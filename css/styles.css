@@ -32,7 +32,10 @@ html, body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding-bottom: 78px; /* space for tab bar */
+  /* Clear the fixed tab bar. Its own padding already includes the home-indicator
+     inset, so this has to grow by the same inset or content hides behind it on
+     an iPhone — a flat 78px was enough in a browser and short on device. */
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
 }
 
 /* ---------- Inline icon sizing ----------
@@ -246,21 +249,25 @@ html, body {
 
 /* Colour-band picker. One row per band: what the band means on the left, the
    colour currently on it and its value on the right, swatches below. */
-.band-row { margin: 0 16px 14px; }
+.band-row { margin: 0 16px 7px; }
 .band-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 }
 .band-head .label { color: var(--text-secondary); font-size: 11px; }
 .band-head .pick { color: var(--text); font-size: 12px; font-weight: 600; }
-.swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+/* Swatches share the row width instead of taking a fixed size, so a 12-colour
+   multiplier row and an 8-colour tolerance row both fit on one line at any
+   width — no wrapping, and the shorter rows get the bigger tap targets. */
+.swatches { display: flex; gap: 5px; }
 .swatch {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 23px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   padding: 0;
   cursor: pointer;
@@ -337,6 +344,9 @@ html, body {
 }
 .result-value .num { color: var(--text); font-size: 19px; font-weight: 600; }
 .result-value .unit { color: var(--result-text); font-size: 12px; font-weight: 500; }
+/* Secondary reading inside a result card, for a figure that qualifies the main
+   number rather than standing on its own (e.g. the tolerance range). */
+.result-sub { color: var(--result-text-soft); font-size: 11px; margin-top: 3px; }
 
 .calc-btn {
   margin: 18px 16px 8px;
@@ -352,7 +362,7 @@ html, body {
   width: calc(100% - 32px);
 }
 .formula-note {
-  margin: 8px 16px 20px;
+  margin: 8px 16px 8px;
   padding-top: 12px;
   border-top: 1px solid #1B1E23;
   display: flex;

@@ -474,17 +474,20 @@ function renderResistorColorCode(domain, tool, key) {
     const roles = rolesFor(state.count);
     const valueBands = roles.filter(r => r !== "tol" && r !== "tc");
     const bars = valueBands.map((r, i) =>
-      `<rect x="${54 + i * 17}" y="24" width="10" height="34" fill="${BAND_COLORS[state.bands[r]].hex}"/>`
+      `<rect x="${71 + i * 12}" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands[r]].hex}"/>`
     );
-    bars.push(`<rect x="146" y="24" width="10" height="34" fill="${BAND_COLORS[state.bands.tol].hex}"/>`);
+    bars.push(`<rect x="132" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tol].hex}"/>`);
     if (roles.includes("tc")) {
-      bars.push(`<rect x="164" y="24" width="10" height="34" fill="${BAND_COLORS[state.bands.tc].hex}"/>`);
+      bars.push(`<rect x="145" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tc].hex}"/>`);
     }
-    return `<svg width="220" height="82" viewBox="0 0 220 82" fill="none">
-      <path d="M6 41 H44 M186 41 H214" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
-      <rect x="44" y="24" width="142" height="34" rx="9" fill="#C8AE7D"/>
-      <g>${bars.join("")}</g>
-      <rect x="44" y="24" width="142" height="34" rx="9" fill="none" stroke="#00000055" stroke-width="1"/>
+    return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none">
+      <defs>
+        <clipPath id="rc-body"><rect x="62" y="12" width="96" height="40" rx="9"/></clipPath>
+      </defs>
+      <path d="M6 32 H62 M158 32 H214" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="62" y="12" width="96" height="40" rx="9" fill="#C8AE7D"/>
+      <g clip-path="url(#rc-body)">${bars.join("")}</g>
+      <rect x="62" y="12" width="96" height="40" rx="9" fill="none" stroke="#00000055" stroke-width="1"/>
     </svg>`;
   }
 
@@ -533,27 +536,8 @@ function renderResistorColorCode(domain, tool, key) {
           <span class="num">${formatOhms(r.ohms)}</span>
           <span class="unit">±${r.tol}%</span>
         </div>
+        <div class="result-sub">${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}</div>
       </div>
-      <div class="result-field">
-        <div class="result-head">
-          <span class="label">Range</span>
-          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
-        </div>
-        <div class="result-value">
-          <span class="num">${formatOhms(r.min)} – ${formatOhms(r.max)}</span>
-        </div>
-      </div>
-      ${r.tc === null ? "" : `
-        <div class="result-field">
-          <div class="result-head">
-            <span class="label">Temp. coefficient</span>
-            <span class="badge-calc">${ICONS.bolt2}Calculated</span>
-          </div>
-          <div class="result-value">
-            <span class="num">${r.tc}</span>
-            <span class="unit">ppm/K</span>
-          </div>
-        </div>`}
 
       <div class="formula-note">${ICONS.info}<span>${
         [`${roles.filter(x => x[0] === "d").length} digits ${multLabel(BAND_COLORS[state.bands.mult].mult)}`, "tolerance"]
