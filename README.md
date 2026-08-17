@@ -9,8 +9,10 @@ Working proof of concept:
 - 185 tools/categories listed across 7 domains, matching `REFERENCE.md` exactly
 - Global search across all tool names
 - Favorites (localStorage)
-- **One fully working calculator: Ohm's law** (`js/app.js`, `renderOhmsLaw`) — 3 modes, unit selection, live calculation
-- All other 184 tools currently open a "not built yet" placeholder screen
+- **Two fully working calculators:**
+  - **Ohm's law** (`js/app.js`, `renderOhmsLaw`) — 3 modes, unit selection, live calculation, mode-aware circuit diagram and formula footnote
+  - **Resistor color code** (`js/app.js`, `renderResistorColorCode`) — 4/5/6 bands, visual band picker, live resistor illustration, value + tolerance + range + temp. coefficient
+- All other 183 tools currently open a "not built yet" placeholder screen
 - Installable PWA (manifest + service worker + icons), works offline once installed
 
 ## Stack
@@ -50,9 +52,9 @@ REFERENCE.md          Full product spec: navigation, naming convention, visual s
 ## Next steps (suggested order)
 
 1. Build out calculators one domain at a time, following the `renderOhmsLaw` pattern as the template for each new tool.
-2. Good second candidate: **Resistor color code** (Passive components) — visual band picker, good test of a non-numeric-input calculator.
+2. Next good candidates: **Series/parallel** and **Voltage divider** (Passive components) — both reuse the numeric-input pattern from `renderOhmsLaw` and want a mode-aware diagram.
 3. Circuit diagrams: add the schematic SVG per calculator that needs one (see REFERENCE.md section 4, "Calculator screen template").
-4. Consider extracting the calculator template into a shared render helper once 3-4 calculators exist, to avoid repeating the boilerplate seen in `renderOhmsLaw`.
+4. Extract the calculator template into a shared render helper — with two calculators the shared shape (header → diagram → mode pills → inputs → results → footnote) is now duplicated verbatim in `renderOhmsLaw` and `renderResistorColorCode`. Worth doing before a third.
 5. Longer term: Links and Notes sections (Tools domain) need actual storage logic (localStorage is fine to start, same pattern as favorites).
 
 ## Deploying

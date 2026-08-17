@@ -130,6 +130,7 @@ function renderTool(rawKey, calcId) {
   const { domain, section, tool } = found;
 
   if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, key);
+  if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, key);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -369,6 +370,206 @@ function renderOhmsLaw(domain, tool, key) {
     });
     app.querySelectorAll("select[data-unit]").forEach(sel => {
       sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; paint(); };
+    });
+  }
+
+  paint();
+}
+
+// ---------- Resistor colour code ----------
+// A band's meaning depends on which position it sits in, so one table carries
+// every reading of a colour and each role picks the property it needs. A colour
+// is offered for a role only if it has a value for it — silver is a legal
+// multiplier and tolerance but never a digit.
+const BAND_COLORS = {
+  black:  { hex: "#1A1A1A", digit: 0, mult: 1,    tc: 250 },
+  brown:  { hex: "#7A4A21", digit: 1, mult: 1e1,  tol: 1,    tc: 100 },
+  red:    { hex: "#C62828", digit: 2, mult: 1e2,  tol: 2,    tc: 50 },
+  orange: { hex: "#EF6C00", digit: 3, mult: 1e3,             tc: 15 },
+  yellow: { hex: "#F2C200", digit: 4, mult: 1e4,             tc: 25 },
+  green:  { hex: "#2E8B45", digit: 5, mult: 1e5,  tol: 0.5,  tc: 20 },
+  blue:   { hex: "#2160C4", digit: 6, mult: 1e6,  tol: 0.25, tc: 10 },
+  violet: { hex: "#7C4DBE", digit: 7, mult: 1e7,  tol: 0.1,  tc: 5 },
+  grey:   { hex: "#9AA0A8", digit: 8, mult: 1e8,  tol: 0.05, tc: 1 },
+  white:  { hex: "#F2F2F2", digit: 9, mult: 1e9 },
+  gold:   { hex: "#C9A227",           mult: 0.1,  tol: 5 },
+  silver: { hex: "#C0C4C8",           mult: 0.01, tol: 10 },
+};
+
+const BAND_ROLE_LABEL = {
+  d1: "1st digit", d2: "2nd digit", d3: "3rd digit",
+  mult: "Multiplier", tol: "Tolerance", tc: "Temp. coefficient",
+};
+
+function renderResistorColorCode(domain, tool, key) {
+  const state = {
+    count: 4,
+    bands: { d1: "brown", d2: "black", d3: "black", mult: "red", tol: "gold", tc: "brown" },
+  };
+
+  // Digits, then multiplier, then tolerance; the 6th band adds temperature
+  // coefficient. The order here is also the order the bands are painted.
+  function rolesFor(count) {
+    if (count === 4) return ["d1", "d2", "mult", "tol"];
+    if (count === 5) return ["d1", "d2", "d3", "mult", "tol"];
+    return ["d1", "d2", "d3", "mult", "tol", "tc"];
+  }
+
+  function propFor(role) {
+    return role === "mult" || role === "tol" || role === "tc" ? role : "digit";
+  }
+
+  function optionsFor(role) {
+    const prop = propFor(role);
+    return Object.keys(BAND_COLORS).filter(c => BAND_COLORS[c][prop] !== undefined);
+  }
+
+  function trim(n) {
+    return Number(n.toPrecision(4)).toString();
+  }
+
+  function formatOhms(v) {
+    if (!isFinite(v)) return "—";
+    for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
+      if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
+    }
+    return `${trim(v * 1e3)} mΩ`;
+  }
+
+  function multLabel(v) {
+    if (v >= 1e9) return "×1G";
+    if (v >= 1e6) return `×${trim(v / 1e6)}M`;
+    if (v >= 1e3) return `×${trim(v / 1e3)}k`;
+    return `×${trim(v)}`;
+  }
+
+  // What the colour on this band is worth, in the units of its role.
+  function valueLabel(role, color) {
+    const v = BAND_COLORS[color][propFor(role)];
+    if (role === "mult") return multLabel(v);
+    if (role === "tol") return `±${v}%`;
+    if (role === "tc") return `${v} ppm/K`;
+    return String(v);
+  }
+
+  function compute() {
+    const roles = rolesFor(state.count);
+    const digits = roles.filter(r => r[0] === "d").map(r => BAND_COLORS[state.bands[r]].digit).join("");
+    const ohms = parseInt(digits, 10) * BAND_COLORS[state.bands.mult].mult;
+    const tol = BAND_COLORS[state.bands.tol].tol;
+    return {
+      ohms,
+      tol,
+      min: ohms * (1 - tol / 100),
+      max: ohms * (1 + tol / 100),
+      tc: roles.includes("tc") ? BAND_COLORS[state.bands.tc].tc : null,
+    };
+  }
+
+  // Literal resistor, not a schematic symbol: this drawing identifies a physical
+  // part rather than showing topology, which is the case REFERENCE.md carves out
+  // for literal illustration. Value bands cluster left, tolerance sits apart on
+  // the right the way it does on a real part.
+  function resistor() {
+    const roles = rolesFor(state.count);
+    const valueBands = roles.filter(r => r !== "tol" && r !== "tc");
+    const bars = valueBands.map((r, i) =>
+      `<rect x="${54 + i * 17}" y="24" width="10" height="34" fill="${BAND_COLORS[state.bands[r]].hex}"/>`
+    );
+    bars.push(`<rect x="146" y="24" width="10" height="34" fill="${BAND_COLORS[state.bands.tol].hex}"/>`);
+    if (roles.includes("tc")) {
+      bars.push(`<rect x="164" y="24" width="10" height="34" fill="${BAND_COLORS[state.bands.tc].hex}"/>`);
+    }
+    return `<svg width="220" height="82" viewBox="0 0 220 82" fill="none">
+      <path d="M6 41 H44 M186 41 H214" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="44" y="24" width="142" height="34" rx="9" fill="#C8AE7D"/>
+      <g>${bars.join("")}</g>
+      <rect x="44" y="24" width="142" height="34" rx="9" fill="none" stroke="#00000055" stroke-width="1"/>
+    </svg>`;
+  }
+
+  function paint() {
+    const roles = rolesFor(state.count);
+    const r = compute();
+
+    app.innerHTML = `
+      <div class="topbar back-row">
+        <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
+        <h1>${tool.name}</h1>
+        <button class="icon-btn ${isFavorite(key) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
+      </div>
+      <div class="sub" style="padding-left:46px;">4 to 6 bands</div>
+
+      <div class="diagram-box">${resistor()}</div>
+
+      <div class="mode-pills">
+        ${[4, 5, 6].map(n => `
+          <button class="pill ${state.count === n ? "active" : ""}" data-count="${n}" style="${state.count === n ? `background:${domain.bg};color:#8FC1F5` : ""}">${n} bands</button>`).join("")}
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Your bands</div>
+      ${roles.map((role, i) => `
+        <div class="band-row">
+          <div class="band-head">
+            <span class="label">Band ${i + 1} · ${BAND_ROLE_LABEL[role]}</span>
+            <span class="pick">${state.bands[role][0].toUpperCase() + state.bands[role].slice(1)} · ${valueLabel(role, state.bands[role])}</span>
+          </div>
+          <div class="swatches">
+            ${optionsFor(role).map(c => `
+              <button class="swatch" data-role="${role}" data-color="${c}"
+                      aria-pressed="${state.bands[role] === c}"
+                      title="${c} · ${valueLabel(role, c)}"
+                      style="background:${BAND_COLORS[c].hex}"></button>`).join("")}
+          </div>
+        </div>`).join("")}
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Resistance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num">${formatOhms(r.ohms)}</span>
+          <span class="unit">±${r.tol}%</span>
+        </div>
+      </div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Range</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num">${formatOhms(r.min)} – ${formatOhms(r.max)}</span>
+        </div>
+      </div>
+      ${r.tc === null ? "" : `
+        <div class="result-field">
+          <div class="result-head">
+            <span class="label">Temp. coefficient</span>
+            <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+          </div>
+          <div class="result-value">
+            <span class="num">${r.tc}</span>
+            <span class="unit">ppm/K</span>
+          </div>
+        </div>`}
+
+      <div class="formula-note">${ICONS.info}<span>${
+        [`${roles.filter(x => x[0] === "d").length} digits ${multLabel(BAND_COLORS[state.bands.mult].mult)}`, "tolerance"]
+          .concat(roles.includes("tc") ? ["temp. coefficient"] : [])
+          .join(" &nbsp;·&nbsp; ")
+      }</span></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(key); paint(); };
+
+    app.querySelectorAll(".pill").forEach(btn => {
+      btn.onclick = () => { state.count = +btn.dataset.count; paint(); };
+    });
+    app.querySelectorAll(".swatch").forEach(btn => {
+      btn.onclick = () => { state.bands[btn.dataset.role] = btn.dataset.color; paint(); };
     });
   }
 

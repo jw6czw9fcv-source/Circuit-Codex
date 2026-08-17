@@ -244,6 +244,31 @@ html, body {
 }
 .pill.active { color: #FFFFFF; }
 
+/* Colour-band picker. One row per band: what the band means on the left, the
+   colour currently on it and its value on the right, swatches below. */
+.band-row { margin: 0 16px 14px; }
+.band-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.band-head .label { color: var(--text-secondary); font-size: 11px; }
+.band-head .pick { color: var(--text); font-size: 12px; font-weight: 600; }
+.swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+.swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 0;
+  cursor: pointer;
+}
+/* Double ring: the inner one is the page colour, so the accent reads as a halo
+   and never touches a swatch whose own colour is close to it. */
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #5B9BE0; }
+
 .field {
   background: var(--card);
   border: 1px solid var(--input-border);
