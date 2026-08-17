@@ -274,6 +274,18 @@ function renderOhmsLaw(domain, tool, key) {
     return fmt(siValue / scale);
   }
 
+  // Refresh only the result numbers. The set of result fields depends on the
+  // mode, not on the values, so it is stable while typing — updating in place
+  // keeps the caret alive, which a full paint() would destroy on every keystroke.
+  function updateResults() {
+    const inputs = fieldsForMode(state.mode);
+    const results = compute();
+    ["V", "I", "R", "P"].filter(v => !inputs.includes(v)).forEach(v => {
+      const num = app.querySelector(`.result-field[data-out="${v}"] .num`);
+      if (num) num.textContent = fmt(results[v] / unitScale(state.units[v] || defaultUnit(v)));
+    });
+  }
+
   function paint() {
     const inputs = fieldsForMode(state.mode);
     const outputs = ["V", "I", "R", "P"].filter(v => !inputs.includes(v));
@@ -309,7 +321,7 @@ function renderOhmsLaw(domain, tool, key) {
 
       <div class="section-label" style="color:#5DCAA5">Results</div>
       ${outputs.map(v => `
-        <div class="result-field">
+        <div class="result-field" data-out="${v}">
           <div class="result-head">
             <span class="label">${{ V: "Voltage (V)", I: "Current (I)", R: "Resistance (R)", P: "Power (P)" }[v]}</span>
             <span class="badge-calc">${ICONS.bolt2}Calculated</span>
@@ -331,9 +343,11 @@ function renderOhmsLaw(domain, tool, key) {
     });
     app.querySelectorAll("input[data-var]").forEach(inp => {
       inp.oninput = () => {
-        const v = inp.dataset.var;
-        const num = parseFloat(inp.value);
-        if (!isNaN(num)) state.values[v] = num;
+        // Store NaN for a blank or half-typed field too: compute() propagates it
+        // and fmt() shows "—", rather than leaving a stale number under a
+        // "Calculated" badge that no longer matches the inputs on screen.
+        state.values[inp.dataset.var] = parseFloat(inp.value);
+        updateResults();
       };
     });
     app.querySelectorAll("select[data-unit]").forEach(sel => {
