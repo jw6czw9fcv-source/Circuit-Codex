@@ -208,16 +208,24 @@ function renderFavorites() {
 function renderOhmsLaw(domain, tool, key) {
   const state = { mode: "vi", V: 12, I: 250, Ivi_unit: "mA" };
 
+  // Series loop with V, I and R marked where they physically are: V across the
+  // source, I as a current arrow along the wire, R on the resistor. Wires stay
+  // neutral so the labels can carry the mode — a quantity you entered is drawn
+  // in the input blue, one being solved for in the result green, matching the
+  // "Your inputs" and "Results" headings below.
   function diagram() {
-    return `<svg width="200" height="70" viewBox="0 0 200 70" fill="none">
-      <path d="M10 35 H40" stroke="#8FC1F5" stroke-width="1.6"/>
-      <path d="M40 20 V50 M47 20 V50" stroke="#8FC1F5" stroke-width="1.6"/>
-      <path d="M47 35 H70" stroke="#8FC1F5" stroke-width="1.6"/>
-      <path d="M70 35 L75 27 L83 43 L91 27 L99 43 L107 27 L112 35" stroke="#8FC1F5" stroke-width="1.6" stroke-linejoin="round" fill="none"/>
-      <path d="M112 35 H170" stroke="#8FC1F5" stroke-width="1.6"/>
-      <path d="M10 35 V58 H170 V35" stroke="#8FC1F5" stroke-width="1.6" fill="none"/>
-      <text x="43" y="14" fill="#9A9EA6" font-size="10" text-anchor="middle">+/-</text>
-      <text x="91" y="18" fill="#9A9EA6" font-size="10" text-anchor="middle">R</text>
+    const known = fieldsForMode(state.mode);
+    const tone = (v) => (known.includes(v) ? "#8FC1F5" : "#5DCAA5");
+    const wire = "#5A6169";
+    return `<svg width="220" height="104" viewBox="0 0 220 104" fill="none">
+      <path d="M34 34 H95 M137 34 H186 M186 34 V84 M186 84 H34 M34 34 V52 M34 62 V84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M95 34 L100 26 L108 42 L116 26 L124 42 L132 26 L137 34" stroke="${tone("R")}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+      <path d="M22 52 H46" stroke="${tone("V")}" stroke-width="2"/>
+      <path d="M28 62 H40" stroke="${tone("V")}" stroke-width="2"/>
+      <path d="M50 22 H74 M69 18 L75 22 L69 26" stroke="${tone("I")}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="12" y="61" fill="${tone("V")}" font-size="12" font-weight="600" text-anchor="middle">V</text>
+      <text x="62" y="14" fill="${tone("I")}" font-size="12" font-weight="600" text-anchor="middle">I</text>
+      <text x="116" y="18" fill="${tone("R")}" font-size="12" font-weight="600" text-anchor="middle">R</text>
     </svg>`;
   }
 
@@ -231,6 +239,15 @@ function renderOhmsLaw(domain, tool, key) {
     if (mode === "vi") return ["V", "I"];
     if (mode === "vr") return ["V", "R"];
     return ["I", "R"];
+  }
+
+  // The footnote states how each result is derived from the two values the
+  // user actually typed, so it tracks the mode instead of naming a rearrangement
+  // that is not the one on screen.
+  function formulaFor(mode) {
+    if (mode === "vi") return "R = V / I &nbsp;·&nbsp; P = V × I";
+    if (mode === "vr") return "I = V / R &nbsp;·&nbsp; P = V² / R";
+    return "V = I × R &nbsp;·&nbsp; P = I² × R";
   }
 
   function unitOptionsFor(varName) {
@@ -302,9 +319,9 @@ function renderOhmsLaw(domain, tool, key) {
       <div class="diagram-box">${diagram()}</div>
 
       <div class="mode-pills">
-        <button class="pill ${state.mode === "vi" ? "active" : ""}" data-mode="vi" style="${state.mode === "vi" ? "background:#1B2A3B;color:#8FC1F5" : ""}">V + I</button>
-        <button class="pill ${state.mode === "vr" ? "active" : ""}" data-mode="vr" style="${state.mode === "vr" ? "background:#1B2A3B;color:#8FC1F5" : ""}">V + R</button>
-        <button class="pill ${state.mode === "ir" ? "active" : ""}" data-mode="ir" style="${state.mode === "ir" ? "background:#1B2A3B;color:#8FC1F5" : ""}">I + R</button>
+        <button class="pill ${state.mode === "vi" ? "active" : ""}" data-mode="vi" style="${state.mode === "vi" ? "background:#1B2A3B;color:#8FC1F5" : ""}">VI</button>
+        <button class="pill ${state.mode === "vr" ? "active" : ""}" data-mode="vr" style="${state.mode === "vr" ? "background:#1B2A3B;color:#8FC1F5" : ""}">VR</button>
+        <button class="pill ${state.mode === "ir" ? "active" : ""}" data-mode="ir" style="${state.mode === "ir" ? "background:#1B2A3B;color:#8FC1F5" : ""}">IR</button>
       </div>
 
       <div class="section-label" style="color:#8FC1F5">Your inputs</div>
@@ -332,7 +349,7 @@ function renderOhmsLaw(domain, tool, key) {
           </div>
         </div>`).join("")}
 
-      <div class="formula-note">${ICONS.info}<span>V = I × R &nbsp;·&nbsp; P = V × I</span></div>
+      <div class="formula-note">${ICONS.info}<span>${formulaFor(state.mode)}</span></div>
       ${tabbarHTML("")}
     `;
 
