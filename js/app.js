@@ -215,22 +215,34 @@ function renderSearch() {
 }
 
 function renderFavorites() {
-  const favs = favorites();
-  const items = favs.map(id => findByFavoriteId(id)).filter(Boolean);
+  const items = favorites().map(id => findByFavoriteId(id)).filter(Boolean);
   app.innerHTML = `
     <div class="topbar"><h1>Favorites</h1></div>
     <div class="tool-list">
       ${items.length ? items.map(it => `
-        <button class="tool-row" style="flex-direction:column;align-items:flex-start;" onclick="location.hash='/tool/${encodeURIComponent(it.key)}/${it.tool.calc || ""}'">
-          <span>${it.tool.name}</span>
-          <span class="breadcrumb">${it.domain.title} · ${it.section.title}</span>
-        </button>`).join("") :
+        <div class="tool-row fav-row">
+          <button class="fav-open" data-route="/tool/${encodeURIComponent(it.key)}/${it.tool.calc || ""}">
+            <span>${it.tool.name}</span>
+            <span class="breadcrumb">${it.domain.title} · ${it.section.title}</span>
+          </button>
+          <button class="icon-btn active fav-remove" data-id="${favoriteId(it.domain, it.section, it.tool)}"
+                  aria-label="Remove ${it.tool.name} from favorites">${ICONS.star}</button>
+        </div>`).join("") :
         `<div class="placeholder">${ICONS.star}<div>No favorites yet.</div><div style="font-size:12px;margin-top:6px;">Tap the star on any tool to pin it here.</div></div>`
       }
     </div>
     ${tabbarHTML("favorites")}
   `;
+
+  // Wired rather than inline: identities carry apostrophes ("Ohm's law").
+  app.querySelectorAll(".fav-open").forEach(btn => {
+    btn.onclick = () => { location.hash = btn.dataset.route; };
+  });
+  app.querySelectorAll(".fav-remove").forEach(btn => {
+    btn.onclick = () => { toggleFavorite(btn.dataset.id); renderFavorites(); };
+  });
 }
+
 
 // ---------- Ohm's law calculator (fully functional proof of concept) ----------
 function renderOhmsLaw(domain, tool, favId) {
