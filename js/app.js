@@ -708,7 +708,7 @@ function renderResistorColorCode(domain, tool, key) {
             <div class="roller-window">
               <div class="roller-track" data-role="${role}">
                 ${optionsFor(role).map(c => `
-                  <button class="roller-item${c === "none" ? " roller-item--none" : ""}" data-color="${c}" title="${c} · ${valueLabel(role, c)}"><span style="background:${BAND_COLORS[c].hex}"></span></button>`).join("")}
+                  <button class="roller-item${c === "none" ? " roller-item--none" : ""}" data-color="${c}" title="${c} · ${valueLabel(role, c)}"><span style="background:${BAND_COLORS[c].hex}">${c === "none" ? "—" : ""}</span></button>`).join("")}
               </div>
             </div>
             <div class="roller-value" data-value="${role}">${shortValue(role, state.bands[role])}</div>
