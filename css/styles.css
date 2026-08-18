@@ -318,6 +318,13 @@ html, body {
   border-radius: 5px;
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
+/* The "no band" slot: an outline where a colour would be, so it reads as the
+   absence of a band rather than as a pale one. */
+.roller-item--none span {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
 .roller-value {
   font-size: 15px;
   font-weight: 600;

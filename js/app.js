@@ -391,9 +391,13 @@ const BAND_COLORS = {
   blue:   { hex: "#2160C4", digit: 6, mult: 1e6,  tol: 0.25, tc: 10 },
   violet: { hex: "#7C4DBE", digit: 7, mult: 1e7,  tol: 0.1,  tc: 5 },
   grey:   { hex: "#9AA0A8", digit: 8, mult: 1e8,  tol: 0.05, tc: 1 },
-  white:  { hex: "#F2F2F2", digit: 9, mult: 1e9, tol: 20 },
+  white:  { hex: "#F2F2F2", digit: 9, mult: 1e9 },
   gold:   { hex: "#C9A227",           mult: 0.1,  tol: 5 },
   silver: { hex: "#C0C4C8",           mult: 0.01, tol: 10 },
+  // IEC 60062 marks ±20% by leaving the tolerance band off the part, so this
+  // entry is the absence of a band rather than a colour. It is legal on the
+  // tolerance role only, and draws nothing on the resistor.
+  none:   { hex: "transparent",                   tol: 20 },
 };
 
 // Column headers are abbreviated: six columns across a phone leaves ~50px each.
@@ -442,7 +446,7 @@ function nearestESeries(ohms, name) {
   return { value: best * scale, exact: Math.abs(best - mantissa) < mantissa * 1e-9 };
 }
 
-const TOL_ORDER = ["brown", "red", "green", "blue", "violet", "grey", "gold", "silver", "white"];
+const TOL_ORDER = ["brown", "red", "green", "blue", "violet", "grey", "gold", "silver", "none"];
 
 const BAND_ROLE_LABEL = {
   d1: "1st digit", d2: "2nd digit", d3: "3rd digit",
@@ -541,7 +545,9 @@ function renderResistorColorCode(domain, tool, key) {
     const bars = valueBands.map((r, i) =>
       `<rect x="${71 + i * 12}" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands[r]].hex}"/>`
     );
-    bars.push(`<rect x="132" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tol].hex}"/>`);
+    if (state.bands.tol !== "none") {
+      bars.push(`<rect x="132" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tol].hex}"/>`);
+    }
     if (roles.includes("tc")) {
       bars.push(`<rect x="145" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tc].hex}"/>`);
     }
@@ -702,7 +708,7 @@ function renderResistorColorCode(domain, tool, key) {
             <div class="roller-window">
               <div class="roller-track" data-role="${role}">
                 ${optionsFor(role).map(c => `
-                  <button class="roller-item" data-color="${c}" title="${c} · ${valueLabel(role, c)}"><span style="background:${BAND_COLORS[c].hex}"></span></button>`).join("")}
+                  <button class="roller-item${c === "none" ? " roller-item--none" : ""}" data-color="${c}" title="${c} · ${valueLabel(role, c)}"><span style="background:${BAND_COLORS[c].hex}"></span></button>`).join("")}
               </div>
             </div>
             <div class="roller-value" data-value="${role}">${shortValue(role, state.bands[role])}</div>
