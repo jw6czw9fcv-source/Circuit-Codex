@@ -391,7 +391,7 @@ const BAND_COLORS = {
   blue:   { hex: "#2160C4", digit: 6, mult: 1e6,  tol: 0.25, tc: 10 },
   violet: { hex: "#7C4DBE", digit: 7, mult: 1e7,  tol: 0.1,  tc: 5 },
   grey:   { hex: "#9AA0A8", digit: 8, mult: 1e8,  tol: 0.05, tc: 1 },
-  white:  { hex: "#F2F2F2", digit: 9, mult: 1e9 },
+  white:  { hex: "#F2F2F2", digit: 9, mult: 1e9, tol: 20 },
   gold:   { hex: "#C9A227",           mult: 0.1,  tol: 5 },
   silver: { hex: "#C0C4C8",           mult: 0.01, tol: 10 },
 };
@@ -420,6 +420,7 @@ function eSeriesValues(name) {
 // Each series exists to cover a tolerance band: at ±5% the E24 steps just touch,
 // so the tolerance on the part tells you which series it was drawn from.
 function eSeriesForTolerance(tol) {
+  if (tol >= 20) return "E6";
   if (tol >= 10) return "E12";
   if (tol >= 5) return "E24";
   if (tol >= 2) return "E48";
@@ -440,6 +441,8 @@ function nearestESeries(ohms, name) {
   }
   return { value: best * scale, exact: Math.abs(best - mantissa) < mantissa * 1e-9 };
 }
+
+const TOL_ORDER = ["brown", "red", "green", "blue", "violet", "grey", "gold", "silver", "white"];
 
 const BAND_ROLE_LABEL = {
   d1: "1st digit", d2: "2nd digit", d3: "3rd digit",
@@ -468,6 +471,10 @@ function renderResistorColorCode(domain, tool, key) {
   }
 
   function optionsFor(role) {
+    // Tolerance needs its own order. Table order is dictated by the digit and
+    // multiplier bands, where white sits at 9 and ×1G, but on the tolerance band
+    // it belongs past gold and silver at the loose end of the scale.
+    if (role === "tol") return TOL_ORDER;
     const prop = propFor(role);
     return Object.keys(BAND_COLORS).filter(c => BAND_COLORS[c][prop] !== undefined);
   }
