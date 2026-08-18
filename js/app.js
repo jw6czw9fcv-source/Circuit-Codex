@@ -17,13 +17,13 @@ function isFavorite(key) {
 
 // ---------- Icons (inline SVG, literal style) ----------
 const ICONS = {
-  resistor: `<svg width="21" height="21" viewBox="0 0 48 24"><path d="M2 12 H12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M36 12 H46" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="12" y="6" width="24" height="12" rx="5" fill="#D9C9A8"/><rect x="16" y="6" width="2.4" height="12" fill="#7A4A2B"/><rect x="21" y="6" width="2.4" height="12" fill="#C24C3A"/><rect x="26" y="6" width="2.4" height="12" fill="#D8A62B"/></svg>`,
-  transistor: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M8 6 V18 M8 10 L15 6 M8 14 L15 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  binary: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><text x="2" y="10" font-size="8" fill="currentColor" font-family="monospace">10</text><text x="2" y="20" font-size="8" fill="currentColor" font-family="monospace">01</text></svg>`,
-  antenna: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M12 22 V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7" r="2" fill="currentColor"/><path d="M8 4 Q12 -1 16 4 M5 7 Q12 -4 19 7" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`,
-  bolt: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M13 2 L4 14 H11 L9 22 L20 9 H13 L15 2 Z" fill="currentColor"/></svg>`,
-  pcb: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="16" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="16" r="1.4" fill="currentColor"/><path d="M8 9.4 V14.6 M9.4 8 H14.6" stroke="currentColor" stroke-width="1.4"/></svg>`,
-  wrench: `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+  resistor: `<svg width="24" height="24" viewBox="0 0 48 24"><path d="M2 12 H12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M36 12 H46" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="12" y="6" width="24" height="12" rx="5" fill="#D9C9A8"/><rect x="16" y="6" width="2.4" height="12" fill="#7A4A2B"/><rect x="21" y="6" width="2.4" height="12" fill="#C24C3A"/><rect x="26" y="6" width="2.4" height="12" fill="#D8A62B"/></svg>`,
+  transistor: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M8 6 V18 M8 10 L15 6 M8 14 L15 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  binary: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><text x="2" y="10" font-size="8" fill="currentColor" font-family="monospace">10</text><text x="2" y="20" font-size="8" fill="currentColor" font-family="monospace">01</text></svg>`,
+  antenna: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 22 V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7" r="2" fill="currentColor"/><path d="M8 4 Q12 -1 16 4 M5 7 Q12 -4 19 7" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`,
+  bolt: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M13 2 L4 14 H11 L9 22 L20 9 H13 L15 2 Z" fill="currentColor"/></svg>`,
+  pcb: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="16" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="16" r="1.4" fill="currentColor"/><path d="M8 9.4 V14.6 M9.4 8 H14.6" stroke="currentColor" stroke-width="1.4"/></svg>`,
+  wrench: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
   home: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 11 L12 4 L20 11 V20 H4 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
   search: `<svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21 L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   tools: `<svg viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
@@ -407,9 +407,12 @@ const BAND_ROLE_LABEL = {
   mult: "Multiplier", tol: "Tolerance", tc: "Temp. coefficient",
 };
 
+const OHM_UNITS = { "mΩ": 1e-3, "Ω": 1, "kΩ": 1e3, "MΩ": 1e6, "GΩ": 1e9 };
+
 function renderResistorColorCode(domain, tool, key) {
   const state = {
     count: 4,
+    unit: "kΩ",
     bands: { d1: "brown", d2: "black", d3: "black", mult: "red", tol: "gold", tc: "brown" },
   };
 
@@ -462,7 +465,9 @@ function renderResistorColorCode(domain, tool, key) {
   // header already implies. valueLabel stays the full form for tooltips and the
   // results card, where there is room to be unambiguous.
   function shortValue(role, color) {
-    if (role === "tc") return String(BAND_COLORS[color].tc);
+    // Keep the unit on the temp column — a bare number reads as a digit band.
+    // Only "/K" is dropped, which the results card still spells out.
+    if (role === "tc") return `${BAND_COLORS[color].tc} ppm`;
     return valueLabel(role, color);
   }
 
@@ -505,6 +510,62 @@ function renderResistorColorCode(domain, tool, key) {
     </svg>`;
   }
 
+  function colorWith(prop, value) {
+    return Object.keys(BAND_COLORS).find(c => BAND_COLORS[c][prop] === value);
+  }
+
+  // Work the code backwards: split the resistance into the n significant digits
+  // the band count allows plus a power-of-ten multiplier, then look up the
+  // colour that carries each. Returns false when no legal multiplier reaches the
+  // value — below 0.01x or above 1e9x there is simply no band for it.
+  function bandsFromOhms(ohms) {
+    const n = rolesFor(state.count).filter(r => r[0] === "d").length;
+    if (!isFinite(ohms) || ohms <= 0) return false;
+    let e = Math.floor(Math.log10(ohms)) - (n - 1);
+    let digits = Math.round(ohms / Math.pow(10, e));
+    // Rounding can carry past the digit budget: 99.6 -> 100 needs one fewer digit.
+    if (digits >= Math.pow(10, n)) { digits = Math.round(digits / 10); e += 1; }
+    const mult = Math.pow(10, e);
+    const multColor = Object.keys(BAND_COLORS)
+      .find(c => BAND_COLORS[c].mult !== undefined && Math.abs(BAND_COLORS[c].mult - mult) <= mult * 1e-9);
+    if (!multColor) return false;
+    const each = String(digits).padStart(n, "0").split("").map(Number);
+    const picked = {};
+    for (let i = 0; i < n; i++) {
+      const c = colorWith("digit", each[i]);
+      if (!c) return false;
+      picked["d" + (i + 1)] = c;
+    }
+    picked.mult = multColor;
+    return picked;
+  }
+
+  // Drive the rollers from state rather than repainting: a repaint would drop
+  // the caret out of the value field the user is typing in.
+  function syncRollers() {
+    rolesFor(state.count).forEach(role => {
+      const track = app.querySelector(`.roller-track[data-role="${role}"]`);
+      if (!track) return;
+      const i = optionsFor(role).indexOf(state.bands[role]);
+      if (i >= 0) track.scrollTop = i * ITEM_H;
+    });
+    updateReadout();
+  }
+
+  function applyTypedValue(raw) {
+    const err = app.querySelector('[data-res="err"]');
+    const ohms = parseFloat(raw) * OHM_UNITS[state.unit];
+    if (!isFinite(ohms) || ohms <= 0) { err.textContent = ""; return; }
+    const picked = bandsFromOhms(ohms);
+    if (!picked) {
+      err.textContent = "No band combination reaches that value.";
+      return;
+    }
+    err.textContent = "";
+    Object.assign(state.bands, picked);
+    syncRollers();
+  }
+
   function footnoteHTML(roles) {
     return [`${roles.filter(x => x[0] === "d").length} digits ${multLabel(BAND_COLORS[state.bands.mult].mult)}`, "tolerance"]
       .concat(roles.includes("tc") ? ["temp. coefficient"] : [])
@@ -529,6 +590,15 @@ function renderResistorColorCode(domain, tool, key) {
     app.querySelector('[data-res="sub"]').innerHTML =
       `${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}`;
     app.querySelector('[data-res="note"]').innerHTML = footnoteHTML(roles);
+
+    // Mirror the bands back into the value field, unless the user is mid-edit
+    // there — overwriting what someone is typing is worse than a stale field.
+    const typed = app.querySelector("#cc-value");
+    if (typed && document.activeElement !== typed) {
+      typed.value = trim(r.ohms / OHM_UNITS[state.unit]);
+    }
+    const tolSel = app.querySelector("#cc-tol");
+    if (tolSel) tolSel.value = state.bands.tol;
   }
 
   function paint() {
@@ -549,6 +619,16 @@ function renderResistorColorCode(domain, tool, key) {
         ${[4, 5, 6].map(n => `
           <button class="pill ${state.count === n ? "active" : ""}" data-count="${n}" style="${state.count === n ? `background:${domain.bg};color:#8FC1F5` : ""}">${n} bands</button>`).join("")}
       </div>
+
+      <div class="field">
+        <label>Enter a value</label>
+        <div class="field-row">
+          <input id="cc-value" type="number" inputmode="decimal" step="any" value="${trim(r.ohms / OHM_UNITS[state.unit])}" />
+          <select id="cc-unit">${Object.keys(OHM_UNITS).map(u => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <select id="cc-tol">${optionsFor("tol").map(c => `<option value="${c}" ${state.bands.tol === c ? "selected" : ""}>±${BAND_COLORS[c].tol}%</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="error-text" data-res="err"></div>
 
       <div class="section-label" style="color:#8FC1F5">Your bands</div>
       <div class="rollers">
@@ -587,6 +667,17 @@ function renderResistorColorCode(domain, tool, key) {
     app.querySelectorAll(".pill").forEach(btn => {
       btn.onclick = () => { state.count = +btn.dataset.count; paint(); };
     });
+    const typed = document.getElementById("cc-value");
+    typed.oninput = () => applyTypedValue(typed.value);
+    document.getElementById("cc-unit").onchange = (e) => {
+      state.unit = e.target.value;
+      applyTypedValue(typed.value);
+    };
+    document.getElementById("cc-tol").onchange = (e) => {
+      state.bands.tol = e.target.value;
+      syncRollers();
+    };
+
     app.querySelectorAll(".roller-track").forEach(track => {
       const role = track.dataset.role;
       const opts = optionsFor(role);

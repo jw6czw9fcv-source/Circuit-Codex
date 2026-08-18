@@ -44,11 +44,11 @@ html, body {
    every container needs an explicit size: without one an svg collapses to 0
    inside a flex row, or balloons to its intrinsic box in a block context.
    .diagram-box svg is absent here deliberately — it sets its own dimensions. */
-.icon-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
-.chev svg { width: 17px; height: 17px; flex-shrink: 0; }
-.search-box svg { width: 20px; height: 20px; flex-shrink: 0; }
-.badge-calc svg { width: 12px; height: 12px; flex-shrink: 0; }
-.formula-note svg { width: 15px; height: 15px; flex-shrink: 0; }
+.icon-btn svg { width: 25px; height: 25px; flex-shrink: 0; }
+.chev svg { width: 19px; height: 19px; flex-shrink: 0; }
+.search-box svg { width: 22px; height: 22px; flex-shrink: 0; }
+.badge-calc svg { width: 13px; height: 13px; flex-shrink: 0; }
+.formula-note svg { width: 16px; height: 16px; flex-shrink: 0; }
 .placeholder svg { width: 34px; height: 34px; display: block; margin: 0 auto 10px; }
 
 /* ---------- Top bar ---------- */
@@ -60,14 +60,14 @@ html, body {
   gap: 10px;
 }
 .topbar h1 {
-  font-size: 20px;
+  font-size: 23px;
   font-weight: 600;
   margin: 0;
 }
 .topbar .sub {
   padding: 0 16px 10px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15.5px;
 }
 .back-row {
   display: flex;
@@ -110,8 +110,8 @@ html, body {
   gap: 10px;
 }
 .chip {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 9px;
   display: flex;
   align-items: center;
@@ -121,12 +121,12 @@ html, body {
 }
 .full-card .chip { margin-bottom: 0; }
 .card-title {
-  font-size: 14.5px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.3;
 }
 .card-sub {
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--text-secondary);
   margin-top: 2px;
   line-height: 1.3;
@@ -136,7 +136,7 @@ html, body {
 .section-label {
   padding: 10px 16px 5px;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -158,7 +158,7 @@ html, body {
   cursor: pointer;
   color: var(--text);
   text-align: left;
-  font-size: 15px;
+  font-size: 16.5px;
 }
 .tool-row .chev { color: var(--text-muted); font-size: 16px; }
 .tool-row .badge {
@@ -219,11 +219,11 @@ html, body {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12.5px;
   cursor: pointer;
 }
 .tab.active { color: var(--text); }
-.tab svg { width: 22px; height: 22px; }
+.tab svg { width: 25px; height: 25px; }
 
 /* ---------- Calculator ---------- */
 .mode-pills {
@@ -240,7 +240,7 @@ html, body {
   padding: 7px 0;
   border-radius: 9px;
   color: var(--text-secondary);
-  font-size: 13.5px;
+  font-size: 15px;
   cursor: pointer;
   background: none;
   border: none;
@@ -253,7 +253,7 @@ html, body {
 .rollers { display: flex; gap: 6px; margin: 0 16px 10px; }
 .roller { flex: 1 1 0; min-width: 0; text-align: center; }
 .roller-name {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   margin-bottom: 4px;
   white-space: nowrap;
@@ -315,13 +315,14 @@ html, body {
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 .roller-value {
-  font-size: 12.5px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
   margin-top: 5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wrap rather than clip: "250 ppm" does not fit a ~52px column on a small
+     phone, and a truncated reading ("250 p…") is worse than a second line. */
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .field {
@@ -334,7 +335,7 @@ html, body {
 .field label {
   display: block;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 14px;
   margin-bottom: 4px;
 }
 .field-row {
@@ -373,7 +374,7 @@ html, body {
   justify-content: space-between;
   margin-bottom: 4px;
 }
-.result-head span.label { color: var(--result-text-soft); font-size: 12.5px; }
+.result-head span.label { color: var(--result-text-soft); font-size: 14px; }
 .badge-calc {
   display: flex;
   align-items: center;
@@ -390,11 +391,11 @@ html, body {
   align-items: center;
   justify-content: space-between;
 }
-.result-value .num { color: var(--text); font-size: 22px; font-weight: 600; }
-.result-value .unit { color: var(--result-text); font-size: 13px; font-weight: 500; }
+.result-value .num { color: var(--text); font-size: 26px; font-weight: 600; }
+.result-value .unit { color: var(--result-text); font-size: 14.5px; font-weight: 500; }
 /* Secondary reading inside a result card, for a figure that qualifies the main
    number rather than standing on its own (e.g. the tolerance range). */
-.result-sub { color: var(--result-text-soft); font-size: 12.5px; margin-top: 3px; }
+.result-sub { color: var(--result-text-soft); font-size: 14px; margin-top: 3px; }
 
 .calc-btn {
   margin: 18px 16px 8px;
@@ -417,7 +418,7 @@ html, body {
   align-items: center;
   gap: 8px;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 14px;
 }
 .error-text {
   color: var(--danger);
