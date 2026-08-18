@@ -67,7 +67,7 @@ function renderHome() {
   const toolsDomain = DOMAINS.find(d => d.id === "tools");
   app.innerHTML = `
     <div class="topbar"><h1>Circuit Codex</h1></div>
-    <div class="sub">Electronics reference and tools</div>
+    <div class="sub sub-center">Electronics reference and tools</div>
     <div class="domain-grid">
       ${domains.map(d => `
         <button class="domain-card" onclick="location.hash='/domain/${d.id}'">
@@ -547,7 +547,11 @@ function renderResistorColorCode(domain, tool, key) {
       const track = app.querySelector(`.roller-track[data-role="${role}"]`);
       if (!track) return;
       const i = optionsFor(role).indexOf(state.bands[role]);
-      if (i >= 0) track.scrollTop = i * ITEM_H;
+      if (i < 0) return;
+      // Clear any in-progress user gesture: this scroll is the app's, and must
+      // not be read back as a selection.
+      delete track.dataset.user;
+      track.scrollTop = i * ITEM_H;
     });
     updateReadout();
   }
@@ -701,19 +705,38 @@ function renderResistorColorCode(domain, tool, key) {
 
       let frame = 0;
       let settle;
+      // Only a scroll the user actually drove may change the selection. Reading
+      // it back from scrollTop unconditionally also picks up the app's own
+      // scrolls — and those are still travelling when the timer fires, so it
+      // commits the slot being passed through rather than the one aimed at.
+      // One slot out on the multiplier column is a factor of ten in the result.
+      track.addEventListener("pointerdown", () => { track.dataset.user = "1"; }, { passive: true });
+      track.addEventListener("touchstart", () => { track.dataset.user = "1"; }, { passive: true });
+      track.addEventListener("wheel", () => { track.dataset.user = "1"; }, { passive: true });
+      track.addEventListener("keydown", () => { track.dataset.user = "1"; });
+
       track.addEventListener("scroll", () => {
         // Shape on a frame so a fast flick does not queue a write per event.
         if (!frame) frame = requestAnimationFrame(() => { frame = 0; shape(); });
+        if (!track.dataset.user) return;
         // Safari has no scrollend event yet, so treat a quiet moment as the end
         // of the gesture rather than reacting to every scroll frame.
         clearTimeout(settle);
         settle = setTimeout(() => {
+          delete track.dataset.user;
           const i = Math.min(opts.length - 1, Math.max(0, Math.round(track.scrollTop / ITEM_H)));
           if (opts[i] !== state.bands[role]) { state.bands[role] = opts[i]; updateReadout(); }
         }, 90);
       });
-      track.querySelectorAll(".roller-item").forEach((item, i) => {
-        item.onclick = () => track.scrollTo({ top: i * ITEM_H, behavior: "smooth" });
+
+      // A tap knows its own index, so commit it directly instead of inferring it
+      // from where the smooth scroll ends up.
+      items.forEach((item, i) => {
+        item.onclick = () => {
+          delete track.dataset.user;
+          if (opts[i] !== state.bands[role]) { state.bands[role] = opts[i]; updateReadout(); }
+          track.scrollTo({ top: i * ITEM_H, behavior: "smooth" });
+        };
       });
     });
   }

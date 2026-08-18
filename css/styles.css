@@ -64,11 +64,15 @@ html, body {
   font-weight: 600;
   margin: 0;
 }
-.topbar .sub {
+.sub {
   padding: 0 16px 10px;
   color: var(--text-secondary);
   font-size: 15.5px;
 }
+.sub-center { text-align: center; }
+/* Top-level screens have no back button or star to balance the title against,
+   so space-between left it flush left. Tool screens keep their three-up row. */
+.topbar h1:only-child { flex: 1; text-align: center; }
 .back-row {
   display: flex;
   align-items: center;
