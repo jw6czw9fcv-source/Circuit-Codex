@@ -396,6 +396,12 @@ const BAND_COLORS = {
   silver: { hex: "#C0C4C8",           mult: 0.01, tol: 10 },
 };
 
+// Column headers are abbreviated: six columns across a phone leaves ~50px each.
+// The full label from BAND_ROLE_LABEL rides along as the column's title.
+const ROLLER_NAME = {
+  d1: "1st", d2: "2nd", d3: "3rd", mult: "Mult", tol: "Tol", tc: "Temp",
+};
+
 const BAND_ROLE_LABEL = {
   d1: "1st digit", d2: "2nd digit", d3: "3rd digit",
   mult: "Multiplier", tol: "Tolerance", tc: "Temp. coefficient",
@@ -452,6 +458,14 @@ function renderResistorColorCode(domain, tool, key) {
     return String(v);
   }
 
+  // The roller column is only ~50px wide, so its readout drops units the column
+  // header already implies. valueLabel stays the full form for tooltips and the
+  // results card, where there is room to be unambiguous.
+  function shortValue(role, color) {
+    if (role === "tc") return String(BAND_COLORS[color].tc);
+    return valueLabel(role, color);
+  }
+
   function compute() {
     const roles = rolesFor(state.count);
     const digits = roles.filter(r => r[0] === "d").map(r => BAND_COLORS[state.bands[r]].digit).join("");
@@ -491,6 +505,32 @@ function renderResistorColorCode(domain, tool, key) {
     </svg>`;
   }
 
+  function footnoteHTML(roles) {
+    return [`${roles.filter(x => x[0] === "d").length} digits ${multLabel(BAND_COLORS[state.bands.mult].mult)}`, "tolerance"]
+      .concat(roles.includes("tc") ? ["temp. coefficient"] : [])
+      .join(" &nbsp;·&nbsp; ");
+  }
+
+  // Height of one roller slot, shared by the CSS and the scroll maths.
+  const ITEM_H = 30;
+
+  // Refresh what a colour change affects, in place. A full paint() would reset
+  // every roller's scroll position, throwing the user out of their own gesture.
+  function updateReadout() {
+    const roles = rolesFor(state.count);
+    const r = compute();
+    app.querySelector(".diagram-box").innerHTML = resistor();
+    roles.forEach(role => {
+      const el = app.querySelector(`[data-value="${role}"]`);
+      if (el) el.textContent = shortValue(role, state.bands[role]);
+    });
+    app.querySelector('[data-res="ohms"]').textContent = formatOhms(r.ohms);
+    app.querySelector('[data-res="tol"]').textContent = `±${r.tol}%`;
+    app.querySelector('[data-res="sub"]').innerHTML =
+      `${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}`;
+    app.querySelector('[data-res="note"]').innerHTML = footnoteHTML(roles);
+  }
+
   function paint() {
     const roles = rolesFor(state.count);
     const r = compute();
@@ -511,20 +551,19 @@ function renderResistorColorCode(domain, tool, key) {
       </div>
 
       <div class="section-label" style="color:#8FC1F5">Your bands</div>
-      ${roles.map((role, i) => `
-        <div class="band-row">
-          <div class="band-head">
-            <span class="label">Band ${i + 1} · ${BAND_ROLE_LABEL[role]}</span>
-            <span class="pick">${state.bands[role][0].toUpperCase() + state.bands[role].slice(1)} · ${valueLabel(role, state.bands[role])}</span>
-          </div>
-          <div class="swatches">
-            ${optionsFor(role).map(c => `
-              <button class="swatch" data-role="${role}" data-color="${c}"
-                      aria-pressed="${state.bands[role] === c}"
-                      title="${c} · ${valueLabel(role, c)}"
-                      style="background:${BAND_COLORS[c].hex}"></button>`).join("")}
-          </div>
-        </div>`).join("")}
+      <div class="rollers">
+        ${roles.map((role, i) => `
+          <div class="roller">
+            <div class="roller-name" title="Band ${i + 1} · ${BAND_ROLE_LABEL[role]}">${ROLLER_NAME[role]}</div>
+            <div class="roller-window">
+              <div class="roller-track" data-role="${role}">
+                ${optionsFor(role).map(c => `
+                  <button class="roller-item" data-color="${c}" title="${c} · ${valueLabel(role, c)}"><span style="background:${BAND_COLORS[c].hex}"></span></button>`).join("")}
+              </div>
+            </div>
+            <div class="roller-value" data-value="${role}">${shortValue(role, state.bands[role])}</div>
+          </div>`).join("")}
+      </div>
 
       <div class="section-label" style="color:#5DCAA5">Results</div>
       <div class="result-field">
@@ -533,17 +572,13 @@ function renderResistorColorCode(domain, tool, key) {
           <span class="badge-calc">${ICONS.bolt2}Calculated</span>
         </div>
         <div class="result-value">
-          <span class="num">${formatOhms(r.ohms)}</span>
-          <span class="unit">±${r.tol}%</span>
+          <span class="num" data-res="ohms">${formatOhms(r.ohms)}</span>
+          <span class="unit" data-res="tol">±${r.tol}%</span>
         </div>
-        <div class="result-sub">${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}</div>
+        <div class="result-sub" data-res="sub">${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}</div>
       </div>
 
-      <div class="formula-note">${ICONS.info}<span>${
-        [`${roles.filter(x => x[0] === "d").length} digits ${multLabel(BAND_COLORS[state.bands.mult].mult)}`, "tolerance"]
-          .concat(roles.includes("tc") ? ["temp. coefficient"] : [])
-          .join(" &nbsp;·&nbsp; ")
-      }</span></div>
+      <div class="formula-note">${ICONS.info}<span data-res="note">${footnoteHTML(roles)}</span></div>
       ${tabbarHTML("")}
     `;
 
@@ -552,8 +587,43 @@ function renderResistorColorCode(domain, tool, key) {
     app.querySelectorAll(".pill").forEach(btn => {
       btn.onclick = () => { state.count = +btn.dataset.count; paint(); };
     });
-    app.querySelectorAll(".swatch").forEach(btn => {
-      btn.onclick = () => { state.bands[btn.dataset.role] = btn.dataset.color; paint(); };
+    app.querySelectorAll(".roller-track").forEach(track => {
+      const role = track.dataset.role;
+      const opts = optionsFor(role);
+      const items = [...track.querySelectorAll(".roller-item")];
+
+      // Lay the slots on a drum: each one tilts by its distance from the centre
+      // and is pushed back as it goes, so the column reads as a wheel rather
+      // than a flat list. Runs off the scroll position, so it tracks the finger.
+      const shape = () => {
+        const centre = track.scrollTop / ITEM_H;
+        items.forEach((item, i) => {
+          const d = i - centre;
+          const angle = Math.max(-64, Math.min(64, d * 22));
+          item.style.transform = `rotateX(${-angle}deg) translateZ(${30 - Math.abs(d) * 5}px)`;
+          item.style.opacity = String(Math.max(0.18, 1 - Math.abs(d) * 0.3));
+        });
+      };
+
+      track.scrollTop = opts.indexOf(state.bands[role]) * ITEM_H;
+      shape();
+
+      let frame = 0;
+      let settle;
+      track.addEventListener("scroll", () => {
+        // Shape on a frame so a fast flick does not queue a write per event.
+        if (!frame) frame = requestAnimationFrame(() => { frame = 0; shape(); });
+        // Safari has no scrollend event yet, so treat a quiet moment as the end
+        // of the gesture rather than reacting to every scroll frame.
+        clearTimeout(settle);
+        settle = setTimeout(() => {
+          const i = Math.min(opts.length - 1, Math.max(0, Math.round(track.scrollTop / ITEM_H)));
+          if (opts[i] !== state.bands[role]) { state.bands[role] = opts[i]; updateReadout(); }
+        }, 90);
+      });
+      track.querySelectorAll(".roller-item").forEach((item, i) => {
+        item.onclick = () => track.scrollTo({ top: i * ITEM_H, behavior: "smooth" });
+      });
     });
   }
 

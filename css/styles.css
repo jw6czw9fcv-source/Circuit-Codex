@@ -247,34 +247,82 @@ html, body {
 }
 .pill.active { color: #FFFFFF; }
 
-/* Colour-band picker. One row per band: what the band means on the left, the
-   colour currently on it and its value on the right, swatches below. */
-.band-row { margin: 0 16px 6px; }
-.band-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 5px;
+/* Colour-band roller. One column per band, left to right in the order the
+   bands sit on the part, so the picker reads like the resistor above it.
+   Each column is a scroll-snap track; the centre slot is the selection. */
+.rollers { display: flex; gap: 6px; margin: 0 16px 10px; }
+.roller { flex: 1 1 0; min-width: 0; text-align: center; }
+.roller-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.band-head .label { color: var(--text-secondary); font-size: 12.5px; }
-.band-head .pick { color: var(--text); font-size: 13.5px; font-weight: 600; }
-/* Swatches share the row width instead of taking a fixed size, so a 12-colour
-   multiplier row and an 8-colour tolerance row both fit on one line at any
-   width — no wrapping, and the shorter rows get the bigger tap targets. */
-.swatches { display: flex; gap: 5px; }
-.swatch {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 23px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  padding: 0;
+/* perspective + the per-item rotateX applied in JS turn the flat list into a
+   drum. The mask fades the ends so items appear to curve away over the rim. */
+.roller-window {
+  position: relative;
+  perspective: 320px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 26%, #000 74%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 26%, #000 74%, transparent);
+}
+/* Centre slot marker, drawn over the track so it stays put while it scrolls. */
+.roller-window::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 31px;
+  height: 30px;
+  border-top: 1px solid #3A4048;
+  border-bottom: 1px solid #3A4048;
+  pointer-events: none;
+}
+.roller-track {
+  transform-style: preserve-3d;
+  height: 92px;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  /* Half a slot above and below, so the first and last colour can reach the
+     centre. Without it neither end is selectable. */
+  padding: 30px 0;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  scrollbar-width: none;
+}
+.roller-track::-webkit-scrollbar { display: none; }
+.roller-item {
+  display: block;
+  transform-origin: center center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+  width: 100%;
+  height: 30px;
+  scroll-snap-align: center;
+  border: none;
+  background: none;
+  padding: 3px 5px;
   cursor: pointer;
 }
-/* Double ring: the inner one is the page colour, so the accent reads as a halo
-   and never touches a swatch whose own colour is close to it. */
-.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #5B9BE0; }
+.roller-item span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.roller-value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .field {
   background: var(--card);
