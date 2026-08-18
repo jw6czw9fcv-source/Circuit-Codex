@@ -132,6 +132,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, key);
   if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, key);
   if (calcId === "smd-code") return renderSmdCode(domain, tool, key);
+  if (calcId === "eia96-code") return renderSmdCode(domain, tool, key, "96");
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -818,13 +819,59 @@ function renderResistorColorCode(domain, tool, key) {
 // ---------- SMD resistor code ----------
 // Chip resistors mark the value as significant digits followed by a decade
 // exponent (472 = 47 x 10^2), and use R in place of a decimal point below the
-// range that notation reaches (4R7 = 4.7). EIA-96 is a different scheme with
-// its own tool.
-function renderSmdCode(domain, tool, key) {
-  const state = { digits: 3, ohms: 4700, unit: "kΩ" };
+// range that reaches (4R7 = 4.7). EIA-96 is the three-character scheme used
+// where two digits are not enough: a 2-digit index into E96 plus a letter for
+// the decade. All three are the same job — read the marking — so they share
+// this screen; the EIA-96 tool entry opens it straight into that mode.
+const EIA96_MULT = { Z: 1e-3, Y: 1e-2, R: 1e-2, X: 1e-1, S: 1e-1, A: 1, B: 1e1, H: 1e1, C: 1e2, D: 1e3, E: 1e4, F: 1e5 };
+// Y/R, X/S and B/H are alternates for the same decade; these are the ones to
+// print, the table above still reads the others back.
+const EIA96_LETTER = [["Z", 1e-3], ["Y", 1e-2], ["X", 1e-1], ["A", 1], ["B", 1e1], ["C", 1e2], ["D", 1e3], ["E", 1e4], ["F", 1e5]];
+
+function eia96Decode(code) {
+  const m = /^(\d{2})([A-Z])$/.exec(String(code).trim().toUpperCase());
+  if (!m) return NaN;
+  const index = Number(m[1]);
+  const mult = EIA96_MULT[m[2]];
+  if (index < 1 || index > 96 || mult === undefined) return NaN;
+  return eSeriesValues("E96")[index - 1] * mult;
+}
+
+// Only E96 values are expressible, so this returns the code and the value that
+// code actually means — they differ whenever the input was not an E96 value.
+function eia96Encode(ohms) {
+  if (!isFinite(ohms) || ohms <= 0) return null;
+  const values = eSeriesValues("E96");
+  const decade = Math.pow(10, Math.floor(Math.log10(ohms)) - 2);
+  const mantissa = ohms / decade;
+  let idx = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (Math.abs(values[i] - mantissa) < Math.abs(values[idx] - mantissa)) idx = i;
+  }
+  // Just under the next decade, 01 of that decade is the closer code.
+  if (Math.abs(1000 - mantissa) < Math.abs(values[idx] - mantissa)) {
+    const up = decade * 10;
+    const letterUp = EIA96_LETTER.find(([, m]) => Math.abs(m - up) <= up * 1e-9);
+    return letterUp ? { code: "01" + letterUp[0], ohms: 100 * up } : null;
+  }
+  const letter = EIA96_LETTER.find(([, m]) => Math.abs(m - decade) <= decade * 1e-9);
+  return letter ? { code: String(idx + 1).padStart(2, "0") + letter[0], ohms: values[idx] * decade } : null;
+}
+
+function renderSmdCode(domain, tool, key, initialMode) {
+  const state = { mode: initialMode || "3", ohms: 4700, unit: "kΩ" };
+
+  // EIA-96 can only express E96 values, so entering that mode has to pull the
+  // current value onto the grid. Without it the screen opens showing a code and
+  // a resistance that disagree.
+  function normalize() {
+    if (state.mode !== "96") return;
+    const e = eia96Encode(state.ohms);
+    if (e) state.ohms = e.ohms;
+  }
 
   function sig() {
-    return state.digits === 3 ? 2 : 3;
+    return state.mode === "3" ? 2 : 3;
   }
 
   function trim(n) {
@@ -833,8 +880,6 @@ function renderSmdCode(domain, tool, key) {
 
   function formatOhms(v) {
     if (!isFinite(v)) return "—";
-    // A zero-ohm link is a real part; without this it falls through to the
-    // milliohm branch and reads "0 mΩ".
     if (v === 0) return "0 Ω";
     for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
       if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
@@ -844,7 +889,12 @@ function renderSmdCode(domain, tool, key) {
 
   // R sits where the decimal point would: 4R7 is 4.7, R47 is 0.47, 47R0 is 47.
   function codeFor(ohms) {
-    if (ohms === 0) return "0".repeat(state.digits);
+    if (state.mode === "96") {
+      const e = eia96Encode(ohms);
+      return e ? e.code : null;
+    }
+    const digits = Number(state.mode);
+    if (ohms === 0) return "0".repeat(digits);
     if (!isFinite(ohms) || ohms < 0) return null;
     const n = sig();
     const e = Math.floor(Math.log10(ohms));
@@ -854,18 +904,20 @@ function renderSmdCode(domain, tool, key) {
     if (exponent > 9) return null;
     if (exponent >= 0) return d + String(exponent);
     const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
-    return code.length <= state.digits + 1 ? code : null;
+    return code.length <= digits + 1 ? code : null;
   }
 
   function ohmsFor(code) {
     const raw = String(code).trim().toUpperCase();
     if (!raw) return NaN;
+    if (state.mode === "96") return eia96Decode(raw);
+    const digits = Number(state.mode);
     if (raw.includes("R")) {
       if ((raw.match(/R/g) || []).length > 1 || /[^0-9R]/.test(raw)) return NaN;
       const v = parseFloat(raw.replace("R", "."));
       return isFinite(v) ? v : NaN;
     }
-    if (!/^[0-9]+$/.test(raw) || raw.length !== state.digits) return NaN;
+    if (!/^[0-9]+$/.test(raw) || raw.length !== digits) return NaN;
     if (Number(raw) === 0) return 0;
     const n = sig();
     return Number(raw.slice(0, n)) * Math.pow(10, Number(raw.slice(n)));
@@ -876,8 +928,13 @@ function renderSmdCode(domain, tool, key) {
     for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
       if (nearestESeries(ohms, name).exact) return `${name} standard value`;
     }
-    const grid = state.digits === 3 ? "E24" : "E96";
+    const grid = state.mode === "3" ? "E24" : "E96";
     return `Not standard — nearest ${grid} is ${formatOhms(nearestESeries(ohms, grid).value)}`;
+  }
+
+  function subtitle() {
+    if (state.mode === "96") return "2 digits + multiplier letter";
+    return `${state.mode} digit codes`;
   }
 
   // Literal part, like the colour code's resistor: a black chip with metallised
@@ -893,16 +950,19 @@ function renderSmdCode(domain, tool, key) {
   }
 
   function footnoteHTML() {
+    if (state.mode === "96") {
+      return ["2-digit E96 index + letter", "letter sets the decade", "±1%"].join(" &nbsp;·&nbsp; ");
+    }
     return [
       `${sig()} digits + ×10ⁿ`,
       "R marks the decimal point",
-      state.digits === 3 ? "usually ±5%" : "usually ±1%",
+      state.mode === "3" ? "usually ±5%" : "usually ±1%",
     ].join(" &nbsp;·&nbsp; ");
   }
 
   // Update in place rather than repainting, so the field being typed in keeps
   // its caret — same reason as the colour code.
-  function refresh(source) {
+  function refresh(source, notice) {
     const code = codeFor(state.ohms);
     app.querySelector(".diagram-box").innerHTML = chip(code);
     app.querySelector('[data-res="ohms"]').textContent = formatOhms(state.ohms);
@@ -915,7 +975,24 @@ function renderSmdCode(domain, tool, key) {
       valueField.value = trim(state.ohms / OHM_UNITS[state.unit]);
     }
     app.querySelector('[data-res="err"]').textContent =
-      code === null ? `Out of range for a ${state.digits}-digit code.` : "";
+      notice || (code === null ? `Out of range for ${state.mode === "96" ? "EIA-96" : `a ${state.mode}-digit code`}.` : "");
+  }
+
+  // EIA-96 can only express E96 values, so a typed value snaps to the nearest
+  // one. Say so rather than showing a code that means something else.
+  function applyValue(raw) {
+    const v = parseFloat(raw) * OHM_UNITS[state.unit];
+    if (!isFinite(v) || v < 0) return;
+    if (state.mode === "96") {
+      const e = eia96Encode(v);
+      if (!e) { state.ohms = v; refresh("value"); return; }
+      const snapped = Math.abs(e.ohms - v) > v * 1e-9;
+      state.ohms = e.ohms;
+      refresh("value", snapped ? `Rounded to the nearest EIA-96 value, ${formatOhms(e.ohms)}.` : "");
+      return;
+    }
+    state.ohms = v;
+    refresh("value");
   }
 
   function paint() {
@@ -926,20 +1003,20 @@ function renderSmdCode(domain, tool, key) {
         <h1>${tool.name}</h1>
         <button class="icon-btn ${isFavorite(key) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
       </div>
-      <div class="sub" style="padding-left:46px;">3 and 4 digit codes</div>
+      <div class="sub" style="padding-left:46px;">${subtitle()}</div>
 
       <div class="diagram-box">${chip(code)}</div>
 
       <div class="mode-pills">
-        ${[3, 4].map(n => `
-          <button class="pill ${state.digits === n ? "active" : ""}" data-digits="${n}" style="${state.digits === n ? `background:${domain.bg};color:#8FC1F5` : ""}">${n} digit</button>`).join("")}
+        ${[["3", "3 digit"], ["4", "4 digit"], ["96", "EIA-96"]].map(([m, label]) => `
+          <button class="pill ${state.mode === m ? "active" : ""}" data-mode="${m}" style="${state.mode === m ? `background:${domain.bg};color:#8FC1F5` : ""}">${label}</button>`).join("")}
       </div>
 
       <div class="section-label" style="color:#8FC1F5">Marking on the chip</div>
       <div class="field">
         <label>Code</label>
         <div class="field-row">
-          <input id="smd-code" type="text" autocapitalize="characters" spellcheck="false" value="${code || ""}" />
+          <input id="smd-code" type="text" autocapitalize="characters" spellcheck="false" maxlength="4" value="${code || ""}" />
         </div>
       </div>
 
@@ -972,28 +1049,27 @@ function renderSmdCode(domain, tool, key) {
     document.getElementById("fav-btn").onclick = () => { toggleFavorite(key); paint(); };
 
     app.querySelectorAll(".pill").forEach(btn => {
-      btn.onclick = () => { state.digits = +btn.dataset.digits; paint(); };
+      btn.onclick = () => { state.mode = btn.dataset.mode; normalize(); paint(); };
     });
 
     const codeField = document.getElementById("smd-code");
     codeField.oninput = () => {
       const v = ohmsFor(codeField.value);
       if (!isNaN(v)) { state.ohms = v; refresh("code"); }
-      else app.querySelector('[data-res="err"]').textContent = "Not a valid marking.";
+      else {
+        app.querySelector('[data-res="err"]').textContent =
+          state.mode === "96" ? "Not a valid EIA-96 marking." : "Not a valid marking.";
+      }
     };
     const valueField = document.getElementById("smd-value");
-    valueField.oninput = () => {
-      const v = parseFloat(valueField.value) * OHM_UNITS[state.unit];
-      if (isFinite(v) && v >= 0) { state.ohms = v; refresh("value"); }
-    };
+    valueField.oninput = () => applyValue(valueField.value);
     document.getElementById("smd-unit").onchange = (e) => {
       state.unit = e.target.value;
-      const v = parseFloat(valueField.value) * OHM_UNITS[state.unit];
-      if (isFinite(v) && v >= 0) state.ohms = v;
-      refresh("value");
+      applyValue(valueField.value);
     };
   }
 
+  normalize();
   paint();
 }
 
