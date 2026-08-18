@@ -706,10 +706,13 @@ function renderResistorColorCode(domain, tool, favId) {
     return `Not standard — nearest ${grid} is ${formatOhms(nearestESeries(r.ohms, grid).value)}`;
   }
 
+  // Says how the code composes, and nothing the screen already shows: the band
+  // roles are the roller column headers, the multiplier and tolerance are read
+  // out under them, and the value is in the results card. What is left that is
+  // not on screen anywhere is which end you read from.
   function footnoteHTML(roles) {
-    return [`${roles.filter(x => x[0] === "d").length} digits ${multLabel(BAND_COLORS[state.bands.mult].mult)}`, "tolerance"]
-      .concat(roles.includes("tc") ? ["temp. coefficient"] : [])
-      .join(" &nbsp;·&nbsp; ");
+    const digits = roles.filter(x => x[0] === "d").length;
+    return `${digits} digits × multiplier &nbsp;·&nbsp; tolerance band goes last`;
   }
 
   // Height of one roller slot, shared by the CSS and the scroll maths.
