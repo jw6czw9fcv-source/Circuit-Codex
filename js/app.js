@@ -2,18 +2,41 @@
 
 const app = document.getElementById("app");
 
+// Favourites are keyed by what a tool *is*, not where it sits. Position keys
+// (domain:section:index) silently repoint at a different tool whenever the list
+// is reordered or something is removed, which has already happened once.
+function favoriteId(domain, section, tool) {
+  return `${domain.id}:${section.title}:${tool.name}`;
+}
+
+function findByFavoriteId(id) {
+  for (const d of DOMAINS) {
+    for (let si = 0; si < d.sections.length; si++) {
+      const sec = d.sections[si];
+      for (let ti = 0; ti < sec.tools.length; ti++) {
+        if (favoriteId(d, sec, sec.tools[ti]) === id) {
+          return { domain: d, section: sec, tool: sec.tools[ti], key: `${d.id}:${si}:${ti}` };
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function favorites() {
   return JSON.parse(localStorage.getItem("cc_favorites") || "[]");
 }
-function toggleFavorite(key) {
+function toggleFavorite(id) {
   const favs = favorites();
-  const idx = favs.indexOf(key);
-  if (idx >= 0) favs.splice(idx, 1); else favs.push(key);
+  const idx = favs.indexOf(id);
+  if (idx >= 0) favs.splice(idx, 1); else favs.push(id);
   localStorage.setItem("cc_favorites", JSON.stringify(favs));
 }
-function isFavorite(key) {
-  return favorites().includes(key);
+function isFavorite(id) {
+  return favorites().includes(id);
 }
+
+const POSITION_KEY = /^[^:]+:\d+:\d+$/;
 
 // ---------- Icons (inline SVG, literal style) ----------
 const ICONS = {
@@ -128,17 +151,18 @@ function renderTool(rawKey, calcId) {
   const found = findTool(key);
   if (!found) return renderHome();
   const { domain, section, tool } = found;
+  const favId = favoriteId(domain, section, tool);
 
-  if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, key);
-  if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, key);
-  if (calcId === "smd-code") return renderSmdCode(domain, tool, key);
+  if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, favId);
+  if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, favId);
+  if (calcId === "smd-code") return renderSmdCode(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
     <div class="topbar back-row">
       <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
       <h1>${tool.name}</h1>
-      <button class="icon-btn ${isFavorite(key) ? "active" : ""}" onclick="toggleFavorite('${key}');render()">${ICONS.star}</button>
+      <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
     </div>
     <div class="sub" style="padding-left:46px;">${domain.title} · ${section.title}</div>
     <div class="placeholder">
@@ -148,6 +172,8 @@ function renderTool(rawKey, calcId) {
     </div>
     ${tabbarHTML("")}
   `;
+
+  document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); render(); };
 }
 
 function renderSearch() {
@@ -190,7 +216,7 @@ function renderSearch() {
 
 function renderFavorites() {
   const favs = favorites();
-  const items = favs.map(key => findTool(key)).filter(Boolean);
+  const items = favs.map(id => findByFavoriteId(id)).filter(Boolean);
   app.innerHTML = `
     <div class="topbar"><h1>Favorites</h1></div>
     <div class="tool-list">
@@ -207,7 +233,7 @@ function renderFavorites() {
 }
 
 // ---------- Ohm's law calculator (fully functional proof of concept) ----------
-function renderOhmsLaw(domain, tool, key) {
+function renderOhmsLaw(domain, tool, favId) {
   const state = { mode: "vi", V: 12, I: 250, Ivi_unit: "mA" };
 
   // Series loop with V, I and R marked where they physically are: V across the
@@ -314,7 +340,7 @@ function renderOhmsLaw(domain, tool, key) {
       <div class="topbar back-row">
         <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
         <h1>${tool.name}</h1>
-        <button class="icon-btn ${isFavorite(key) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
+        <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
       </div>
       <div class="sub" style="padding-left:46px;">Voltage, current, resistance</div>
 
@@ -355,7 +381,7 @@ function renderOhmsLaw(domain, tool, key) {
       ${tabbarHTML("")}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(key); paint(); };
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
 
     app.querySelectorAll(".pill").forEach(btn => {
       btn.onclick = () => { state.mode = btn.dataset.mode; paint(); };
@@ -456,7 +482,7 @@ const BAND_ROLE_LABEL = {
 
 const OHM_UNITS = { "mΩ": 1e-3, "Ω": 1, "kΩ": 1e3, "MΩ": 1e6, "GΩ": 1e9 };
 
-function renderResistorColorCode(domain, tool, key) {
+function renderResistorColorCode(domain, tool, favId) {
   const state = {
     count: 4,
     unit: "kΩ",
@@ -683,7 +709,7 @@ function renderResistorColorCode(domain, tool, key) {
       <div class="topbar back-row">
         <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
         <h1>${tool.name}</h1>
-        <button class="icon-btn ${isFavorite(key) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
+        <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
       </div>
       <div class="sub" style="padding-left:46px;">4 to 6 bands</div>
 
@@ -737,7 +763,7 @@ function renderResistorColorCode(domain, tool, key) {
       ${tabbarHTML("")}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(key); paint(); };
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
 
     app.querySelectorAll(".pill").forEach(btn => {
       btn.onclick = () => { state.count = +btn.dataset.count; paint(); };
@@ -857,7 +883,7 @@ function eia96Encode(ohms) {
   return letter ? { code: String(idx + 1).padStart(2, "0") + letter[0], ohms: values[idx] * decade } : null;
 }
 
-function renderSmdCode(domain, tool, key) {
+function renderSmdCode(domain, tool, favId) {
   const state = { mode: "3", ohms: 4700, unit: "kΩ" };
 
   // EIA-96 can only express E96 values, so entering that mode has to pull the
@@ -1000,7 +1026,7 @@ function renderSmdCode(domain, tool, key) {
       <div class="topbar back-row">
         <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
         <h1>${tool.name}</h1>
-        <button class="icon-btn ${isFavorite(key) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
+        <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
       </div>
       <div class="sub" style="padding-left:46px;">${subtitle()}</div>
 
@@ -1045,7 +1071,7 @@ function renderSmdCode(domain, tool, key) {
       ${tabbarHTML("")}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(key); paint(); };
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
 
     app.querySelectorAll(".pill").forEach(btn => {
       btn.onclick = () => { state.mode = btn.dataset.mode; normalize(); paint(); };
@@ -1071,5 +1097,19 @@ function renderSmdCode(domain, tool, key) {
   normalize();
   paint();
 }
+
+// Anything stored under the old position keys is converted once, on load.
+// A key whose tool no longer exists is dropped rather than left dangling.
+(function migrateFavorites() {
+  const stored = favorites();
+  if (!stored.some(k => POSITION_KEY.test(k))) return;
+  const migrated = [];
+  for (const entry of stored) {
+    if (!POSITION_KEY.test(entry)) { migrated.push(entry); continue; }
+    const found = findTool(entry);
+    if (found) migrated.push(favoriteId(found.domain, found.section, found.tool));
+  }
+  localStorage.setItem("cc_favorites", JSON.stringify([...new Set(migrated)]));
+})();
 
 render();
