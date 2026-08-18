@@ -359,6 +359,14 @@ html, body {
   font-size: 13px;
   font-weight: 500;
   outline: none;
+  /* Form controls do not inherit colour: without these the select renders as
+     the UA default black, invisible on the dark card. The option rule matters
+     too — the open dropdown is painted by the platform, not by the page. */
+  color: var(--text);
+}
+.field select option {
+  color: var(--text);
+  background: var(--card);
 }
 
 .result-field {
