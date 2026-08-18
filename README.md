@@ -11,8 +11,9 @@ Working proof of concept:
 - Favorites (localStorage)
 - **Two fully working calculators:**
   - **Ohm's law** (`js/app.js`, `renderOhmsLaw`) — 3 modes, unit selection, live calculation, mode-aware circuit diagram and formula footnote
-  - **Resistor color code** (`js/app.js`, `renderResistorColorCode`) — 4/5/6 bands, visual band picker, live resistor illustration, value + tolerance + range + temp. coefficient
-- All other 183 tools currently open a "not built yet" placeholder screen
+  - **Resistor color code** (`js/app.js`, `renderResistorColorCode`) — 4/5/6 bands, 3D band roller, value entry with unit and tolerance, live resistor illustration, E-series check
+  - **SMD resistor code** (`js/app.js`, `renderSmdCode`) — 3 and 4 digit markings including R notation, both directions, live chip illustration, E-series check
+- All other 182 tools currently open a "not built yet" placeholder screen
 - Installable PWA (manifest + service worker + icons), works offline once installed
 
 ## Stack

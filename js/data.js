@@ -16,7 +16,7 @@ const DOMAINS = [
         title: "Resistors",
         tools: [
           { name: "Color code", calc: "resistor-color-code" },
-          { name: "SMD code" },
+          { name: "SMD code", calc: "smd-code" },
           { name: "EIA-96 code" },
           { name: "Series/parallel" },
           { name: "Voltage divider" },

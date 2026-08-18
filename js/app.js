@@ -131,6 +131,7 @@ function renderTool(rawKey, calcId) {
 
   if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, key);
   if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, key);
+  if (calcId === "smd-code") return renderSmdCode(domain, tool, key);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -489,6 +490,9 @@ function renderResistorColorCode(domain, tool, key) {
 
   function formatOhms(v) {
     if (!isFinite(v)) return "—";
+    // A zero-ohm link is a real part; without this it falls through to the
+    // milliohm branch and reads "0 mΩ".
+    if (v === 0) return "0 Ω";
     for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
       if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
     }
@@ -806,6 +810,188 @@ function renderResistorColorCode(domain, tool, key) {
         };
       });
     });
+  }
+
+  paint();
+}
+
+// ---------- SMD resistor code ----------
+// Chip resistors mark the value as significant digits followed by a decade
+// exponent (472 = 47 x 10^2), and use R in place of a decimal point below the
+// range that notation reaches (4R7 = 4.7). EIA-96 is a different scheme with
+// its own tool.
+function renderSmdCode(domain, tool, key) {
+  const state = { digits: 3, ohms: 4700, unit: "kΩ" };
+
+  function sig() {
+    return state.digits === 3 ? 2 : 3;
+  }
+
+  function trim(n) {
+    return Number(n.toPrecision(4)).toString();
+  }
+
+  function formatOhms(v) {
+    if (!isFinite(v)) return "—";
+    // A zero-ohm link is a real part; without this it falls through to the
+    // milliohm branch and reads "0 mΩ".
+    if (v === 0) return "0 Ω";
+    for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
+      if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
+    }
+    return `${trim(v * 1e3)} mΩ`;
+  }
+
+  // R sits where the decimal point would: 4R7 is 4.7, R47 is 0.47, 47R0 is 47.
+  function codeFor(ohms) {
+    if (ohms === 0) return "0".repeat(state.digits);
+    if (!isFinite(ohms) || ohms < 0) return null;
+    const n = sig();
+    const e = Math.floor(Math.log10(ohms));
+    const d = String(Math.round(ohms / Math.pow(10, e - n + 1)));
+    if (d.length > n) return codeFor(Math.pow(10, e + 1));
+    const exponent = e - n + 1;
+    if (exponent > 9) return null;
+    if (exponent >= 0) return d + String(exponent);
+    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
+    return code.length <= state.digits + 1 ? code : null;
+  }
+
+  function ohmsFor(code) {
+    const raw = String(code).trim().toUpperCase();
+    if (!raw) return NaN;
+    if (raw.includes("R")) {
+      if ((raw.match(/R/g) || []).length > 1 || /[^0-9R]/.test(raw)) return NaN;
+      const v = parseFloat(raw.replace("R", "."));
+      return isFinite(v) ? v : NaN;
+    }
+    if (!/^[0-9]+$/.test(raw) || raw.length !== state.digits) return NaN;
+    if (Number(raw) === 0) return 0;
+    const n = sig();
+    return Number(raw.slice(0, n)) * Math.pow(10, Number(raw.slice(n)));
+  }
+
+  function seriesLine(ohms) {
+    if (!isFinite(ohms) || ohms <= 0) return "";
+    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
+      if (nearestESeries(ohms, name).exact) return `${name} standard value`;
+    }
+    const grid = state.digits === 3 ? "E24" : "E96";
+    return `Not standard — nearest ${grid} is ${formatOhms(nearestESeries(ohms, grid).value)}`;
+  }
+
+  // Literal part, like the colour code's resistor: a black chip with metallised
+  // ends and the marking in white, which is what you are holding.
+  function chip(code) {
+    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
+      <rect x="44" y="16" width="132" height="48" rx="5" fill="#141619" stroke="#3A3F47" stroke-width="1"/>
+      <rect x="44" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
+      <rect x="156" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
+      <text x="110" y="48" fill="#FFFFFF" font-size="21" font-weight="600" text-anchor="middle"
+            font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1.5">${code || "—"}</text>
+    </svg>`;
+  }
+
+  function footnoteHTML() {
+    return [
+      `${sig()} digits + ×10ⁿ`,
+      "R marks the decimal point",
+      state.digits === 3 ? "usually ±5%" : "usually ±1%",
+    ].join(" &nbsp;·&nbsp; ");
+  }
+
+  // Update in place rather than repainting, so the field being typed in keeps
+  // its caret — same reason as the colour code.
+  function refresh(source) {
+    const code = codeFor(state.ohms);
+    app.querySelector(".diagram-box").innerHTML = chip(code);
+    app.querySelector('[data-res="ohms"]').textContent = formatOhms(state.ohms);
+    app.querySelector('[data-res="series"]').textContent = seriesLine(state.ohms);
+    app.querySelector('[data-res="note"]').innerHTML = footnoteHTML();
+    const codeField = app.querySelector("#smd-code");
+    const valueField = app.querySelector("#smd-value");
+    if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    if (source !== "value" && document.activeElement !== valueField) {
+      valueField.value = trim(state.ohms / OHM_UNITS[state.unit]);
+    }
+    app.querySelector('[data-res="err"]').textContent =
+      code === null ? `Out of range for a ${state.digits}-digit code.` : "";
+  }
+
+  function paint() {
+    const code = codeFor(state.ohms);
+    app.innerHTML = `
+      <div class="topbar back-row">
+        <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
+        <h1>${tool.name}</h1>
+        <button class="icon-btn ${isFavorite(key) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
+      </div>
+      <div class="sub" style="padding-left:46px;">3 and 4 digit codes</div>
+
+      <div class="diagram-box">${chip(code)}</div>
+
+      <div class="mode-pills">
+        ${[3, 4].map(n => `
+          <button class="pill ${state.digits === n ? "active" : ""}" data-digits="${n}" style="${state.digits === n ? `background:${domain.bg};color:#8FC1F5` : ""}">${n} digit</button>`).join("")}
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Marking on the chip</div>
+      <div class="field">
+        <label>Code</label>
+        <div class="field-row">
+          <input id="smd-code" type="text" autocapitalize="characters" spellcheck="false" value="${code || ""}" />
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Or enter a value</div>
+      <div class="field">
+        <label>Resistance</label>
+        <div class="field-row">
+          <input id="smd-value" type="number" inputmode="decimal" step="any" value="${trim(state.ohms / OHM_UNITS[state.unit])}" />
+          <select id="smd-unit">${Object.keys(OHM_UNITS).map(u => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Resistance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="ohms">${formatOhms(state.ohms)}</span>
+        </div>
+        <div class="result-sub" data-res="series">${seriesLine(state.ohms)}</div>
+      </div>
+
+      <div class="formula-note">${ICONS.info}<span data-res="note">${footnoteHTML()}</span></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(key); paint(); };
+
+    app.querySelectorAll(".pill").forEach(btn => {
+      btn.onclick = () => { state.digits = +btn.dataset.digits; paint(); };
+    });
+
+    const codeField = document.getElementById("smd-code");
+    codeField.oninput = () => {
+      const v = ohmsFor(codeField.value);
+      if (!isNaN(v)) { state.ohms = v; refresh("code"); }
+      else app.querySelector('[data-res="err"]').textContent = "Not a valid marking.";
+    };
+    const valueField = document.getElementById("smd-value");
+    valueField.oninput = () => {
+      const v = parseFloat(valueField.value) * OHM_UNITS[state.unit];
+      if (isFinite(v) && v >= 0) { state.ohms = v; refresh("value"); }
+    };
+    document.getElementById("smd-unit").onchange = (e) => {
+      state.unit = e.target.value;
+      const v = parseFloat(valueField.value) * OHM_UNITS[state.unit];
+      if (isFinite(v) && v >= 0) state.ohms = v;
+      refresh("value");
+    };
   }
 
   paint();
