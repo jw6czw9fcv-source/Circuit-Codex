@@ -6,13 +6,13 @@ Electronics reference and tools — iPhone-first PWA for hobbyists and professio
 
 Working proof of concept:
 - Full navigation (Home grid → domain → sub-section → tool)
-- 185 tools/categories listed across 7 domains, matching `REFERENCE.md` exactly
+- 184 tools/categories listed across 7 domains, matching `REFERENCE.md` exactly
 - Global search across all tool names
 - Favorites (localStorage)
 - **Three fully working calculators:**
   - **Ohm's law** (`js/app.js`, `renderOhmsLaw`) — 3 modes, unit selection, live calculation, mode-aware circuit diagram and formula footnote
   - **Resistor color code** (`js/app.js`, `renderResistorColorCode`) — 4/5/6 bands, 3D band roller, value entry with unit and tolerance, live resistor illustration, E-series check
-  - **SMD resistor code** (`js/app.js`, `renderSmdCode`) — 3-digit, 4-digit and EIA-96 markings, both directions, live chip illustration, E-series check. The `EIA-96 code` tool entry opens the same screen in EIA-96 mode
+  - **SMD resistor code** (`js/app.js`, `renderSmdCode`) — 3-digit, 4-digit and EIA-96 markings, both directions, live chip illustration, E-series check
 - All other 181 tools currently open a "not built yet" placeholder screen
 - Installable PWA (manifest + service worker + icons), works offline once installed
 

@@ -50,7 +50,7 @@ Tools within each sub-section are ordered logically/by frequency of use,
 not alphabetically:
 
 -   Most fundamental / most commonly used tool first (e.g. "Color code"
-    before "EIA-96 code")
+    before "SMD code")
 
 -   Conceptually related tools stay grouped together (e.g. all resistor
     coding methods, then all network calculations)
@@ -125,9 +125,7 @@ tools/calculators inside.
 
 -   Color code
 
--   SMD code
-
--   EIA-96 code
+-   SMD code (3-digit, 4-digit and EIA-96)
 
 -   Series/parallel
 

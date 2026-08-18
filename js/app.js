@@ -132,7 +132,6 @@ function renderTool(rawKey, calcId) {
   if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, key);
   if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, key);
   if (calcId === "smd-code") return renderSmdCode(domain, tool, key);
-  if (calcId === "eia96-code") return renderSmdCode(domain, tool, key, "96");
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -858,8 +857,8 @@ function eia96Encode(ohms) {
   return letter ? { code: String(idx + 1).padStart(2, "0") + letter[0], ohms: values[idx] * decade } : null;
 }
 
-function renderSmdCode(domain, tool, key, initialMode) {
-  const state = { mode: initialMode || "3", ohms: 4700, unit: "kΩ" };
+function renderSmdCode(domain, tool, key) {
+  const state = { mode: "3", ohms: 4700, unit: "kΩ" };
 
   // EIA-96 can only express E96 values, so entering that mode has to pull the
   // current value onto the grid. Without it the screen opens showing a code and
