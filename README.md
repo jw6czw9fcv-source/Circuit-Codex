@@ -56,7 +56,7 @@ REFERENCE.md          Full product spec: navigation, naming convention, visual s
 1. Build out calculators one domain at a time, following the `renderOhmsLaw` pattern as the template for each new tool.
 2. Next good candidates: **Series/parallel** and **Voltage divider** (Passive components) — both reuse the numeric-input pattern from `renderOhmsLaw` and want a mode-aware diagram.
 3. Circuit diagrams: add the schematic SVG per calculator that needs one (see REFERENCE.md section 4, "Calculator screen template").
-4. **Extract the calculator template into a shared render helper — overdue.** The shape (header → diagram → mode pills → inputs → results → footnote) is now duplicated verbatim across three calculators, along with `trim`/`formatOhms`. The duplication has already caused two real bugs: an edit anchored on "Results" hit the wrong calculator, and a helper was defined inside the wrong closure because both define `compute()`.
+4. **Done.** The shared screen shape lives in `calcHeader` / `pillRow` / `calcFooter` / `wireCalc`, and `trim` / `formatOhms` are module-level. A new calculator supplies a subtitle, an optional illustration, its pill options, its own body and a footnote.
 5. Longer term: Links and Notes sections (Tools domain) need actual storage logic (localStorage is fine to start, same pattern as favorites).
 
 ## Deploying

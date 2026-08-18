@@ -245,6 +245,61 @@ function renderFavorites() {
 }
 
 
+// ---------- Shared calculator screen ----------
+// Every calculator is the same shape: header, an optional illustration, an
+// optional mode selector, its own body, a footnote. That shape lives here so a
+// fix lands once instead of four times — the duplication it replaces had
+// already caused three bugs, twice by an edit landing in the wrong calculator.
+
+function trim(n) {
+  return Number(n.toPrecision(4)).toString();
+}
+
+function formatOhms(v) {
+  if (!isFinite(v)) return "—";
+  // A zero-ohm link is a real part; without this it falls through to the
+  // milliohm branch and reads "0 mΩ".
+  if (v === 0) return "0 Ω";
+  for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
+    if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
+  }
+  return `${trim(v * 1e3)} mΩ`;
+}
+
+function calcHeader(tool, favId, subtitle) {
+  return `
+    <div class="topbar back-row">
+      <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
+      <h1>${tool.name}</h1>
+      <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
+    </div>
+    <div class="sub" style="padding-left:46px;">${subtitle}</div>`;
+}
+
+// options is [value, label] pairs; the active one is tinted with the domain
+// accent. Values are compared as strings so callers can pass numbers.
+function pillRow(options, active, bg) {
+  return `
+    <div class="mode-pills">
+      ${options.map(([value, label]) => `
+        <button class="pill ${String(value) === String(active) ? "active" : ""}" data-pill="${value}"
+                style="${String(value) === String(active) ? `background:${bg};color:#8FC1F5` : ""}">${label}</button>`).join("")}
+    </div>`;
+}
+
+function calcFooter(note) {
+  return `
+      <div class="formula-note">${ICONS.info}<span data-res="note">${note}</span></div>
+      ${tabbarHTML("")}`;
+}
+
+function wireCalc(favId, repaint, onPill) {
+  document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); repaint(); };
+  if (onPill) {
+    app.querySelectorAll(".pill").forEach(btn => { btn.onclick = () => onPill(btn.dataset.pill); });
+  }
+}
+
 // ---------- Ohm's law calculator (fully functional proof of concept) ----------
 function renderOhmsLaw(domain, tool, favId) {
   const state = { mode: "vi", V: 12, I: 250, Ivi_unit: "mA" };
@@ -350,20 +405,11 @@ function renderOhmsLaw(domain, tool, favId) {
     const results = compute();
 
     app.innerHTML = `
-      <div class="topbar back-row">
-        <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
-        <h1>${tool.name}</h1>
-        <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
-      </div>
-      <div class="sub" style="padding-left:46px;">Voltage, current, resistance</div>
+      ${calcHeader(tool, favId, "Voltage, current, resistance")}
 
       <div class="diagram-box">${diagram()}</div>
 
-      <div class="mode-pills">
-        <button class="pill ${state.mode === "vi" ? "active" : ""}" data-mode="vi" style="${state.mode === "vi" ? "background:#1B2A3B;color:#8FC1F5" : ""}">VI</button>
-        <button class="pill ${state.mode === "vr" ? "active" : ""}" data-mode="vr" style="${state.mode === "vr" ? "background:#1B2A3B;color:#8FC1F5" : ""}">VR</button>
-        <button class="pill ${state.mode === "ir" ? "active" : ""}" data-mode="ir" style="${state.mode === "ir" ? "background:#1B2A3B;color:#8FC1F5" : ""}">IR</button>
-      </div>
+      ${pillRow([["vi", "VI"], ["vr", "VR"], ["ir", "IR"]], state.mode, "#1B2A3B")}
 
       <div class="section-label" style="color:#8FC1F5">Your inputs</div>
       ${inputs.map(v => `
@@ -390,15 +436,10 @@ function renderOhmsLaw(domain, tool, favId) {
           </div>
         </div>`).join("")}
 
-      <div class="formula-note">${ICONS.info}<span>${formulaFor(state.mode)}</span></div>
-      ${tabbarHTML("")}
+      ${calcFooter(formulaFor(state.mode))}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
-
-    app.querySelectorAll(".pill").forEach(btn => {
-      btn.onclick = () => { state.mode = btn.dataset.mode; paint(); };
-    });
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
     app.querySelectorAll("input[data-var]").forEach(inp => {
       inp.oninput = () => {
         // Store NaN for a blank or half-typed field too: compute() propagates it
@@ -523,20 +564,7 @@ function renderResistorColorCode(domain, tool, favId) {
     return Object.keys(BAND_COLORS).filter(c => BAND_COLORS[c][prop] !== undefined);
   }
 
-  function trim(n) {
-    return Number(n.toPrecision(4)).toString();
-  }
 
-  function formatOhms(v) {
-    if (!isFinite(v)) return "—";
-    // A zero-ohm link is a real part; without this it falls through to the
-    // milliohm branch and reads "0 mΩ".
-    if (v === 0) return "0 Ω";
-    for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
-      if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
-    }
-    return `${trim(v * 1e3)} mΩ`;
-  }
 
   function multLabel(v) {
     if (v >= 1e9) return "×1G";
@@ -719,19 +747,11 @@ function renderResistorColorCode(domain, tool, favId) {
     const r = compute();
 
     app.innerHTML = `
-      <div class="topbar back-row">
-        <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
-        <h1>${tool.name}</h1>
-        <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
-      </div>
-      <div class="sub" style="padding-left:46px;">4 to 6 bands</div>
+      ${calcHeader(tool, favId, "4 to 6 bands")}
 
       <div class="diagram-box">${resistor()}</div>
 
-      <div class="mode-pills">
-        ${[4, 5, 6].map(n => `
-          <button class="pill ${state.count === n ? "active" : ""}" data-count="${n}" style="${state.count === n ? `background:${domain.bg};color:#8FC1F5` : ""}">${n} bands</button>`).join("")}
-      </div>
+      ${pillRow([4, 5, 6].map(n => [n, `${n} bands`]), state.count, domain.bg)}
 
       <div class="field">
         <label>Enter a value</label>
@@ -772,15 +792,10 @@ function renderResistorColorCode(domain, tool, favId) {
         <div class="result-sub" data-res="sub">${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}</div>
       </div>
 
-      <div class="formula-note">${ICONS.info}<span data-res="note">${footnoteHTML(roles)}</span></div>
-      ${tabbarHTML("")}
+      ${calcFooter(footnoteHTML(roles))}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
-
-    app.querySelectorAll(".pill").forEach(btn => {
-      btn.onclick = () => { state.count = +btn.dataset.count; paint(); };
-    });
+    wireCalc(favId, paint, (v) => { state.count = +v; paint(); });
     const typed = document.getElementById("cc-value");
     typed.oninput = () => applyTypedValue(typed.value);
     document.getElementById("cc-unit").onchange = (e) => {
@@ -912,18 +927,7 @@ function renderSmdCode(domain, tool, favId) {
     return state.mode === "3" ? 2 : 3;
   }
 
-  function trim(n) {
-    return Number(n.toPrecision(4)).toString();
-  }
 
-  function formatOhms(v) {
-    if (!isFinite(v)) return "—";
-    if (v === 0) return "0 Ω";
-    for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
-      if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
-    }
-    return `${trim(v * 1e3)} mΩ`;
-  }
 
   // R sits where the decimal point would: 4R7 is 4.7, R47 is 0.47, 47R0 is 47.
   function codeFor(ohms) {
@@ -1036,19 +1040,11 @@ function renderSmdCode(domain, tool, favId) {
   function paint() {
     const code = codeFor(state.ohms);
     app.innerHTML = `
-      <div class="topbar back-row">
-        <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
-        <h1>${tool.name}</h1>
-        <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
-      </div>
-      <div class="sub" style="padding-left:46px;">${subtitle()}</div>
+      ${calcHeader(tool, favId, subtitle())}
 
       <div class="diagram-box">${chip(code)}</div>
 
-      <div class="mode-pills">
-        ${[["3", "3 digit"], ["4", "4 digit"], ["96", "EIA-96"]].map(([m, label]) => `
-          <button class="pill ${state.mode === m ? "active" : ""}" data-mode="${m}" style="${state.mode === m ? `background:${domain.bg};color:#8FC1F5` : ""}">${label}</button>`).join("")}
-      </div>
+      ${pillRow([["3", "3 digit"], ["4", "4 digit"], ["96", "EIA-96"]], state.mode, domain.bg)}
 
       <div class="section-label" style="color:#8FC1F5">Marking on the chip</div>
       <div class="field">
@@ -1080,15 +1076,10 @@ function renderSmdCode(domain, tool, favId) {
         <div class="result-sub" data-res="series">${seriesLine(state.ohms)}</div>
       </div>
 
-      <div class="formula-note">${ICONS.info}<span data-res="note">${footnoteHTML()}</span></div>
-      ${tabbarHTML("")}
+      ${calcFooter(footnoteHTML())}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
-
-    app.querySelectorAll(".pill").forEach(btn => {
-      btn.onclick = () => { state.mode = btn.dataset.mode; normalize(); paint(); };
-    });
+    wireCalc(favId, paint, (v) => { state.mode = v; normalize(); paint(); });
 
     const codeField = document.getElementById("smd-code");
     codeField.oninput = () => {
@@ -1135,18 +1126,7 @@ const E_TOLERANCE = { E6: "±20%", E12: "±10%", E24: "±5%", E48: "±2%", E96: 
 function renderESeries(domain, tool, favId) {
   const state = { series: "E24", ohms: 4700, unit: "kΩ" };
 
-  function trim(n) {
-    return Number(n.toPrecision(4)).toString();
-  }
 
-  function formatOhms(v) {
-    if (!isFinite(v)) return "—";
-    if (v === 0) return "0 Ω";
-    for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
-      if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
-    }
-    return `${trim(v * 1e3)} mΩ`;
-  }
 
   // The decade the entered value sits in, and the factor that puts a table
   // mantissa into it. E6/E12/E24 are listed two-digit, the rest three-digit.
@@ -1196,17 +1176,9 @@ function renderESeries(domain, tool, favId) {
 
   function paint() {
     app.innerHTML = `
-      <div class="topbar back-row">
-        <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
-        <h1>${tool.name}</h1>
-        <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
-      </div>
-      <div class="sub" style="padding-left:46px;">E6 to E192 standard values</div>
+      ${calcHeader(tool, favId, "E6 to E192 standard values")}
 
-      <div class="mode-pills">
-        ${Object.keys(E_TOLERANCE).map(s => `
-          <button class="pill ${state.series === s ? "active" : ""}" data-series="${s}" style="${state.series === s ? `background:${domain.bg};color:#8FC1F5` : ""}">${s}</button>`).join("")}
-      </div>
+      ${pillRow(Object.keys(E_TOLERANCE).map(s => [s, s]), state.series, domain.bg)}
 
       <div class="section-label" style="color:#8FC1F5">Value you want</div>
       <div class="field">
@@ -1232,15 +1204,10 @@ function renderESeries(domain, tool, favId) {
       <div class="section-label" style="color:#8FC1F5">Whole series <span data-res="decade" class="decade-note">${decadeLabel()}</span></div>
       <div class="eseries-grid" data-res="grid">${table()}</div>
 
-      <div class="formula-note">${ICONS.info}<span>Table follows the decade of your value &nbsp;·&nbsp; ${E_TOLERANCE[state.series]} parts</span></div>
-      ${tabbarHTML("")}
+      ${calcFooter(`Table follows the decade of your value &nbsp;·&nbsp; ${E_TOLERANCE[state.series]} parts`)}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
-
-    app.querySelectorAll(".pill").forEach(btn => {
-      btn.onclick = () => { state.series = btn.dataset.series; paint(); };
-    });
+    wireCalc(favId, paint, (v) => { state.series = v; paint(); });
 
     const field = document.getElementById("es-value");
     field.oninput = () => {
