@@ -9,7 +9,7 @@ Working proof of concept:
 - 185 tools/categories listed across 7 domains, matching `REFERENCE.md` exactly
 - Global search across all tool names
 - Favorites (localStorage)
-- **Two fully working calculators:**
+- **Three fully working calculators:**
   - **Ohm's law** (`js/app.js`, `renderOhmsLaw`) — 3 modes, unit selection, live calculation, mode-aware circuit diagram and formula footnote
   - **Resistor color code** (`js/app.js`, `renderResistorColorCode`) — 4/5/6 bands, 3D band roller, value entry with unit and tolerance, live resistor illustration, E-series check
   - **SMD resistor code** (`js/app.js`, `renderSmdCode`) — 3 and 4 digit markings including R notation, both directions, live chip illustration, E-series check
@@ -26,7 +26,7 @@ Plain HTML/CSS/JS. No build step, no framework, no dependencies. Chosen delibera
 index.html         App shell, loads css/js
 css/styles.css      Full design system (see below)
 js/data.js          Content: 7 domains → sections → tools (single source of truth for structure)
-js/app.js           Routing (hash-based), screen rendering, Ohm's law calculator logic
+js/app.js           Routing (hash-based), screen rendering, calculator logic
 manifest.json        PWA manifest
 sw.js                Service worker (offline caching)
 icons/                App icons (generated to match the design system — literal resistor mark)
@@ -55,7 +55,7 @@ REFERENCE.md          Full product spec: navigation, naming convention, visual s
 1. Build out calculators one domain at a time, following the `renderOhmsLaw` pattern as the template for each new tool.
 2. Next good candidates: **Series/parallel** and **Voltage divider** (Passive components) — both reuse the numeric-input pattern from `renderOhmsLaw` and want a mode-aware diagram.
 3. Circuit diagrams: add the schematic SVG per calculator that needs one (see REFERENCE.md section 4, "Calculator screen template").
-4. Extract the calculator template into a shared render helper — with two calculators the shared shape (header → diagram → mode pills → inputs → results → footnote) is now duplicated verbatim in `renderOhmsLaw` and `renderResistorColorCode`. Worth doing before a third.
+4. **Extract the calculator template into a shared render helper — overdue.** The shape (header → diagram → mode pills → inputs → results → footnote) is now duplicated verbatim across three calculators, along with `trim`/`formatOhms`. The duplication has already caused two real bugs: an edit anchored on "Results" hit the wrong calculator, and a helper was defined inside the wrong closure because both define `compute()`.
 5. Longer term: Links and Notes sections (Tools domain) need actual storage logic (localStorage is fine to start, same pattern as favorites).
 
 ## Deploying
