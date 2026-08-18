@@ -402,6 +402,45 @@ const ROLLER_NAME = {
   d1: "1st", d2: "2nd", d3: "3rd", mult: "Mult", tol: "Tol", tc: "Temp",
 };
 
+// E6/E12/E24 are published two-digit sets and do not come out of the decade
+// formula (it yields 14, the standard says 15), so they are listed. E48/E96/E192
+// are three-digit and do follow it, so they are generated.
+const E_LISTED = {
+  E6: [10, 15, 22, 33, 47, 68],
+  E12: [10, 12, 15, 18, 22, 27, 33, 39, 47, 56, 68, 82],
+  E24: [10, 11, 12, 13, 15, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 43, 47, 51, 56, 62, 68, 75, 82, 91],
+};
+
+function eSeriesValues(name) {
+  if (E_LISTED[name]) return E_LISTED[name];
+  const count = { E48: 48, E96: 96, E192: 192 }[name];
+  return Array.from({ length: count }, (_, i) => Number((Math.pow(10, i / count) * 100).toPrecision(3)));
+}
+
+// Each series exists to cover a tolerance band: at ±5% the E24 steps just touch,
+// so the tolerance on the part tells you which series it was drawn from.
+function eSeriesForTolerance(tol) {
+  if (tol >= 10) return "E12";
+  if (tol >= 5) return "E24";
+  if (tol >= 2) return "E48";
+  if (tol >= 1) return "E96";
+  return "E192";
+}
+
+function nearestESeries(ohms, name) {
+  const values = eSeriesValues(name);
+  const places = values[0] >= 100 ? 3 : 2;
+  const scale = Math.pow(10, Math.floor(Math.log10(ohms)) - (places - 1));
+  const mantissa = ohms / scale;
+  // The top of the decade is the first value of the next one, so include it or
+  // a 9.7 mantissa reports a long way off instead of just under 10.
+  let best = values[0] * 10;
+  for (const v of values) {
+    if (Math.abs(v - mantissa) < Math.abs(best - mantissa)) best = v;
+  }
+  return { value: best * scale, exact: Math.abs(best - mantissa) < mantissa * 1e-9 };
+}
+
 const BAND_ROLE_LABEL = {
   d1: "1st digit", d2: "2nd digit", d3: "3rd digit",
   mult: "Multiplier", tol: "Tolerance", tc: "Temp. coefficient",
@@ -570,6 +609,19 @@ function renderResistorColorCode(domain, tool, key) {
     syncRollers();
   }
 
+  // Report the coarsest series the value belongs to, not the one its tolerance
+  // implies: 4.7k is a stock E6 value even when bought at 2%, and calling that
+  // "not E48" would be true of the grid but misleading about the part. The
+  // tolerance only decides which grid to measure the distance against when the
+  // value is not standard at all.
+  function seriesLine(r) {
+    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
+      if (nearestESeries(r.ohms, name).exact) return `${name} standard value`;
+    }
+    const grid = eSeriesForTolerance(r.tol);
+    return `Not standard — nearest ${grid} is ${formatOhms(nearestESeries(r.ohms, grid).value)}`;
+  }
+
   function footnoteHTML(roles) {
     return [`${roles.filter(x => x[0] === "d").length} digits ${multLabel(BAND_COLORS[state.bands.mult].mult)}`, "tolerance"]
       .concat(roles.includes("tc") ? ["temp. coefficient"] : [])
@@ -593,6 +645,7 @@ function renderResistorColorCode(domain, tool, key) {
     app.querySelector('[data-res="tol"]').textContent = `±${r.tol}%`;
     app.querySelector('[data-res="sub"]').innerHTML =
       `${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}`;
+    app.querySelector('[data-res="series"]').textContent = seriesLine(r);
     app.querySelector('[data-res="note"]').innerHTML = footnoteHTML(roles);
 
     // Mirror the bands back into the value field, unless the user is mid-edit
@@ -659,6 +712,7 @@ function renderResistorColorCode(domain, tool, key) {
           <span class="num" data-res="ohms">${formatOhms(r.ohms)}</span>
           <span class="unit" data-res="tol">±${r.tol}%</span>
         </div>
+        <div class="result-sub" data-res="series">${seriesLine(r)}</div>
         <div class="result-sub" data-res="sub">${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}</div>
       </div>
 
