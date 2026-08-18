@@ -22,7 +22,7 @@ const DOMAINS = [
           { name: "Current divider" },
           { name: "Wheatstone bridge" },
           { name: "Delta-Y transform" },
-          { name: "Closest E-series value" },
+          { name: "Closest E-series value", calc: "e-series" },
           { name: "NTC/PTC thermistor" },
         ],
       },

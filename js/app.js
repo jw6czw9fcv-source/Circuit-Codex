@@ -156,6 +156,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, favId);
   if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, favId);
   if (calcId === "smd-code") return renderSmdCode(domain, tool, favId);
+  if (calcId === "e-series") return renderESeries(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -1123,5 +1124,138 @@ function renderSmdCode(domain, tool, favId) {
   }
   localStorage.setItem("cc_favorites", JSON.stringify([...new Set(migrated)]));
 })();
+
+// ---------- E-series standard values ----------
+// Every series is a decade split into equal ratio steps, sized so that parts at
+// the matching tolerance just cover the gaps between neighbours. Both jobs live
+// here: the nearest standard value to something you want, and the whole table
+// to read off.
+const E_TOLERANCE = { E6: "±20%", E12: "±10%", E24: "±5%", E48: "±2%", E96: "±1%", E192: "±0.5%" };
+
+function renderESeries(domain, tool, favId) {
+  const state = { series: "E24", ohms: 4700, unit: "kΩ" };
+
+  function trim(n) {
+    return Number(n.toPrecision(4)).toString();
+  }
+
+  function formatOhms(v) {
+    if (!isFinite(v)) return "—";
+    if (v === 0) return "0 Ω";
+    for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
+      if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
+    }
+    return `${trim(v * 1e3)} mΩ`;
+  }
+
+  // The decade the entered value sits in, and the factor that puts a table
+  // mantissa into it. E6/E12/E24 are listed two-digit, the rest three-digit.
+  function decade() {
+    const values = eSeriesValues(state.series);
+    const places = values[0] >= 100 ? 3 : 2;
+    return Math.pow(10, Math.floor(Math.log10(state.ohms)) - (places - 1));
+  }
+
+  function nearest() {
+    return nearestESeries(state.ohms, state.series);
+  }
+
+  function errorLine() {
+    const near = nearest();
+    if (near.exact) return `${state.series} standard value, exactly`;
+    // Two decimals: the fourth significant figure of a drift is noise here.
+    const drift = ((near.value - state.ohms) / state.ohms) * 100;
+    return `${drift > 0 ? "+" : ""}${Number(drift.toFixed(2))}% from ${formatOhms(state.ohms)}`;
+  }
+
+  function table() {
+    const values = eSeriesValues(state.series);
+    const scale = decade();
+    const hit = nearest().value;
+    return values.map(v => {
+      const ohms = v * scale;
+      const isHit = Math.abs(ohms - hit) <= hit * 1e-9;
+      return `<div class="eseries-cell${isHit ? " hit" : ""}">${formatOhms(ohms)}</div>`;
+    }).join("");
+  }
+
+  function refresh() {
+    app.querySelector('[data-res="ohms"]').textContent = formatOhms(nearest().value);
+    app.querySelector('[data-res="drift"]').textContent = errorLine();
+    app.querySelector('[data-res="grid"]').innerHTML = table();
+    app.querySelector('[data-res="decade"]').textContent = decadeLabel();
+    const field = app.querySelector("#es-value");
+    if (document.activeElement !== field) field.value = trim(state.ohms / OHM_UNITS[state.unit]);
+  }
+
+  function decadeLabel() {
+    const scale = decade();
+    const values = eSeriesValues(state.series);
+    return `${values.length} values · ${formatOhms(values[0] * scale)} to ${formatOhms(values[values.length - 1] * scale)}`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      <div class="topbar back-row">
+        <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
+        <h1>${tool.name}</h1>
+        <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
+      </div>
+      <div class="sub" style="padding-left:46px;">E6 to E192 standard values</div>
+
+      <div class="mode-pills">
+        ${Object.keys(E_TOLERANCE).map(s => `
+          <button class="pill ${state.series === s ? "active" : ""}" data-series="${s}" style="${state.series === s ? `background:${domain.bg};color:#8FC1F5` : ""}">${s}</button>`).join("")}
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Value you want</div>
+      <div class="field">
+        <label>Resistance</label>
+        <div class="field-row">
+          <input id="es-value" type="number" inputmode="decimal" step="any" value="${trim(state.ohms / OHM_UNITS[state.unit])}" />
+          <select id="es-unit">${Object.keys(OHM_UNITS).map(u => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Nearest standard value</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${state.series} · ${E_TOLERANCE[state.series]}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="ohms">${formatOhms(nearest().value)}</span>
+        </div>
+        <div class="result-sub" data-res="drift">${errorLine()}</div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Whole series <span data-res="decade" class="decade-note">${decadeLabel()}</span></div>
+      <div class="eseries-grid" data-res="grid">${table()}</div>
+
+      <div class="formula-note">${ICONS.info}<span>Table follows the decade of your value &nbsp;·&nbsp; ${E_TOLERANCE[state.series]} parts</span></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    app.querySelectorAll(".pill").forEach(btn => {
+      btn.onclick = () => { state.series = btn.dataset.series; paint(); };
+    });
+
+    const field = document.getElementById("es-value");
+    field.oninput = () => {
+      const v = parseFloat(field.value) * OHM_UNITS[state.unit];
+      if (isFinite(v) && v > 0) { state.ohms = v; refresh(); }
+    };
+    document.getElementById("es-unit").onchange = (e) => {
+      state.unit = e.target.value;
+      const v = parseFloat(field.value) * OHM_UNITS[state.unit];
+      if (isFinite(v) && v > 0) state.ohms = v;
+      refresh();
+    };
+  }
+
+  paint();
+}
 
 render();

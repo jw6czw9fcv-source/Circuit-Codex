@@ -9,11 +9,12 @@ Working proof of concept:
 - 184 tools/categories listed across 7 domains, matching `REFERENCE.md` exactly
 - Global search across all tool names
 - Favorites (localStorage)
-- **Three fully working calculators:**
+- **Four fully working calculators:**
   - **Ohm's law** (`js/app.js`, `renderOhmsLaw`) — 3 modes, unit selection, live calculation, mode-aware circuit diagram and formula footnote
   - **Resistor color code** (`js/app.js`, `renderResistorColorCode`) — 4/5/6 bands, 3D band roller, value entry with unit and tolerance, live resistor illustration, E-series check
   - **SMD resistor code** (`js/app.js`, `renderSmdCode`) — 3-digit, 4-digit and EIA-96 markings, both directions, live chip illustration, E-series check
-- All other 181 tools currently open a "not built yet" placeholder screen
+  - **Closest E-series value** (`js/app.js`, `renderESeries`) — E6 to E192, nearest standard value with % drift, and the whole series as a table. The one screen that scrolls by design
+- All other 180 tools currently open a "not built yet" placeholder screen
 - Installable PWA (manifest + service worker + icons), works offline once installed
 
 ## Stack

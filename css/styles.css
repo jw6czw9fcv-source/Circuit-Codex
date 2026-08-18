@@ -463,6 +463,38 @@ html, body {
   color: var(--text-secondary);
   font-size: 14px;
 }
+/* Reference table: as many columns as the width allows, so E96 and E192 stay
+   readable without a horizontal scroll. This screen scrolls by design — 192
+   values cannot fit a phone, and it is a table to read, not a form to fill. */
+.eseries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+  margin: 0 16px 12px;
+}
+.eseries-cell {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 7px 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.eseries-cell.hit {
+  background: var(--result-bg);
+  border-color: var(--result-border);
+  color: var(--result-text);
+  font-weight: 600;
+}
+.decade-note {
+  float: right;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
 .error-text {
   color: var(--danger);
   font-size: 13px;
