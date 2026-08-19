@@ -16,7 +16,7 @@ Working proof of concept:
   - **Voltage divider** (`js/app.js`, `renderVoltageDivider`) — solves for Vout, R1 or R2, mode-aware schematic, divider current and per-resistor power, guards on impossible ratios
   - **Series/parallel** (`js/app.js`, `renderSeriesParallel`) — 2 to 4 resistors, add and remove rows, schematic redraws to the count, total with tolerance range and the nearest single standard part
   - **Current divider** (`js/app.js`, `renderCurrentDivider`) — solves for I1, R1 or R2, parallel schematic, branch split with tolerance spread, E-series on every resistance
-  - **Closest E-series value** (`js/app.js`, `renderESeries`) — E6 to E192, nearest standard value with % drift, and the whole series as a table. The one screen that scrolls by design
+  - **E-series value** (`js/app.js`, `renderESeries`) — E6 to E192, nearest standard value with % drift, and the whole series as a table. The one screen that scrolls by design
 - All other 177 tools currently open a "not built yet" placeholder screen
 - Installable PWA (manifest + service worker + icons), works offline once installed
 

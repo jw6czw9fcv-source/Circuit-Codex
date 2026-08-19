@@ -130,6 +130,8 @@ tools/calculators inside.
 
 -   SMD code (3-digit, 4-digit and EIA-96)
 
+-   E-series value
+
 -   Series/parallel
 
 -   Voltage divider
@@ -139,8 +141,6 @@ tools/calculators inside.
 -   Wheatstone bridge
 
 -   Delta-Y transform
-
--   Closest E-series value
 
 -   NTC/PTC thermistor
 

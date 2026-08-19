@@ -17,12 +17,12 @@ const DOMAINS = [
         tools: [
           { name: "Color code", calc: "resistor-color-code" },
           { name: "SMD code", calc: "smd-code" },
+          { name: "E-series value", calc: "e-series" },
           { name: "Series/parallel", calc: "series-parallel" },
           { name: "Voltage divider", calc: "voltage-divider" },
           { name: "Current divider", calc: "current-divider" },
           { name: "Wheatstone bridge" },
           { name: "Delta-Y transform" },
-          { name: "Closest E-series value", calc: "e-series" },
           { name: "NTC/PTC thermistor" },
         ],
       },
