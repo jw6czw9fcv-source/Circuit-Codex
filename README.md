@@ -17,7 +17,8 @@ Working proof of concept:
   - **Series/parallel** (`js/app.js`, `renderSeriesParallel`) — 2 to 4 resistors, add and remove rows, schematic redraws to the count, total with tolerance range and the nearest single standard part
   - **Current divider** (`js/app.js`, `renderCurrentDivider`) — solves for I1, R1 or R2, parallel schematic, branch split with tolerance spread, E-series on every resistance
   - **E-series value** (`js/app.js`, `renderESeries`) — E6 to E192, nearest standard value with % drift, and the whole series as a table. The one screen that scrolls by design
-- All other 177 tools currently open a "not built yet" placeholder screen
+- **Formula search** (`js/app.js`, `renderFormulaSearch`, data in `js/formulas.js`) — not a calculator itself: a growing reference list (20 formulas so far, in `js/formulas.js`) for topics that don't have a full calculator yet. Searches topic, formula and note text. A card links straight to the real calculator once one is built for that topic — the two lists are joined only by tool name at render time
+- All other 176 tools currently open a "not built yet" placeholder screen
 - Installable PWA (manifest + service worker + icons), works offline once installed
 
 ## Stack
@@ -30,6 +31,7 @@ Plain HTML/CSS/JS. No build step, no framework, no dependencies. Chosen delibera
 index.html         App shell, loads css/js
 css/styles.css      Full design system (see below)
 js/data.js          Content: 7 domains → sections → tools (single source of truth for structure)
+js/formulas.js       Formula reference data for Formula search — separate from js/data.js, joined to it by tool name
 js/app.js           Routing (hash-based), screen rendering, calculator logic
 manifest.json        PWA manifest
 sw.js                Service worker (offline caching)

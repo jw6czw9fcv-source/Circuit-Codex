@@ -161,6 +161,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
   if (calcId === "series-parallel") return renderSeriesParallel(domain, tool, favId);
+  if (calcId === "formula-search") return renderFormulaSearch(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -1931,6 +1932,73 @@ function renderSeriesParallel(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
+  }
+
+  paint();
+}
+
+// ---------- Formula search ----------
+// The safety net for everything that isn't a full calculator yet: a topic,
+// its formula, and a one-line note, findable by name or by the formula
+// itself. When a real calculator later exists for the same tool name, the
+// card links straight to it — this list and the navigation tree are separate
+// data, joined only by that name match at render time.
+function findRouteForTool(name) {
+  for (const d of DOMAINS) {
+    for (let si = 0; si < d.sections.length; si++) {
+      const sec = d.sections[si];
+      for (let ti = 0; ti < sec.tools.length; ti++) {
+        if (sec.tools[ti].name === name && sec.tools[ti].calc) {
+          return `/tool/${encodeURIComponent(`${d.id}:${si}:${ti}`)}/${sec.tools[ti].calc}`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function renderFormulaSearch(domain, tool, favId) {
+  function card(f) {
+    const route = findRouteForTool(f.tool);
+    const d = DOMAINS.find(x => x.id === f.domain);
+    const inner = `
+      <div class="formula-card-head">
+        <span class="formula-card-title">${f.tool}</span>
+        ${route ? `<span class="formula-card-go">Open ${ICONS.chevronRight}</span>` : ""}
+      </div>
+      ${d ? `<div class="breadcrumb">${d.title}</div>` : ""}
+      ${f.formulas.map(x => `<div class="formula-line">${x}</div>`).join("")}
+      <div class="formula-card-note">${f.note}</div>`;
+    return route
+      ? `<button class="formula-card" onclick="location.hash='${route}'">${inner}</button>`
+      : `<div class="formula-card formula-card--static">${inner}</div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `${FORMULAS.length} formulas so far`)}
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="fs-input" type="text" placeholder="Search a topic or a formula" autocapitalize="off" spellcheck="false" />
+      </div>
+      <div id="fs-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    const input = document.getElementById("fs-input");
+    const results = document.getElementById("fs-results");
+    input.oninput = () => {
+      const q = input.value;
+      if (!q.trim()) { results.innerHTML = ""; return; }
+      const matches = searchFormulas(q);
+      results.innerHTML = matches.length
+        ? matches.map(card).join("")
+        : `<div class="placeholder">${ICONS.search}<div>No formula for "${q}" yet.</div><div style="font-size:12px;margin-top:6px;">Still growing — most topics don't have an entry here yet.</div></div>`;
+    };
+    input.focus();
   }
 
   paint();

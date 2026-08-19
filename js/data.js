@@ -199,7 +199,7 @@ const DOMAINS = [
       {
         title: "Reference",
         tools: [
-          { name: "Formula search" }, { name: "Glossary" }, { name: "Physical constants" }, { name: "SI-Units" },
+          { name: "Formula search", calc: "formula-search" }, { name: "Glossary" }, { name: "Physical constants" }, { name: "SI-Units" },
           { name: "RMS calculator" }, { name: "Quiescent current" }, { name: "4-20mA loop conversion" }, { name: "Lumen/Watt" },
         ],
       },

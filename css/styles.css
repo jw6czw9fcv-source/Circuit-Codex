@@ -600,6 +600,53 @@ html, body {
 }
 .label-btn:disabled { color: var(--text-muted); cursor: default; }
 
+/* Formula search result card. A button when a real calculator exists for the
+   topic (tap to open it), a plain div otherwise — nothing to navigate to yet. */
+.formula-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 16px 10px;
+  width: calc(100% - 32px);
+  color: var(--text);
+  cursor: pointer;
+}
+.formula-card--static { cursor: default; }
+.formula-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.formula-card-title { font-size: 15px; font-weight: 600; }
+.formula-card-go {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--result-text);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.formula-card-go svg { width: 14px; height: 14px; }
+.formula-card .breadcrumb { margin: 2px 0 8px; }
+.formula-line {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  color: #8FC1F5;
+  margin-bottom: 3px;
+}
+.formula-card-note {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
 .error-text {
   color: var(--danger);
   font-size: 13px;

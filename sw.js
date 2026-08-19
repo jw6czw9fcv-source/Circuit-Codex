@@ -1,6 +1,6 @@
 // Bump VERSION on every release. The cache name derives from it, so a new
 // version installs into a fresh cache and activate() deletes the old ones.
-const VERSION = "v2";
+const VERSION = "v4";
 const CACHE = `circuit-codex-${VERSION}`;
 
 const ASSETS = [
@@ -8,6 +8,7 @@ const ASSETS = [
   "./index.html",
   "./css/styles.css",
   "./js/data.js",
+  "./js/formulas.js",
   "./js/app.js",
   "./manifest.json",
   "./icons/icon-192.png",
@@ -17,7 +18,17 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+  // cache.addAll() fetches with default caching, which the browser's own HTTP
+  // cache can satisfy from a stale copy — python's dev server sends no
+  // Cache-Control, so that happens easily. That would bake old content into a
+  // freshly versioned cache, defeating the point of bumping VERSION. Forcing
+  // cache: "reload" on every precache fetch is what makes a version bump
+  // actually mean fresh bytes, every time.
+  e.waitUntil(
+    caches.open(CACHE).then((cache) =>
+      Promise.all(ASSETS.map((url) => fetch(url, { cache: "reload" }).then((r) => cache.put(url, r))))
+    )
+  );
   self.skipWaiting();
 });
 
