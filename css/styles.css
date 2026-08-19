@@ -371,11 +371,32 @@ html, body {
   margin: 0 16px 10px;
 }
 .field label {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   color: var(--text-secondary);
   font-size: 14px;
   margin-bottom: 4px;
 }
+/* Series status for a value you typed, sitting on the field's own label so it
+   costs no height. Muted: it is a note about the part, not part of the answer.
+   Laid out with flex rather than a float — a float is out of flow but still
+   grew the field around it, which put the screen over on a 375px phone. */
+/* The name yields before the hint does: an ellipsis on the description is
+   better than a second line, which costs 18px the screen does not have. */
+.field-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.field-hint {
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  margin-left: 10px;
+}
+
 .field-row {
   display: flex;
   align-items: center;
@@ -441,7 +462,10 @@ html, body {
 .result-value .unit { color: var(--result-text); font-size: 14.5px; font-weight: 500; }
 /* Secondary reading inside a result card, for a figure that qualifies the main
    number rather than standing on its own (e.g. the tolerance range). */
-.result-sub { color: var(--result-text-soft); font-size: 14px; margin-top: 3px; }
+/* 13px, not 14: this line carries a range, a current and two powers, and at
+   tight tolerances the numbers grow long enough to wrap — which costs 19px on a
+   375px phone that has 18px spare. */
+.result-sub { color: var(--result-text-soft); font-size: 13px; margin-top: 3px; }
 
 .calc-btn {
   margin: 18px 16px 8px;

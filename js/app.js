@@ -1239,13 +1239,14 @@ const DIVIDER_R_UNITS = { "Ω": 1, "kΩ": 1e3, "MΩ": 1e6 };
 // General SI formatter, for the quantities that are not resistance. formatOhms
 // could delegate to this later; leaving it alone for now keeps this change from
 // touching what the other calculators print.
-function siFormat(v, unit) {
+function siFormat(v, unit, digits = 4) {
   if (!isFinite(v)) return "—";
   if (v === 0) return `0 ${unit}`;
+  const fig = (x) => Number(x.toPrecision(digits)).toString();
   for (const [scale, prefix] of [[1e9, "G"], [1e6, "M"], [1e3, "k"], [1, ""], [1e-3, "m"], [1e-6, "µ"], [1e-9, "n"]]) {
-    if (Math.abs(v) >= scale) return `${trim(v / scale)} ${prefix}${unit}`;
+    if (Math.abs(v) >= scale) return `${fig(v / scale)} ${prefix}${unit}`;
   }
-  return `${trim(v)} ${unit}`;
+  return `${fig(v)} ${unit}`;
 }
 
 function renderVoltageDivider(domain, tool, favId) {
@@ -1259,8 +1260,8 @@ function renderVoltageDivider(domain, tool, favId) {
   const FIELD = {
     vin: { label: "Input voltage (Vin)", units: VOLT_UNITS },
     vout: { label: "Output voltage (Vout)", units: VOLT_UNITS },
-    r1: { label: "R1 — top, in series", units: DIVIDER_R_UNITS },
-    r2: { label: "R2 — bottom, across the tap", units: DIVIDER_R_UNITS },
+    r1: { label: "R1 — top", units: DIVIDER_R_UNITS },
+    r2: { label: "R2 — bottom", units: DIVIDER_R_UNITS },
   };
 
   // Which three you supply depends on which one you want back.
@@ -1305,10 +1306,11 @@ function renderVoltageDivider(domain, tool, favId) {
   // worst case, not the ±tol you might assume from the ratio.
   // Scale a pair by the larger of the two and print the unit once. Repeating it
   // ("5.94 V – 6.06 V") is what pushed this line onto a second row.
-  function pairText(a, b, unit) {
+  function pairText(a, b, unit, digits = 3) {
     const steps = [[1e9, "G"], [1e6, "M"], [1e3, "k"], [1, ""], [1e-3, "m"], [1e-6, "µ"], [1e-9, "n"]];
     const step = steps.find(([scale]) => Math.abs(b) >= scale) || [1, ""];
-    return `${trim(a / step[0])} / ${trim(b / step[0])} ${step[1]}${unit}`;
+    const fig = (x) => Number((x / step[0]).toPrecision(digits)).toString();
+    return `${fig(a)} / ${fig(b)} ${step[1]}${unit}`;
   }
 
   function outputSpread(r) {
@@ -1334,6 +1336,17 @@ function renderVoltageDivider(domain, tool, favId) {
     return state.solve === "vout" ? siFormat(r.vout, "V") : formatOhms(state.solve === "r1" ? r.r1 : r.r2);
   }
 
+  // The resistor you supply has to exist too. Same grid, same question as the
+  // one being solved for — a typed 7.3k is no more orderable than a computed
+  // one, and only saying so about the calculated leg would be half the answer.
+  function seriesHint(name) {
+    const ohms = si(name);
+    if (!isFinite(ohms) || ohms <= 0) return "";
+    const series = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(ohms, series);
+    return near.exact ? series : `${series} → ${formatOhms(near.value)}`;
+  }
+
   function standardPart(r) {
     const name = eSeriesForTolerance(state.tol);
     const near = nearestESeries(state.solve === "r1" ? r.r1 : r.r2, name);
@@ -1345,11 +1358,11 @@ function renderVoltageDivider(domain, tool, favId) {
   function detailLine(r) {
     if (problem(r)) return "";
     if (state.solve === "vout") {
-      return `${spreadLine(r)} &nbsp;·&nbsp; ${siFormat(r.current, "A")} &nbsp;·&nbsp; ${pairText(r.p1, r.p2, "W")}`;
+      return `${spreadLine(r)} &nbsp;·&nbsp; ${siFormat(r.current, "A", 3)} &nbsp;·&nbsp; ${pairText(r.p1, r.p2, "W")}`;
     }
     const std = standardPart(r);
-    const suffix = std.exact ? "is standard" : `→ ${formatOhms(std.value)}, Vout ${siFormat(std.vout, "V")}`;
-    return `${std.name} ${suffix} &nbsp;·&nbsp; ${siFormat(r.current, "A")}`;
+    const suffix = std.exact ? "is standard" : `→ ${formatOhms(std.value)}, Vout ${siFormat(std.vout, "V", 3)}`;
+    return `${std.name} ${suffix} &nbsp;·&nbsp; ${siFormat(r.current, "A", 3)}`;
   }
 
   function formulaFor(solve) {
@@ -1394,6 +1407,7 @@ function renderVoltageDivider(domain, tool, favId) {
     app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
     app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
     app.querySelector('[data-res="err"]').textContent = issue;
+    app.querySelectorAll("[data-hint]").forEach(el => { el.textContent = seriesHint(el.dataset.hint); });
   }
 
   function paint() {
@@ -1408,7 +1422,8 @@ function renderVoltageDivider(domain, tool, favId) {
       <div class="section-label" style="color:#8FC1F5">Your inputs</div>
       ${inputsFor(state.solve).map(name => `
         <div class="field">
-          <label>${FIELD[name].label}</label>
+          <label><span class="field-name">${FIELD[name].label}</span>${FIELD[name].units === DIVIDER_R_UNITS
+            ? `<span class="field-hint" data-hint="${name}">${seriesHint(name)}</span>` : ""}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${state.values[name]}" />
             <select data-unit="${name}">
