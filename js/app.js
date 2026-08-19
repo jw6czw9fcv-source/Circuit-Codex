@@ -303,10 +303,13 @@ function wireCalc(favId, repaint, onPill) {
 
 // ---------- Ohm's law calculator (fully functional proof of concept) ----------
 function renderOhmsLaw(domain, tool, favId) {
-  const state = { mode: "vi", V: 12, I: 250, Ivi_unit: "mA" };
+  const state = { mode: "vi", tol: 1, V: 12, I: 250, Ivi_unit: "mA" };
 
   // Series loop with V, I and R marked where they physically are: V across the
-  // source, I as a current arrow along the wire, R on the resistor. Wires stay
+  // source, I as a current arrow along the wire, R on the resistor. The resistor
+  // is the ANSI/IEEE 315 zigzag at the same proportions as every other schematic
+  // in the app: six peaks, body about 2.5 times its width, straight wire either
+  // side. Wires stay
   // neutral so the labels can carry the mode — a quantity you entered is drawn
   // in the input blue, one being solved for in the result green, matching the
   // "Your inputs" and "Results" headings below.
@@ -314,15 +317,15 @@ function renderOhmsLaw(domain, tool, favId) {
     const known = fieldsForMode(state.mode);
     const tone = (v) => (known.includes(v) ? "#8FC1F5" : "#5DCAA5");
     const wire = "#5A6169";
-    return `<svg width="220" height="104" viewBox="0 0 220 104" fill="none">
-      <path d="M34 34 H95 M137 34 H186 M186 34 V84 M186 84 H34 M34 34 V52 M34 62 V84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M95 34 L100 26 L108 42 L116 26 L124 42 L132 26 L137 34" stroke="${tone("R")}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+    return `<svg width="220" height="90" viewBox="0 0 220 90" fill="none">
+      <path d="M34 34 H95 M131 34 H186 M186 34 V84 M186 84 H34 M34 34 V52 M34 62 V84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M95 34 L98 27 L104 41 L110 27 L116 41 L122 27 L128 41 L131 34" stroke="${tone("R")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <path d="M22 52 H46" stroke="${tone("V")}" stroke-width="2"/>
       <path d="M28 62 H40" stroke="${tone("V")}" stroke-width="2"/>
       <path d="M50 22 H74 M69 18 L75 22 L69 26" stroke="${tone("I")}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
       <text x="12" y="61" fill="${tone("V")}" font-size="12" font-weight="600" text-anchor="middle">V</text>
       <text x="62" y="14" fill="${tone("I")}" font-size="12" font-weight="600" text-anchor="middle">I</text>
-      <text x="116" y="18" fill="${tone("R")}" font-size="12" font-weight="600" text-anchor="middle">R</text>
+      <text x="113" y="18" fill="${tone("R")}" font-size="12" font-weight="600" text-anchor="middle">R</text>
     </svg>`;
   }
 
@@ -364,6 +367,39 @@ function renderOhmsLaw(domain, tool, favId) {
     state.values = { V: 12, I: 250, R: 1, P: 3 };
   }
 
+  // A resistor you supply carries a tolerance, so whatever it determines carries
+  // one too. In VI mode R is derived from measured V and I instead, so there is
+  // no tolerance to propagate — only a nearest standard part to suggest.
+  function spreadFor(name, r) {
+    const t = state.tol / 100;
+    if (state.mode === "vi" || !isFinite(r.R) || r.R <= 0) return null;
+    if (state.mode === "vr") {
+      if (name === "I") return { lo: r.V / (r.R * (1 + t)), hi: r.V / (r.R * (1 - t)) };
+      if (name === "P") return { lo: (r.V * r.V) / (r.R * (1 + t)), hi: (r.V * r.V) / (r.R * (1 - t)) };
+    }
+    if (state.mode === "ir") {
+      if (name === "V") return { lo: r.I * r.R * (1 - t), hi: r.I * r.R * (1 + t) };
+      if (name === "P") return { lo: r.I * r.I * r.R * (1 - t), hi: r.I * r.I * r.R * (1 + t) };
+    }
+    return null;
+  }
+
+  function seriesHint(ohms) {
+    if (!isFinite(ohms) || ohms <= 0) return "";
+    const series = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(ohms, series);
+    return near.exact ? series : `${series} → ${formatOhms(near.value)}`;
+  }
+
+  function resultSub(v, r) {
+    if (v === "R") return seriesHint(r.R);
+    const spread = spreadFor(v, r);
+    if (!spread) return "";
+    const unit = state.units[v] || defaultUnit(v);
+    const scale = unitScale(unit);
+    return `${fmt(spread.lo / scale)} – ${fmt(spread.hi / scale)} ${unit}`;
+  }
+
   function compute() {
     const inputs = fieldsForMode(state.mode);
     const [a, b] = inputs;
@@ -397,7 +433,11 @@ function renderOhmsLaw(domain, tool, favId) {
     ["V", "I", "R", "P"].filter(v => !inputs.includes(v)).forEach(v => {
       const num = app.querySelector(`.result-field[data-out="${v}"] .num`);
       if (num) num.textContent = fmt(results[v] / unitScale(state.units[v] || defaultUnit(v)));
+      const sub = app.querySelector(`.result-field[data-out="${v}"] [data-sub]`);
+      if (sub) sub.textContent = resultSub(v, results);
     });
+    const hint = app.querySelector('[data-hint="R"]');
+    if (hint) hint.textContent = seriesHint(state.values.R * unitScale(state.units.R));
   }
 
   function paint() {
@@ -415,7 +455,8 @@ function renderOhmsLaw(domain, tool, favId) {
       <div class="section-label" style="color:#8FC1F5">Your inputs</div>
       ${inputs.map(v => `
         <div class="field">
-          <label>${{ V: "Voltage (V)", I: "Current (I)", R: "Resistance (R)" }[v]}</label>
+          <label><span class="field-name">${{ V: "Voltage (V)", I: "Current (I)", R: "Resistance (R)" }[v]}</span>${
+            v === "R" ? `<span class="field-hint" data-hint="R">${seriesHint(state.values.R * unitScale(state.units.R))}</span>` : ""}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" data-var="${v}" value="${displayValue(v, state.values[v] === undefined ? 0 : state.values[v] * unitScale(state.units[v]))}" />
             <select data-unit="${v}">
@@ -424,7 +465,11 @@ function renderOhmsLaw(domain, tool, favId) {
           </div>
         </div>`).join("")}
 
-      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="section-label" style="color:#5DCAA5">Results
+        <select id="ohm-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       ${outputs.map(v => `
         <div class="result-field" data-out="${v}">
           <div class="result-head">
@@ -435,6 +480,7 @@ function renderOhmsLaw(domain, tool, favId) {
             <span class="num">${fmt(results[v] / unitScale(state.units[v] || defaultUnit(v)))}</span>
             <span class="unit">${state.units[v] || defaultUnit(v)}</span>
           </div>
+          <div class="result-sub" data-sub="${v}">${resultSub(v, results)}</div>
         </div>`).join("")}
 
       ${calcFooter(formulaFor(state.mode))}
@@ -453,6 +499,10 @@ function renderOhmsLaw(domain, tool, favId) {
     app.querySelectorAll("select[data-unit]").forEach(sel => {
       sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; paint(); };
     });
+    document.getElementById("ohm-tol").onchange = (e) => {
+      state.tol = parseFloat(e.target.value);
+      paint();
+    };
   }
 
   paint();
