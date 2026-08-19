@@ -19,7 +19,7 @@ const DOMAINS = [
           { name: "SMD code", calc: "smd-code" },
           { name: "Series/parallel" },
           { name: "Voltage divider", calc: "voltage-divider" },
-          { name: "Current divider" },
+          { name: "Current divider", calc: "current-divider" },
           { name: "Wheatstone bridge" },
           { name: "Delta-Y transform" },
           { name: "Closest E-series value", calc: "e-series" },

@@ -158,6 +158,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "smd-code") return renderSmdCode(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
+  if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -1514,6 +1515,208 @@ function renderVoltageDivider(domain, tool, favId) {
       select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
     });
     document.getElementById("vd-tol").onchange = (e) => {
+      state.tol = parseFloat(e.target.value);
+      updateResults();
+    };
+  }
+
+  paint();
+}
+
+// ---------- Current divider ----------
+// The dual of the voltage divider, and the place people trip: a branch takes
+// current in proportion to the *other* resistor, so the smaller resistor carries
+// the larger share. I1 = Iin x R2 / (R1 + R2).
+const AMP_UNITS = { "µA": 1e-6, mA: 1e-3, A: 1 };
+
+function renderCurrentDivider(domain, tool, favId) {
+  const state = {
+    solve: "i1",
+    tol: 1,
+    values: { iin: 20, i1: 10, r1: 1, r2: 1 },
+    units: { iin: "mA", i1: "mA", r1: "kΩ", r2: "kΩ" },
+  };
+
+  const FIELD = {
+    iin: { label: "Total current (Iin)", units: AMP_UNITS },
+    i1: { label: "Branch current (I1)", units: AMP_UNITS },
+    r1: { label: "R1 — left branch", units: DIVIDER_R_UNITS },
+    r2: { label: "R2 — right branch", units: DIVIDER_R_UNITS },
+  };
+
+  function inputsFor(solve) {
+    if (solve === "i1") return ["iin", "r1", "r2"];
+    if (solve === "r1") return ["iin", "i1", "r2"];
+    return ["iin", "i1", "r1"];
+  }
+
+  function si(name) {
+    return state.values[name] * FIELD[name].units[state.units[name]];
+  }
+
+  function compute() {
+    const iin = si("iin");
+    let i1 = si("i1");
+    let r1 = si("r1");
+    let r2 = si("r2");
+
+    if (state.solve === "i1") i1 = (iin * r2) / (r1 + r2);
+    if (state.solve === "r1") r1 = (r2 * (iin - i1)) / i1;
+    if (state.solve === "r2") r2 = (r1 * i1) / (iin - i1);
+
+    const i2 = iin - i1;
+    const volts = i1 * r1; // the two branches share one voltage, so either works
+    return { iin, i1, i2, r1, r2, volts, p1: i1 * i1 * r1, p2: i2 * i2 * r2 };
+  }
+
+  function problem(r) {
+    if (state.solve !== "i1") {
+      if (r.i1 <= 0) return "I1 must be greater than zero.";
+      if (r.i1 >= r.iin) return "I1 must be less than Iin.";
+    }
+    if (!isFinite(r.r1) || !isFinite(r.r2) || r.r1 < 0 || r.r2 < 0) return "No solution for those values.";
+    if (r.r1 + r.r2 === 0) return "R1 and R2 cannot both be zero.";
+    return "";
+  }
+
+  // Worst case is the two legs missing in opposite directions, same as the
+  // voltage divider — the ratio is what the tolerance acts on, not the values.
+  function branchSpread(r) {
+    const t = state.tol / 100;
+    return {
+      lo: (r.iin * r.r2 * (1 - t)) / (r.r1 * (1 + t) + r.r2 * (1 - t)),
+      hi: (r.iin * r.r2 * (1 + t)) / (r.r1 * (1 - t) + r.r2 * (1 + t)),
+    };
+  }
+
+  function seriesHint(name) {
+    const ohms = si(name);
+    if (!isFinite(ohms) || ohms <= 0) return "";
+    const series = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(ohms, series);
+    return near.exact ? series : `${series} → ${formatOhms(near.value)}`;
+  }
+
+  function standardPart(r) {
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(state.solve === "r1" ? r.r1 : r.r2, name);
+    const r1 = state.solve === "r1" ? near.value : r.r1;
+    const r2 = state.solve === "r2" ? near.value : r.r2;
+    return { name, value: near.value, exact: near.exact, i1: (r.iin * r2) / (r1 + r2) };
+  }
+
+  function solvedLabel() {
+    return { i1: "Branch current (I1)", r1: "Resistance R1", r2: "Resistance R2" }[state.solve];
+  }
+
+  function solvedValue(r) {
+    if (problem(r)) return "—";
+    return state.solve === "i1" ? siFormat(r.i1, "A") : formatOhms(state.solve === "r1" ? r.r1 : r.r2);
+  }
+
+  function detailLine(r) {
+    if (problem(r)) return "";
+    if (state.solve === "i1") {
+      const { lo, hi } = branchSpread(r);
+      const drift = ((hi - r.i1) / r.i1) * 100;
+      return `${siFormat(lo, "A", 3)} – ${siFormat(hi, "A", 3)} (±${Number(drift.toFixed(2))}%)`
+        + ` &nbsp;·&nbsp; I2 ${siFormat(r.i2, "A", 3)} &nbsp;·&nbsp; ${siFormat(r.volts, "V", 3)}`;
+    }
+    const std = standardPart(r);
+    const suffix = std.exact ? "is standard" : `→ ${formatOhms(std.value)}, I1 ${siFormat(std.i1, "A", 3)}`;
+    return `${std.name} ${suffix} &nbsp;·&nbsp; I2 ${siFormat(r.i2, "A", 3)}`;
+  }
+
+  function formulaFor(solve) {
+    if (solve === "i1") return "I1 = Iin × R2 / (R1 + R2)";
+    if (solve === "r1") return "R1 = R2 × (Iin − I1) / I1";
+    return "R2 = R1 × I1 / (Iin − I1)";
+  }
+
+  // Two branches in parallel between one node pair. ANSI zigzags at the app's
+  // standard proportions, with straight leads into each node.
+  function diagram() {
+    const known = inputsFor(state.solve);
+    const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
+    const wire = "#5A6169";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    return `<svg width="220" height="98" viewBox="0 0 220 98" fill="none">
+      <path d="M110 14 V22 M106 18 L110 22 L114 18" stroke="${tone("iin")}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M70 26 H150 M70 26 V34 M150 26 V34 M70 70 V78 M150 70 V78 M70 78 H150 M110 78 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(70, 34)}" stroke="${tone("r1")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="${zig(150, 34)}" stroke="${tone("r2")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <circle cx="110" cy="26" r="2.6" fill="${wire}"/>
+      <circle cx="110" cy="78" r="2.6" fill="${wire}"/>
+      <text x="110" y="10" fill="${tone("iin")}" font-size="12" font-weight="600" text-anchor="middle">Iin</text>
+      <text x="52" y="56" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
+      <text x="168" y="56" fill="${tone("r2")}" font-size="12" font-weight="600">R2</text>
+      <text x="86" y="56" fill="${tone("i1")}" font-size="12" font-weight="600">I1</text>
+      <text x="134" y="56" fill="${wire}" font-size="12" font-weight="600" text-anchor="end">I2</text>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const r = compute();
+    app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
+    app.querySelector('[data-res="err"]').textContent = problem(r);
+    app.querySelectorAll("[data-hint]").forEach(el => { el.textContent = seriesHint(el.dataset.hint); });
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Two branches in parallel")}
+
+      <div class="diagram-box" style="padding:4px 10px;">${diagram()}</div>
+
+      ${pillRow([["i1", "I1"], ["r1", "R1"], ["r2", "R2"]], state.solve, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${inputsFor(state.solve).map(name => `
+        <div class="field">
+          <label><span class="field-name">${FIELD[name].label}</span>${FIELD[name].units === DIVIDER_R_UNITS
+            ? `<span class="field-hint" data-hint="${name}">${seriesHint(name)}</span>` : ""}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${state.values[name]}" />
+            <select data-unit="${name}">
+              ${Object.keys(FIELD[name].units).map(u => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err">${problem(r)}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result
+        <select id="cd-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="solved">${solvedValue(r)}</span>
+        </div>
+        <div class="result-sub" data-res="detail">${detailLine(r)}</div>
+      </div>
+
+      ${calcFooter(formulaFor(state.solve))}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+
+    app.querySelectorAll("input[data-var]").forEach(input => {
+      input.oninput = () => {
+        state.values[input.dataset.var] = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach(select => {
+      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+    });
+    document.getElementById("cd-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
