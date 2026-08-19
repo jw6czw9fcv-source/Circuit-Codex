@@ -541,6 +541,65 @@ html, body {
   color: var(--text-muted);
 }
 
+/* Variable-length resistor list. One line per part instead of a full field, so
+   four of them still leave room for the schematic above and the result below. */
+.r-list { margin: 0 16px 4px; display: flex; flex-direction: column; gap: 6px; }
+.r-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.r-index { color: var(--text-secondary); font-size: 13px; font-weight: 600; min-width: 22px; }
+.r-row input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 500;
+  outline: none;
+}
+.r-hint { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.r-row select {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+}
+.r-row select option { color: var(--text); background: var(--card); }
+.r-drop {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.r-drop:disabled { opacity: 0.25; cursor: default; }
+
+/* A control that rides a section heading, like .label-select. */
+.label-btn {
+  float: right;
+  background: none;
+  border: none;
+  color: var(--result-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.label-btn:disabled { color: var(--text-muted); cursor: default; }
+
 .error-text {
   color: var(--danger);
   font-size: 13px;

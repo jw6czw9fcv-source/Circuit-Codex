@@ -17,7 +17,7 @@ const DOMAINS = [
         tools: [
           { name: "Color code", calc: "resistor-color-code" },
           { name: "SMD code", calc: "smd-code" },
-          { name: "Series/parallel" },
+          { name: "Series/parallel", calc: "series-parallel" },
           { name: "Voltage divider", calc: "voltage-divider" },
           { name: "Current divider", calc: "current-divider" },
           { name: "Wheatstone bridge" },

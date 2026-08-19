@@ -160,6 +160,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
+  if (calcId === "series-parallel") return renderSeriesParallel(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -1720,6 +1721,199 @@ function renderCurrentDivider(domain, tool, favId) {
       select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
     });
     document.getElementById("cd-tol").onchange = (e) => {
+      state.tol = parseFloat(e.target.value);
+      updateResults();
+    };
+  }
+
+  paint();
+}
+
+// ---------- Series / parallel resistors ----------
+// Capped at four resistors: past that the schematic stops being readable at
+// phone width, and a drawing that no longer matches the inputs is worse than
+// a limit. Four covers the overwhelming majority of real networks.
+const SP_MAX = 4;
+
+function renderSeriesParallel(domain, tool, favId) {
+  const state = {
+    mode: "series",
+    tol: 1,
+    rows: [
+      { value: 1, unit: "kΩ" },
+      { value: 1, unit: "kΩ" },
+    ],
+  };
+
+  function ohmsOf(row) {
+    return row.value * DIVIDER_R_UNITS[row.unit];
+  }
+
+  function values() {
+    return state.rows.map(ohmsOf);
+  }
+
+  function total() {
+    const v = values();
+    if (v.some(x => !isFinite(x) || x < 0)) return NaN;
+    if (state.mode === "series") return v.reduce((a, b) => a + b, 0);
+    if (v.some(x => x === 0)) return 0; // a short across the group wins
+    const inv = v.reduce((a, b) => a + 1 / b, 0);
+    return inv === 0 ? NaN : 1 / inv;
+  }
+
+  function problem() {
+    if (values().some(x => !isFinite(x) || x < 0)) return "Every resistance must be zero or more.";
+    return "";
+  }
+
+  function seriesHint(ohms) {
+    if (!isFinite(ohms) || ohms <= 0) return "";
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(ohms, name);
+    return near.exact ? name : `${name} ${formatOhms(near.value)}`;
+  }
+
+  // Scaling every resistor by (1 ± t) scales both a series sum and a parallel
+  // combination by exactly the same factor, so the total carries the part
+  // tolerance unchanged — no better, and no worse.
+  function detailLine() {
+    const r = total();
+    if (problem() || !isFinite(r) || r <= 0) return "";
+    const t = state.tol / 100;
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(r, name);
+    const single = near.exact
+      ? `one ${name} part would do it`
+      : `nearest single ${name} ${formatOhms(near.value)}`;
+    return `${formatOhms(r * (1 - t))} – ${formatOhms(r * (1 + t))} &nbsp;·&nbsp; ${single}`;
+  }
+
+  function formulaFor(mode) {
+    return mode === "series"
+      ? "R = R1 + R2 + …"
+      : "1/R = 1/R1 + 1/R2 + …";
+  }
+
+  // ANSI zigzags at the app's proportions. Series runs them along one wire;
+  // parallel hangs them between two rails. Both scale to the resistor count.
+  function diagram() {
+    const n = state.rows.length;
+    const wire = "#5A6169";
+    const ink = "#8FC1F5";
+    if (state.mode === "series") {
+      const slot = 196 / n;
+      const body = Math.min(36, slot - 12);
+      const parts = state.rows.map((_, i) => {
+        const cx = 12 + slot * (i + 0.5);
+        const x = cx - body / 2;
+        const step = body / 6;
+        const zig = `M${x} 35 L${x + step * 0.5} 28 L${x + step * 1.5} 42 L${x + step * 2.5} 28`
+          + ` L${x + step * 3.5} 42 L${x + step * 4.5} 28 L${x + step * 5.5} 42 L${x + body} 35`;
+        return `<path d="${zig}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`
+          + `<text x="${cx}" y="18" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">R${i + 1}</text>`;
+      });
+      const gaps = state.rows.map((_, i) => {
+        const cx = 12 + slot * (i + 0.5);
+        return `M${i === 0 ? 6 : cx - slot + body / 2} 35 H${cx - body / 2}`;
+      });
+      return `<svg width="220" height="56" viewBox="0 0 220 56" fill="none">
+        <path d="${gaps.join(" ")} M${12 + slot * (n - 0.5) + body / 2} 35 H214" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        ${parts.join("")}
+      </svg>`;
+    }
+    const slot = 196 / n;
+    const xs = state.rows.map((_, i) => 12 + slot * (i + 0.5));
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
+      <path d="M${xs[0]} 24 H${xs[n - 1]} M${xs[0]} 76 H${xs[n - 1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${xs.map(x => `M${x} 24 V30 M${x} 66 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M110 12 V24 M110 76 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${xs.map(x => `<path d="${zig(x, 30)}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`).join("")}
+      ${xs.map((x, i) => `<text x="${x}" y="52" fill="${ink}" font-size="11" font-weight="600" text-anchor="${i === n - 1 ? "start" : "end"}" dx="${i === n - 1 ? 10 : -10}">R${i + 1}</text>`).join("")}
+    </svg>`;
+  }
+
+  function rowsHTML() {
+    return state.rows.map((row, i) => `
+      <div class="r-row">
+        <span class="r-index">R${i + 1}</span>
+        <input type="number" inputmode="decimal" step="any" data-row="${i}" value="${row.value}" />
+        <span class="r-hint" data-hint="${i}">${seriesHint(ohmsOf(row))}</span>
+        <select data-unit="${i}">
+          ${Object.keys(DIVIDER_R_UNITS).map(u => `<option ${row.unit === u ? "selected" : ""}>${u}</option>`).join("")}
+        </select>
+        <button class="r-drop" data-drop="${i}" aria-label="Remove R${i + 1}" ${state.rows.length <= 2 ? "disabled" : ""}>×</button>
+      </div>`).join("");
+  }
+
+  function updateResults() {
+    app.querySelector('[data-res="total"]').textContent = problem() ? "—" : formatOhms(total());
+    app.querySelector('[data-res="detail"]').innerHTML = detailLine();
+    app.querySelector('[data-res="err"]').textContent = problem();
+    app.querySelectorAll("[data-hint]").forEach(el => {
+      el.textContent = seriesHint(ohmsOf(state.rows[el.dataset.hint]));
+    });
+    app.querySelector(".diagram-box").innerHTML = diagram();
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `${state.rows.length} resistors, ${state.mode === "series" ? "end to end" : "across each other"}`)}
+
+      <div class="diagram-box" style="padding:6px 10px;">${diagram()}</div>
+
+      ${pillRow([["series", "Series"], ["parallel", "Parallel"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Resistors
+        <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
+      </div>
+      <div class="r-list">${rowsHTML()}</div>
+      <div class="error-text" data-res="err">${problem()}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result
+        <select id="sp-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Total resistance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="total">${problem() ? "—" : formatOhms(total())}</span>
+        </div>
+        <div class="result-sub" data-res="detail">${detailLine()}</div>
+      </div>
+
+      ${calcFooter(formulaFor(state.mode))}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    app.querySelectorAll("input[data-row]").forEach(input => {
+      input.oninput = () => {
+        state.rows[input.dataset.row].value = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach(select => {
+      select.onchange = () => { state.rows[select.dataset.unit].unit = select.value; updateResults(); };
+    });
+    app.querySelectorAll("[data-drop]").forEach(btn => {
+      btn.onclick = () => {
+        if (state.rows.length <= 2) return;
+        state.rows.splice(+btn.dataset.drop, 1);
+        paint();
+      };
+    });
+    document.getElementById("sp-add").onclick = () => {
+      if (state.rows.length >= SP_MAX) return;
+      state.rows.push({ value: 1, unit: "kΩ" });
+      paint();
+    };
+    document.getElementById("sp-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
