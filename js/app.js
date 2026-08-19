@@ -1634,7 +1634,9 @@ function renderCurrentDivider(domain, tool, favId) {
   }
 
   // Two branches in parallel between one node pair. ANSI zigzags at the app's
-  // standard proportions, with straight leads into each node.
+  // standard proportions, with straight leads into each node. I2 is never an
+  // input, so tone() gives it the result green like any other derived quantity;
+  // drawn in the wire grey it was all but invisible.
   function diagram() {
     const known = inputsFor(state.solve);
     const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
@@ -1642,16 +1644,16 @@ function renderCurrentDivider(domain, tool, favId) {
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
     return `<svg width="220" height="98" viewBox="0 0 220 98" fill="none">
       <path d="M110 14 V22 M106 18 L110 22 L114 18" stroke="${tone("iin")}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M70 26 H150 M70 26 V34 M150 26 V34 M70 70 V78 M150 70 V78 M70 78 H150 M110 78 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(70, 34)}" stroke="${tone("r1")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="${zig(150, 34)}" stroke="${tone("r2")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M84 26 H136 M84 26 V34 M136 26 V34 M84 70 V78 M136 70 V78 M84 78 H136 M110 78 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(84, 34)}" stroke="${tone("r1")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="${zig(136, 34)}" stroke="${tone("r2")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <circle cx="110" cy="26" r="2.6" fill="${wire}"/>
       <circle cx="110" cy="78" r="2.6" fill="${wire}"/>
       <text x="110" y="10" fill="${tone("iin")}" font-size="12" font-weight="600" text-anchor="middle">Iin</text>
-      <text x="52" y="56" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
-      <text x="168" y="56" fill="${tone("r2")}" font-size="12" font-weight="600">R2</text>
-      <text x="86" y="56" fill="${tone("i1")}" font-size="12" font-weight="600">I1</text>
-      <text x="134" y="56" fill="${wire}" font-size="12" font-weight="600" text-anchor="end">I2</text>
+      <text x="66" y="56" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
+      <text x="154" y="56" fill="${tone("r2")}" font-size="12" font-weight="600">R2</text>
+      <text x="97" y="56" fill="${tone("i1")}" font-size="12" font-weight="600">I1</text>
+      <text x="123" y="56" fill="${tone("i2")}" font-size="12" font-weight="600" text-anchor="end">I2</text>
     </svg>`;
   }
 
