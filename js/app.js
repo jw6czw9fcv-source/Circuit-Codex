@@ -1368,17 +1368,19 @@ function renderVoltageDivider(domain, tool, favId) {
     const wire = "#5A6169";
     // ANSI/IEEE 315 resistor: six peaks alternating either side of the axis. The
     // zigzag here is the body only — the straight lead each side is drawn as
-    // wire, long enough to read as the pin that joins the next part.
+    // wire, long enough to read as the pin that joins the next part. R1's body
+    // ends at 62 and R2's starts at 74, so the tap leaves from 68: the midpoint
+    // of the wire between them, which is where the junction physically is.
     const zig = (t) => `M90 ${t} L83 ${t + 3} L97 ${t + 9} L83 ${t + 15} L97 ${t + 21} L83 ${t + 27} L97 ${t + 33} L90 ${t + 36}`;
     return `<svg width="220" height="134" viewBox="0 0 220 134" fill="none">
       <path d="M90 14 V26 M90 62 V74 M90 110 V122" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M90 74 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M90 68 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${zig(26)}" stroke="${tone("r1")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <path d="${zig(74)}" stroke="${tone("r2")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <circle cx="90" cy="74" r="2.6" fill="${wire}"/>
+      <circle cx="90" cy="68" r="2.6" fill="${wire}"/>
       <path d="M78 122 H102 M82 127 H98 M86 132 H94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <text x="90" y="10" fill="${tone("vin")}" font-size="12" font-weight="600" text-anchor="middle">Vin</text>
-      <text x="156" y="78" fill="${tone("vout")}" font-size="12" font-weight="600">Vout</text>
+      <text x="156" y="72" fill="${tone("vout")}" font-size="12" font-weight="600">Vout</text>
       <text x="70" y="48" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
       <text x="70" y="96" fill="${tone("r2")}" font-size="12" font-weight="600" text-anchor="end">R2</text>
     </svg>`;
