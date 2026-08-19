@@ -136,6 +136,11 @@ const FORMULAS = [
   },
 ];
 
+// Sorted once here rather than hand-ordered above, so the list stays correct
+// as entries are added anywhere in it — no risk of a manual reorder mistake,
+// and filtering preserves this order since it just filters the sorted array.
+FORMULAS.sort((a, b) => a.tool.localeCompare(b.tool, undefined, { sensitivity: "base" }));
+
 // Case-insensitive match against topic name, formula text and the note —
 // "duty cycle" should find the 555 timer even though "duty cycle" is not in
 // its tool name.
