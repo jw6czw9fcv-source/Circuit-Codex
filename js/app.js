@@ -90,7 +90,7 @@ function renderHome() {
   const toolsDomain = DOMAINS.find(d => d.id === "tools");
   app.innerHTML = `
     <div class="topbar"><h1>Circuit Codex</h1></div>
-    <div class="sub sub-center">Electronics reference and tools</div>
+    <div class="sub">Electronics reference and tools</div>
     <div class="domain-grid">
       ${domains.map(d => `
         <button class="domain-card" onclick="location.hash='/domain/${d.id}'">
@@ -117,8 +117,9 @@ function renderDomain(domainId) {
     <div class="topbar back-row">
       <button class="icon-btn" onclick="location.hash='/home'">${ICONS.chevronLeft}</button>
       <h1>${d.title}</h1>
+      <span class="icon-btn" aria-hidden="true" style="visibility:hidden">${ICONS.chevronLeft}</span>
     </div>
-    <div class="sub" style="padding-left:46px;">${d.subtitle}</div>
+    <div class="sub">${d.subtitle}</div>
     ${d.sections.map((sec, si) => `
       <div class="section-label" style="color:${d.color}">${sec.title}</div>
       <div class="tool-list">
@@ -167,7 +168,7 @@ function renderTool(rawKey, calcId) {
       <h1>${tool.name}</h1>
       <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
     </div>
-    <div class="sub" style="padding-left:46px;">${domain.title} · ${section.title}</div>
+    <div class="sub">${domain.title} · ${section.title}</div>
     <div class="placeholder">
       ${ICONS.wrench}
       <div style="font-size:14px;">This calculator isn't built yet in this preview.</div>
@@ -275,7 +276,7 @@ function calcHeader(tool, favId, subtitle) {
       <h1>${tool.name}</h1>
       <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
     </div>
-    <div class="sub" style="padding-left:46px;">${subtitle}</div>`;
+    <div class="sub">${subtitle}</div>`;
 }
 
 // options is [value, label] pairs; the active one is tinted with the domain
