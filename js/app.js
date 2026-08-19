@@ -1974,6 +1974,17 @@ function renderFormulaSearch(domain, tool, favId) {
       : `<div class="formula-card formula-card--static">${inner}</div>`;
   }
 
+  // The full list on open, filtered as you type, and back to the full list on
+  // clearing — with only a few dozen entries, browsing is as useful as
+  // searching, so nothing here waits for a query the way the global Search
+  // screen does.
+  function renderList(list, emptyQuery) {
+    const results = document.getElementById("fs-results");
+    results.innerHTML = list.length
+      ? list.map(card).join("")
+      : `<div class="placeholder">${ICONS.search}<div>No formula for "${emptyQuery}" yet.</div><div style="font-size:12px;margin-top:6px;">Still growing — most topics don't have an entry here yet.</div></div>`;
+  }
+
   function paint() {
     app.innerHTML = `
       ${calcHeader(tool, favId, `${FORMULAS.length} formulas so far`)}
@@ -1989,16 +2000,13 @@ function renderFormulaSearch(domain, tool, favId) {
     document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
 
     const input = document.getElementById("fs-input");
-    const results = document.getElementById("fs-results");
+    renderList(FORMULAS, "");
     input.oninput = () => {
       const q = input.value;
-      if (!q.trim()) { results.innerHTML = ""; return; }
-      const matches = searchFormulas(q);
-      results.innerHTML = matches.length
-        ? matches.map(card).join("")
-        : `<div class="placeholder">${ICONS.search}<div>No formula for "${q}" yet.</div><div style="font-size:12px;margin-top:6px;">Still growing — most topics don't have an entry here yet.</div></div>`;
+      renderList(q.trim() ? searchFormulas(q) : FORMULAS, q);
     };
-    input.focus();
+    // No autofocus: focusing pops the keyboard immediately and covers the list
+    // this screen exists to let you browse before you type anything.
   }
 
   paint();

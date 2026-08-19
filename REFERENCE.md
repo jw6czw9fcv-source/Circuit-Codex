@@ -570,7 +570,7 @@ tools/calculators inside.
 
 **Reference**
 
--   Formula search
+-   Formula
 
 -   Glossary
 
