@@ -364,7 +364,10 @@ html, body {
   background: var(--card);
   border: 1px solid var(--input-border);
   border-radius: 12px;
-  padding: 10px 12px;
+  /* 8px rather than 10: the voltage divider carries three of these under the
+     tallest schematic in the app, and the symbol needs the height more than the
+     padding does. Every other calculator has slack to give. */
+  padding: 8px 12px;
   margin: 0 16px 10px;
 }
 .field label {

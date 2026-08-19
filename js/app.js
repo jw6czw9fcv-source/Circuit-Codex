@@ -1303,6 +1303,14 @@ function renderVoltageDivider(domain, tool, favId) {
   // Real resistors are only as good as their tolerance, and a divider's error is
   // worst when the two legs miss in opposite directions — so this is the true
   // worst case, not the ±tol you might assume from the ratio.
+  // Scale a pair by the larger of the two and print the unit once. Repeating it
+  // ("5.94 V – 6.06 V") is what pushed this line onto a second row.
+  function pairText(a, b, unit) {
+    const steps = [[1e9, "G"], [1e6, "M"], [1e3, "k"], [1, ""], [1e-3, "m"], [1e-6, "µ"], [1e-9, "n"]];
+    const step = steps.find(([scale]) => Math.abs(b) >= scale) || [1, ""];
+    return `${trim(a / step[0])} / ${trim(b / step[0])} ${step[1]}${unit}`;
+  }
+
   function outputSpread(r) {
     const t = state.tol / 100;
     const hi = (r.vin * r.r2 * (1 + t)) / (r.r1 * (1 - t) + r.r2 * (1 + t));
@@ -1314,7 +1322,7 @@ function renderVoltageDivider(domain, tool, favId) {
     if (problem(r)) return "";
     const { lo, hi } = outputSpread(r);
     const drift = ((hi - r.vout) / r.vout) * 100;
-    return `Vout ${siFormat(lo, "V")} – ${siFormat(hi, "V")} &nbsp;·&nbsp; ±${Number(drift.toFixed(2))}%`;
+    return `${pairText(lo, hi, "V").replace(" / ", " – ")} (±${Number(drift.toFixed(2))}%)`;
   }
 
   function solvedLabel() {
@@ -1326,9 +1334,22 @@ function renderVoltageDivider(domain, tool, favId) {
     return state.solve === "vout" ? siFormat(r.vout, "V") : formatOhms(state.solve === "r1" ? r.r1 : r.r2);
   }
 
+  function standardPart(r) {
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(state.solve === "r1" ? r.r1 : r.r2, name);
+    const r1 = state.solve === "r1" ? near.value : r.r1;
+    const r2 = state.solve === "r2" ? near.value : r.r2;
+    return { name, value: near.value, exact: near.exact, vout: (r.vin * r2) / (r1 + r2) };
+  }
+
   function detailLine(r) {
     if (problem(r)) return "";
-    return `I = ${siFormat(r.current, "A")} &nbsp;·&nbsp; R1 ${siFormat(r.p1, "W")} &nbsp;·&nbsp; R2 ${siFormat(r.p2, "W")}`;
+    if (state.solve === "vout") {
+      return `${spreadLine(r)} &nbsp;·&nbsp; ${siFormat(r.current, "A")} &nbsp;·&nbsp; ${pairText(r.p1, r.p2, "W")}`;
+    }
+    const std = standardPart(r);
+    const suffix = std.exact ? "is standard" : `→ ${formatOhms(std.value)}, Vout ${siFormat(std.vout, "V")}`;
+    return `${std.name} ${suffix} &nbsp;·&nbsp; ${siFormat(r.current, "A")}`;
   }
 
   function formulaFor(solve) {
@@ -1345,21 +1366,21 @@ function renderVoltageDivider(domain, tool, favId) {
     const known = inputsFor(state.solve);
     const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
     const wire = "#5A6169";
-    // One zigzag, drawn from its top: four peaks either side of the wire, which
-    // is the fewest that still reads as a resistor. Kept compact because the
-    // screen has to hold three input fields under it on a 375px phone.
-    const zig = (top) => `M90 ${top} V${top + 2} L83 ${top + 5} L97 ${top + 10} L83 ${top + 15} L97 ${top + 20} L90 ${top + 22}`;
-    return `<svg width="220" height="88" viewBox="0 0 220 88" fill="none">
-      <path d="M90 14 V20 M90 42 V48 M90 70 V74" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M90 48 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(20)}" stroke="${tone("r1")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="${zig(48)}" stroke="${tone("r2")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <circle cx="90" cy="48" r="2.6" fill="${wire}"/>
-      <path d="M78 74 H102 M82 79 H98 M86 84 H94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    // ANSI/IEEE 315 resistor: six peaks alternating either side of the axis. The
+    // zigzag here is the body only — the straight lead each side is drawn as
+    // wire, long enough to read as the pin that joins the next part.
+    const zig = (t) => `M90 ${t} L83 ${t + 3} L97 ${t + 9} L83 ${t + 15} L97 ${t + 21} L83 ${t + 27} L97 ${t + 33} L90 ${t + 36}`;
+    return `<svg width="220" height="134" viewBox="0 0 220 134" fill="none">
+      <path d="M90 14 V26 M90 62 V74 M90 110 V122" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M90 74 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(26)}" stroke="${tone("r1")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="${zig(74)}" stroke="${tone("r2")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <circle cx="90" cy="74" r="2.6" fill="${wire}"/>
+      <path d="M78 122 H102 M82 127 H98 M86 132 H94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <text x="90" y="10" fill="${tone("vin")}" font-size="12" font-weight="600" text-anchor="middle">Vin</text>
-      <text x="156" y="52" fill="${tone("vout")}" font-size="12" font-weight="600">Vout</text>
-      <text x="70" y="35" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
-      <text x="70" y="63" fill="${tone("r2")}" font-size="12" font-weight="600" text-anchor="end">R2</text>
+      <text x="156" y="78" fill="${tone("vout")}" font-size="12" font-weight="600">Vout</text>
+      <text x="70" y="48" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
+      <text x="70" y="96" fill="${tone("r2")}" font-size="12" font-weight="600" text-anchor="end">R2</text>
     </svg>`;
   }
 
@@ -1369,7 +1390,6 @@ function renderVoltageDivider(domain, tool, favId) {
     const r = compute();
     const issue = problem(r);
     app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
-    app.querySelector('[data-res="spread"]').innerHTML = spreadLine(r);
     app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
     app.querySelector('[data-res="err"]').textContent = issue;
   }
@@ -1379,7 +1399,7 @@ function renderVoltageDivider(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "Unloaded resistive divider")}
 
-      <div class="diagram-box">${diagram()}</div>
+      <div class="diagram-box" style="padding:2px 10px;">${diagram()}</div>
 
       ${pillRow([["vout", "Vout"], ["r1", "R1"], ["r2", "R2"]], state.solve, domain.bg)}
 
@@ -1398,7 +1418,7 @@ function renderVoltageDivider(domain, tool, favId) {
 
       <div class="section-label" style="color:#5DCAA5">Result
         <select id="vd-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% resistors</option>`).join("")}
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
         </select>
       </div>
       <div class="result-field">
@@ -1409,7 +1429,6 @@ function renderVoltageDivider(domain, tool, favId) {
         <div class="result-value">
           <span class="num" data-res="solved">${solvedValue(r)}</span>
         </div>
-        <div class="result-sub" data-res="spread">${spreadLine(r)}</div>
         <div class="result-sub" data-res="detail">${detailLine(r)}</div>
       </div>
 
