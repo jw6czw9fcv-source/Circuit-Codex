@@ -1796,41 +1796,48 @@ function renderSeriesParallel(domain, tool, favId) {
   }
 
   // ANSI zigzags at the app's proportions. Series runs them along one wire;
-  // parallel hangs them between two rails. Both scale to the resistor count.
+  // parallel hangs them between two rails. The pitch is fixed at the four-part
+  // spacing whatever the count, so adding or removing a resistor slides the
+  // group wider or narrower instead of respacing the ones already drawn.
+  const SP_SLOT = 196 / SP_MAX;
+  const SP_BODY = 36;
+
+  function centres(n) {
+    const start = (220 - n * SP_SLOT) / 2;
+    return Array.from({ length: n }, (_, i) => start + SP_SLOT * (i + 0.5));
+  }
+
   function diagram() {
     const n = state.rows.length;
     const wire = "#5A6169";
     const ink = "#8FC1F5";
+    const cx = centres(n);
+    const half = SP_BODY / 2;
+
     if (state.mode === "series") {
-      const slot = 196 / n;
-      const body = Math.min(36, slot - 12);
-      const parts = state.rows.map((_, i) => {
-        const cx = 12 + slot * (i + 0.5);
-        const x = cx - body / 2;
-        const step = body / 6;
+      const step = SP_BODY / 6;
+      const bodies = cx.map((c, i) => {
+        const x = c - half;
         const zig = `M${x} 35 L${x + step * 0.5} 28 L${x + step * 1.5} 42 L${x + step * 2.5} 28`
-          + ` L${x + step * 3.5} 42 L${x + step * 4.5} 28 L${x + step * 5.5} 42 L${x + body} 35`;
+          + ` L${x + step * 3.5} 42 L${x + step * 4.5} 28 L${x + step * 5.5} 42 L${x + SP_BODY} 35`;
         return `<path d="${zig}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`
-          + `<text x="${cx}" y="18" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">R${i + 1}</text>`;
+          + `<text x="${c}" y="18" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">R${i + 1}</text>`;
       });
-      const gaps = state.rows.map((_, i) => {
-        const cx = 12 + slot * (i + 0.5);
-        return `M${i === 0 ? 6 : cx - slot + body / 2} 35 H${cx - body / 2}`;
-      });
+      const links = cx.map((c, i) => (i === 0 ? `M6 35 H${c - half}` : `M${cx[i - 1] + half} 35 H${c - half}`));
+      links.push(`M${cx[n - 1] + half} 35 H214`);
       return `<svg width="220" height="56" viewBox="0 0 220 56" fill="none">
-        <path d="${gaps.join(" ")} M${12 + slot * (n - 0.5) + body / 2} 35 H214" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-        ${parts.join("")}
+        <path d="${links.join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        ${bodies.join("")}
       </svg>`;
     }
-    const slot = 196 / n;
-    const xs = state.rows.map((_, i) => 12 + slot * (i + 0.5));
+
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
     return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
-      <path d="M${xs[0]} 24 H${xs[n - 1]} M${xs[0]} 76 H${xs[n - 1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${xs.map(x => `M${x} 24 V30 M${x} 66 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M${cx[0]} 24 H${cx[n - 1]} M${cx[0]} 76 H${cx[n - 1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${cx.map(x => `M${x} 24 V30 M${x} 66 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M110 12 V24 M110 76 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${xs.map(x => `<path d="${zig(x, 30)}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`).join("")}
-      ${xs.map((x, i) => `<text x="${x}" y="52" fill="${ink}" font-size="11" font-weight="600" text-anchor="${i === n - 1 ? "start" : "end"}" dx="${i === n - 1 ? 10 : -10}">R${i + 1}</text>`).join("")}
+      ${cx.map(x => `<path d="${zig(x, 30)}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`).join("")}
+      ${cx.map((x, i) => `<text x="${x}" y="52" fill="${ink}" font-size="11" font-weight="600" text-anchor="${i === n - 1 ? "start" : "end"}" dx="${i === n - 1 ? 10 : -10}">R${i + 1}</text>`).join("")}
     </svg>`;
   }
 
