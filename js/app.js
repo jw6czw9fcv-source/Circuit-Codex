@@ -1815,16 +1815,23 @@ function renderSeriesParallel(domain, tool, favId) {
     const half = SP_BODY / 2;
 
     if (state.mode === "series") {
+      // Every length of trace is the same: the lead at each end matches the gap
+      // between resistors, so the chain reads evenly instead of floating in two
+      // long tails. The pitch is unchanged — body plus gap is still 49.
+      const gap = SP_SLOT - SP_BODY;
+      const width = n * SP_BODY + (n + 1) * gap;
+      const x0 = (220 - width) / 2;
+      const bodyStart = (i) => x0 + gap + i * (SP_BODY + gap);
       const step = SP_BODY / 6;
-      const bodies = cx.map((c, i) => {
-        const x = c - half;
+      const bodies = Array.from({ length: n }, (_, i) => {
+        const x = bodyStart(i);
         const zig = `M${x} 35 L${x + step * 0.5} 28 L${x + step * 1.5} 42 L${x + step * 2.5} 28`
           + ` L${x + step * 3.5} 42 L${x + step * 4.5} 28 L${x + step * 5.5} 42 L${x + SP_BODY} 35`;
         return `<path d="${zig}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`
-          + `<text x="${c}" y="18" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">R${i + 1}</text>`;
+          + `<text x="${x + half}" y="18" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">R${i + 1}</text>`;
       });
-      const links = cx.map((c, i) => (i === 0 ? `M6 35 H${c - half}` : `M${cx[i - 1] + half} 35 H${c - half}`));
-      links.push(`M${cx[n - 1] + half} 35 H214`);
+      const links = Array.from({ length: n + 1 }, (_, i) =>
+        `M${i === 0 ? x0 : bodyStart(i - 1) + SP_BODY} 35 H${i === n ? x0 + width : bodyStart(i)}`);
       return `<svg width="220" height="56" viewBox="0 0 220 56" fill="none">
         <path d="${links.join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
         ${bodies.join("")}
