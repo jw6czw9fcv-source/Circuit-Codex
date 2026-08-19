@@ -1251,6 +1251,7 @@ function siFormat(v, unit) {
 function renderVoltageDivider(domain, tool, favId) {
   const state = {
     solve: "vout",
+    tol: 1,
     values: { vin: 12, vout: 6, r1: 10, r2: 10 },
     units: { vin: "V", vout: "V", r1: "kΩ", r2: "kΩ" },
   };
@@ -1299,6 +1300,23 @@ function renderVoltageDivider(domain, tool, favId) {
     return "";
   }
 
+  // Real resistors are only as good as their tolerance, and a divider's error is
+  // worst when the two legs miss in opposite directions — so this is the true
+  // worst case, not the ±tol you might assume from the ratio.
+  function outputSpread(r) {
+    const t = state.tol / 100;
+    const hi = (r.vin * r.r2 * (1 + t)) / (r.r1 * (1 - t) + r.r2 * (1 + t));
+    const lo = (r.vin * r.r2 * (1 - t)) / (r.r1 * (1 + t) + r.r2 * (1 - t));
+    return { lo, hi };
+  }
+
+  function spreadLine(r) {
+    if (problem(r)) return "";
+    const { lo, hi } = outputSpread(r);
+    const drift = ((hi - r.vout) / r.vout) * 100;
+    return `Vout ${siFormat(lo, "V")} – ${siFormat(hi, "V")} &nbsp;·&nbsp; ±${Number(drift.toFixed(2))}%`;
+  }
+
   function solvedLabel() {
     return { vout: "Output voltage (Vout)", r1: "Resistance R1", r2: "Resistance R2" }[state.solve];
   }
@@ -1320,24 +1338,28 @@ function renderVoltageDivider(domain, tool, favId) {
   }
 
   // Schematic, not literal: this shows how the parts are wired, which is the
-  // case REFERENCE.md wants a symbol for. Boxes rather than zigzags — at this
-  // size a zigzag turned vertical reads as noise. Known legs are drawn in the
-  // input blue, the one being solved for in the result green.
+  // case REFERENCE.md wants a symbol for. US convention — zigzag resistors,
+  // never the IEC box. Known legs are drawn in the input blue, the one being
+  // solved for in the result green.
   function diagram() {
     const known = inputsFor(state.solve);
     const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
     const wire = "#5A6169";
-    return `<svg width="220" height="102" viewBox="0 0 220 102" fill="none">
-      <path d="M90 18 V28 M90 52 V60 M90 84 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M90 60 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="90" cy="60" r="2.6" fill="${wire}"/>
-      <rect x="80" y="28" width="20" height="24" rx="3" stroke="${tone("r1")}" stroke-width="1.8" fill="none"/>
-      <rect x="80" y="60" width="20" height="24" rx="3" stroke="${tone("r2")}" stroke-width="1.8" fill="none"/>
-      <path d="M78 88 H102 M82 94 H98 M86 100 H94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <text x="90" y="13" fill="${tone("vin")}" font-size="12" font-weight="600" text-anchor="middle">Vin</text>
-      <text x="156" y="64" fill="${tone("vout")}" font-size="12" font-weight="600">Vout</text>
-      <text x="72" y="44" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
-      <text x="72" y="76" fill="${tone("r2")}" font-size="12" font-weight="600" text-anchor="end">R2</text>
+    // One zigzag, drawn from its top: four peaks either side of the wire, which
+    // is the fewest that still reads as a resistor. Kept compact because the
+    // screen has to hold three input fields under it on a 375px phone.
+    const zig = (top) => `M90 ${top} V${top + 2} L83 ${top + 5} L97 ${top + 10} L83 ${top + 15} L97 ${top + 20} L90 ${top + 22}`;
+    return `<svg width="220" height="88" viewBox="0 0 220 88" fill="none">
+      <path d="M90 14 V20 M90 42 V48 M90 70 V74" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M90 48 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(20)}" stroke="${tone("r1")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="${zig(48)}" stroke="${tone("r2")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <circle cx="90" cy="48" r="2.6" fill="${wire}"/>
+      <path d="M78 74 H102 M82 79 H98 M86 84 H94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="90" y="10" fill="${tone("vin")}" font-size="12" font-weight="600" text-anchor="middle">Vin</text>
+      <text x="156" y="52" fill="${tone("vout")}" font-size="12" font-weight="600">Vout</text>
+      <text x="70" y="35" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
+      <text x="70" y="63" fill="${tone("r2")}" font-size="12" font-weight="600" text-anchor="end">R2</text>
     </svg>`;
   }
 
@@ -1347,6 +1369,7 @@ function renderVoltageDivider(domain, tool, favId) {
     const r = compute();
     const issue = problem(r);
     app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="spread"]').innerHTML = spreadLine(r);
     app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
     app.querySelector('[data-res="err"]').textContent = issue;
   }
@@ -1373,7 +1396,11 @@ function renderVoltageDivider(domain, tool, favId) {
         </div>`).join("")}
       <div class="error-text" data-res="err">${problem(r)}</div>
 
-      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="section-label" style="color:#5DCAA5">Result
+        <select id="vd-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% resistors</option>`).join("")}
+        </select>
+      </div>
       <div class="result-field">
         <div class="result-head">
           <span class="label">${solvedLabel()}</span>
@@ -1382,6 +1409,7 @@ function renderVoltageDivider(domain, tool, favId) {
         <div class="result-value">
           <span class="num" data-res="solved">${solvedValue(r)}</span>
         </div>
+        <div class="result-sub" data-res="spread">${spreadLine(r)}</div>
         <div class="result-sub" data-res="detail">${detailLine(r)}</div>
       </div>
 
@@ -1399,6 +1427,10 @@ function renderVoltageDivider(domain, tool, favId) {
     app.querySelectorAll("select[data-unit]").forEach(select => {
       select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
     });
+    document.getElementById("vd-tol").onchange = (e) => {
+      state.tol = parseFloat(e.target.value);
+      updateResults();
+    };
   }
 
   paint();

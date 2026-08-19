@@ -105,9 +105,12 @@ button in the domain accent color → formula reminder footer.
 
 Circuit diagram exception: unlike navigation icons
 (literal/photographic), the in-calculator circuit diagram uses the
-standard schematic symbol (zigzag or box for R, parallel lines for C,
-etc.), because its job is to show circuit topology (how components are
-wired --- series, parallel, RC, etc.), not to identify a physical part.
+standard schematic symbol, because its job is to show circuit topology
+(how components are wired --- series, parallel, RC, etc.), not to
+identify a physical part. Symbols follow the **US (ANSI)** convention
+throughout: a resistor is a zigzag, never the IEC rectangle. Where a
+vertical zigzag is cramped, make the diagram taller rather than
+substituting a box.
 Shown for calculators where wiring configuration isn\'t obvious from the
 name alone (e.g. R series vs. R parallel, RC circuit), and updates with
 the selected mode when relevant.
