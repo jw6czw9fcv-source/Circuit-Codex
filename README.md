@@ -9,12 +9,13 @@ Working proof of concept:
 - 184 tools/categories listed across 7 domains, matching `REFERENCE.md` exactly
 - Global search across all tool names
 - Favorites (localStorage)
-- **Four fully working calculators:**
+- **Five fully working calculators:**
   - **Ohm's law** (`js/app.js`, `renderOhmsLaw`) — 3 modes, unit selection, live calculation, mode-aware circuit diagram and formula footnote
   - **Resistor color code** (`js/app.js`, `renderResistorColorCode`) — 4/5/6 bands, 3D band roller, value entry with unit and tolerance, live resistor illustration, E-series check
   - **SMD resistor code** (`js/app.js`, `renderSmdCode`) — 3-digit, 4-digit and EIA-96 markings, both directions, live chip illustration, E-series check
+  - **Voltage divider** (`js/app.js`, `renderVoltageDivider`) — solves for Vout, R1 or R2, mode-aware schematic, divider current and per-resistor power, guards on impossible ratios
   - **Closest E-series value** (`js/app.js`, `renderESeries`) — E6 to E192, nearest standard value with % drift, and the whole series as a table. The one screen that scrolls by design
-- All other 180 tools currently open a "not built yet" placeholder screen
+- All other 179 tools currently open a "not built yet" placeholder screen
 - Installable PWA (manifest + service worker + icons), works offline once installed
 
 ## Stack
@@ -54,7 +55,7 @@ REFERENCE.md          Full product spec: navigation, naming convention, visual s
 ## Next steps (suggested order)
 
 1. Build out calculators one domain at a time, following the `renderOhmsLaw` pattern as the template for each new tool.
-2. Next good candidates: **Series/parallel** and **Voltage divider** (Passive components) — both reuse the numeric-input pattern from `renderOhmsLaw` and want a mode-aware diagram.
+2. Next good candidates: **Series/parallel** and **Current divider** (Passive components) — both reuse the numeric-input pattern, and Current divider is the dual of Voltage divider so much of its shape carries over.
 3. Circuit diagrams: add the schematic SVG per calculator that needs one (see REFERENCE.md section 4, "Calculator screen template").
 4. **Done.** The shared screen shape lives in `calcHeader` / `pillRow` / `calcFooter` / `wireCalc`, and `trim` / `formatOhms` are module-level. A new calculator supplies a subtitle, an optional illustration, its pill options, its own body and a footnote.
 5. Longer term: Links and Notes sections (Tools domain) need actual storage logic (localStorage is fine to start, same pattern as favorites).

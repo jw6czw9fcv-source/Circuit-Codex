@@ -157,6 +157,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, favId);
   if (calcId === "smd-code") return renderSmdCode(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
+  if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -1223,6 +1224,181 @@ function renderESeries(domain, tool, favId) {
       if (isFinite(v) && v > 0) state.ohms = v;
       refresh();
     };
+  }
+
+  paint();
+}
+
+// ---------- Voltage divider ----------
+// Vout = Vin x R2 / (R1 + R2), rearranged for whichever leg you are solving
+// for. Unloaded: drawing current from the tap changes the ratio, which is why
+// the subtitle says so rather than leaving it implied.
+const VOLT_UNITS = { mV: 1e-3, V: 1, kV: 1e3 };
+const DIVIDER_R_UNITS = { "Ω": 1, "kΩ": 1e3, "MΩ": 1e6 };
+
+// General SI formatter, for the quantities that are not resistance. formatOhms
+// could delegate to this later; leaving it alone for now keeps this change from
+// touching what the other calculators print.
+function siFormat(v, unit) {
+  if (!isFinite(v)) return "—";
+  if (v === 0) return `0 ${unit}`;
+  for (const [scale, prefix] of [[1e9, "G"], [1e6, "M"], [1e3, "k"], [1, ""], [1e-3, "m"], [1e-6, "µ"], [1e-9, "n"]]) {
+    if (Math.abs(v) >= scale) return `${trim(v / scale)} ${prefix}${unit}`;
+  }
+  return `${trim(v)} ${unit}`;
+}
+
+function renderVoltageDivider(domain, tool, favId) {
+  const state = {
+    solve: "vout",
+    values: { vin: 12, vout: 6, r1: 10, r2: 10 },
+    units: { vin: "V", vout: "V", r1: "kΩ", r2: "kΩ" },
+  };
+
+  const FIELD = {
+    vin: { label: "Input voltage (Vin)", units: VOLT_UNITS },
+    vout: { label: "Output voltage (Vout)", units: VOLT_UNITS },
+    r1: { label: "R1 — top, in series", units: DIVIDER_R_UNITS },
+    r2: { label: "R2 — bottom, across the tap", units: DIVIDER_R_UNITS },
+  };
+
+  // Which three you supply depends on which one you want back.
+  function inputsFor(solve) {
+    if (solve === "vout") return ["vin", "r1", "r2"];
+    if (solve === "r1") return ["vin", "vout", "r2"];
+    return ["vin", "vout", "r1"];
+  }
+
+  function si(name) {
+    return state.values[name] * FIELD[name].units[state.units[name]];
+  }
+
+  function compute() {
+    const vin = si("vin");
+    let vout = si("vout");
+    let r1 = si("r1");
+    let r2 = si("r2");
+
+    if (state.solve === "vout") vout = (vin * r2) / (r1 + r2);
+    if (state.solve === "r1") r1 = (r2 * (vin - vout)) / vout;
+    if (state.solve === "r2") r2 = (r1 * vout) / (vin - vout);
+
+    const current = vin / (r1 + r2);
+    return { vin, vout, r1, r2, current, p1: current * current * r1, p2: current * current * r2 };
+  }
+
+  // The arithmetic will happily return a negative resistance or divide by zero;
+  // both mean the divider asked for cannot exist, so say which.
+  function problem(r) {
+    if (state.solve !== "vout") {
+      if (r.vout <= 0) return "Vout must be greater than zero.";
+      if (r.vout >= r.vin) return "Vout must be less than Vin.";
+    }
+    if (!isFinite(r.r1) || !isFinite(r.r2) || r.r1 < 0 || r.r2 < 0) return "No solution for those values.";
+    if (r.r1 + r.r2 === 0) return "R1 and R2 cannot both be zero.";
+    return "";
+  }
+
+  function solvedLabel() {
+    return { vout: "Output voltage (Vout)", r1: "Resistance R1", r2: "Resistance R2" }[state.solve];
+  }
+
+  function solvedValue(r) {
+    if (problem(r)) return "—";
+    return state.solve === "vout" ? siFormat(r.vout, "V") : formatOhms(state.solve === "r1" ? r.r1 : r.r2);
+  }
+
+  function detailLine(r) {
+    if (problem(r)) return "";
+    return `I = ${siFormat(r.current, "A")} &nbsp;·&nbsp; R1 ${siFormat(r.p1, "W")} &nbsp;·&nbsp; R2 ${siFormat(r.p2, "W")}`;
+  }
+
+  function formulaFor(solve) {
+    if (solve === "vout") return "Vout = Vin × R2 / (R1 + R2)";
+    if (solve === "r1") return "R1 = R2 × (Vin − Vout) / Vout";
+    return "R2 = R1 × Vout / (Vin − Vout)";
+  }
+
+  // Schematic, not literal: this shows how the parts are wired, which is the
+  // case REFERENCE.md wants a symbol for. Boxes rather than zigzags — at this
+  // size a zigzag turned vertical reads as noise. Known legs are drawn in the
+  // input blue, the one being solved for in the result green.
+  function diagram() {
+    const known = inputsFor(state.solve);
+    const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
+    const wire = "#5A6169";
+    return `<svg width="220" height="102" viewBox="0 0 220 102" fill="none">
+      <path d="M90 18 V28 M90 52 V60 M90 84 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M90 60 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="90" cy="60" r="2.6" fill="${wire}"/>
+      <rect x="80" y="28" width="20" height="24" rx="3" stroke="${tone("r1")}" stroke-width="1.8" fill="none"/>
+      <rect x="80" y="60" width="20" height="24" rx="3" stroke="${tone("r2")}" stroke-width="1.8" fill="none"/>
+      <path d="M78 88 H102 M82 94 H98 M86 100 H94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="90" y="13" fill="${tone("vin")}" font-size="12" font-weight="600" text-anchor="middle">Vin</text>
+      <text x="156" y="64" fill="${tone("vout")}" font-size="12" font-weight="600">Vout</text>
+      <text x="72" y="44" fill="${tone("r1")}" font-size="12" font-weight="600" text-anchor="end">R1</text>
+      <text x="72" y="76" fill="${tone("r2")}" font-size="12" font-weight="600" text-anchor="end">R2</text>
+    </svg>`;
+  }
+
+  // Only the numbers move while typing, so update them in place and leave the
+  // fields — and the caret — alone.
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
+    app.querySelector('[data-res="err"]').textContent = issue;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Unloaded resistive divider")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["vout", "Vout"], ["r1", "R1"], ["r2", "R2"]], state.solve, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${inputsFor(state.solve).map(name => `
+        <div class="field">
+          <label>${FIELD[name].label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${state.values[name]}" />
+            <select data-unit="${name}">
+              ${Object.keys(FIELD[name].units).map(u => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err">${problem(r)}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="solved">${solvedValue(r)}</span>
+        </div>
+        <div class="result-sub" data-res="detail">${detailLine(r)}</div>
+      </div>
+
+      ${calcFooter(formulaFor(state.solve))}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+
+    app.querySelectorAll("input[data-var]").forEach(input => {
+      input.oninput = () => {
+        state.values[input.dataset.var] = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach(select => {
+      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+    });
   }
 
   paint();
