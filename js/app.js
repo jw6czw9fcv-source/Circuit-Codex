@@ -91,7 +91,6 @@ function renderHome() {
   app.innerHTML = `
     <div class="topbar"><h1>Circuit Codex</h1></div>
     <div class="sub">Electronics reference and tools</div>
-    <div id="debug-marker" style="text-align:center;font-size:10px;color:#555;margin-top:-6px;margin-bottom:4px;white-space:pre-line;">build v11</div>
     <div class="domain-grid">
       ${domains.map(d => `
         <button class="domain-card" onclick="location.hash='/domain/${d.id}'">
@@ -109,12 +108,6 @@ function renderHome() {
     </button>
     ${tabbarHTML("home")}
   `;
-  const titleEl = document.querySelector(".card-title");
-  const dbg = document.getElementById("debug-marker");
-  if (titleEl && dbg) {
-    const cs = getComputedStyle(titleEl);
-    dbg.textContent = `v11 | vw:${window.innerWidth} dpr:${window.devicePixelRatio} font:${cs.fontFamily.split(",")[0]} size:${cs.fontSize} zoom:${Math.round(window.visualViewport ? window.visualViewport.scale * 100 : 100)}%`;
-  }
 }
 
 function renderDomain(domainId) {
