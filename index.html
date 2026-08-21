@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <!-- viewport-fit=cover was only needed to draw content under the status
+       bar for black-translucent, which is no longer in use — and it's also
+       specifically implicated in reports of this exact standalone-launch
+       viewport bug on Pro Max iPhones, so it's worth dropping now that
+       nothing here still depends on it. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
   <title>Circuit Codex</title>
   <meta name="description" content="Electronics reference and tools" />
 
@@ -30,14 +35,14 @@
        a stale URL as far as that cache is concerned — this is what makes an
        update visible on reload instead of waiting out the cache or
        reinstalling the app. -->
-  <link rel="stylesheet" href="css/styles.css?v=15" />
+  <link rel="stylesheet" href="css/styles.css?v=16" />
 </head>
 <body>
   <div id="app"></div>
 
-  <script src="js/data.js?v=15"></script>
-  <script src="js/formulas.js?v=15"></script>
-  <script src="js/app.js?v=15"></script>
+  <script src="js/data.js?v=16"></script>
+  <script src="js/formulas.js?v=16"></script>
+  <script src="js/app.js?v=16"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

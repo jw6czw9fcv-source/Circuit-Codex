@@ -1,15 +1,15 @@
 // Bump VERSION on every release. The cache name derives from it, so a new
 // version installs into a fresh cache and activate() deletes the old ones.
-const VERSION = "v15";
+const VERSION = "v16";
 const CACHE = `circuit-codex-${VERSION}`;
 
 const ASSETS = [
   "./",
   "./index.html",
-  "./css/styles.css?v=15",
-  "./js/data.js?v=15",
-  "./js/formulas.js?v=15",
-  "./js/app.js?v=15",
+  "./css/styles.css?v=16",
+  "./js/data.js?v=16",
+  "./js/formulas.js?v=16",
+  "./js/app.js?v=16",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

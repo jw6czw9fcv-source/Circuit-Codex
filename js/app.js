@@ -113,7 +113,7 @@ function renderHome() {
   if (dbg) {
     const vv = window.visualViewport;
     dbg.textContent =
-      `v15 | standalone:${window.navigator.standalone} displayMode:${window.matchMedia("(display-mode: standalone)").matches}\n` +
+      `v16 | standalone:${window.navigator.standalone} displayMode:${window.matchMedia("(display-mode: standalone)").matches}\n` +
       `screen:${screen.width}x${screen.height} outer:${window.outerWidth}x${window.outerHeight} inner:${window.innerWidth}x${window.innerHeight}\n` +
       `vv:${vv ? Math.round(vv.width) + "x" + Math.round(vv.height) : "n/a"} vvScale:${vv ? vv.scale : "n/a"} dpr:${window.devicePixelRatio}`;
   }
