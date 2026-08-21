@@ -14,19 +14,15 @@
   <!-- PWA / iOS home screen -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0B0D10" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <!-- black-translucent draws the webview full-bleed under the status bar
-       (why the topbar needed its own safe-area-inset-top padding), but it's
-       also the specific combination — with viewport-fit=cover, on a Dynamic
-       Island phone, standalone launch only — behind a known WebKit bug where
-       the initial scale computes at 125% instead of 100%. default lets iOS
-       reserve and draw its own opaque status bar instead, which sidesteps
-       the bug entirely. "black" (not "default", which draws a white bar
-       that would clash with this dark theme) keeps an opaque dark status
-       bar and reserves its own space, at the cost of losing the full-bleed
-       look up top. -->
-  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-  <meta name="apple-mobile-web-app-title" content="Circuit Codex" />
+  <!-- The apple-mobile-web-app-* tags are the old, pre-manifest.json,
+       Apple-only mechanism for "Add to Home Screen". iOS 16.4+ also reads
+       manifest.json directly (confirmed: the add-to-home-screen sheet now
+       offers "Open as Web App", the modern manifest-driven wording) — and
+       manifest.json already declares display/theme/background/icons on its
+       own. Dropping the legacy tags is a bet that the 344px/125%-zoom bug
+       on standalone launch (confirmed NOT caused by Display Zoom, Larger
+       Text, or Safari's per-site zoom — all checked and ruled out) lives in
+       that old code path, and that the manifest-only route avoids it. -->
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="icon" href="icons/icon-192.png" />
 
@@ -35,14 +31,14 @@
        a stale URL as far as that cache is concerned — this is what makes an
        update visible on reload instead of waiting out the cache or
        reinstalling the app. -->
-  <link rel="stylesheet" href="css/styles.css?v=16" />
+  <link rel="stylesheet" href="css/styles.css?v=17" />
 </head>
 <body>
   <div id="app"></div>
 
-  <script src="js/data.js?v=16"></script>
-  <script src="js/formulas.js?v=16"></script>
-  <script src="js/app.js?v=16"></script>
+  <script src="js/data.js?v=17"></script>
+  <script src="js/formulas.js?v=17"></script>
+  <script src="js/app.js?v=17"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
