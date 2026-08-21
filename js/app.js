@@ -91,6 +91,7 @@ function renderHome() {
   app.innerHTML = `
     <div class="topbar"><h1>Circuit Codex</h1></div>
     <div class="sub">Electronics reference and tools</div>
+    <div style="text-align:center;font-size:11px;color:#555;margin-top:-6px;margin-bottom:4px;">build v10</div>
     <div class="domain-grid">
       ${domains.map(d => `
         <button class="domain-card" onclick="location.hash='/domain/${d.id}'">
