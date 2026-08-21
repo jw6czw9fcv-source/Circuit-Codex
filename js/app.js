@@ -443,7 +443,9 @@ function renderOhmsLaw(domain, tool, favId) {
     const hint = app.querySelector('[data-hint="R"]');
     if (hint) hint.textContent = seriesHint(state.values.R * unitScale(state.units.R));
     if (inputs.includes("R")) {
-      syncSliderPositions(eSeriesForTolerance(state.tol), () => state.values.R * unitScale(state.units.R));
+      syncSliderPositions(eSeriesForTolerance(state.tol),
+        () => state.values.R * unitScale(state.units.R),
+        () => unitSliderBounds(unitScale(state.units.R)));
     }
   }
 
@@ -470,7 +472,7 @@ function renderOhmsLaw(domain, tool, favId) {
               ${unitOptionsFor(v).map(u => `<option value="${u}" ${state.units[v] === u ? "selected" : ""} style="color:#8FC1F5;background:#15181D;">${u}</option>`).join("")}
             </select>
           </div>
-          ${v === "R" ? seriesSliderHTML("R", eSeriesForTolerance(state.tol), state.values.R * unitScale(state.units.R)) : ""}
+          ${v === "R" ? seriesSliderHTML("R", eSeriesForTolerance(state.tol), state.values.R * unitScale(state.units.R), unitSliderBounds(unitScale(state.units.R))) : ""}
         </div>`).join("")}
 
       <div class="section-label" style="color:#5DCAA5">Results
@@ -513,8 +515,9 @@ function renderOhmsLaw(domain, tool, favId) {
     };
     const rSlider = app.querySelector('.series-slider[data-slider="R"]');
     if (rSlider) {
-      const range = eSeriesRange(eSeriesForTolerance(state.tol));
       rSlider.oninput = () => {
+        const bounds = unitSliderBounds(unitScale(state.units.R));
+        const range = eSeriesRange(eSeriesForTolerance(state.tol), bounds[0], bounds[1]);
         state.values.R = range[+rSlider.value] / unitScale(state.units.R);
         app.querySelector('input[data-var="R"]').value = trim(state.values.R);
         updateResults();
@@ -597,31 +600,48 @@ function nearestESeries(ohms, name) {
 
 // ---------- Standard-value slider ----------
 // A resistor field's slider drags through the active E-series only — every
-// position it can land on is an orderable part, across a practical 1 Ω to
-// 10 MΩ span (narrower than E_LISTED could technically cover, but nobody is
-// dragging a slider out to milliohms or gigohms looking for a stock part).
+// position it can land on is an orderable part. The overall span it could
+// ever reach is a practical 1 Ω to 10 MΩ (narrower than E_LISTED could
+// technically cover, but nobody is dragging a slider out to milliohms or
+// gigohms looking for a stock part) — but at any moment it only explores the
+// one decade family the unit selector is currently set to. Crossing from Ω
+// into kΩ by dragging would be surprising when there is a unit dropdown
+// sitting right there for exactly that job — switch units first, then drag.
 const SLIDER_MIN_OHMS = 1;
 const SLIDER_MAX_OHMS = 10e6;
 
-function eSeriesRange(series) {
+// 999× rather than 999.999×: the gap this needs to land in is "below the
+// next unit's first value" (…, 976, [boundary], 1000, …), and even E192's
+// tightest step is ~1.2% — a 0.1% margin comfortably clears that without
+// float rounding on either side accidentally pulling the next unit's value
+// into range, which a wider margin did.
+function unitSliderBounds(scale) {
+  return [Math.max(SLIDER_MIN_OHMS, scale), Math.min(SLIDER_MAX_OHMS, scale * 999)];
+}
+
+function eSeriesRange(series, minOhms = SLIDER_MIN_OHMS, maxOhms = SLIDER_MAX_OHMS) {
   const values = eSeriesValues(series);
   const places = values[0] >= 100 ? 3 : 2;
-  let decade = Math.pow(10, Math.floor(Math.log10(SLIDER_MIN_OHMS)) - (places - 1));
+  let decade = Math.pow(10, Math.floor(Math.log10(minOhms)) - (places - 1));
   const out = [];
-  while (decade * values[0] <= SLIDER_MAX_OHMS * 1.0001) {
+  // Float-precision slack only (repeated ×10 can land a fraction of a percent
+  // off an exact boundary like the 10 MΩ ceiling) — not a real tolerance, or
+  // it reopens the gap the 999× margin above exists to close.
+  const eps = 1e-6;
+  while (decade * values[0] <= maxOhms * (1 + eps)) {
     for (const v of values) {
       const ohms = v * decade;
-      if (ohms >= SLIDER_MIN_OHMS * 0.999 && ohms <= SLIDER_MAX_OHMS * 1.001) out.push(ohms);
+      if (ohms >= minOhms * (1 - eps) && ohms <= maxOhms * (1 + eps)) out.push(ohms);
     }
     decade *= 10;
   }
   return out;
 }
 
-// Nearest by ratio rather than absolute difference — a range spanning 1 Ω to
-// 10 MΩ needs "close" to mean the same thing at both ends.
+// Nearest by ratio rather than absolute difference — a range spanning a full
+// decade family needs "close" to mean the same thing at both ends.
 function nearestSliderIndex(range, ohms) {
-  if (!isFinite(ohms) || ohms <= 0) return 0;
+  if (!isFinite(ohms) || ohms <= 0 || range.length === 0) return 0;
   let best = 0, bestDiff = Infinity;
   for (let i = 0; i < range.length; i++) {
     const diff = Math.abs(Math.log(range[i]) - Math.log(ohms));
@@ -630,21 +650,23 @@ function nearestSliderIndex(range, ohms) {
   return best;
 }
 
-function seriesSliderHTML(fieldId, series, ohms) {
-  const range = eSeriesRange(series);
+function seriesSliderHTML(fieldId, series, ohms, bounds) {
+  const range = eSeriesRange(series, bounds[0], bounds[1]);
   const idx = nearestSliderIndex(range, ohms);
-  return `<input type="range" class="series-slider" data-slider="${fieldId}" min="0" max="${range.length - 1}" step="1" value="${idx}" aria-label="Drag to a standard value" />`;
+  return `<input type="range" class="series-slider" data-slider="${fieldId}" min="0" max="${Math.max(0, range.length - 1)}" step="1" value="${idx}" aria-label="Drag to a standard value within this unit" />`;
 }
 
 // Repositions every slider in the current paint to match its field's live
-// value — needed after typing a number directly, and after a tolerance
-// change resizes the active series (max isn't just stale then, the whole
-// range array is different).
-function syncSliderPositions(series, getOhms) {
-  const range = eSeriesRange(series);
+// value — needed after typing a number directly, after a tolerance change
+// resizes the active series, and after a unit change moves the decade family
+// a slider is allowed to explore.
+function syncSliderPositions(series, getOhms, getBounds) {
   app.querySelectorAll(".series-slider").forEach(el => {
-    el.max = range.length - 1;
-    el.value = nearestSliderIndex(range, getOhms(el.dataset.slider));
+    const name = el.dataset.slider;
+    const bounds = getBounds(name);
+    const range = eSeriesRange(series, bounds[0], bounds[1]);
+    el.max = Math.max(0, range.length - 1);
+    el.value = nearestSliderIndex(range, getOhms(name));
   });
 }
 
@@ -1528,7 +1550,8 @@ function renderVoltageDivider(domain, tool, favId) {
     app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
     app.querySelector('[data-res="err"]').textContent = issue;
     app.querySelectorAll("[data-hint]").forEach(el => { el.textContent = seriesHint(el.dataset.hint); });
-    syncSliderPositions(eSeriesForTolerance(state.tol), si);
+    syncSliderPositions(eSeriesForTolerance(state.tol), si,
+      (name) => unitSliderBounds(FIELD[name].units[state.units[name]]));
   }
 
   function paint() {
@@ -1551,7 +1574,7 @@ function renderVoltageDivider(domain, tool, favId) {
               ${Object.keys(FIELD[name].units).map(u => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
             </select>
           </div>
-          ${FIELD[name].units === DIVIDER_R_UNITS ? seriesSliderHTML(name, eSeriesForTolerance(state.tol), si(name)) : ""}
+          ${FIELD[name].units === DIVIDER_R_UNITS ? seriesSliderHTML(name, eSeriesForTolerance(state.tol), si(name), unitSliderBounds(FIELD[name].units[state.units[name]])) : ""}
         </div>`).join("")}
       <div class="error-text" data-res="err">${problem(r)}</div>
 
@@ -1592,7 +1615,8 @@ function renderVoltageDivider(domain, tool, favId) {
     app.querySelectorAll(".series-slider").forEach(slider => {
       slider.oninput = () => {
         const name = slider.dataset.slider;
-        const range = eSeriesRange(eSeriesForTolerance(state.tol));
+        const bounds = unitSliderBounds(FIELD[name].units[state.units[name]]);
+        const range = eSeriesRange(eSeriesForTolerance(state.tol), bounds[0], bounds[1]);
         state.values[name] = range[+slider.value] / FIELD[name].units[state.units[name]];
         app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
         updateResults();
@@ -1743,7 +1767,8 @@ function renderCurrentDivider(domain, tool, favId) {
     app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
     app.querySelector('[data-res="err"]').textContent = problem(r);
     app.querySelectorAll("[data-hint]").forEach(el => { el.textContent = seriesHint(el.dataset.hint); });
-    syncSliderPositions(eSeriesForTolerance(state.tol), si);
+    syncSliderPositions(eSeriesForTolerance(state.tol), si,
+      (name) => unitSliderBounds(FIELD[name].units[state.units[name]]));
   }
 
   function paint() {
@@ -1766,7 +1791,7 @@ function renderCurrentDivider(domain, tool, favId) {
               ${Object.keys(FIELD[name].units).map(u => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
             </select>
           </div>
-          ${FIELD[name].units === DIVIDER_R_UNITS ? seriesSliderHTML(name, eSeriesForTolerance(state.tol), si(name)) : ""}
+          ${FIELD[name].units === DIVIDER_R_UNITS ? seriesSliderHTML(name, eSeriesForTolerance(state.tol), si(name), unitSliderBounds(FIELD[name].units[state.units[name]])) : ""}
         </div>`).join("")}
       <div class="error-text" data-res="err">${problem(r)}</div>
 
@@ -1807,7 +1832,8 @@ function renderCurrentDivider(domain, tool, favId) {
     app.querySelectorAll(".series-slider").forEach(slider => {
       slider.oninput = () => {
         const name = slider.dataset.slider;
-        const range = eSeriesRange(eSeriesForTolerance(state.tol));
+        const bounds = unitSliderBounds(FIELD[name].units[state.units[name]]);
+        const range = eSeriesRange(eSeriesForTolerance(state.tol), bounds[0], bounds[1]);
         state.values[name] = range[+slider.value] / FIELD[name].units[state.units[name]];
         app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
         updateResults();
@@ -1949,7 +1975,7 @@ function renderSeriesParallel(domain, tool, favId) {
           </select>
           <button class="r-drop" data-drop="${i}" aria-label="Remove R${i + 1}" ${state.rows.length <= 2 ? "disabled" : ""}>×</button>
         </div>
-        ${seriesSliderHTML(i, eSeriesForTolerance(state.tol), ohmsOf(row))}
+        ${seriesSliderHTML(i, eSeriesForTolerance(state.tol), ohmsOf(row), unitSliderBounds(DIVIDER_R_UNITS[row.unit]))}
       </div>`).join("");
   }
 
@@ -1961,7 +1987,8 @@ function renderSeriesParallel(domain, tool, favId) {
       el.textContent = seriesHint(ohmsOf(state.rows[el.dataset.hint]));
     });
     app.querySelector(".diagram-box").innerHTML = diagram();
-    syncSliderPositions(eSeriesForTolerance(state.tol), (i) => ohmsOf(state.rows[i]));
+    syncSliderPositions(eSeriesForTolerance(state.tol), (i) => ohmsOf(state.rows[i]),
+      (i) => unitSliderBounds(DIVIDER_R_UNITS[state.rows[i].unit]));
   }
 
   function paint() {
@@ -2027,7 +2054,8 @@ function renderSeriesParallel(domain, tool, favId) {
     app.querySelectorAll(".series-slider").forEach(slider => {
       slider.oninput = () => {
         const i = +slider.dataset.slider;
-        const range = eSeriesRange(eSeriesForTolerance(state.tol));
+        const bounds = unitSliderBounds(DIVIDER_R_UNITS[state.rows[i].unit]);
+        const range = eSeriesRange(eSeriesForTolerance(state.tol), bounds[0], bounds[1]);
         const ohms = range[+slider.value];
         state.rows[i].value = trim(ohms / DIVIDER_R_UNITS[state.rows[i].unit]);
         app.querySelector(`input[data-row="${i}"]`).value = state.rows[i].value;
