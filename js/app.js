@@ -91,6 +91,7 @@ function renderHome() {
   app.innerHTML = `
     <div class="topbar"><h1>Circuit Codex</h1></div>
     <div class="sub">Electronics reference and tools</div>
+    <div id="debug-marker" style="text-align:center;font-size:9.5px;color:#555;margin-top:-4px;margin-bottom:4px;white-space:pre-line;line-height:1.4;"></div>
     <div class="domain-grid">
       ${domains.map(d => `
         <button class="domain-card" onclick="location.hash='/domain/${d.id}'">
@@ -108,6 +109,14 @@ function renderHome() {
     </button>
     ${tabbarHTML("home")}
   `;
+  const dbg = document.getElementById("debug-marker");
+  if (dbg) {
+    const vv = window.visualViewport;
+    dbg.textContent =
+      `v15 | standalone:${window.navigator.standalone} displayMode:${window.matchMedia("(display-mode: standalone)").matches}\n` +
+      `screen:${screen.width}x${screen.height} outer:${window.outerWidth}x${window.outerHeight} inner:${window.innerWidth}x${window.innerHeight}\n` +
+      `vv:${vv ? Math.round(vv.width) + "x" + Math.round(vv.height) : "n/a"} vvScale:${vv ? vv.scale : "n/a"} dpr:${window.devicePixelRatio}`;
+  }
 }
 
 function renderDomain(domainId) {
