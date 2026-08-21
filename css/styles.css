@@ -112,7 +112,17 @@ html, body {
   text-align: left;
   cursor: pointer;
   color: var(--text);
-  display: block;
+}
+/* Chrome centers a native <button>'s content internally even once display is
+   overridden to block, so a shorter card in a stretched grid row visibly sinks
+   toward the middle instead of sitting flush with its taller row-mate. An
+   explicit flex column with flex-start pins every card's content to the top
+   regardless of how much the grid row stretches it. */
+.domain-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
 }
 .full-card {
   margin: 0 14px 10px;
