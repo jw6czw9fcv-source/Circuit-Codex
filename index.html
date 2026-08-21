@@ -2,11 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <!-- iOS home-screen standalone launches have a known quirk where the page
-       can render pre-zoomed despite initial-scale=1, even while the exact
-       same URL in a normal Safari tab is fine — minimum-scale and
-       user-scalable=no close the gap that lets that happen. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover" />
   <title>Circuit Codex</title>
   <meta name="description" content="Electronics reference and tools" />
 
@@ -14,7 +10,17 @@
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0B0D10" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- black-translucent draws the webview full-bleed under the status bar
+       (why the topbar needed its own safe-area-inset-top padding), but it's
+       also the specific combination — with viewport-fit=cover, on a Dynamic
+       Island phone, standalone launch only — behind a known WebKit bug where
+       the initial scale computes at 125% instead of 100%. default lets iOS
+       reserve and draw its own opaque status bar instead, which sidesteps
+       the bug entirely. "black" (not "default", which draws a white bar
+       that would clash with this dark theme) keeps an opaque dark status
+       bar and reserves its own space, at the cost of losing the full-bleed
+       look up top. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <meta name="apple-mobile-web-app-title" content="Circuit Codex" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="icon" href="icons/icon-192.png" />
@@ -24,14 +30,14 @@
        a stale URL as far as that cache is concerned — this is what makes an
        update visible on reload instead of waiting out the cache or
        reinstalling the app. -->
-  <link rel="stylesheet" href="css/styles.css?v=13" />
+  <link rel="stylesheet" href="css/styles.css?v=14" />
 </head>
 <body>
   <div id="app"></div>
 
-  <script src="js/data.js?v=13"></script>
-  <script src="js/formulas.js?v=13"></script>
-  <script src="js/app.js?v=13"></script>
+  <script src="js/data.js?v=14"></script>
+  <script src="js/formulas.js?v=14"></script>
+  <script src="js/app.js?v=14"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
