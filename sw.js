@@ -60,10 +60,14 @@ async function put(request, response) {
   return response;
 }
 
-// Network first, cache as offline fallback.
+// Network first, cache as offline fallback. GitHub Pages sends
+// Cache-Control: max-age=600, so a plain fetch() can be satisfied straight
+// from the browser's own HTTP cache with stale bytes even though this looks
+// like a network request — cache: "reload" forces it past that layer, the
+// same reason the install handler below needs it.
 async function networkFirst(request) {
   try {
-    return await put(request, await fetch(request));
+    return await put(request, await fetch(request, { cache: "reload" }));
   } catch (err) {
     const cached = await caches.match(request);
     if (cached) return cached;
