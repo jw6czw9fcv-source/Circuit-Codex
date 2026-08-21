@@ -442,6 +442,9 @@ function renderOhmsLaw(domain, tool, favId) {
     });
     const hint = app.querySelector('[data-hint="R"]');
     if (hint) hint.textContent = seriesHint(state.values.R * unitScale(state.units.R));
+    if (inputs.includes("R")) {
+      syncSliderPositions(eSeriesForTolerance(state.tol), () => state.values.R * unitScale(state.units.R));
+    }
   }
 
   function paint() {
@@ -467,6 +470,7 @@ function renderOhmsLaw(domain, tool, favId) {
               ${unitOptionsFor(v).map(u => `<option value="${u}" ${state.units[v] === u ? "selected" : ""} style="color:#8FC1F5;background:#15181D;">${u}</option>`).join("")}
             </select>
           </div>
+          ${v === "R" ? seriesSliderHTML("R", eSeriesForTolerance(state.tol), state.values.R * unitScale(state.units.R)) : ""}
         </div>`).join("")}
 
       <div class="section-label" style="color:#5DCAA5">Results
@@ -507,6 +511,15 @@ function renderOhmsLaw(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       paint();
     };
+    const rSlider = app.querySelector('.series-slider[data-slider="R"]');
+    if (rSlider) {
+      const range = eSeriesRange(eSeriesForTolerance(state.tol));
+      rSlider.oninput = () => {
+        state.values.R = range[+rSlider.value] / unitScale(state.units.R);
+        app.querySelector('input[data-var="R"]').value = trim(state.values.R);
+        updateResults();
+      };
+    }
   }
 
   paint();
@@ -580,6 +593,59 @@ function nearestESeries(ohms, name) {
     if (Math.abs(v - mantissa) < Math.abs(best - mantissa)) best = v;
   }
   return { value: best * scale, exact: Math.abs(best - mantissa) < mantissa * 1e-9 };
+}
+
+// ---------- Standard-value slider ----------
+// A resistor field's slider drags through the active E-series only — every
+// position it can land on is an orderable part, across a practical 1 Ω to
+// 10 MΩ span (narrower than E_LISTED could technically cover, but nobody is
+// dragging a slider out to milliohms or gigohms looking for a stock part).
+const SLIDER_MIN_OHMS = 1;
+const SLIDER_MAX_OHMS = 10e6;
+
+function eSeriesRange(series) {
+  const values = eSeriesValues(series);
+  const places = values[0] >= 100 ? 3 : 2;
+  let decade = Math.pow(10, Math.floor(Math.log10(SLIDER_MIN_OHMS)) - (places - 1));
+  const out = [];
+  while (decade * values[0] <= SLIDER_MAX_OHMS * 1.0001) {
+    for (const v of values) {
+      const ohms = v * decade;
+      if (ohms >= SLIDER_MIN_OHMS * 0.999 && ohms <= SLIDER_MAX_OHMS * 1.001) out.push(ohms);
+    }
+    decade *= 10;
+  }
+  return out;
+}
+
+// Nearest by ratio rather than absolute difference — a range spanning 1 Ω to
+// 10 MΩ needs "close" to mean the same thing at both ends.
+function nearestSliderIndex(range, ohms) {
+  if (!isFinite(ohms) || ohms <= 0) return 0;
+  let best = 0, bestDiff = Infinity;
+  for (let i = 0; i < range.length; i++) {
+    const diff = Math.abs(Math.log(range[i]) - Math.log(ohms));
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  }
+  return best;
+}
+
+function seriesSliderHTML(fieldId, series, ohms) {
+  const range = eSeriesRange(series);
+  const idx = nearestSliderIndex(range, ohms);
+  return `<input type="range" class="series-slider" data-slider="${fieldId}" min="0" max="${range.length - 1}" step="1" value="${idx}" aria-label="Drag to a standard value" />`;
+}
+
+// Repositions every slider in the current paint to match its field's live
+// value — needed after typing a number directly, and after a tolerance
+// change resizes the active series (max isn't just stale then, the whole
+// range array is different).
+function syncSliderPositions(series, getOhms) {
+  const range = eSeriesRange(series);
+  app.querySelectorAll(".series-slider").forEach(el => {
+    el.max = range.length - 1;
+    el.value = nearestSliderIndex(range, getOhms(el.dataset.slider));
+  });
 }
 
 const TOL_ORDER = ["brown", "red", "green", "blue", "violet", "grey", "gold", "silver", "none"];
@@ -1462,6 +1528,7 @@ function renderVoltageDivider(domain, tool, favId) {
     app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
     app.querySelector('[data-res="err"]').textContent = issue;
     app.querySelectorAll("[data-hint]").forEach(el => { el.textContent = seriesHint(el.dataset.hint); });
+    syncSliderPositions(eSeriesForTolerance(state.tol), si);
   }
 
   function paint() {
@@ -1484,6 +1551,7 @@ function renderVoltageDivider(domain, tool, favId) {
               ${Object.keys(FIELD[name].units).map(u => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
             </select>
           </div>
+          ${FIELD[name].units === DIVIDER_R_UNITS ? seriesSliderHTML(name, eSeriesForTolerance(state.tol), si(name)) : ""}
         </div>`).join("")}
       <div class="error-text" data-res="err">${problem(r)}</div>
 
@@ -1521,6 +1589,15 @@ function renderVoltageDivider(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
+    app.querySelectorAll(".series-slider").forEach(slider => {
+      slider.oninput = () => {
+        const name = slider.dataset.slider;
+        const range = eSeriesRange(eSeriesForTolerance(state.tol));
+        state.values[name] = range[+slider.value] / FIELD[name].units[state.units[name]];
+        app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
+        updateResults();
+      };
+    });
   }
 
   paint();
@@ -1666,6 +1743,7 @@ function renderCurrentDivider(domain, tool, favId) {
     app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
     app.querySelector('[data-res="err"]').textContent = problem(r);
     app.querySelectorAll("[data-hint]").forEach(el => { el.textContent = seriesHint(el.dataset.hint); });
+    syncSliderPositions(eSeriesForTolerance(state.tol), si);
   }
 
   function paint() {
@@ -1688,6 +1766,7 @@ function renderCurrentDivider(domain, tool, favId) {
               ${Object.keys(FIELD[name].units).map(u => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
             </select>
           </div>
+          ${FIELD[name].units === DIVIDER_R_UNITS ? seriesSliderHTML(name, eSeriesForTolerance(state.tol), si(name)) : ""}
         </div>`).join("")}
       <div class="error-text" data-res="err">${problem(r)}</div>
 
@@ -1725,6 +1804,15 @@ function renderCurrentDivider(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
+    app.querySelectorAll(".series-slider").forEach(slider => {
+      slider.oninput = () => {
+        const name = slider.dataset.slider;
+        const range = eSeriesRange(eSeriesForTolerance(state.tol));
+        state.values[name] = range[+slider.value] / FIELD[name].units[state.units[name]];
+        app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
+        updateResults();
+      };
+    });
   }
 
   paint();
@@ -1851,14 +1939,17 @@ function renderSeriesParallel(domain, tool, favId) {
 
   function rowsHTML() {
     return state.rows.map((row, i) => `
-      <div class="r-row">
-        <span class="r-index">R${i + 1}</span>
-        <input type="number" inputmode="decimal" step="any" data-row="${i}" value="${row.value}" />
-        <span class="r-hint" data-hint="${i}">${seriesHint(ohmsOf(row))}</span>
-        <select data-unit="${i}">
-          ${Object.keys(DIVIDER_R_UNITS).map(u => `<option ${row.unit === u ? "selected" : ""}>${u}</option>`).join("")}
-        </select>
-        <button class="r-drop" data-drop="${i}" aria-label="Remove R${i + 1}" ${state.rows.length <= 2 ? "disabled" : ""}>×</button>
+      <div class="r-item">
+        <div class="r-row">
+          <span class="r-index">R${i + 1}</span>
+          <input type="number" inputmode="decimal" step="any" data-row="${i}" value="${row.value}" />
+          <span class="r-hint" data-hint="${i}">${seriesHint(ohmsOf(row))}</span>
+          <select data-unit="${i}">
+            ${Object.keys(DIVIDER_R_UNITS).map(u => `<option ${row.unit === u ? "selected" : ""}>${u}</option>`).join("")}
+          </select>
+          <button class="r-drop" data-drop="${i}" aria-label="Remove R${i + 1}" ${state.rows.length <= 2 ? "disabled" : ""}>×</button>
+        </div>
+        ${seriesSliderHTML(i, eSeriesForTolerance(state.tol), ohmsOf(row))}
       </div>`).join("");
   }
 
@@ -1870,6 +1961,7 @@ function renderSeriesParallel(domain, tool, favId) {
       el.textContent = seriesHint(ohmsOf(state.rows[el.dataset.hint]));
     });
     app.querySelector(".diagram-box").innerHTML = diagram();
+    syncSliderPositions(eSeriesForTolerance(state.tol), (i) => ohmsOf(state.rows[i]));
   }
 
   function paint() {
@@ -1932,6 +2024,16 @@ function renderSeriesParallel(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
+    app.querySelectorAll(".series-slider").forEach(slider => {
+      slider.oninput = () => {
+        const i = +slider.dataset.slider;
+        const range = eSeriesRange(eSeriesForTolerance(state.tol));
+        const ohms = range[+slider.value];
+        state.rows[i].value = trim(ohms / DIVIDER_R_UNITS[state.rows[i].unit]);
+        app.querySelector(`input[data-row="${i}"]`).value = state.rows[i].value;
+        updateResults();
+      };
+    });
   }
 
   paint();

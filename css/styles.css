@@ -451,6 +451,43 @@ html, body {
   background: var(--card);
 }
 
+/* Drags a resistor field straight through the active E-series — every
+   position is a standard value, never an arbitrary number. Custom-styled
+   because the native slider track/thumb render invisibly dim on this dark
+   theme otherwise. */
+.series-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin: 10px 0 2px;
+  background: var(--input-border);
+  border-radius: 2px;
+  outline: none;
+}
+.series-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #8FC1F5;
+  cursor: pointer;
+}
+.series-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: #8FC1F5;
+  cursor: pointer;
+}
+.series-slider::-moz-range-track {
+  height: 4px;
+  background: var(--input-border);
+  border-radius: 2px;
+}
+
 .result-field {
   background: var(--result-bg);
   border: 1px solid var(--result-border);
@@ -564,6 +601,8 @@ html, body {
 /* Variable-length resistor list. One line per part instead of a full field, so
    four of them still leave room for the schematic above and the result below. */
 .r-list { margin: 0 16px 4px; display: flex; flex-direction: column; gap: 6px; }
+.r-item { display: flex; flex-direction: column; }
+.r-item .series-slider { margin: 5px 2px 0; width: calc(100% - 4px); }
 .r-row {
   display: flex;
   align-items: center;
