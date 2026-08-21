@@ -461,7 +461,10 @@ html, body {
   display: block;
   width: 100%;
   height: 4px;
-  margin: 10px 0 2px;
+  /* iOS gives a range input a much taller invisible touch target than its
+     4px track — tight enough spacing above it and that target eats taps
+     meant for the unit dropdown sitting right there instead. 18px clears it. */
+  margin: 18px 0 4px;
   background: var(--input-border);
   border-radius: 2px;
   outline: none;
@@ -602,7 +605,7 @@ html, body {
    four of them still leave room for the schematic above and the result below. */
 .r-list { margin: 0 16px 4px; display: flex; flex-direction: column; gap: 6px; }
 .r-item { display: flex; flex-direction: column; }
-.r-item .series-slider { margin: 5px 2px 0; width: calc(100% - 4px); }
+.r-item .series-slider { margin: 18px 2px 0; width: calc(100% - 4px); }
 .r-row {
   display: flex;
   align-items: center;
