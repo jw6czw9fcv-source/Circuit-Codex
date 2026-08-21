@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <!-- iOS home-screen standalone launches have a known quirk where the page
+       can render pre-zoomed despite initial-scale=1, even while the exact
+       same URL in a normal Safari tab is fine — minimum-scale and
+       user-scalable=no close the gap that lets that happen. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Circuit Codex</title>
   <meta name="description" content="Electronics reference and tools" />
 
@@ -20,14 +24,14 @@
        a stale URL as far as that cache is concerned — this is what makes an
        update visible on reload instead of waiting out the cache or
        reinstalling the app. -->
-  <link rel="stylesheet" href="css/styles.css?v=12" />
+  <link rel="stylesheet" href="css/styles.css?v=13" />
 </head>
 <body>
   <div id="app"></div>
 
-  <script src="js/data.js?v=12"></script>
-  <script src="js/formulas.js?v=12"></script>
-  <script src="js/app.js?v=12"></script>
+  <script src="js/data.js?v=13"></script>
+  <script src="js/formulas.js?v=13"></script>
+  <script src="js/app.js?v=13"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
