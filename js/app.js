@@ -2237,7 +2237,7 @@ function renderCapSeriesParallel(domain, tool, favId) {
     const plates = (x, t) => `<path d="M${x} ${t} V${t + 11} M${x - 9} ${t + 11} H${x + 9} M${x - 9} ${t + 19} H${x + 9} M${x} ${t + 19} V${t + 30}" stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>`;
     return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
       <path d="M${cx[0]} 24 H${cx[n - 1]} M${cx[0]} 76 H${cx[n - 1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${cx.map(x => `M${x} 24 V30`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${cx.map(x => `M${x} 24 V30 M${x} 60 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M110 12 V24 M110 76 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${cx.map(x => plates(x, 30)).join("")}
       ${cx.map((x, i) => `<text x="${x}" y="52" fill="${ink}" font-size="11" font-weight="600" text-anchor="${i === n - 1 ? "start" : "end"}" dx="${i === n - 1 ? 10 : -10}">C${i + 1}</text>`).join("")}

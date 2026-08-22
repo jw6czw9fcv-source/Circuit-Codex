@@ -29,12 +29,12 @@ const DOMAINS = [
       {
         title: "Capacitors",
         tools: [
-          { name: "Charge/discharge (RC)" },
-          { name: "Stored energy" },
           { name: "Ceramic code" },
           { name: "Film code" },
           { name: "SMD code" },
           { name: "Series/parallel", calc: "cap-series-parallel" },
+          { name: "Charge/discharge (RC)" },
+          { name: "Stored energy" },
         ],
       },
       {
