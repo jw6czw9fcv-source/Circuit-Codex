@@ -2683,7 +2683,11 @@ function renderKirchhoff(domain, tool, favId) {
     const label = state.mode === "kcl" ? "I" : "V";
     const u = unknown();
     const items = state.rows.map((r, i) => ({ sign: r.sign, text: `${label}${i + 1}`, unk: false }));
-    items.push({ sign: u >= 0 ? 1 : -1, text: state.mode === "kcl" ? "Iout" : "Vout", unk: true });
+    // No "out" naming — a real node can have more than one outgoing branch,
+    // so singling the unknown out as *the* output would be wrong. It's just
+    // the next term in the same sequence; the dashed gold styling is what
+    // marks it as calculated rather than entered, not its label.
+    items.push({ sign: u >= 0 ? 1 : -1, text: `${label}${items.length + 1}`, unk: true });
     const inItems = items.filter(x => x.sign > 0);
     const outItems = items.filter(x => x.sign <= 0);
     if (state.mode === "kcl") {
