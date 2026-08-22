@@ -2689,27 +2689,32 @@ function renderKirchhoff(domain, tool, favId) {
     // Result green, not gold — every other calculator marks a computed value
     // this same colour, so the dashed line reads as "this one's calculated"
     // consistently with the rest of the app instead of introducing a new
-    // meaning for gold.
+    // meaning for gold. Reserved for the unknown alone: known rows each get
+    // their own colour from this palette (cycling by index) instead of only
+    // two colours split by side, so I2 and I3 are never just "both green"
+    // — position (which side of the node, or +/− on the loop) already says
+    // in/out or rise/drop; colour's job here is telling rows apart.
     const resultColor = "#5DCAA5";
+    const palette = ["#8FC1F5", "#B98FE0", "#E08585", "#EF9F27", "#5BC4E0"];
     const label = state.mode === "kcl" ? "I" : "V";
     const u = unknown();
-    const items = state.rows.map((r, i) => ({ sign: r.sign, text: `${label}${i + 1}`, unk: false }));
+    const items = state.rows.map((r, i) => ({ sign: r.sign, text: `${label}${i + 1}`, unk: false, color: palette[i % palette.length] }));
     // No "out" naming — a real node can have more than one outgoing branch,
     // so singling the unknown out as *the* output would be wrong. It's just
     // the next term in the same sequence; the dashed styling is what marks
     // it as calculated rather than entered, not its label.
-    items.push({ sign: u >= 0 ? 1 : -1, text: unknownLabel(), unk: true });
+    items.push({ sign: u >= 0 ? 1 : -1, text: unknownLabel(), unk: true, color: resultColor });
     const inItems = items.filter(x => x.sign > 0);
     const outItems = items.filter(x => x.sign <= 0);
     if (state.mode === "kcl") {
       const inYs = spread(inItems.length, 14, 86);
       const outYs = spread(outItems.length, 14, 86);
       const inArrows = inItems.map((it, k) => `
-        <path d="${arrowPath(34, inYs[k], 104, 50 - (50 - inYs[k]) * 0.06)}" stroke="${it.unk ? resultColor : "#8FC1F5"}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${it.unk ? 'stroke-dasharray="3,2.5"' : ""}/>
-        <text x="26" y="${inYs[k] + 4}" fill="${it.unk ? resultColor : "#8FC1F5"}" font-size="11" font-weight="600" text-anchor="end">${it.text}</text>`);
+        <path d="${arrowPath(34, inYs[k], 104, 50 - (50 - inYs[k]) * 0.06)}" stroke="${it.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${it.unk ? 'stroke-dasharray="3,2.5"' : ""}/>
+        <text x="26" y="${inYs[k] + 4}" fill="${it.color}" font-size="11" font-weight="600" text-anchor="end">${it.text}</text>`);
       const outArrows = outItems.map((it, k) => `
-        <path d="${arrowPath(116, 50 - (50 - outYs[k]) * 0.06, 186, outYs[k])}" stroke="${resultColor}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${it.unk ? 'stroke-dasharray="3,2.5"' : ""}/>
-        <text x="194" y="${outYs[k] + 4}" fill="${resultColor}" font-size="11" font-weight="600" text-anchor="start">${it.text}</text>`);
+        <path d="${arrowPath(116, 50 - (50 - outYs[k]) * 0.06, 186, outYs[k])}" stroke="${it.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${it.unk ? 'stroke-dasharray="3,2.5"' : ""}/>
+        <text x="194" y="${outYs[k] + 4}" fill="${it.color}" font-size="11" font-weight="600" text-anchor="start">${it.text}</text>`);
       return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
         <circle cx="110" cy="50" r="4" fill="${wire}"/>
         ${inArrows.join("")}
@@ -2722,10 +2727,9 @@ function renderKirchhoff(domain, tool, favId) {
     // convenient, which is exactly what each row's own +/− already records.
     const xs = spread(items.length, 46, 174);
     const ticks = items.map((it, i) => {
-      const c = it.unk ? resultColor : (it.sign > 0 ? "#8FC1F5" : "#E08585");
       const x = xs[i];
-      return `<path d="M${x} 16 V24" stroke="${c}" stroke-width="2.2" stroke-linecap="round" ${it.unk ? 'stroke-dasharray="2.5,2"' : ""}/>
-        <text x="${x}" y="11" fill="${c}" font-size="10" font-weight="600" text-anchor="middle">${it.text}</text>`;
+      return `<path d="M${x} 16 V24" stroke="${it.color}" stroke-width="2.2" stroke-linecap="round" ${it.unk ? 'stroke-dasharray="2.5,2"' : ""}/>
+        <text x="${x}" y="11" fill="${it.color}" font-size="10" font-weight="600" text-anchor="middle">${it.text}</text>`;
     }).join("");
     return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
       <path d="M50 20 H170 V80 H50 Z" stroke="${wire}" stroke-width="1.6" stroke-linejoin="round"/>
@@ -2752,6 +2756,7 @@ function renderKirchhoff(domain, tool, favId) {
       <div class="section-label split" style="color:#8FC1F5">
         <span>Known terms</span>
         <button class="label-btn" id="kl-add" ${state.rows.length >= KL_MAX ? "disabled" : ""}>+ add</button>
+        <span style="visibility:hidden;" aria-hidden="true">+ add</span>
       </div>
       <div class="r-list">${rowsHTML()}</div>
       <div class="error-text" data-res="err">${problem()}</div>
