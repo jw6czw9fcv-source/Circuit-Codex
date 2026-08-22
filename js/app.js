@@ -912,15 +912,6 @@ function renderResistorColorCode(domain, tool, favId) {
     return `Not standard — nearest ${grid} is ${formatOhms(nearestESeries(r.ohms, grid).value)}`;
   }
 
-  // Says how the code composes, and nothing the screen already shows: the band
-  // roles are the roller column headers, the multiplier and tolerance are read
-  // out under them, and the value is in the results card. What is left that is
-  // not on screen anywhere is which end you read from.
-  function footnoteHTML(roles) {
-    const digits = roles.filter(x => x[0] === "d").length;
-    return `${digits} digits × multiplier &nbsp;·&nbsp; tolerance band goes last`;
-  }
-
   // Height of one roller slot, shared by the CSS and the scroll maths.
   const ITEM_H = 30;
 
@@ -939,7 +930,6 @@ function renderResistorColorCode(domain, tool, favId) {
     app.querySelector('[data-res="sub"]').innerHTML =
       `${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}`;
     app.querySelector('[data-res="series"]').textContent = seriesLine(r);
-    app.querySelector('[data-res="note"]').innerHTML = footnoteHTML(roles);
 
     // Mirror the bands back into the value field, unless the user is mid-edit
     // there — overwriting what someone is typing is worse than a stale field.
@@ -1001,7 +991,13 @@ function renderResistorColorCode(domain, tool, favId) {
         <div class="result-sub" data-res="sub">${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}</div>
       </div>
 
-      ${calcFooter(footnoteHTML(roles))}
+      ${formulaSection(
+        [roles.filter(x => x[0] === "d").length === 2
+          ? "Value = (10 × D1 + D2) × Multiplier"
+          : "Value = (100 × D1 + 10 × D2 + D3) × Multiplier"],
+        "Tolerance band sets ±%; the temperature-coefficient band (6-band only) adds ppm/K drift per degree."
+      )}
+      ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (v) => { state.count = +v; paint(); });
@@ -1200,17 +1196,6 @@ function renderSmdCode(domain, tool, favId) {
     </svg>`;
   }
 
-  function footnoteHTML() {
-    if (state.mode === "96") {
-      return ["2-digit E96 index + letter", "letter sets the decade", "±1%"].join(" &nbsp;·&nbsp; ");
-    }
-    return [
-      `${sig()} digits + ×10ⁿ`,
-      "R marks the decimal point",
-      state.mode === "3" ? "usually ±5%" : "usually ±1%",
-    ].join(" &nbsp;·&nbsp; ");
-  }
-
   // Update in place rather than repainting, so the field being typed in keeps
   // its caret — same reason as the colour code.
   function refresh(source, notice) {
@@ -1218,7 +1203,6 @@ function renderSmdCode(domain, tool, favId) {
     app.querySelector(".diagram-box").innerHTML = chip(code);
     app.querySelector('[data-res="ohms"]').textContent = formatOhms(state.ohms);
     app.querySelector('[data-res="series"]').textContent = seriesLine(state.ohms);
-    app.querySelector('[data-res="note"]').innerHTML = footnoteHTML();
     const codeField = app.querySelector("#smd-code");
     const valueField = app.querySelector("#smd-value");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
@@ -1285,7 +1269,15 @@ function renderSmdCode(domain, tool, favId) {
         <div class="result-sub" data-res="series">${seriesLine(state.ohms)}</div>
       </div>
 
-      ${calcFooter(footnoteHTML())}
+      ${formulaSection(
+        state.mode === "96"
+          ? ["Value = E96 table[2-digit code] × multiplier letter"]
+          : [`Value = (${sig() === 2 ? "D1D2" : "D1D2D3"}) × 10^${sig() === 2 ? "D3" : "D4"}`],
+        state.mode === "96"
+          ? "The 2-digit index looks up an E96 mantissa; the letter (A, B, C, …) sets which decade it's multiplied into."
+          : "R stands in for the decimal point when there's no room for an exponent — 4R7 marks 4.7 Ω, R47 marks 0.47 Ω."
+      )}
+      ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (v) => { state.mode = v; normalize(); paint(); });
@@ -1413,6 +1405,10 @@ function renderESeries(domain, tool, favId) {
       <div class="section-label" style="color:#8FC1F5">Whole series <span data-res="decade" class="decade-note">${decadeLabel()}</span></div>
       <div class="eseries-grid" data-res="grid">${table()}</div>
 
+      ${formulaSection(
+        ["Eᵢ = 10^(i / N), for i = 0 … N−1", "N = 6, 12, 24, 48, 96, or 192"],
+        "Values space evenly on a logarithmic scale, so every part in a series covers the same percentage gap to its neighbours regardless of decade — that spacing is set to just cover the series' own tolerance."
+      )}
       ${calcFooter(`Table follows the decade of your value &nbsp;·&nbsp; ${E_TOLERANCE[state.series]} parts`)}
     `;
 
