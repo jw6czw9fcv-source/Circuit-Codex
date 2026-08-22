@@ -2673,31 +2673,39 @@ function renderKirchhoff(domain, tool, favId) {
   // always matches exactly what's in the list below it, the way the
   // reference screenshot's I1/I2 labels do. KVL: same idea around a loop,
   // each row a tick with its Vⁿ label and sign-coloured to match its row.
+  // The missing term is drawn too, dashed and marked "?" on whichever side
+  // its computed sign puts it — leaving it out entirely (e.g. when every
+  // known row happens to be "in") drew a node with nothing balancing it,
+  // which looks like current can just vanish.
   function diagram() {
     const wire = "#5A6169";
+    const gold = "#F0C24A";
     const label = state.mode === "kcl" ? "I" : "V";
-    const inRows = state.rows.map((r, i) => ({ r, i })).filter(x => x.r.sign > 0);
-    const outRows = state.rows.map((r, i) => ({ r, i })).filter(x => x.r.sign <= 0);
+    const u = unknown();
+    const items = state.rows.map((r, i) => ({ sign: r.sign, text: `${label}${i + 1}`, unk: false }));
+    items.push({ sign: u >= 0 ? 1 : -1, text: "?", unk: true });
+    const inItems = items.filter(x => x.sign > 0);
+    const outItems = items.filter(x => x.sign <= 0);
     if (state.mode === "kcl") {
-      const inYs = spread(inRows.length, 14, 86);
-      const outYs = spread(outRows.length, 14, 86);
-      const inArrows = inRows.map(({ i }, k) => `
-        <path d="${arrowPath(34, inYs[k], 104, 50 - (50 - inYs[k]) * 0.06)}" stroke="#8FC1F5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <text x="26" y="${inYs[k] + 4}" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="end">${label}${i + 1}</text>`);
-      const outArrows = outRows.map(({ i }, k) => `
-        <path d="${arrowPath(116, 50 - (50 - outYs[k]) * 0.06, 186, outYs[k])}" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <text x="194" y="${outYs[k] + 4}" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="start">${label}${i + 1}</text>`);
+      const inYs = spread(inItems.length, 14, 86);
+      const outYs = spread(outItems.length, 14, 86);
+      const inArrows = inItems.map((it, k) => `
+        <path d="${arrowPath(34, inYs[k], 104, 50 - (50 - inYs[k]) * 0.06)}" stroke="${it.unk ? gold : "#8FC1F5"}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${it.unk ? 'stroke-dasharray="3,2.5"' : ""}/>
+        <text x="26" y="${inYs[k] + 4}" fill="${it.unk ? gold : "#8FC1F5"}" font-size="11" font-weight="600" text-anchor="end">${it.text}</text>`);
+      const outArrows = outItems.map((it, k) => `
+        <path d="${arrowPath(116, 50 - (50 - outYs[k]) * 0.06, 186, outYs[k])}" stroke="${it.unk ? gold : "#5DCAA5"}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${it.unk ? 'stroke-dasharray="3,2.5"' : ""}/>
+        <text x="194" y="${outYs[k] + 4}" fill="${it.unk ? gold : "#5DCAA5"}" font-size="11" font-weight="600" text-anchor="start">${it.text}</text>`);
       return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
         <circle cx="110" cy="50" r="4" fill="${wire}"/>
         ${inArrows.join("")}
         ${outArrows.join("")}
       </svg>`;
     }
-    const xs = spread(state.rows.length, 62, 158);
-    const ticks = state.rows.map((r, i) => {
-      const x = xs[i], c = r.sign > 0 ? "#8FC1F5" : "#E08585";
-      return `<path d="M${x} 16 V24" stroke="${c}" stroke-width="2.2" stroke-linecap="round"/>
-        <text x="${x}" y="12" fill="${c}" font-size="11" font-weight="600" text-anchor="middle">${label}${i + 1}</text>`;
+    const xs = spread(items.length, 62, 158);
+    const ticks = items.map((it, i) => {
+      const x = xs[i], c = it.unk ? gold : (it.sign > 0 ? "#8FC1F5" : "#E08585");
+      return `<path d="M${x} 16 V24" stroke="${c}" stroke-width="2.2" stroke-linecap="round" ${it.unk ? 'stroke-dasharray="2.5,2"' : ""}/>
+        <text x="${x}" y="12" fill="${c}" font-size="11" font-weight="600" text-anchor="middle">${it.text}</text>`;
     }).join("");
     return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
       <path d="M50 20 H170 V80 H50 Z" stroke="${wire}" stroke-width="1.6" stroke-linejoin="round"/>
