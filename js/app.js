@@ -292,10 +292,27 @@ function pillRow(options, active, bg) {
     </div>`;
 }
 
+// note is falsy on the four calculators formulaSection now covers in full —
+// the one-liner this used to carry would just repeat that section's first
+// line right below it.
 function calcFooter(note) {
   return `
-      <div class="formula-note">${ICONS.info}<span data-res="note">${note}</span></div>
+      ${note ? `<div class="formula-note">${ICONS.info}<span data-res="note">${note}</span></div>` : ""}
       ${tabbarHTML("")}`;
+}
+
+// The one-liner in calcFooter names only the rearrangement the current
+// mode/solve actually uses. This is the rest of the family — every legal
+// rearrangement, not just the one on screen — reusing the Formula search
+// screen's own card styling. Scrolling to see it is fine: unlike the rest of
+// a calculator screen, this section only exists to be read, not glanced at.
+function formulaSection(lines, note) {
+  return `
+    <div class="section-label" style="color:#9AA0A8">Formula</div>
+    <div class="formula-card formula-card--static" style="margin:0 16px 10px;">
+      ${lines.map(l => `<div class="formula-line">${l}</div>`).join("")}
+      ${note ? `<div class="formula-card-note">${note}</div>` : ""}
+    </div>`;
 }
 
 function wireCalc(favId, repaint, onPill) {
@@ -345,14 +362,6 @@ function renderOhmsLaw(domain, tool, favId) {
     return ["I", "R"];
   }
 
-  // The footnote states how each result is derived from the two values the
-  // user actually typed, so it tracks the mode instead of naming a rearrangement
-  // that is not the one on screen.
-  function formulaFor(mode) {
-    if (mode === "vi") return "R = V / I &nbsp;·&nbsp; P = V × I";
-    if (mode === "vr") return "I = V / R &nbsp;·&nbsp; P = V² / R";
-    return "V = I × R &nbsp;·&nbsp; P = I² × R";
-  }
 
   function unitOptionsFor(varName) {
     if (varName === "V") return ["V", "mV"];
@@ -493,7 +502,11 @@ function renderOhmsLaw(domain, tool, favId) {
           <div class="result-sub" data-sub="${v}">${resultSub(v, results)}</div>
         </div>`).join("")}
 
-      ${calcFooter(formulaFor(state.mode))}
+      ${formulaSection(
+        ["V = I × R", "I = V / R", "R = V / I", "P = V × I", "P = I² × R", "P = V² / R"],
+        "Any two of V, I, R give the third; power follows from any pair."
+      )}
+      ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
@@ -1557,11 +1570,6 @@ function renderVoltageDivider(domain, tool, favId) {
     return `${std.name} ${suffix} &nbsp;·&nbsp; ${siFormat(r.current, "A", 3)}`;
   }
 
-  function formulaFor(solve) {
-    if (solve === "vout") return "Vout = Vin × R2 / (R1 + R2)";
-    if (solve === "r1") return "R1 = R2 × (Vin − Vout) / Vout";
-    return "R2 = R1 × Vout / (Vin − Vout)";
-  }
 
   // Schematic, not literal: this shows how the parts are wired, which is the
   // case REFERENCE.md wants a symbol for. US convention — zigzag resistors,
@@ -1644,7 +1652,11 @@ function renderVoltageDivider(domain, tool, favId) {
         <div class="result-sub" data-res="detail">${detailLine(r)}</div>
       </div>
 
-      ${calcFooter(formulaFor(state.solve))}
+      ${formulaSection(
+        ["Vout = Vin × R2 / (R1 + R2)", "R1 = R2 × (Vin − Vout) / Vout", "R2 = R1 × Vout / (Vin − Vout)"],
+        "Unloaded divider — assumes nothing else draws current from the Vout tap."
+      )}
+      ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
@@ -1780,11 +1792,6 @@ function renderCurrentDivider(domain, tool, favId) {
     return `${std.name} ${suffix} &nbsp;·&nbsp; I2 ${siFormat(r.i2, "A", 3)}`;
   }
 
-  function formulaFor(solve) {
-    if (solve === "i1") return "I1 = Iin × R2 / (R1 + R2)";
-    if (solve === "r1") return "R1 = R2 × (Iin − I1) / I1";
-    return "R2 = R1 × I1 / (Iin − I1)";
-  }
 
   // Two branches in parallel between one node pair. ANSI zigzags at the app's
   // standard proportions, with straight leads into each node. I2 is never an
@@ -1860,7 +1867,11 @@ function renderCurrentDivider(domain, tool, favId) {
         <div class="result-sub" data-res="detail">${detailLine(r)}</div>
       </div>
 
-      ${calcFooter(formulaFor(state.solve))}
+      ${formulaSection(
+        ["I1 = Iin × R2 / (R1 + R2)", "I2 = Iin × R1 / (R1 + R2)", "R1 = R2 × (Iin − I1) / I1", "R2 = R1 × I1 / (Iin − I1)"],
+        "The smaller resistor carries the larger share — branches split inversely to their resistance."
+      )}
+      ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
@@ -1952,11 +1963,6 @@ function renderSeriesParallel(domain, tool, favId) {
     return `${formatOhms(r * (1 - t))} – ${formatOhms(r * (1 + t))} &nbsp;·&nbsp; ${single}`;
   }
 
-  function formulaFor(mode) {
-    return mode === "series"
-      ? "R = R1 + R2 + …"
-      : "1/R = 1/R1 + 1/R2 + …";
-  }
 
   // ANSI zigzags at the app's proportions. Series runs them along one wire;
   // parallel hangs them between two rails. The pitch is fixed at the four-part
@@ -2069,7 +2075,11 @@ function renderSeriesParallel(domain, tool, favId) {
         <div class="result-sub" data-res="detail">${detailLine()}</div>
       </div>
 
-      ${calcFooter(formulaFor(state.mode))}
+      ${formulaSection(
+        ["Series: R = R1 + R2 + R3 + …", "Parallel: 1/R = 1/R1 + 1/R2 + 1/R3 + …", "Parallel (2 only): R = R1 × R2 / (R1 + R2)"],
+        "Series always increases total resistance; parallel always decreases it below the smallest single resistor."
+      )}
+      ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
