@@ -2281,13 +2281,14 @@ function renderSeriesParallel(domain, tool, favId) {
 
       ${pillRow([["series", "Series"], ["parallel", "Parallel"]], state.mode, domain.bg)}
 
-      <div class="section-label" style="color:#8FC1F5">Resistors
+      <div class="section-label split" style="color:#8FC1F5">
+        <span>Resistors</span>
+        <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
         <select id="sp-tol" class="label-select">
           ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
         </select>
       </div>
       <div class="r-list">${rowsHTML()}</div>
-      <button class="add-row-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ Add resistor</button>
       <div class="error-text" data-res="err">${problem()}</div>
 
       <div class="section-label" style="color:#5DCAA5">Result</div>
@@ -2501,13 +2502,14 @@ function renderCapSeriesParallel(domain, tool, favId) {
 
       ${pillRow([["parallel", "Parallel"], ["series", "Series"]], state.mode, domain.bg)}
 
-      <div class="section-label" style="color:#8FC1F5">Capacitors
+      <div class="section-label split" style="color:#8FC1F5">
+        <span>Capacitors</span>
+        <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
         <select id="sp-tol" class="label-select">
           ${[1, 2, 5, 10, 20].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
         </select>
       </div>
       <div class="r-list">${rowsHTML()}</div>
-      <button class="add-row-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ Add capacitor</button>
       <div class="error-text" data-res="err">${problem()}</div>
 
       <div class="section-label" style="color:#5DCAA5">Result</div>
