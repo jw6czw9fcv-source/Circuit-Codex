@@ -454,17 +454,47 @@ html, body {
 /* Drags a resistor field straight through the active E-series — every
    position is a standard value, never an arbitrary number. Custom-styled
    because the native slider track/thumb render invisibly dim on this dark
-   theme otherwise. */
-.series-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  display: block;
-  width: 100%;
-  height: 4px;
+   theme otherwise. The ± buttons flanking it step one standard value per
+   tap, holding repeats. */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   /* iOS gives a range input a much taller invisible touch target than its
      4px track — tight enough spacing above it and that target eats taps
      meant for the unit dropdown sitting right there instead. 18px clears it. */
   margin: 18px 0 4px;
+}
+.slider-step {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--input-border);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  /* iOS's default tap highlight is a grey box that outlives the press on a
+     round button — same reason .icon-btn and every other tappable control
+     in this app disables it in favour of no feedback rather than a wrong one. */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.series-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  margin: 0;
   background: var(--input-border);
   border-radius: 2px;
   outline: none;
@@ -602,21 +632,22 @@ html, body {
 }
 
 /* Variable-length resistor list. One line per part instead of a full field, so
-   four of them still leave room for the schematic above and the result below. */
+   four of them still leave room for the schematic above and the result below.
+   .r-item is the card (matching .field's own background/border, so its
+   slider sits on the same surface as every other slider in the app instead
+   of the page background behind it); .r-line is the row of controls inside. */
 .r-list { margin: 0 16px 4px; display: flex; flex-direction: column; gap: 6px; }
-.r-item { display: flex; flex-direction: column; }
-.r-item .series-slider { margin: 18px 2px 0; width: calc(100% - 4px); }
-.r-row {
+.r-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
   background: var(--card);
   border: 1px solid var(--input-border);
   border-radius: 10px;
   padding: 6px 10px;
 }
+.r-line { display: flex; align-items: center; gap: 8px; }
 .r-index { color: var(--text-secondary); font-size: 13px; font-weight: 600; min-width: 22px; }
-.r-row input {
+.r-line input {
   flex: 1;
   min-width: 0;
   background: none;
@@ -627,7 +658,7 @@ html, body {
   outline: none;
 }
 .r-hint { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
-.r-row select {
+.r-line select {
   background: none;
   border: none;
   color: var(--text);
@@ -635,7 +666,7 @@ html, body {
   font-weight: 500;
   outline: none;
 }
-.r-row select option { color: var(--text); background: var(--card); }
+.r-line select option { color: var(--text); background: var(--card); }
 .r-drop {
   background: none;
   border: none;

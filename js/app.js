@@ -513,15 +513,14 @@ function renderOhmsLaw(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       paint();
     };
-    const rSlider = app.querySelector('.series-slider[data-slider="R"]');
-    if (rSlider) {
-      rSlider.oninput = () => {
-        const bounds = unitSliderBounds(unitScale(state.units.R));
-        const range = eSeriesRange(eSeriesForTolerance(state.tol), bounds[0], bounds[1]);
-        state.values.R = range[+rSlider.value] / unitScale(state.units.R);
-        app.querySelector('input[data-var="R"]').value = trim(state.values.R);
-        updateResults();
-      };
+    if (inputs.includes("R")) {
+      wireSlider("R",
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(unitScale(state.units.R))),
+        (ohms) => {
+          state.values.R = ohms / unitScale(state.units.R);
+          app.querySelector('input[data-var="R"]').value = trim(state.values.R);
+          updateResults();
+        });
     }
   }
 
@@ -653,7 +652,58 @@ function nearestSliderIndex(range, ohms) {
 function seriesSliderHTML(fieldId, series, ohms, bounds) {
   const range = eSeriesRange(series, bounds[0], bounds[1]);
   const idx = nearestSliderIndex(range, ohms);
-  return `<input type="range" class="series-slider" data-slider="${fieldId}" min="0" max="${Math.max(0, range.length - 1)}" step="1" value="${idx}" aria-label="Drag to a standard value within this unit" />`;
+  const max = Math.max(0, range.length - 1);
+  return `<div class="slider-row">
+    <button type="button" class="slider-step" data-slider="${fieldId}" data-dir="-1" aria-label="Previous standard value">−</button>
+    <input type="range" class="series-slider" data-slider="${fieldId}" min="0" max="${max}" step="1" value="${idx}" aria-label="Drag to a standard value within this unit" />
+    <button type="button" class="slider-step" data-slider="${fieldId}" data-dir="1" aria-label="Next standard value">+</button>
+  </div>`;
+}
+
+// Wires one resistor field's slider together with its ± step buttons.
+// getRange() is called fresh on every interaction rather than memoized,
+// since the active series or unit can have changed since the last render.
+// onPick receives the chosen value in ohms — converting it, writing it into
+// state, mirroring the number field, and refreshing results is the caller's
+// job, since that bookkeeping differs per calculator.
+function wireSlider(fieldId, getRange, onPick) {
+  const slider = app.querySelector(`.series-slider[data-slider="${fieldId}"]`);
+  if (!slider) return;
+  const step = (dir) => {
+    // A held button's repeat timer outlives a single interaction — if a
+    // tolerance/mode change repainted the screen while it was still running,
+    // this element is a detached leftover from the old render and the field
+    // it used to control may no longer exist at all. Stop quietly instead of
+    // writing into whatever now occupies app's DOM.
+    if (!slider.isConnected) return;
+    const range = getRange();
+    if (!range.length) return;
+    const idx = Math.max(0, Math.min(range.length - 1, +slider.value + dir));
+    slider.value = idx;
+    onPick(range[idx]);
+  };
+  slider.oninput = () => {
+    const range = getRange();
+    if (range.length) onPick(range[+slider.value]);
+  };
+  app.querySelectorAll(`.slider-step[data-slider="${fieldId}"]`).forEach(btn => {
+    const dir = +btn.dataset.dir;
+    let holdTimeout = null, repeatInterval = null;
+    const stop = () => { clearTimeout(holdTimeout); clearInterval(repeatInterval); };
+    const start = () => {
+      stop();
+      step(dir);
+      // A held button repeats after a short delay, faster than a single tap
+      // could — release (mouseup/leave/touchend) always clears both timers.
+      holdTimeout = setTimeout(() => { repeatInterval = setInterval(() => step(dir), 90); }, 420);
+    };
+    btn.onmousedown = start;
+    btn.onmouseup = stop;
+    btn.onmouseleave = stop;
+    btn.ontouchstart = (e) => { e.preventDefault(); start(); };
+    btn.ontouchend = stop;
+    btn.ontouchcancel = stop;
+  });
 }
 
 // Repositions every slider in the current paint to match its field's live
@@ -1612,15 +1662,14 @@ function renderVoltageDivider(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
-    app.querySelectorAll(".series-slider").forEach(slider => {
-      slider.oninput = () => {
-        const name = slider.dataset.slider;
-        const bounds = unitSliderBounds(FIELD[name].units[state.units[name]]);
-        const range = eSeriesRange(eSeriesForTolerance(state.tol), bounds[0], bounds[1]);
-        state.values[name] = range[+slider.value] / FIELD[name].units[state.units[name]];
-        app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
-        updateResults();
-      };
+    inputsFor(state.solve).filter(name => FIELD[name].units === DIVIDER_R_UNITS).forEach(name => {
+      wireSlider(name,
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(FIELD[name].units[state.units[name]])),
+        (ohms) => {
+          state.values[name] = ohms / FIELD[name].units[state.units[name]];
+          app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
+          updateResults();
+        });
     });
   }
 
@@ -1829,15 +1878,14 @@ function renderCurrentDivider(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
-    app.querySelectorAll(".series-slider").forEach(slider => {
-      slider.oninput = () => {
-        const name = slider.dataset.slider;
-        const bounds = unitSliderBounds(FIELD[name].units[state.units[name]]);
-        const range = eSeriesRange(eSeriesForTolerance(state.tol), bounds[0], bounds[1]);
-        state.values[name] = range[+slider.value] / FIELD[name].units[state.units[name]];
-        app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
-        updateResults();
-      };
+    inputsFor(state.solve).filter(name => FIELD[name].units === DIVIDER_R_UNITS).forEach(name => {
+      wireSlider(name,
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(FIELD[name].units[state.units[name]])),
+        (ohms) => {
+          state.values[name] = ohms / FIELD[name].units[state.units[name]];
+          app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
+          updateResults();
+        });
     });
   }
 
@@ -1966,7 +2014,7 @@ function renderSeriesParallel(domain, tool, favId) {
   function rowsHTML() {
     return state.rows.map((row, i) => `
       <div class="r-item">
-        <div class="r-row">
+        <div class="r-line">
           <span class="r-index">R${i + 1}</span>
           <input type="number" inputmode="decimal" step="any" data-row="${i}" value="${row.value}" />
           <span class="r-hint" data-hint="${i}">${seriesHint(ohmsOf(row))}</span>
@@ -2051,16 +2099,14 @@ function renderSeriesParallel(domain, tool, favId) {
       state.tol = parseFloat(e.target.value);
       updateResults();
     };
-    app.querySelectorAll(".series-slider").forEach(slider => {
-      slider.oninput = () => {
-        const i = +slider.dataset.slider;
-        const bounds = unitSliderBounds(DIVIDER_R_UNITS[state.rows[i].unit]);
-        const range = eSeriesRange(eSeriesForTolerance(state.tol), bounds[0], bounds[1]);
-        const ohms = range[+slider.value];
-        state.rows[i].value = trim(ohms / DIVIDER_R_UNITS[state.rows[i].unit]);
-        app.querySelector(`input[data-row="${i}"]`).value = state.rows[i].value;
-        updateResults();
-      };
+    state.rows.forEach((row, i) => {
+      wireSlider(i,
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(DIVIDER_R_UNITS[state.rows[i].unit])),
+        (ohms) => {
+          state.rows[i].value = trim(ohms / DIVIDER_R_UNITS[state.rows[i].unit]);
+          app.querySelector(`input[data-row="${i}"]`).value = state.rows[i].value;
+          updateResults();
+        });
     });
   }
 
