@@ -2016,9 +2016,9 @@ function renderSeriesParallel(domain, tool, favId) {
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
     return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
       <path d="M${cx[0]} 24 H${cx[n - 1]} M${cx[0]} 76 H${cx[n - 1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${cx.map(x => `M${x} 24 V30 M${x} 66 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${cx.map(x => `M${x} 24 V32 M${x} 68 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M110 12 V24 M110 76 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${cx.map(x => `<path d="${zig(x, 30)}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`).join("")}
+      ${cx.map(x => `<path d="${zig(x, 32)}" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`).join("")}
       ${cx.map((x, i) => `<text x="${x}" y="52" fill="${ink}" font-size="11" font-weight="600" text-anchor="${i === n - 1 ? "start" : "end"}" dx="${i === n - 1 ? 10 : -10}">R${i + 1}</text>`).join("")}
     </svg>`;
   }
@@ -2237,9 +2237,9 @@ function renderCapSeriesParallel(domain, tool, favId) {
     const plates = (x, t) => `<path d="M${x} ${t} V${t + 11} M${x - 9} ${t + 11} H${x + 9} M${x - 9} ${t + 19} H${x + 9} M${x} ${t + 19} V${t + 30}" stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>`;
     return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
       <path d="M${cx[0]} 24 H${cx[n - 1]} M${cx[0]} 76 H${cx[n - 1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${cx.map(x => `M${x} 24 V30 M${x} 60 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${cx.map(x => `M${x} 24 V35 M${x} 65 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M110 12 V24 M110 76 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${cx.map(x => plates(x, 30)).join("")}
+      ${cx.map(x => plates(x, 35)).join("")}
       ${cx.map((x, i) => `<text x="${x}" y="52" fill="${ink}" font-size="11" font-weight="600" text-anchor="${i === n - 1 ? "start" : "end"}" dx="${i === n - 1 ? 10 : -10}">C${i + 1}</text>`).join("")}
     </svg>`;
   }
