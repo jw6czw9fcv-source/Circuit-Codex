@@ -160,6 +160,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
+  if (calcId === "wheatstone-bridge") return renderWheatstoneBridge(domain, tool, favId);
   if (calcId === "series-parallel") return renderSeriesParallel(domain, tool, favId);
   if (calcId === "cap-series-parallel") return renderCapSeriesParallel(domain, tool, favId);
   if (calcId === "formula-search") return renderFormulaSearch(domain, tool, favId);
@@ -1900,6 +1901,226 @@ function renderCurrentDivider(domain, tool, favId) {
         () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(FIELD[name].units[state.units[name]])),
         (ohms) => {
           state.values[name] = ohms / FIELD[name].units[state.units[name]];
+          app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
+          updateResults();
+        });
+    });
+  }
+
+  paint();
+}
+
+// ---------- Wheatstone bridge ----------
+// At balance the galvanometer carries no current, so R1/R2 = R3/Rx with no
+// other measurement needed — that ratio is the whole calculator. Any of the
+// four arms can be the one you're solving for: R1/R2 are usually the fixed
+// ratio arms, R3 the adjustable one, and Rx the unknown under test, but
+// nothing here assumes which physical role a given arm plays.
+function renderWheatstoneBridge(domain, tool, favId) {
+  const state = {
+    solve: "rx",
+    tol: 1,
+    values: { r1: 1, r2: 1, r3: 1, rx: 1 },
+    units: { r1: "kΩ", r2: "kΩ", r3: "kΩ", rx: "kΩ" },
+  };
+
+  const FIELD = {
+    r1: { label: "R1 — top left" },
+    r2: { label: "R2 — top right" },
+    r3: { label: "R3 — bottom left" },
+    rx: { label: "Rx — bottom right (unknown)" },
+  };
+
+  function inputsFor(solve) {
+    return ["r1", "r2", "r3", "rx"].filter(n => n !== solve);
+  }
+
+  function si(name) {
+    return state.values[name] * DIVIDER_R_UNITS[state.units[name]];
+  }
+
+  function compute() {
+    let r1 = si("r1"), r2 = si("r2"), r3 = si("r3"), rx = si("rx");
+    if (state.solve === "rx") rx = (r2 * r3) / r1;
+    if (state.solve === "r1") r1 = (r2 * r3) / rx;
+    if (state.solve === "r2") r2 = (r1 * rx) / r3;
+    if (state.solve === "r3") r3 = (r1 * rx) / r2;
+    return { r1, r2, r3, rx };
+  }
+
+  // Each rearrangement divides by a different arm, so the one that has to be
+  // nonzero moves with what you're solving for — dividing by the arm you
+  // just solved away is exactly the case that can't happen.
+  function problem(r) {
+    const divisor = { rx: "r1", r1: "rx", r2: "r3", r3: "r2" }[state.solve];
+    if (si(divisor) <= 0) return `${FIELD[divisor].label.split(" —")[0]} cannot be zero.`;
+    if (!isFinite(r[state.solve]) || r[state.solve] < 0) return "No solution for those values.";
+    return "";
+  }
+
+  function solvedLabel() {
+    return FIELD[state.solve].label;
+  }
+
+  function seriesHint(name) {
+    const ohms = si(name);
+    if (!isFinite(ohms) || ohms <= 0) return "";
+    const series = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(ohms, series);
+    return near.exact ? series : `${series} → ${formatOhms(near.value)}`;
+  }
+
+  // The arm you solved for has to exist as a real part too, same question the
+  // three you supplied are already held to.
+  function standardPart(r) {
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(r[state.solve], name);
+    return { name, value: near.value, exact: near.exact };
+  }
+
+  function detailLine(r) {
+    if (problem(r)) return "";
+    const std = standardPart(r);
+    return std.exact ? `${std.name} standard value` : `${std.name} → nearest ${formatOhms(std.value)}`;
+  }
+
+  function formulaFor(solve) {
+    if (solve === "rx") return "Rx = R2 × R3 / R1";
+    if (solve === "r1") return "R1 = R2 × R3 / Rx";
+    if (solve === "r2") return "R2 = R1 × Rx / R3";
+    return "R3 = R1 × Rx / R2";
+  }
+
+  // A short zigzag centered on a diagonal edge, with straight leads either
+  // side reaching the corners — the diagonal version of the same body-plus-
+  // leads shape every other resistor symbol in the app uses, just rotated to
+  // whatever angle this edge sits at instead of the usual horizontal/vertical.
+  function edgeZigzag(x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const ux = dx / Math.hypot(dx, dy), uy = dy / Math.hypot(dx, dy);
+    const px = -uy, py = ux;
+    const amp = 4.5;
+    const bx1 = x1 + dx * 0.28, by1 = y1 + dy * 0.28;
+    const bx2 = x1 + dx * 0.72, by2 = y1 + dy * 0.72;
+    const pts = [[bx1, by1]];
+    for (let i = 1; i < 6; i++) {
+      const t = i / 6;
+      const side = i % 2 === 1 ? 1 : -1;
+      pts.push([bx1 + (bx2 - bx1) * t + px * amp * side, by1 + (by2 - by1) * t + py * amp * side]);
+    }
+    pts.push([bx2, by2]);
+    const zig = pts.map(p => p.map(n => n.toFixed(1)).join(",")).join(" L");
+    return `M${x1},${y1} L${bx1.toFixed(1)},${by1.toFixed(1)} M${zig} M${bx2.toFixed(1)},${by2.toFixed(1)} L${x2},${y2}`;
+  }
+
+  // Classic diamond: A (top) and C (bottom) carry the supply, B and D sit
+  // level with each other and are bridged by the galvanometer — the branch
+  // that reads zero at balance, which is the whole premise of the circuit.
+  function diagram() {
+    const known = inputsFor(state.solve);
+    const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
+    const wire = "#5A6169";
+    const A = [110, 20], B = [38, 72], D = [182, 72], C = [110, 124];
+    const labelPos = {
+      r1: [66, 38, "end"], r2: [154, 38, "start"],
+      r3: [66, 106, "end"], rx: [154, 106, "start"],
+    };
+    const edges = [
+      ["r1", A, B], ["r2", A, D], ["r3", B, C], ["rx", D, C],
+    ];
+    return `<svg width="220" height="146" viewBox="0 0 220 146" fill="none">
+      <path d="M110 8 V${A[1]} M110 ${C[1]} V138" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M${B[0]} ${B[1]} H${D[0]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="110" cy="${B[1]}" r="13" fill="#15181D" stroke="${wire}" stroke-width="1.6"/>
+      <text x="110" y="${B[1] + 4}" fill="${wire}" font-size="11" font-weight="700" text-anchor="middle">G</text>
+      ${edges.map(([name, [x1, y1], [x2, y2]]) =>
+        `<path d="${edgeZigzag(x1, y1, x2, y2)}" stroke="${tone(name)}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`
+      ).join("")}
+      ${Object.entries(labelPos).map(([name, [x, y, anchor]]) =>
+        `<text x="${x}" y="${y}" fill="${tone(name)}" font-size="11" font-weight="600" text-anchor="${anchor}">${name === "rx" ? "Rx" : name.toUpperCase()}</text>`
+      ).join("")}
+      <text x="110" y="6" fill="${tone("r1")}" font-size="11" font-weight="600" text-anchor="middle" dy="6">V</text>
+      <path d="M98 138 H122 M102 143 H118 M106 148 H114" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" transform="translate(0,-16)"/>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="solved"]').textContent = issue ? "—" : formatOhms(r[state.solve]);
+    app.querySelector('[data-res="detail"]').innerHTML = detailLine(r);
+    app.querySelector('[data-res="err"]').textContent = issue;
+    app.querySelectorAll("[data-hint]").forEach(el => { el.textContent = seriesHint(el.dataset.hint); });
+    syncSliderPositions(eSeriesForTolerance(state.tol), si,
+      (name) => unitSliderBounds(DIVIDER_R_UNITS[state.units[name]]));
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Balanced ratio bridge")}
+
+      <div class="diagram-box" style="padding:2px 10px;">${diagram()}</div>
+
+      ${pillRow([["rx", "Rx"], ["r1", "R1"], ["r2", "R2"], ["r3", "R3"]], state.solve, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${inputsFor(state.solve).map(name => `
+        <div class="field">
+          <label><span class="field-name">${FIELD[name].label}</span><span class="field-hint" data-hint="${name}">${seriesHint(name)}</span></label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${state.values[name]}" />
+            <select data-unit="${name}">
+              ${Object.keys(DIVIDER_R_UNITS).map(u => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+          ${seriesSliderHTML(name, eSeriesForTolerance(state.tol), si(name), unitSliderBounds(DIVIDER_R_UNITS[state.units[name]]))}
+        </div>`).join("")}
+      <div class="error-text" data-res="err">${problem(r)}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result
+        <select id="wb-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="solved">${problem(r) ? "—" : formatOhms(r[state.solve])}</span>
+        </div>
+        <div class="result-sub" data-res="detail">${detailLine(r)}</div>
+      </div>
+
+      ${formulaSection(
+        ["At balance: R1 / R2 = R3 / Rx", "Rx = R2 × R3 / R1", "R1 = R2 × R3 / Rx", "R2 = R1 × Rx / R3", "R3 = R1 × Rx / R2"],
+        "Balance means the galvanometer reads zero — no separate current or voltage measurement is needed, only the ratio."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+
+    app.querySelectorAll("input[data-var]").forEach(input => {
+      input.oninput = () => {
+        state.values[input.dataset.var] = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach(select => {
+      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+    });
+    document.getElementById("wb-tol").onchange = (e) => {
+      state.tol = parseFloat(e.target.value);
+      updateResults();
+    };
+    inputsFor(state.solve).forEach(name => {
+      wireSlider(name,
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(DIVIDER_R_UNITS[state.units[name]])),
+        (ohms) => {
+          state.values[name] = ohms / DIVIDER_R_UNITS[state.units[name]];
           app.querySelector(`input[data-var="${name}"]`).value = trim(state.values[name]);
           updateResults();
         });

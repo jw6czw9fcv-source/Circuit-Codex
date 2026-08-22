@@ -21,7 +21,7 @@ const DOMAINS = [
           { name: "Series/parallel", calc: "series-parallel" },
           { name: "Voltage divider", calc: "voltage-divider" },
           { name: "Current divider", calc: "current-divider" },
-          { name: "Wheatstone bridge" },
+          { name: "Wheatstone bridge", calc: "wheatstone-bridge" },
           { name: "Delta-Y transform" },
           { name: "NTC/PTC thermistor" },
         ],
