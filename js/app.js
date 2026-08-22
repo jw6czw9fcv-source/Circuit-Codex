@@ -2683,7 +2683,7 @@ function renderKirchhoff(domain, tool, favId) {
     const label = state.mode === "kcl" ? "I" : "V";
     const u = unknown();
     const items = state.rows.map((r, i) => ({ sign: r.sign, text: `${label}${i + 1}`, unk: false }));
-    items.push({ sign: u >= 0 ? 1 : -1, text: "?", unk: true });
+    items.push({ sign: u >= 0 ? 1 : -1, text: state.mode === "kcl" ? "Iout" : "Vout", unk: true });
     const inItems = items.filter(x => x.sign > 0);
     const outItems = items.filter(x => x.sign <= 0);
     if (state.mode === "kcl") {
@@ -2701,15 +2701,18 @@ function renderKirchhoff(domain, tool, favId) {
         ${outArrows.join("")}
       </svg>`;
     }
-    const xs = spread(items.length, 62, 158);
+    // No loop-direction arrow: it only ever collided with whichever tick sat
+    // near top-centre, and traversal direction isn't something this tool
+    // needs to assert — a KVL loop is walked whichever way makes the signs
+    // convenient, which is exactly what each row's own +/− already records.
+    const xs = spread(items.length, 46, 174);
     const ticks = items.map((it, i) => {
       const x = xs[i], c = it.unk ? gold : (it.sign > 0 ? "#8FC1F5" : "#E08585");
       return `<path d="M${x} 16 V24" stroke="${c}" stroke-width="2.2" stroke-linecap="round" ${it.unk ? 'stroke-dasharray="2.5,2"' : ""}/>
-        <text x="${x}" y="12" fill="${c}" font-size="11" font-weight="600" text-anchor="middle">${it.text}</text>`;
+        <text x="${x}" y="11" fill="${c}" font-size="10" font-weight="600" text-anchor="middle">${it.text}</text>`;
     }).join("");
     return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
       <path d="M50 20 H170 V80 H50 Z" stroke="${wire}" stroke-width="1.6" stroke-linejoin="round"/>
-      <path d="M100 20 L108 16 L108 24 Z" fill="#8FC1F5"/>
       ${ticks}
       <text x="35" y="24" fill="#8FC1F5" font-size="13" font-weight="700" text-anchor="middle">+</text>
       <text x="35" y="84" fill="#E08585" font-size="13" font-weight="700" text-anchor="middle">−</text>
