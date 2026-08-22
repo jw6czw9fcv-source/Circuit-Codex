@@ -1991,44 +1991,57 @@ function renderWheatstoneBridge(domain, tool, favId) {
     return "R3 = R1 × Rx / R2";
   }
 
-  // Vertical zigzag at the app's usual proportions (36px body), same shape
-  // the resistor/capacitor parallel diagrams use for each leg.
-  const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+  // A short zigzag centered on a diagonal edge, with straight leads either
+  // side reaching the corners — the diagonal version of the same body-plus-
+  // leads shape every other resistor symbol in the app uses, rotated to
+  // whatever angle this edge sits at instead of the usual horizontal/vertical.
+  function edgeZigzag(x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    const ux = dx / len, uy = dy / len;
+    const px = -uy, py = ux;
+    const amp = 4.5;
+    const bx1 = x1 + dx * 0.28, by1 = y1 + dy * 0.28;
+    const bx2 = x1 + dx * 0.72, by2 = y1 + dy * 0.72;
+    const pts = [[bx1, by1]];
+    for (let i = 1; i < 6; i++) {
+      const t = i / 6;
+      const side = i % 2 === 1 ? 1 : -1;
+      pts.push([bx1 + (bx2 - bx1) * t + px * amp * side, by1 + (by2 - by1) * t + py * amp * side]);
+    }
+    pts.push([bx2, by2]);
+    const zig = pts.map(p => p.map(n => n.toFixed(1)).join(",")).join(" L");
+    return `M${x1},${y1} L${bx1.toFixed(1)},${by1.toFixed(1)} M${zig} M${bx2.toFixed(1)},${by2.toFixed(1)} L${x2},${y2}`;
+  }
 
-  // Square layout, every corner a right angle: two vertical legs (left:
-  // R1 over R3, right: R2 over Rx) between a top and bottom rail, with the
-  // galvanometer bridging the midpoint of each leg — the same four-node
-  // topology as the diamond drawing this replaced, just laid out on a grid
-  // instead of rotated 45°.
+  // True diamond: A/B/D/C sit at equal radius from the centre (N/W/E/S), so
+  // every internal corner is exactly 90° — a square standing on its point,
+  // not just any rhombus. A and C carry the supply, B and D sit level and
+  // are bridged by the galvanometer — the branch that reads zero at balance.
   function diagram() {
     const known = inputsFor(state.solve);
     const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
     const wire = "#5A6169";
-    const L = 65, R = 155, cx = 110;
-    const top = 16, bridge = 78, bottom = 140;
-    const legs = [
-      ["r1", L, top + 13], ["r3", L, bridge + 13],
-      ["r2", R, top + 13], ["rx", R, bridge + 13],
-    ];
+    const cx = 110, cy = 76, rad = 54;
+    const A = [cx, cy - rad], B = [cx - rad, cy], D = [cx + rad, cy], C = [cx, cy + rad];
     const labelPos = {
-      r1: [L - 10, 50, "end"], r2: [R + 10, 50, "start"],
-      r3: [L - 10, 112, "end"], rx: [R + 10, 112, "start"],
+      r1: [70, 44, "end"], r2: [150, 44, "start"],
+      r3: [70, 112, "end"], rx: [150, 112, "start"],
     };
-    return `<svg width="220" height="158" viewBox="0 0 220 158" fill="none">
-      <path d="M${cx} 10 V${top} M${L} ${top} H${R} M${L} ${bridge} H${R} M${L} ${bottom} H${R} M${cx} ${bottom} V146" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M${L} ${top} V${top + 13} M${L} ${top + 49} V${bridge} M${L} ${bridge} V${bridge + 13} M${L} ${bridge + 49} V${bottom}
-                M${R} ${top} V${top + 13} M${R} ${top + 49} V${bridge} M${R} ${bridge} V${bridge + 13} M${R} ${bridge + 49} V${bottom}"
-            stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="${cx}" cy="${bridge}" r="11" fill="#15181D" stroke="${wire}" stroke-width="1.6"/>
-      <text x="${cx}" y="${bridge + 4}" fill="${wire}" font-size="10" font-weight="700" text-anchor="middle">G</text>
-      ${legs.map(([name, x, t]) =>
-        `<path d="${zig(x, t)}" stroke="${tone(name)}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`
+    const edges = [["r1", A, B], ["r2", A, D], ["r3", B, C], ["rx", D, C]];
+    return `<svg width="220" height="150" viewBox="0 0 220 150" fill="none">
+      <path d="M${cx} 10 V${A[1]} M${cx} ${C[1]} V138" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M${B[0]} ${B[1]} H${D[0]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="${cx}" cy="${cy}" r="11" fill="#15181D" stroke="${wire}" stroke-width="1.6"/>
+      <text x="${cx}" y="${cy + 4}" fill="${wire}" font-size="10" font-weight="700" text-anchor="middle">G</text>
+      ${edges.map(([name, [x1, y1], [x2, y2]]) =>
+        `<path d="${edgeZigzag(x1, y1, x2, y2)}" stroke="${tone(name)}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`
       ).join("")}
       ${Object.entries(labelPos).map(([name, [x, y, anchor]]) =>
         `<text x="${x}" y="${y}" fill="${tone(name)}" font-size="11" font-weight="600" text-anchor="${anchor}">${name === "rx" ? "Rx" : name.toUpperCase()}</text>`
       ).join("")}
       <text x="${cx}" y="7" fill="${tone("r1")}" font-size="11" font-weight="600" text-anchor="middle" dy="6">V</text>
-      <path d="M103 146 H117 M105.5 149 H114.5 M108 152 H112" stroke="${wire}" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M103 138 H117 M105.5 141 H114.5 M108 144 H112" stroke="${wire}" stroke-width="1.5" stroke-linecap="round"/>
     </svg>`;
   }
 
@@ -2269,12 +2282,12 @@ function renderSeriesParallel(domain, tool, favId) {
       ${pillRow([["series", "Series"], ["parallel", "Parallel"]], state.mode, domain.bg)}
 
       <div class="section-label" style="color:#8FC1F5">Resistors
-        <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
         <select id="sp-tol" class="label-select">
           ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
         </select>
       </div>
       <div class="r-list">${rowsHTML()}</div>
+      <button class="add-row-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ Add resistor</button>
       <div class="error-text" data-res="err">${problem()}</div>
 
       <div class="section-label" style="color:#5DCAA5">Result</div>
@@ -2489,12 +2502,12 @@ function renderCapSeriesParallel(domain, tool, favId) {
       ${pillRow([["parallel", "Parallel"], ["series", "Series"]], state.mode, domain.bg)}
 
       <div class="section-label" style="color:#8FC1F5">Capacitors
-        <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
         <select id="sp-tol" class="label-select">
           ${[1, 2, 5, 10, 20].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
         </select>
       </div>
       <div class="r-list">${rowsHTML()}</div>
+      <button class="add-row-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ Add capacitor</button>
       <div class="error-text" data-res="err">${problem()}</div>
 
       <div class="section-label" style="color:#5DCAA5">Result</div>
