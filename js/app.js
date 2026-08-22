@@ -481,7 +481,11 @@ function renderOhmsLaw(domain, tool, favId) {
 
       ${pillRow([["vi", "VI"], ["vr", "VR"], ["ir", "IR"]], state.mode, "#1B2A3B")}
 
-      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="ohm-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       ${inputs.map(v => `
         <div class="field">
           <label><span class="field-name">${{ V: "Voltage (V)", I: "Current (I)", R: "Resistance (R)" }[v]}</span>${
@@ -495,11 +499,7 @@ function renderOhmsLaw(domain, tool, favId) {
           ${v === "R" ? seriesSliderHTML("R", eSeriesForTolerance(state.tol), state.values.R * unitScale(state.units.R), unitSliderBounds(unitScale(state.units.R))) : ""}
         </div>`).join("")}
 
-      <div class="section-label" style="color:#5DCAA5">Results
-        <select id="ohm-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Results</div>
       ${outputs.map(v => `
         <div class="result-field" data-out="${v}">
           <div class="result-head">
@@ -1628,7 +1628,11 @@ function renderVoltageDivider(domain, tool, favId) {
 
       ${pillRow([["vout", "Vout"], ["r1", "R1"], ["r2", "R2"]], state.solve, domain.bg)}
 
-      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="vd-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       ${inputsFor(state.solve).map(name => `
         <div class="field">
           <label><span class="field-name">${FIELD[name].label}</span>${FIELD[name].units === DIVIDER_R_UNITS
@@ -1643,11 +1647,7 @@ function renderVoltageDivider(domain, tool, favId) {
         </div>`).join("")}
       <div class="error-text" data-res="err">${problem(r)}</div>
 
-      <div class="section-label" style="color:#5DCAA5">Result
-        <select id="vd-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Result</div>
       <div class="result-field">
         <div class="result-head">
           <span class="label">${solvedLabel()}</span>
@@ -1843,7 +1843,11 @@ function renderCurrentDivider(domain, tool, favId) {
 
       ${pillRow([["i1", "I1"], ["r1", "R1"], ["r2", "R2"]], state.solve, domain.bg)}
 
-      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="cd-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       ${inputsFor(state.solve).map(name => `
         <div class="field">
           <label><span class="field-name">${FIELD[name].label}</span>${FIELD[name].units === DIVIDER_R_UNITS
@@ -1858,11 +1862,7 @@ function renderCurrentDivider(domain, tool, favId) {
         </div>`).join("")}
       <div class="error-text" data-res="err">${problem(r)}</div>
 
-      <div class="section-label" style="color:#5DCAA5">Result
-        <select id="cd-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Result</div>
       <div class="result-field">
         <div class="result-head">
           <span class="label">${solvedLabel()}</span>
@@ -1991,56 +1991,44 @@ function renderWheatstoneBridge(domain, tool, favId) {
     return "R3 = R1 × Rx / R2";
   }
 
-  // A short zigzag centered on a diagonal edge, with straight leads either
-  // side reaching the corners — the diagonal version of the same body-plus-
-  // leads shape every other resistor symbol in the app uses, just rotated to
-  // whatever angle this edge sits at instead of the usual horizontal/vertical.
-  function edgeZigzag(x1, y1, x2, y2) {
-    const dx = x2 - x1, dy = y2 - y1;
-    const ux = dx / Math.hypot(dx, dy), uy = dy / Math.hypot(dx, dy);
-    const px = -uy, py = ux;
-    const amp = 4.5;
-    const bx1 = x1 + dx * 0.28, by1 = y1 + dy * 0.28;
-    const bx2 = x1 + dx * 0.72, by2 = y1 + dy * 0.72;
-    const pts = [[bx1, by1]];
-    for (let i = 1; i < 6; i++) {
-      const t = i / 6;
-      const side = i % 2 === 1 ? 1 : -1;
-      pts.push([bx1 + (bx2 - bx1) * t + px * amp * side, by1 + (by2 - by1) * t + py * amp * side]);
-    }
-    pts.push([bx2, by2]);
-    const zig = pts.map(p => p.map(n => n.toFixed(1)).join(",")).join(" L");
-    return `M${x1},${y1} L${bx1.toFixed(1)},${by1.toFixed(1)} M${zig} M${bx2.toFixed(1)},${by2.toFixed(1)} L${x2},${y2}`;
-  }
+  // Vertical zigzag at the app's usual proportions (36px body), same shape
+  // the resistor/capacitor parallel diagrams use for each leg.
+  const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
 
-  // Classic diamond: A (top) and C (bottom) carry the supply, B and D sit
-  // level with each other and are bridged by the galvanometer — the branch
-  // that reads zero at balance, which is the whole premise of the circuit.
+  // Square layout, every corner a right angle: two vertical legs (left:
+  // R1 over R3, right: R2 over Rx) between a top and bottom rail, with the
+  // galvanometer bridging the midpoint of each leg — the same four-node
+  // topology as the diamond drawing this replaced, just laid out on a grid
+  // instead of rotated 45°.
   function diagram() {
     const known = inputsFor(state.solve);
     const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
     const wire = "#5A6169";
-    const A = [110, 20], B = [38, 72], D = [182, 72], C = [110, 124];
-    const labelPos = {
-      r1: [66, 38, "end"], r2: [154, 38, "start"],
-      r3: [66, 106, "end"], rx: [154, 106, "start"],
-    };
-    const edges = [
-      ["r1", A, B], ["r2", A, D], ["r3", B, C], ["rx", D, C],
+    const L = 65, R = 155, cx = 110;
+    const top = 16, bridge = 78, bottom = 140;
+    const legs = [
+      ["r1", L, top + 13], ["r3", L, bridge + 13],
+      ["r2", R, top + 13], ["rx", R, bridge + 13],
     ];
-    return `<svg width="220" height="146" viewBox="0 0 220 146" fill="none">
-      <path d="M110 8 V${A[1]} M110 ${C[1]} V138" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M${B[0]} ${B[1]} H${D[0]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="110" cy="${B[1]}" r="13" fill="#15181D" stroke="${wire}" stroke-width="1.6"/>
-      <text x="110" y="${B[1] + 4}" fill="${wire}" font-size="11" font-weight="700" text-anchor="middle">G</text>
-      ${edges.map(([name, [x1, y1], [x2, y2]]) =>
-        `<path d="${edgeZigzag(x1, y1, x2, y2)}" stroke="${tone(name)}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`
+    const labelPos = {
+      r1: [L - 10, 50, "end"], r2: [R + 10, 50, "start"],
+      r3: [L - 10, 112, "end"], rx: [R + 10, 112, "start"],
+    };
+    return `<svg width="220" height="158" viewBox="0 0 220 158" fill="none">
+      <path d="M${cx} 10 V${top} M${L} ${top} H${R} M${L} ${bridge} H${R} M${L} ${bottom} H${R} M${cx} ${bottom} V146" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M${L} ${top} V${top + 13} M${L} ${top + 49} V${bridge} M${L} ${bridge} V${bridge + 13} M${L} ${bridge + 49} V${bottom}
+                M${R} ${top} V${top + 13} M${R} ${top + 49} V${bridge} M${R} ${bridge} V${bridge + 13} M${R} ${bridge + 49} V${bottom}"
+            stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="${cx}" cy="${bridge}" r="11" fill="#15181D" stroke="${wire}" stroke-width="1.6"/>
+      <text x="${cx}" y="${bridge + 4}" fill="${wire}" font-size="10" font-weight="700" text-anchor="middle">G</text>
+      ${legs.map(([name, x, t]) =>
+        `<path d="${zig(x, t)}" stroke="${tone(name)}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`
       ).join("")}
       ${Object.entries(labelPos).map(([name, [x, y, anchor]]) =>
         `<text x="${x}" y="${y}" fill="${tone(name)}" font-size="11" font-weight="600" text-anchor="${anchor}">${name === "rx" ? "Rx" : name.toUpperCase()}</text>`
       ).join("")}
-      <text x="110" y="6" fill="${tone("r1")}" font-size="11" font-weight="600" text-anchor="middle" dy="6">V</text>
-      <path d="M98 138 H122 M102 143 H118 M106 148 H114" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" transform="translate(0,-16)"/>
+      <text x="${cx}" y="7" fill="${tone("r1")}" font-size="11" font-weight="600" text-anchor="middle" dy="6">V</text>
+      <path d="M103 146 H117 M105.5 149 H114.5 M108 152 H112" stroke="${wire}" stroke-width="1.5" stroke-linecap="round"/>
     </svg>`;
   }
 
@@ -2064,7 +2052,11 @@ function renderWheatstoneBridge(domain, tool, favId) {
 
       ${pillRow([["rx", "Rx"], ["r1", "R1"], ["r2", "R2"], ["r3", "R3"]], state.solve, domain.bg)}
 
-      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="wb-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       ${inputsFor(state.solve).map(name => `
         <div class="field">
           <label><span class="field-name">${FIELD[name].label}</span><span class="field-hint" data-hint="${name}">${seriesHint(name)}</span></label>
@@ -2078,11 +2070,7 @@ function renderWheatstoneBridge(domain, tool, favId) {
         </div>`).join("")}
       <div class="error-text" data-res="err">${problem(r)}</div>
 
-      <div class="section-label" style="color:#5DCAA5">Result
-        <select id="wb-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Result</div>
       <div class="result-field">
         <div class="result-head">
           <span class="label">${solvedLabel()}</span>
@@ -2282,15 +2270,14 @@ function renderSeriesParallel(domain, tool, favId) {
 
       <div class="section-label" style="color:#8FC1F5">Resistors
         <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
-      </div>
-      <div class="r-list">${rowsHTML()}</div>
-      <div class="error-text" data-res="err">${problem()}</div>
-
-      <div class="section-label" style="color:#5DCAA5">Result
         <select id="sp-tol" class="label-select">
           ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
         </select>
       </div>
+      <div class="r-list">${rowsHTML()}</div>
+      <div class="error-text" data-res="err">${problem()}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
       <div class="result-field">
         <div class="result-head">
           <span class="label">Total resistance</span>
@@ -2503,15 +2490,14 @@ function renderCapSeriesParallel(domain, tool, favId) {
 
       <div class="section-label" style="color:#8FC1F5">Capacitors
         <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
-      </div>
-      <div class="r-list">${rowsHTML()}</div>
-      <div class="error-text" data-res="err">${problem()}</div>
-
-      <div class="section-label" style="color:#5DCAA5">Result
         <select id="sp-tol" class="label-select">
           ${[1, 2, 5, 10, 20].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
         </select>
       </div>
+      <div class="r-list">${rowsHTML()}</div>
+      <div class="error-text" data-res="err">${problem()}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
       <div class="result-field">
         <div class="result-head">
           <span class="label">Total capacitance</span>
