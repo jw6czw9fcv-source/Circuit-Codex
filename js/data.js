@@ -185,7 +185,7 @@ const DOMAINS = [
         tools: [
           { name: "Ohm's law", calc: "ohms-law" },
           { name: "AC Ohm's law (impedance form)" },
-          { name: "Kirchhoff's laws" },
+          { name: "Kirchhoff's laws", calc: "kirchhoff" },
           { name: "Basic calculator" },
           { name: "Circuit calculators (divider, attenuator, delta-Y)" },
           { name: "SI prefix converter" },

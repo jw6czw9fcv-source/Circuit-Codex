@@ -161,6 +161,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
   if (calcId === "wheatstone-bridge") return renderWheatstoneBridge(domain, tool, favId);
+  if (calcId === "kirchhoff") return renderKirchhoff(domain, tool, favId);
   if (calcId === "series-parallel") return renderSeriesParallel(domain, tool, favId);
   if (calcId === "cap-series-parallel") return renderCapSeriesParallel(domain, tool, favId);
   if (calcId === "formula-search") return renderFormulaSearch(domain, tool, favId);
@@ -2567,6 +2568,200 @@ function renderCapSeriesParallel(domain, tool, favId) {
           updateResults();
         });
     });
+  }
+
+  paint();
+}
+
+// ---------- Kirchhoff's laws ----------
+// Both laws are the same statement — a signed sum around a closed boundary
+// is zero — just applied to a node (KCL, current) or a loop (KVL, voltage).
+// One screen, one mechanism: enter every known signed term, and the missing
+// one is whatever balances the sum back to zero. No topology is assumed —
+// which terms are "into the node" or "a rise" is exactly what the sign on
+// each row means, decided by whoever is filling it in.
+const KL_MAX = 5;
+
+function renderKirchhoff(domain, tool, favId) {
+  const state = {
+    mode: "kcl",
+    rows: [
+      { value: 2, unit: "A", sign: 1 },
+      { value: 1.2, unit: "A", sign: -1 },
+    ],
+  };
+
+  function unitsFor() {
+    return state.mode === "kcl" ? AMP_UNITS : VOLT_UNITS;
+  }
+
+  // Rows carry whichever unit was on screen when the mode last changed, so
+  // switching KCL/KVL needs to reset them to a sane default instead of
+  // reading amps as volts.
+  function resetRows() {
+    const unit = state.mode === "kcl" ? "A" : "V";
+    state.rows = [{ value: 2, unit, sign: 1 }, { value: 1.2, unit, sign: -1 }];
+  }
+
+  function signedValue(row) {
+    return row.sign * row.value * unitsFor()[row.unit];
+  }
+
+  function sumKnown() {
+    return state.rows.reduce((a, r) => a + (isFinite(signedValue(r)) ? signedValue(r) : 0), 0);
+  }
+
+  function unknown() {
+    return -sumKnown();
+  }
+
+  function problem() {
+    if (state.rows.some(r => !isFinite(r.value))) return "Every term needs a value.";
+    return "";
+  }
+
+  function resultValue() {
+    return formatSigned(unknown());
+  }
+
+  function formatSigned(v) {
+    const unit = state.mode === "kcl" ? "A" : "V";
+    return `${v < 0 ? "−" : "+"}${siFormat(Math.abs(v), unit, 4)}`;
+  }
+
+  function detailLine() {
+    if (problem()) return "";
+    const dir = state.mode === "kcl"
+      ? (unknown() >= 0 ? "flows into the node" : "flows out of the node")
+      : (unknown() >= 0 ? "is a rise" : "is a drop");
+    return `The missing term ${dir} to bring the sum to zero.`;
+  }
+
+  function rowsHTML() {
+    return state.rows.map((row, i) => `
+      <div class="r-item">
+        <div class="r-line">
+          <span class="r-index">${state.mode === "kcl" ? "I" : "V"}${i + 1}</span>
+          <button class="sign-btn" data-sign="${i}" style="color:${row.sign > 0 ? "#8FC1F5" : "#E08585"};border-color:${row.sign > 0 ? "#8FC1F5" : "#E08585"}55;" aria-label="${row.sign > 0 ? "Positive" : "Negative"} — tap to flip">${row.sign > 0 ? "+" : "−"}</button>
+          <input type="number" inputmode="decimal" step="any" data-row="${i}" value="${row.value}" />
+          <select data-unit="${i}">
+            ${Object.keys(unitsFor()).map(u => `<option ${row.unit === u ? "selected" : ""}>${u}</option>`).join("")}
+          </select>
+          <button class="r-drop" data-drop="${i}" aria-label="Remove term ${i + 1}" ${state.rows.length <= 2 ? "disabled" : ""}>×</button>
+        </div>
+      </div>`).join("");
+  }
+
+  // KCL: a node with wires in and out, arrowheads showing the convention +
+  // means in. KVL: a loop with a direction arrow, "+"/"−" marking where a
+  // rise or drop is measured from. Both illustrate the sign convention the
+  // row buttons use rather than the specific circuit on screen — there isn't
+  // one; any node or loop works.
+  function diagram() {
+    const wire = "#5A6169";
+    const ink = "#8FC1F5";
+    if (state.mode === "kcl") {
+      const arrow = (x1, y1, x2, y2) => {
+        const a = Math.atan2(y2 - y1, x2 - x1);
+        const ax = x2 - 7 * Math.cos(a - 0.5), ay = y2 - 7 * Math.sin(a - 0.5);
+        const bx = x2 - 7 * Math.cos(a + 0.5), by = y2 - 7 * Math.sin(a + 0.5);
+        return `M${x1} ${y1} L${x2} ${y2} M${x2} ${y2} L${ax.toFixed(1)} ${ay.toFixed(1)} M${x2} ${y2} L${bx.toFixed(1)} ${by.toFixed(1)}`;
+      };
+      return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
+        <circle cx="110" cy="50" r="4" fill="${wire}"/>
+        <path d="${arrow(40, 20, 105, 47)}" stroke="${ink}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${arrow(40, 80, 105, 53)}" stroke="${ink}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${arrow(115, 50, 180, 22)}" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${arrow(115, 50, 180, 78)}" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="32" y="16" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">in</text>
+        <text x="32" y="90" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">in</text>
+        <text x="188" y="16" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="middle">out</text>
+        <text x="188" y="90" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="middle">out</text>
+      </svg>`;
+    }
+    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
+      <path d="M50 20 H170 V80 H50 Z" stroke="${wire}" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M100 20 L108 16 L108 24 Z" fill="${ink}"/>
+      <text x="35" y="24" fill="${ink}" font-size="13" font-weight="700" text-anchor="middle">+</text>
+      <text x="35" y="84" fill="#E08585" font-size="13" font-weight="700" text-anchor="middle">−</text>
+      <text x="110" y="55" fill="${wire}" font-size="11" font-weight="600" text-anchor="middle">loop</text>
+    </svg>`;
+  }
+
+  function updateResults() {
+    app.querySelector('[data-res="solved"]').textContent = problem() ? "—" : resultValue();
+    app.querySelector('[data-res="detail"]').textContent = detailLine();
+    app.querySelector('[data-res="err"]').textContent = problem();
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, state.mode === "kcl" ? "Currents at a node sum to zero" : "Voltages around a loop sum to zero")}
+
+      <div class="diagram-box" style="padding:6px 10px;">${diagram()}</div>
+
+      ${pillRow([["kcl", "KCL — current"], ["kvl", "KVL — voltage"]], state.mode, domain.bg)}
+
+      <div class="section-label split" style="color:#8FC1F5">
+        <span>Known terms</span>
+        <button class="label-btn" id="kl-add" ${state.rows.length >= KL_MAX ? "disabled" : ""}>+ add</button>
+      </div>
+      <div class="r-list">${rowsHTML()}</div>
+      <div class="error-text" data-res="err">${problem()}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Missing ${state.mode === "kcl" ? "current" : "voltage"}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="solved">${problem() ? "—" : resultValue()}</span>
+        </div>
+        <div class="result-sub" data-res="detail">${detailLine()}</div>
+      </div>
+
+      ${formulaSection(
+        state.mode === "kcl"
+          ? ["ΣIin = ΣIout", "or equivalently: ΣI = 0"]
+          : ["ΣV = 0 around any closed loop"],
+        state.mode === "kcl"
+          ? "Charge can't pile up at a node — whatever current arrives has to leave somewhere. + is a term flowing in, − a term flowing out."
+          : "Energy gained going around a loop and back to the start has to equal energy lost — the signed sum of every rise and drop is zero. + is a rise, − a drop."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; resetRows(); paint(); });
+
+    app.querySelectorAll("input[data-row]").forEach(input => {
+      input.oninput = () => {
+        state.rows[input.dataset.row].value = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach(select => {
+      select.onchange = () => { state.rows[select.dataset.unit].unit = select.value; updateResults(); };
+    });
+    app.querySelectorAll("[data-sign]").forEach(btn => {
+      btn.onclick = () => {
+        state.rows[btn.dataset.sign].sign *= -1;
+        paint();
+      };
+    });
+    app.querySelectorAll("[data-drop]").forEach(btn => {
+      btn.onclick = () => {
+        if (state.rows.length <= 2) return;
+        state.rows.splice(+btn.dataset.drop, 1);
+        paint();
+      };
+    });
+    document.getElementById("kl-add").onclick = () => {
+      if (state.rows.length >= KL_MAX) return;
+      const unit = state.mode === "kcl" ? "A" : "V";
+      state.rows.push({ value: 1, unit, sign: 1 });
+      paint();
+    };
   }
 
   paint();
