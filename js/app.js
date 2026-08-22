@@ -161,6 +161,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
   if (calcId === "series-parallel") return renderSeriesParallel(domain, tool, favId);
+  if (calcId === "cap-series-parallel") return renderCapSeriesParallel(domain, tool, favId);
   if (calcId === "formula-search") return renderFormulaSearch(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
@@ -269,6 +270,15 @@ function formatOhms(v) {
     if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
   }
   return `${trim(v * 1e3)} mΩ`;
+}
+
+function formatFarads(v) {
+  if (!isFinite(v)) return "—";
+  if (v === 0) return "0 F";
+  for (const [scale, unit] of [[1, "F"], [1e-3, "mF"], [1e-6, "µF"], [1e-9, "nF"], [1e-12, "pF"]]) {
+    if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
+  }
+  return `${trim(v / 1e-12)} pF`;
 }
 
 function calcHeader(tool, favId, subtitle) {
@@ -627,8 +637,8 @@ const SLIDER_MAX_OHMS = 10e6;
 // tightest step is ~1.2% — a 0.1% margin comfortably clears that without
 // float rounding on either side accidentally pulling the next unit's value
 // into range, which a wider margin did.
-function unitSliderBounds(scale) {
-  return [Math.max(SLIDER_MIN_OHMS, scale), Math.min(SLIDER_MAX_OHMS, scale * 999)];
+function unitSliderBounds(scale, rangeMin = SLIDER_MIN_OHMS, rangeMax = SLIDER_MAX_OHMS) {
+  return [Math.max(rangeMin, scale), Math.min(rangeMax, scale * 999)];
 }
 
 function eSeriesRange(series, minOhms = SLIDER_MIN_OHMS, maxOhms = SLIDER_MAX_OHMS) {
@@ -2110,6 +2120,227 @@ function renderSeriesParallel(domain, tool, favId) {
         () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(DIVIDER_R_UNITS[state.rows[i].unit])),
         (ohms) => {
           state.rows[i].value = trim(ohms / DIVIDER_R_UNITS[state.rows[i].unit]);
+          app.querySelector(`input[data-row="${i}"]`).value = state.rows[i].value;
+          updateResults();
+        });
+    });
+  }
+
+  paint();
+}
+
+// ---------- Series / parallel capacitors ----------
+// The mirror image of the resistor version: series and parallel swap which
+// formula applies (capacitance combines like conductance, not resistance),
+// the practical value range runs pF–mF instead of Ω–MΩ, and the schematic
+// symbol is a pair of plates instead of a zigzag — everything else (row
+// add/remove, tolerance-driven E-series, the standard-value slider) is the
+// same shape as renderSeriesParallel and kept separate rather than factored
+// out, since threading two more config parameters through it would obscure
+// more than four near-identical closures side by side would cost.
+const CAP_UNITS = { pF: 1e-12, nF: 1e-9, "µF": 1e-6, mF: 1e-3, F: 1 };
+const CAP_SLIDER_MIN = 1e-12;
+const CAP_SLIDER_MAX = 1e-3;
+
+function renderCapSeriesParallel(domain, tool, favId) {
+  const state = {
+    mode: "parallel",
+    tol: 10,
+    rows: [
+      { value: 100, unit: "nF" },
+      { value: 100, unit: "nF" },
+    ],
+  };
+
+  function faradsOf(row) {
+    return row.value * CAP_UNITS[row.unit];
+  }
+
+  function values() {
+    return state.rows.map(faradsOf);
+  }
+
+  // Swapped from the resistor version: capacitors in series combine like
+  // resistors in parallel, and vice versa — series capacitance is always
+  // smaller than the smallest part, parallel always larger.
+  function total() {
+    const v = values();
+    if (v.some(x => !isFinite(x) || x < 0)) return NaN;
+    if (state.mode === "parallel") return v.reduce((a, b) => a + b, 0);
+    if (v.some(x => x === 0)) return 0;
+    const inv = v.reduce((a, b) => a + 1 / b, 0);
+    return inv === 0 ? NaN : 1 / inv;
+  }
+
+  function problem() {
+    if (values().some(x => !isFinite(x) || x < 0)) return "Every capacitance must be zero or more.";
+    return "";
+  }
+
+  function seriesHint(farads) {
+    if (!isFinite(farads) || farads <= 0) return "";
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(farads, name);
+    return near.exact ? name : `${name} ${formatFarads(near.value)}`;
+  }
+
+  function detailLine() {
+    const r = total();
+    if (problem() || !isFinite(r) || r <= 0) return "";
+    const t = state.tol / 100;
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(r, name);
+    const single = near.exact
+      ? `one ${name} part would do it`
+      : `nearest single ${name} ${formatFarads(near.value)}`;
+    return `${formatFarads(r * (1 - t))} – ${formatFarads(r * (1 + t))} &nbsp;·&nbsp; ${single}`;
+  }
+
+  const SP_SLOT = 196 / SP_MAX;
+  const SP_BODY = 36;
+
+  function centres(n) {
+    const start = (220 - n * SP_SLOT) / 2;
+    return Array.from({ length: n }, (_, i) => start + SP_SLOT * (i + 0.5));
+  }
+
+  function diagram() {
+    const n = state.rows.length;
+    const wire = "#5A6169";
+    const ink = "#8FC1F5";
+    const cx = centres(n);
+    const half = SP_BODY / 2;
+
+    if (state.mode === "series") {
+      // Same lead/pitch math as the resistor chain — only the body itself,
+      // two plates with a gap instead of a zigzag, differs.
+      const gap = SP_SLOT - SP_BODY;
+      const width = n * SP_BODY + (n + 1) * gap;
+      const x0 = (220 - width) / 2;
+      const bodyStart = (i) => x0 + gap + i * (SP_BODY + gap);
+      const bodies = Array.from({ length: n }, (_, i) => {
+        const x = bodyStart(i);
+        const c = x + half;
+        return `<path d="M${x} 35 H${c - 5} M${c - 5} 21 V49 M${c + 5} 21 V49 M${c + 5} 35 H${x + SP_BODY}" stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>`
+          + `<text x="${c}" y="18" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">C${i + 1}</text>`;
+      });
+      const links = Array.from({ length: n + 1 }, (_, i) =>
+        `M${i === 0 ? x0 : bodyStart(i - 1) + SP_BODY} 35 H${i === n ? x0 + width : bodyStart(i)}`);
+      return `<svg width="220" height="56" viewBox="0 0 220 56" fill="none">
+        <path d="${links.join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        ${bodies.join("")}
+      </svg>`;
+    }
+
+    // Parallel: plates rotate 90° to sit crosswise on the vertical drop
+    // between the two rails, same as the resistor version's zigzags do.
+    const plates = (x, t) => `<path d="M${x} ${t} V${t + 11} M${x - 9} ${t + 11} H${x + 9} M${x - 9} ${t + 19} H${x + 9} M${x} ${t + 19} V${t + 30}" stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>`;
+    return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
+      <path d="M${cx[0]} 24 H${cx[n - 1]} M${cx[0]} 76 H${cx[n - 1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${cx.map(x => `M${x} 24 V30`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M110 12 V24 M110 76 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${cx.map(x => plates(x, 30)).join("")}
+      ${cx.map((x, i) => `<text x="${x}" y="52" fill="${ink}" font-size="11" font-weight="600" text-anchor="${i === n - 1 ? "start" : "end"}" dx="${i === n - 1 ? 10 : -10}">C${i + 1}</text>`).join("")}
+    </svg>`;
+  }
+
+  function rowsHTML() {
+    return state.rows.map((row, i) => `
+      <div class="r-item">
+        <div class="r-line">
+          <span class="r-index">C${i + 1}</span>
+          <input type="number" inputmode="decimal" step="any" data-row="${i}" value="${row.value}" />
+          <span class="r-hint" data-hint="${i}">${seriesHint(faradsOf(row))}</span>
+          <select data-unit="${i}">
+            ${Object.keys(CAP_UNITS).map(u => `<option ${row.unit === u ? "selected" : ""}>${u}</option>`).join("")}
+          </select>
+          <button class="r-drop" data-drop="${i}" aria-label="Remove C${i + 1}" ${state.rows.length <= 2 ? "disabled" : ""}>×</button>
+        </div>
+        ${seriesSliderHTML(i, eSeriesForTolerance(state.tol), faradsOf(row), unitSliderBounds(CAP_UNITS[row.unit], CAP_SLIDER_MIN, CAP_SLIDER_MAX))}
+      </div>`).join("");
+  }
+
+  function updateResults() {
+    app.querySelector('[data-res="total"]').textContent = problem() ? "—" : formatFarads(total());
+    app.querySelector('[data-res="detail"]').innerHTML = detailLine();
+    app.querySelector('[data-res="err"]').textContent = problem();
+    app.querySelectorAll("[data-hint]").forEach(el => {
+      el.textContent = seriesHint(faradsOf(state.rows[el.dataset.hint]));
+    });
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    syncSliderPositions(eSeriesForTolerance(state.tol), (i) => faradsOf(state.rows[i]),
+      (i) => unitSliderBounds(CAP_UNITS[state.rows[i].unit], CAP_SLIDER_MIN, CAP_SLIDER_MAX));
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `${state.rows.length} capacitors, ${state.mode === "series" ? "end to end" : "across each other"}`)}
+
+      <div class="diagram-box" style="padding:6px 10px;">${diagram()}</div>
+
+      ${pillRow([["parallel", "Parallel"], ["series", "Series"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Capacitors
+        <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
+      </div>
+      <div class="r-list">${rowsHTML()}</div>
+      <div class="error-text" data-res="err">${problem()}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result
+        <select id="sp-tol" class="label-select">
+          ${[1, 2, 5, 10, 20].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Total capacitance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="total">${problem() ? "—" : formatFarads(total())}</span>
+        </div>
+        <div class="result-sub" data-res="detail">${detailLine()}</div>
+      </div>
+
+      ${formulaSection(
+        ["Parallel: C = C1 + C2 + C3 + …", "Series: 1/C = 1/C1 + 1/C2 + 1/C3 + …", "Series (2 only): C = C1 × C2 / (C1 + C2)"],
+        "The opposite of resistors: parallel always increases total capacitance; series always decreases it below the smallest single capacitor."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    app.querySelectorAll("input[data-row]").forEach(input => {
+      input.oninput = () => {
+        state.rows[input.dataset.row].value = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach(select => {
+      select.onchange = () => { state.rows[select.dataset.unit].unit = select.value; updateResults(); };
+    });
+    app.querySelectorAll("[data-drop]").forEach(btn => {
+      btn.onclick = () => {
+        if (state.rows.length <= 2) return;
+        state.rows.splice(+btn.dataset.drop, 1);
+        paint();
+      };
+    });
+    document.getElementById("sp-add").onclick = () => {
+      if (state.rows.length >= SP_MAX) return;
+      state.rows.push({ value: 100, unit: "nF" });
+      paint();
+    };
+    document.getElementById("sp-tol").onchange = (e) => {
+      state.tol = parseFloat(e.target.value);
+      updateResults();
+    };
+    state.rows.forEach((row, i) => {
+      wireSlider(i,
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(CAP_UNITS[state.rows[i].unit], CAP_SLIDER_MIN, CAP_SLIDER_MAX)),
+        (farads) => {
+          state.rows[i].value = trim(farads / CAP_UNITS[state.rows[i].unit]);
           app.querySelector(`input[data-row="${i}"]`).value = state.rows[i].value;
           updateResults();
         });

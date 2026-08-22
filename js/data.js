@@ -34,7 +34,7 @@ const DOMAINS = [
           { name: "Ceramic code" },
           { name: "Film code" },
           { name: "SMD code" },
-          { name: "Series/parallel" },
+          { name: "Series/parallel", calc: "cap-series-parallel" },
         ],
       },
       {
