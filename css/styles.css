@@ -708,6 +708,27 @@ html, body {
   float: none;
 }
 
+/* Kirchhoff's laws: a signed-term row needs a third control before the value
+   — whether it counts into the sum or against it — round to match .r-drop's
+   scale rather than a full field-sized button. */
+.sign-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--input-border);
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Formula search result card. A button when a real calculator exists for the
    topic (tap to open it), a plain div otherwise — nothing to navigate to yet. */
 .formula-card {
