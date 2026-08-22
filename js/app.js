@@ -2652,39 +2652,59 @@ function renderKirchhoff(domain, tool, favId) {
       </div>`).join("");
   }
 
-  // KCL: a node with wires in and out, arrowheads showing the convention +
-  // means in. KVL: a loop with a direction arrow, "+"/"−" marking where a
-  // rise or drop is measured from. Both illustrate the sign convention the
-  // row buttons use rather than the specific circuit on screen — there isn't
-  // one; any node or loop works.
+  // Evenly spaced y-positions for n items between the canvas's top and
+  // bottom margins — shared by both diagrams so an extra row (up to KL_MAX)
+  // just adds another arrow or tick instead of needing a different layout.
+  function spread(n, lo, hi) {
+    if (n <= 1) return [(lo + hi) / 2];
+    const step = (hi - lo) / (n - 1);
+    return Array.from({ length: n }, (_, i) => lo + step * i);
+  }
+
+  function arrowPath(x1, y1, x2, y2) {
+    const a = Math.atan2(y2 - y1, x2 - x1);
+    const ax = x2 - 7 * Math.cos(a - 0.5), ay = y2 - 7 * Math.sin(a - 0.5);
+    const bx = x2 - 7 * Math.cos(a + 0.5), by = y2 - 7 * Math.sin(a + 0.5);
+    return `M${x1} ${y1} L${x2} ${y2} M${x2} ${y2} L${ax.toFixed(1)} ${ay.toFixed(1)} M${x2} ${y2} L${bx.toFixed(1)} ${by.toFixed(1)}`;
+  }
+
+  // KCL: every row draws its own arrow into or out of the centre node —
+  // sign decides which side, row index picks its Iⁿ label — so the diagram
+  // always matches exactly what's in the list below it, the way the
+  // reference screenshot's I1/I2 labels do. KVL: same idea around a loop,
+  // each row a tick with its Vⁿ label and sign-coloured to match its row.
   function diagram() {
     const wire = "#5A6169";
-    const ink = "#8FC1F5";
+    const label = state.mode === "kcl" ? "I" : "V";
+    const inRows = state.rows.map((r, i) => ({ r, i })).filter(x => x.r.sign > 0);
+    const outRows = state.rows.map((r, i) => ({ r, i })).filter(x => x.r.sign <= 0);
     if (state.mode === "kcl") {
-      const arrow = (x1, y1, x2, y2) => {
-        const a = Math.atan2(y2 - y1, x2 - x1);
-        const ax = x2 - 7 * Math.cos(a - 0.5), ay = y2 - 7 * Math.sin(a - 0.5);
-        const bx = x2 - 7 * Math.cos(a + 0.5), by = y2 - 7 * Math.sin(a + 0.5);
-        return `M${x1} ${y1} L${x2} ${y2} M${x2} ${y2} L${ax.toFixed(1)} ${ay.toFixed(1)} M${x2} ${y2} L${bx.toFixed(1)} ${by.toFixed(1)}`;
-      };
+      const inYs = spread(inRows.length, 14, 86);
+      const outYs = spread(outRows.length, 14, 86);
+      const inArrows = inRows.map(({ i }, k) => `
+        <path d="${arrowPath(34, inYs[k], 104, 50 - (50 - inYs[k]) * 0.06)}" stroke="#8FC1F5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="26" y="${inYs[k] + 4}" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="end">${label}${i + 1}</text>`);
+      const outArrows = outRows.map(({ i }, k) => `
+        <path d="${arrowPath(116, 50 - (50 - outYs[k]) * 0.06, 186, outYs[k])}" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="194" y="${outYs[k] + 4}" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="start">${label}${i + 1}</text>`);
       return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
         <circle cx="110" cy="50" r="4" fill="${wire}"/>
-        <path d="${arrow(40, 20, 105, 47)}" stroke="${ink}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="${arrow(40, 80, 105, 53)}" stroke="${ink}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="${arrow(115, 50, 180, 22)}" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="${arrow(115, 50, 180, 78)}" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <text x="32" y="16" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">in</text>
-        <text x="32" y="90" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">in</text>
-        <text x="188" y="16" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="middle">out</text>
-        <text x="188" y="90" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="middle">out</text>
+        ${inArrows.join("")}
+        ${outArrows.join("")}
       </svg>`;
     }
+    const xs = spread(state.rows.length, 62, 158);
+    const ticks = state.rows.map((r, i) => {
+      const x = xs[i], c = r.sign > 0 ? "#8FC1F5" : "#E08585";
+      return `<path d="M${x} 16 V24" stroke="${c}" stroke-width="2.2" stroke-linecap="round"/>
+        <text x="${x}" y="12" fill="${c}" font-size="11" font-weight="600" text-anchor="middle">${label}${i + 1}</text>`;
+    }).join("");
     return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
       <path d="M50 20 H170 V80 H50 Z" stroke="${wire}" stroke-width="1.6" stroke-linejoin="round"/>
-      <path d="M100 20 L108 16 L108 24 Z" fill="${ink}"/>
-      <text x="35" y="24" fill="${ink}" font-size="13" font-weight="700" text-anchor="middle">+</text>
+      <path d="M100 20 L108 16 L108 24 Z" fill="#8FC1F5"/>
+      ${ticks}
+      <text x="35" y="24" fill="#8FC1F5" font-size="13" font-weight="700" text-anchor="middle">+</text>
       <text x="35" y="84" fill="#E08585" font-size="13" font-weight="700" text-anchor="middle">−</text>
-      <text x="110" y="55" fill="${wire}" font-size="11" font-weight="600" text-anchor="middle">loop</text>
     </svg>`;
   }
 
