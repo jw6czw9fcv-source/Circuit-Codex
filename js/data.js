@@ -167,7 +167,7 @@ const DOMAINS = [
           { name: "Trace current — IPC-2152 method" }, { name: "Laminate material reference (Dk/Df) — IPC-4101" },
         ],
       },
-      { title: "Cabling", tools: [{ name: "Wire gauge (AWG/SWG)" }, { name: "Cable current capacity" }, { name: "Voltage drop of a cable" }, { name: "Cable resistance" }, { name: "IEC cable reference" }, { name: "Cable colors (standard + DIN47100)" }] },
+      { title: "Cabling", tools: [{ name: "Wire gauge (AWG/SWG)", calc: "wire-gauge" }, { name: "Cable current capacity" }, { name: "Cable resistance / voltage drop", calc: "cable-resistance-drop" }, { name: "IEC cable reference" }, { name: "Cable colors (standard + DIN47100)" }] },
       { title: "Electrical safety", tools: [{ name: "Fuse/breaker sizing" }, { name: "Resettable fuse (PTC) sizing" }, { name: "TVS diode selection" }, { name: "ESD protection basics" }, { name: "Clearance & creepage distance" }, { name: "Wire color code by rating" }, { name: "IP-Ratings" }] },
       { title: "Manufacturing & fabrication", tools: [{ name: "Copper weight converter" }, { name: "Annular ring calculator" }, { name: "Via aspect ratio calculator" }, { name: "Flex PCB bend radius" }, { name: "IPC-7351 land pattern calculator" }] },
     ],

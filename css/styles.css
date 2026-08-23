@@ -426,6 +426,17 @@ html, body {
   justify-content: space-between;
   gap: 8px;
 }
+/* Two independent labeled fields side by side, each keeping its own label —
+   .field-row puts multiple controls inside one field box, which only works
+   when they don't need separate labels. A screen with several numeric
+   inputs (Cable resistance / voltage drop) needs the labels, so this halves
+   the field count instead by pairing two full .field boxes per row. */
+.field-pair {
+  display: flex;
+  gap: 8px;
+  margin: 0 16px 10px;
+}
+.field-pair .field { flex: 1; margin: 0; }
 .field input {
   background: none;
   border: none;
@@ -449,6 +460,16 @@ html, body {
 .field select option {
   color: var(--text);
   background: var(--card);
+}
+/* The gauge pickers (Wire gauge, Cable resistance / voltage drop) are the
+   one field on their screens with nothing else to look at or tap — worth
+   sizing like a primary input instead of the compact unit-picker style
+   every other .field select on the app uses, which is unreadable when it's
+   the whole point of the field rather than a detail next to one. */
+#wg-size, #cr-gauge {
+  width: 100%;
+  font-size: 20px;
+  padding: 6px 0;
 }
 
 /* Drags a resistor field straight through the active E-series — every

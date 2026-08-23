@@ -12,13 +12,10 @@ bridge · Capacitor series/parallel · Ohm's law · Kirchhoff's laws · Formula
 search · SI prefix converter · Scientific ↔ engineering notation ·
 Percent tolerance / error · Standard & Scientific Calculators ·
 Physical constants · SI-Units · DEC / HEX / BIN conversion ·
-**ASCII table**
+ASCII table · Wire gauge (AWG/SWG) · **Cable resistance / voltage drop**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] Wire gauge (AWG/SWG)
-- [ ] Cable resistance
-- [ ] Voltage drop of a cable
 - [ ] Cable colors (standard + DIN47100)
 - [ ] Wire color code by rating
 - [ ] IP-Ratings
