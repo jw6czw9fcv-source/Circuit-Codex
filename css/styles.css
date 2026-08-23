@@ -693,15 +693,24 @@ html, body {
 }
 .label-btn:disabled { color: var(--text-muted); cursor: default; }
 
-/* Back on the section header, but as a real flex row instead of stacked
+/* Back on the section header, but as a real grid row instead of stacked
    floats — "+ add" reads as sitting between the title and the tolerance
-   picker (space-between with exactly 3 children centres the middle one)
-   rather than crowded flush against whichever element floated first. */
+   picker. A 3-child flex space-between only truly centers the middle child
+   when the two outer children are equal width, and "Known terms" vs "+ add"
+   never are, so that approach let the button drift off true-center. Grid's
+   two 1fr columns are forced equal regardless of what's in them, which
+   centers the middle child for real. */
 .section-label.split {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+}
+.section-label.split > :first-child {
+  justify-self: start;
+}
+.section-label.split > :last-child {
+  justify-self: end;
 }
 .section-label.split .label-select,
 .section-label.split .label-btn {

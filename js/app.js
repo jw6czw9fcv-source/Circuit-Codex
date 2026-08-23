@@ -2756,7 +2756,7 @@ function renderKirchhoff(domain, tool, favId) {
       <div class="section-label split" style="color:#8FC1F5">
         <span>Known terms</span>
         <button class="label-btn" id="kl-add" ${state.rows.length >= KL_MAX ? "disabled" : ""}>+ add</button>
-        <span style="visibility:hidden;" aria-hidden="true">+ add</span>
+        <span aria-hidden="true"></span>
       </div>
       <div class="r-list">${rowsHTML()}</div>
       <div class="error-text" data-res="err">${problem()}</div>
