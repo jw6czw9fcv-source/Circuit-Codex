@@ -902,3 +902,26 @@ html, body {
 
 .tap-select { cursor: pointer; }
 .tap-select:active { background: var(--card); }
+
+/* Cable colors — a swatch is the whole point of this screen, so it leads
+   each row rather than being one more column the way ASCII's dec/hex/bin
+   are. The border exists so white and near-white swatches don't disappear
+   against the card background. */
+.color-list { margin: 0 16px 12px; }
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--card-border);
+}
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+}
+.color-row-text { flex: 1; min-width: 0; }
+.color-row-label { color: var(--text); font-weight: 600; font-size: 14px; }
+.color-row-note { color: var(--text-secondary); font-size: 12.5px; margin-top: 1px; }

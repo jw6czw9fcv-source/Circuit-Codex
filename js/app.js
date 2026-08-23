@@ -207,6 +207,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "ascii-table") return renderAsciiTable(domain, tool, favId);
   if (calcId === "wire-gauge") return renderWireGauge(domain, tool, favId);
   if (calcId === "cable-resistance-drop") return renderCableResistanceDrop(domain, tool, favId);
+  if (calcId === "cable-colors") return renderCableColors(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -4227,6 +4228,122 @@ function renderCableResistanceDrop(domain, tool, favId) {
       if (state.standard === "awg") state.awg = parseInt(e.target.value, 10);
       else state.swg = e.target.value;
       paint();
+    };
+  }
+
+  paint();
+}
+
+// ---------- Cable colors (standard + DIN 47100) ----------
+// Cores 1-10 are solid colours; 11-44 add a second colour as a printed ring
+// around the base insulation colour (not a second solid, which is why the
+// note reads "X with a Y ring" rather than "X/Y"); 45-60 add a third ring,
+// always black. Cross-checked against three independent sources (Wikipedia,
+// Eland Cables, igus) for 1-40, and against a fourth for 41-60, rather than
+// taken from memory — a wiring reference is exactly the place a
+// misremembered stripe colour would actually cause someone a bad day.
+const DIN47100_HEX = {
+  white: "#F2F2ED", brown: "#8B5A2B", green: "#2E8B3D", yellow: "#E8C820", grey: "#8A8A8A",
+  pink: "#F0A0B8", blue: "#2255CC", red: "#CC2222", black: "#1A1A1A", violet: "#7B4FA0",
+};
+const DIN47100_SOLID = ["white", "brown", "green", "yellow", "grey", "pink", "blue", "red", "black", "violet"];
+// Cores 11-40, base colour then ring colour, in standard order.
+const DIN47100_RINGED = [
+  ["grey", "pink"], ["red", "blue"], ["white", "green"], ["brown", "green"], ["white", "yellow"],
+  ["yellow", "brown"], ["white", "grey"], ["grey", "brown"], ["white", "pink"], ["pink", "brown"],
+  ["white", "blue"], ["brown", "blue"], ["white", "red"], ["brown", "red"], ["white", "black"],
+  ["brown", "black"], ["grey", "green"], ["yellow", "grey"], ["pink", "green"], ["yellow", "pink"],
+  ["green", "blue"], ["yellow", "blue"], ["green", "red"], ["yellow", "red"], ["green", "black"],
+  ["yellow", "black"], ["grey", "blue"], ["pink", "blue"], ["grey", "red"], ["pink", "red"],
+  // Cores 41-44: same two-colour scheme, still climbing through the base-10
+  // pairings before the third (always black) stripe joins at 45.
+  ["grey", "black"], ["pink", "black"], ["blue", "black"], ["red", "black"],
+];
+// Cores 45-60: a third stripe joins, always black.
+const DIN47100_TRIPLE = [
+  ["white", "brown"], ["yellow", "green"], ["grey", "pink"], ["red", "blue"], ["white", "green"],
+  ["brown", "green"], ["white", "yellow"], ["yellow", "brown"], ["white", "grey"], ["grey", "brown"],
+  ["white", "pink"], ["pink", "brown"], ["white", "blue"], ["brown", "blue"], ["white", "red"], ["brown", "red"],
+];
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+
+const CABLE_COLORS = [
+  { group: "IEC 60446 (international / EU)", label: "Live / Line (L)", swatch: "#8B5A2B", note: "Brown" },
+  { group: "IEC 60446 (international / EU)", label: "Neutral (N)", swatch: "#2255CC", note: "Blue" },
+  { group: "IEC 60446 (international / EU)", label: "Earth / protective earth (PE)", swatch: "linear-gradient(135deg, #2E8B3D 50%, #E8C820 50%)", note: "Green with a yellow stripe" },
+  { group: "IEC 60446 (international / EU)", label: "Line 2 — L2 (three-phase)", swatch: "#1A1A1A", note: "Black" },
+  { group: "IEC 60446 (international / EU)", label: "Line 3 — L3 (three-phase)", swatch: "#8A8A8A", note: "Grey" },
+  { group: "NEC (US)", label: "Hot / Line", swatch: "#1A1A1A", note: "Black — red or blue for additional hots" },
+  { group: "NEC (US)", label: "Neutral", swatch: "#F2F2ED", note: "White, sometimes grey" },
+  { group: "NEC (US)", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare copper" },
+  ...DIN47100_SOLID.map((c, i) => ({
+    group: "DIN 47100 (cores 1–10)", label: `Core ${i + 1}`, swatch: DIN47100_HEX[c], note: cap(c),
+  })),
+  ...DIN47100_RINGED.map(([base, ring], i) => ({
+    group: "DIN 47100 (cores 11–44)", label: `Core ${i + 11}`,
+    swatch: `linear-gradient(135deg, ${DIN47100_HEX[base]} 65%, ${DIN47100_HEX[ring]} 65%)`,
+    note: `${cap(base)} with a ${ring} ring`,
+  })),
+  ...DIN47100_TRIPLE.map(([base, second], i) => ({
+    group: "DIN 47100 (cores 45–60)", label: `Core ${i + 45}`,
+    swatch: `linear-gradient(135deg, ${DIN47100_HEX[base]} 0%, ${DIN47100_HEX[base]} 45%, ${DIN47100_HEX[second]} 45%, ${DIN47100_HEX[second]} 75%, ${DIN47100_HEX.black} 75%, ${DIN47100_HEX.black} 100%)`,
+    note: `${cap(base)} with ${second} and black rings`,
+  })),
+];
+
+function renderCableColors(domain, tool, favId) {
+  function row(c) {
+    const bg = c.swatch.startsWith("#") ? `background:${c.swatch};` : `background:${c.swatch};`;
+    return `
+      <div class="color-row tap-select">
+        <div class="color-swatch" style="${bg}"></div>
+        <div class="color-row-text">
+          <div class="color-row-label">${c.label}</div>
+          <div class="color-row-note">${c.note}</div>
+        </div>
+      </div>`;
+  }
+
+  function matches(c, q) {
+    return c.label.toLowerCase().includes(q) || c.note.toLowerCase().includes(q) || c.group.toLowerCase().includes(q);
+  }
+
+  function groupedHTML(list) {
+    const groups = [];
+    for (const c of list) {
+      let g = groups.find((x) => x.name === c.group);
+      if (!g) { g = { name: c.group, items: [] }; groups.push(g); }
+      g.items.push(c);
+    }
+    return groups.map((g) => `
+      <div class="section-label" style="color:#8FC1F5">${g.name}</div>
+      <div class="color-list">${g.items.map(row).join("")}</div>`).join("");
+  }
+
+  function renderList(list, emptyQuery) {
+    const results = document.getElementById("cc-results");
+    results.innerHTML = list.length ? groupedHTML(list) : `<div class="placeholder">${ICONS.search}<div>No match for "${emptyQuery}".</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Mains wiring and DIN 47100 multi-core numbering")}
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="cc-input" type="text" placeholder="Search a colour, function, or standard" autocapitalize="off" spellcheck="false" />
+      </div>
+      <div id="cc-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    const input = document.getElementById("cc-input");
+    renderList(CABLE_COLORS, "");
+    input.oninput = () => {
+      const q = input.value.trim().toLowerCase();
+      renderList(q ? CABLE_COLORS.filter((c) => matches(c, q)) : CABLE_COLORS, q);
     };
   }
 
