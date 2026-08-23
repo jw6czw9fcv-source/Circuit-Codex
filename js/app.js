@@ -2,6 +2,20 @@
 
 const app = document.getElementById("app");
 
+// One value field is almost always being replaced, not appended to — select
+// its whole contents on the first click so typing a new value doesn't
+// require a manual select-all first. Delegated on #app (which survives every
+// paint(), unlike the inputs inside it) rather than wired per calculator, so
+// it applies everywhere at once instead of needing to be repeated in each
+// render function. Left out of the two search boxes, where a click is meant
+// to place a caret for editing a query, not replace it outright.
+app.addEventListener("click", (e) => {
+  const el = e.target;
+  if (el.tagName !== "INPUT" || (el.type !== "number" && el.type !== "text")) return;
+  if (el.id === "search-input" || el.id === "fs-input") return;
+  el.select();
+});
+
 // Favourites are keyed by what a tool *is*, not where it sits. Position keys
 // (domain:section:index) silently repoint at a different tool whenever the list
 // is reordered or something is removed, which has already happened once.
@@ -167,6 +181,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "formula-search") return renderFormulaSearch(domain, tool, favId);
   if (calcId === "si-prefix") return renderSiPrefixConverter(domain, tool, favId);
   if (calcId === "sci-eng") return renderSciEngNotation(domain, tool, favId);
+  if (calcId === "percent-tolerance") return renderPercentTolerance(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -3067,6 +3082,129 @@ function renderSciEngNotation(domain, tool, favId) {
       const v = parseFloat(field.value);
       if (isFinite(v)) { state.value = v; refresh(); }
     };
+  }
+
+  paint();
+}
+
+// ---------- Percent tolerance / error ----------
+// Two related but distinct questions share this screen: "what range can a
+// toleranced part actually land in" (no measurement involved, just a spec)
+// vs. "how far off was this measurement" (a real reading compared to a known
+// true value). Same shape of arithmetic, different meaning, so a mode toggle
+// rather than one generic screen keeps the labels honest about which is which.
+function fmtPlain(n) {
+  if (!isFinite(n)) return "—";
+  return Number(n.toPrecision(6)).toString();
+}
+
+function renderPercentTolerance(domain, tool, favId) {
+  const state = { mode: "tol", nominal: 100, tol: 5, measured: 98, expected: 100 };
+
+  function computeTol() {
+    const delta = state.nominal * (state.tol / 100);
+    return { min: state.nominal - delta, max: state.nominal + delta, delta };
+  }
+
+  function computeErr() {
+    const diff = state.measured - state.expected;
+    const pct = state.expected !== 0 ? (diff / state.expected) * 100 : NaN;
+    return { diff, pct };
+  }
+
+  function refresh() {
+    if (state.mode === "tol") {
+      const r = computeTol();
+      app.querySelector('[data-res="range"]').textContent = `${fmtPlain(r.min)} – ${fmtPlain(r.max)}`;
+      app.querySelector('[data-res="delta"]').textContent = `± ${fmtPlain(r.delta)}`;
+    } else {
+      const r = computeErr();
+      app.querySelector('[data-res="pct"]').textContent = isFinite(r.pct) ? `${fmtPlain(r.pct)} %` : "—";
+      app.querySelector('[data-res="diff"]').textContent = `Δ ${fmtPlain(r.diff)}`;
+    }
+  }
+
+  function fieldsHTML() {
+    if (state.mode === "tol") {
+      return `
+        <div class="section-label" style="color:#8FC1F5">Nominal value & tolerance</div>
+        <div class="field">
+          <label>Nominal value</label>
+          <input id="pt-nominal" type="number" inputmode="decimal" step="any" value="${state.nominal}" />
+        </div>
+        <div class="field">
+          <label>Tolerance (%)</label>
+          <input id="pt-tol" type="number" inputmode="decimal" step="any" value="${state.tol}" />
+        </div>`;
+    }
+    return `
+      <div class="section-label" style="color:#8FC1F5">Measured vs expected</div>
+      <div class="field">
+        <label>Measured value</label>
+        <input id="pt-measured" type="number" inputmode="decimal" step="any" value="${state.measured}" />
+      </div>
+      <div class="field">
+        <label>Expected (true) value</label>
+        <input id="pt-expected" type="number" inputmode="decimal" step="any" value="${state.expected}" />
+      </div>`;
+  }
+
+  function resultsHTML() {
+    if (state.mode === "tol") {
+      const r = computeTol();
+      return `
+        <div class="section-label" style="color:#5DCAA5">Range</div>
+        <div class="result-field">
+          <div class="result-head">
+            <span class="label">min – max</span>
+            <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+          </div>
+          <div class="result-value"><span class="num" data-res="range">${fmtPlain(r.min)} – ${fmtPlain(r.max)}</span></div>
+          <div class="result-sub" data-res="delta">± ${fmtPlain(r.delta)}</div>
+        </div>`;
+    }
+    const r = computeErr();
+    return `
+      <div class="section-label" style="color:#5DCAA5">Percent error</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">(measured − expected) / expected</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="pct">${isFinite(r.pct) ? `${fmtPlain(r.pct)} %` : "—"}</span></div>
+        <div class="result-sub" data-res="diff">Δ ${fmtPlain(r.diff)}</div>
+      </div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, state.mode === "tol" ? "Range from a nominal value ± tolerance" : "How far a reading is from expected")}
+
+      ${pillRow([["tol", "Tolerance range"], ["err", "Percent error"]], state.mode, domain.bg)}
+
+      ${fieldsHTML()}
+      ${resultsHTML()}
+
+      ${formulaSection(
+        state.mode === "tol"
+          ? ["min = nominal × (1 − tol/100)", "max = nominal × (1 + tol/100)"]
+          : ["% error = (measured − expected) / expected × 100"],
+        state.mode === "tol"
+          ? "A component's tolerance is the manufacturer's guaranteed worst case, not a typical spread — a 5% resistor can land anywhere in that band."
+          : "Percent error is signed: positive means the measurement read high, negative means it read low."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+
+    if (state.mode === "tol") {
+      document.getElementById("pt-nominal").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.nominal = v; refresh(); } };
+      document.getElementById("pt-tol").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.tol = v; refresh(); } };
+    } else {
+      document.getElementById("pt-measured").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.measured = v; refresh(); } };
+      document.getElementById("pt-expected").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.expected = v; refresh(); } };
+    }
   }
 
   paint();
