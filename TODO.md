@@ -10,11 +10,11 @@ another."
 Resistor series/parallel · Voltage divider · Current divider · Wheatstone
 bridge · Capacitor series/parallel · Ohm's law · Kirchhoff's laws · Formula
 search · SI prefix converter · Scientific ↔ engineering notation ·
-Percent tolerance / error · **Standard & Scientific Calculators**
+Percent tolerance / error · Standard & Scientific Calculators ·
+**Physical constants**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] Physical constants
 - [ ] SI-Units
 - [ ] DEC / HEX / BIN conversion
 - [ ] ASCII table

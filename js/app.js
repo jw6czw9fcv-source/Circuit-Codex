@@ -7,12 +7,13 @@ const app = document.getElementById("app");
 // require a manual select-all first. Delegated on #app (which survives every
 // paint(), unlike the inputs inside it) rather than wired per calculator, so
 // it applies everywhere at once instead of needing to be repeated in each
-// render function. Left out of the two search boxes, where a click is meant
-// to place a caret for editing a query, not replace it outright.
+// render function. Left out of any .search-box input (the global Search
+// screen, Formula search, Physical constants, and any future one) — a click
+// there is meant to place a caret for editing a query, not replace it outright.
 app.addEventListener("click", (e) => {
   const el = e.target;
   if (el.tagName !== "INPUT" || (el.type !== "number" && el.type !== "text")) return;
-  if (el.id === "search-input" || el.id === "fs-input") return;
+  if (el.closest(".search-box")) return;
   el.select();
 });
 
@@ -183,6 +184,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "sci-eng") return renderSciEngNotation(domain, tool, favId);
   if (calcId === "percent-tolerance") return renderPercentTolerance(domain, tool, favId);
   if (calcId === "basic-calculator") return renderBasicCalculator(domain, tool, favId);
+  if (calcId === "physical-constants") return renderPhysicalConstants(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -3232,8 +3234,11 @@ function calcTokenize(s) {
       tokens.push({ type: "num", value: parseFloat(s.slice(i, j)) });
       i = j;
     } else if (/[a-zA-Z]/.test(c)) {
+      // Identifiers may trail digits ("log2") once they've started with a
+      // letter — a leading digit is still parsed as a number, so "2π" stays
+      // implicit multiplication rather than becoming one run-on identifier.
       let j = i + 1;
-      while (j < s.length && /[a-zA-Z]/.test(s[j])) j++;
+      while (j < s.length && /[a-zA-Z0-9]/.test(s[j])) j++;
       tokens.push({ type: "ident", value: s.slice(i, j).toLowerCase() });
       i = j;
     } else if (c === "π") {
@@ -3564,6 +3569,91 @@ function renderBasicCalculator(domain, tool, favId) {
       const btn = e.target.closest(".calc-key");
       if (btn) press(btn.dataset.key);
     });
+  }
+
+  paint();
+}
+
+// ---------- Physical constants ----------
+// A browsable reference, same shape as Formula search: full list on open,
+// filtered as you type. Values reuse the scientific-notation formatting
+// built for the sci/eng calculator (splitNotation/fmtMantissa/superscript)
+// rather than SI prefixes — several of these constants are far outside the
+// pico-to-tera range a prefix can name (Planck's constant is 10⁻³⁴).
+// Kept to entries an electronics app actually reaches for — general-physics
+// constants with no circuit-design use (gravitational constant, standard
+// gravity, Avogadro's number, the molar gas constant, proton mass) were cut
+// in favor of ones that show up in real component/device equations.
+const PHYSICAL_CONSTANTS = [
+  { symbol: "c", name: "Speed of light in vacuum", value: 299792458, unit: "m/s", note: "Exact by definition since 1983." },
+  { symbol: "e", name: "Elementary charge", value: 1.602176634e-19, unit: "C", note: "Magnitude of the charge on a single electron." },
+  { symbol: "eV", name: "Electronvolt", value: 1.602176634e-19, unit: "J", note: "Numerically identical to e in coulombs — no coincidence: 1 eV is defined as e × 1 volt. Common energy unit in semiconductor and photonics work." },
+  { symbol: "h", name: "Planck constant", value: 6.62607015e-34, unit: "J·s", note: "Relates a photon's energy to its frequency: E = hf." },
+  { symbol: "ħ", name: "Reduced Planck constant", value: 1.054571817e-34, unit: "J·s", note: "h / 2π." },
+  { symbol: "k", name: "Boltzmann constant", value: 1.380649e-23, unit: "J/K", note: "Relates temperature to thermal noise power and energy per particle." },
+  { symbol: "Vₜ", name: "Thermal voltage (at 300 K)", value: 0.025852, unit: "V", note: "kT/q — appears in the diode and BJT equations (the Shockley equation). Unlike the rest of this list it scales with temperature; this is the 300 K value." },
+  { symbol: "ε₀", name: "Vacuum permittivity", value: 8.8541878128e-12, unit: "F/m", note: "Sets the capacitance of free space; appears in Coulomb's law." },
+  { symbol: "μ₀", name: "Vacuum permeability", value: 1.25663706212e-6, unit: "N/A²", note: "Sets the inductance of free space; appears in the Biot–Savart law." },
+  { symbol: "Z₀", name: "Impedance of free space", value: 376.730313668, unit: "Ω", note: "√(μ₀ / ε₀) — the E/H field ratio in a plane wave, central to antenna theory." },
+  { symbol: "F", name: "Faraday constant", value: 96485.33212, unit: "C/mol", note: "Charge per mole of electrons — used in battery and electrochemical-cell capacity calculations." },
+  { symbol: "mₑ", name: "Electron mass", value: 9.1093837015e-31, unit: "kg", note: "Used in semiconductor carrier-mobility and effective-mass calculations." },
+  { symbol: "Eg(Si)", name: "Silicon bandgap energy", value: 1.12, unit: "eV", note: "Room-temperature (300 K) bandgap of silicon; sets the forward-voltage floor of silicon diodes and BJTs." },
+  { symbol: "σ", name: "Stefan–Boltzmann constant", value: 5.670374419e-8, unit: "W/(m²·K⁴)", note: "Total blackbody radiant power per unit area — relevant to heat-sink and thermal-management calculations." },
+];
+
+function formatConstantValue(v) {
+  if (v === 0) return "0";
+  const abs = Math.abs(v);
+  if (abs >= 1e5 || abs < 1e-3) {
+    const { mantissa, exp } = splitNotation(v, 1);
+    return `${fmtMantissa(mantissa)} × 10${superscript(exp)}`;
+  }
+  return Number(v.toPrecision(10)).toString();
+}
+
+function renderPhysicalConstants(domain, tool, favId) {
+  function card(c) {
+    return `
+      <div class="formula-card formula-card--static">
+        <div class="formula-card-head">
+          <span class="formula-card-title">${c.symbol} — ${c.name}</span>
+        </div>
+        <div class="formula-line">${formatConstantValue(c.value)} ${c.unit}</div>
+        ${c.note ? `<div class="formula-card-note">${c.note}</div>` : ""}
+      </div>`;
+  }
+
+  function matches(c, q) {
+    return c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q);
+  }
+
+  function renderList(list, emptyQuery) {
+    const results = document.getElementById("pc-results");
+    results.innerHTML = list.length
+      ? list.map(card).join("")
+      : `<div class="placeholder">${ICONS.search}<div>No constant for "${emptyQuery}".</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `${PHYSICAL_CONSTANTS.length} constants`)}
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="pc-input" type="text" placeholder="Search a constant" autocapitalize="off" spellcheck="false" />
+      </div>
+      <div id="pc-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    const input = document.getElementById("pc-input");
+    renderList(PHYSICAL_CONSTANTS, "");
+    input.oninput = () => {
+      const q = input.value.trim().toLowerCase();
+      renderList(q ? PHYSICAL_CONSTANTS.filter((c) => matches(c, q)) : PHYSICAL_CONSTANTS, q);
+    };
   }
 
   paint();
