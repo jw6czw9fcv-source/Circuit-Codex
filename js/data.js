@@ -188,7 +188,7 @@ const DOMAINS = [
           { name: "Kirchhoff's laws", calc: "kirchhoff" },
           { name: "Basic calculator" },
           { name: "Circuit calculators (divider, attenuator, delta-Y)" },
-          { name: "SI prefix converter" },
+          { name: "SI prefix converter", calc: "si-prefix" },
           { name: "Scientific ↔ engineering notation" },
           { name: "Percent tolerance / error" },
           { name: "Generic dB ratio calculator" },

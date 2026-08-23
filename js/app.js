@@ -165,6 +165,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "series-parallel") return renderSeriesParallel(domain, tool, favId);
   if (calcId === "cap-series-parallel") return renderCapSeriesParallel(domain, tool, favId);
   if (calcId === "formula-search") return renderFormulaSearch(domain, tool, favId);
+  if (calcId === "si-prefix") return renderSiPrefixConverter(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -2889,6 +2890,82 @@ function renderFormulaSearch(domain, tool, favId) {
     };
     // No autofocus: focusing pops the keyboard immediately and covers the list
     // this screen exists to let you browse before you type anything.
+  }
+
+  paint();
+}
+
+// ---------- SI prefix converter ----------
+// Every prefix is exactly ×1000 from its neighbor (p → n → µ → m → base → k →
+// M → G → T), so one entered value converts to all of them by dividing the
+// same base quantity by each prefix's own scale — no per-pair formula needed.
+const SI_PREFIXES = [
+  ["T", "tera", 1e12], ["G", "giga", 1e9], ["M", "mega", 1e6], ["k", "kilo", 1e3],
+  ["", "base", 1], ["m", "milli", 1e-3], ["µ", "micro", 1e-6], ["n", "nano", 1e-9], ["p", "pico", 1e-12],
+];
+
+function renderSiPrefixConverter(domain, tool, favId) {
+  const state = { value: 1, prefix: "" };
+
+  function fmtCell(v) {
+    if (!isFinite(v)) return "—";
+    if (v === 0) return "0";
+    const abs = Math.abs(v);
+    if (abs >= 1e6 || abs < 1e-3) return v.toExponential(3);
+    return Number(v.toPrecision(6)).toString();
+  }
+
+  function baseValue() {
+    const scale = SI_PREFIXES.find(([p]) => p === state.prefix)[2];
+    return state.value * scale;
+  }
+
+  function table() {
+    const base = baseValue();
+    return SI_PREFIXES.map(([p, name, scale]) => `
+      <div class="eseries-cell${p === state.prefix ? " hit" : ""}">
+        <div style="font-weight:600;">${p || "—"}</div>
+        <div style="font-size:10.5px;color:var(--text-muted);">${name}</div>
+        <div>${fmtCell(base / scale)}</div>
+      </div>`).join("");
+  }
+
+  function refresh() {
+    document.querySelector('[data-res="grid"]').innerHTML = table();
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "pico to tera, one value at a time")}
+
+      <div class="section-label" style="color:#8FC1F5">Value</div>
+      <div class="field">
+        <label>Enter a value</label>
+        <div class="field-row">
+          <input id="si-value" type="number" inputmode="decimal" step="any" value="${state.value}" />
+          <select id="si-prefix">${SI_PREFIXES.map(([p, name]) => `<option value="${p}" ${state.prefix === p ? "selected" : ""}>${p || "(none)"} — ${name}</option>`).join("")}</select>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Every prefix</div>
+      <div class="eseries-grid" data-res="grid">${table()}</div>
+
+      ${formulaSection(
+        ["value × prefix multiplier = value in base units", "T=10¹², G=10⁹, M=10⁶, k=10³, m=10⁻³, µ=10⁻⁶, n=10⁻⁹, p=10⁻¹²"],
+        "Each step up or down the ladder is ×1000 — the same steps a multimeter range or a datasheet spec uses."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    const valField = document.getElementById("si-value");
+    const prefField = document.getElementById("si-prefix");
+    valField.oninput = () => {
+      const v = parseFloat(valField.value);
+      if (isFinite(v)) { state.value = v; refresh(); }
+    };
+    prefField.onchange = () => { state.prefix = prefField.value; refresh(); };
   }
 
   paint();
