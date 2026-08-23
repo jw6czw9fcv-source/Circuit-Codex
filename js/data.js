@@ -168,7 +168,7 @@ const DOMAINS = [
         ],
       },
       { title: "Cabling", tools: [{ name: "Wire gauge (AWG/SWG)", calc: "wire-gauge" }, { name: "Cable current capacity" }, { name: "Cable resistance / voltage drop", calc: "cable-resistance-drop" }, { name: "IEC cable reference" }, { name: "Wire & cable colors", calc: "cable-colors" }] },
-      { title: "Electrical safety", tools: [{ name: "Fuse/breaker sizing" }, { name: "Resettable fuse (PTC) sizing" }, { name: "TVS diode selection" }, { name: "ESD protection basics" }, { name: "Clearance & creepage distance" }, { name: "IP-Ratings" }] },
+      { title: "Electrical safety", tools: [{ name: "Fuse/breaker sizing" }, { name: "Resettable fuse (PTC) sizing" }, { name: "TVS diode selection" }, { name: "ESD protection basics" }, { name: "Clearance & creepage distance" }, { name: "IP-Ratings", calc: "ip-ratings" }] },
       { title: "Manufacturing & fabrication", tools: [{ name: "Copper weight converter" }, { name: "Annular ring calculator" }, { name: "Via aspect ratio calculator" }, { name: "Flex PCB bend radius" }, { name: "IPC-7351 land pattern calculator" }] },
     ],
   },

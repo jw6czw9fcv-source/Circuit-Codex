@@ -208,6 +208,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "wire-gauge") return renderWireGauge(domain, tool, favId);
   if (calcId === "cable-resistance-drop") return renderCableResistanceDrop(domain, tool, favId);
   if (calcId === "cable-colors") return renderCableColors(domain, tool, favId);
+  if (calcId === "ip-ratings") return renderIpRatings(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -4423,6 +4424,96 @@ function renderCableColors(domain, tool, favId) {
       state.query = input.value.trim().toLowerCase();
       refreshResults();
     };
+  }
+
+  paint();
+}
+
+// ---------- IP-Ratings ----------
+// IEC 60529 only: the first digit is solid-object/dust protection (0-6, or
+// X if untested), the second is liquid protection (0-9, or X if untested).
+// IP69K is deliberately not in the picker — it comes from a different
+// standard (DIN 40050-9 / ISO 20653, the automotive high-pressure washdown
+// test), not from IEC 60529 itself, so folding it into the same dropdown
+// as 0-9 would misrepresent it as one more step on the same scale rather
+// than a stricter test from elsewhere. It's called out in a note instead.
+// Each entry carries a short label (what the <select> shows, so picking is
+// "what do I need protected against" rather than requiring the digit to
+// already be known) and the full IEC wording (shown below once selected).
+const IP_FIRST_DIGIT = {
+  "0": { short: "No protection", full: "No protection against solid objects or dust." },
+  "1": { short: "Hand contact", full: "Protected against solid objects larger than 50 mm — e.g. accidental contact with the back of a hand." },
+  "2": { short: "Finger contact", full: "Protected against solid objects larger than 12.5 mm — e.g. fingers." },
+  "3": { short: "Tools, thick wire", full: "Protected against solid objects larger than 2.5 mm — tools, thick wires." },
+  "4": { short: "Wires, small tools", full: "Protected against solid objects larger than 1 mm — most wires, small tools." },
+  "5": { short: "Dust protected", full: "Dust protected — ingress isn't fully prevented, but not enough to interfere with operation." },
+  "6": { short: "Dust tight", full: "Dust tight — no ingress of dust at all." },
+  "X": { short: "Untested", full: "Not rated / not tested for solid-object protection." },
+};
+const IP_SECOND_DIGIT = {
+  "0": { short: "No protection", full: "No protection against water." },
+  "1": { short: "Dripping water", full: "Protected against vertically falling drops (e.g. condensation)." },
+  "2": { short: "Dripping, tilted", full: "Protected against falling drops with the enclosure tilted up to 15°." },
+  "3": { short: "Spraying water", full: "Protected against water sprayed up to 60° from vertical." },
+  "4": { short: "Splashing water", full: "Protected against water splashed from any direction." },
+  "5": { short: "Low-pressure jets", full: "Protected against low-pressure water jets from any direction." },
+  "6": { short: "Powerful jets", full: "Protected against powerful water jets from any direction — heavy seas." },
+  "7": { short: "Temporary immersion", full: "Protected against temporary immersion — up to 1 m, up to 30 minutes." },
+  "8": { short: "Continuous immersion", full: "Protected against continuous immersion beyond 1 m — exact depth set by the manufacturer." },
+  "9": { short: "High-pressure, hot", full: "Protected against close-range, high-pressure, high-temperature jets (steam-jet cleaning)." },
+  "X": { short: "Untested", full: "Not rated / not tested for liquid protection." },
+};
+
+function renderIpRatings(domain, tool, favId) {
+  const state = { first: "6", second: "5" };
+
+  function refresh() {
+    app.querySelector('[data-res="code"]').textContent = `IP${state.first}${state.second}`;
+    app.querySelector('[data-res="first"]').textContent = IP_FIRST_DIGIT[state.first].full;
+    app.querySelector('[data-res="second"]').textContent = IP_SECOND_DIGIT[state.second].full;
+  }
+
+  function options(map, current) {
+    return Object.keys(map).map((k) => `<option value="${k}" ${k === current ? "selected" : ""}>${k}: ${map[k].short}</option>`).join("");
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "IEC 60529 ingress protection code")}
+
+      <div class="field-pair">
+        <div class="field">
+          <label>1st digit — solids</label>
+          <select id="ip-first">${options(IP_FIRST_DIGIT, state.first)}</select>
+        </div>
+        <div class="field">
+          <label>2nd digit — liquids</label>
+          <select id="ip-second">${options(IP_SECOND_DIGIT, state.second)}</select>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Rating</div>
+      <div class="result-field">
+        <div class="result-value"><span class="num" data-res="code">IP${state.first}${state.second}</span></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">1st digit — solids</div>
+      <div class="field"><div class="color-row-note" data-res="first">${IP_FIRST_DIGIT[state.first].full}</div></div>
+
+      <div class="section-label" style="color:#8FC1F5">2nd digit — liquids</div>
+      <div class="field"><div class="color-row-note" data-res="second">${IP_SECOND_DIGIT[state.second].full}</div></div>
+
+      ${formulaSection(
+        ["IPxy — x = solids (0-6), y = liquids (0-9)", "X in either position means untested for that criterion, not \"no protection\""],
+        "IP69K (high-pressure, high-temperature washdown) isn't on this scale — it's from DIN 40050-9 / ISO 20653, a stricter automotive test, not an IEC 60529 digit."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    document.getElementById("ip-first").onchange = (e) => { state.first = e.target.value; refresh(); };
+    document.getElementById("ip-second").onchange = (e) => { state.second = e.target.value; refresh(); };
   }
 
   paint();

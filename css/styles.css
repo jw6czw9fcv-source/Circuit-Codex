@@ -466,7 +466,21 @@ html, body {
   gap: 8px;
   margin: 0 16px 10px;
 }
-.field-pair .field { flex: 1; margin: 0; }
+/* min-width: 0 overrides the flex default (min-width: auto, i.e. "never
+   shrink below my content's natural width") — without it, a select with
+   long option text pushes its field wider than the row has room for
+   instead of truncating, and the row overflows the screen. */
+.field-pair .field { flex: 1; margin: 0; min-width: 0; }
+/* Scoped to field-pair rather than every .field select — most selects in
+   the app sit in a .field-row next to an input (unit pickers) and need
+   their natural compact width there; only a field-pair's own selects (IP
+   Ratings' two digit pickers) are meant to fill their half and truncate. */
+.field-pair select {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .field input {
   background: none;
   border: none;

@@ -13,14 +13,13 @@ search · SI prefix converter · Scientific ↔ engineering notation ·
 Percent tolerance / error · Standard & Scientific Calculators ·
 Physical constants · SI-Units · DEC / HEX / BIN conversion ·
 ASCII table · Wire gauge (AWG/SWG) · Cable resistance / voltage drop ·
-**Wire & cable colors** (merged with the former "Wire color code by
+Wire & cable colors (merged with the former "Wire color code by
 rating" — one screen covers AC mains (IEC, US, Canada), US three-phase
 by voltage system, DC, and DIN 47100 multi-core numbering, with filter
-chips to jump straight to a country/topic)
+chips to jump straight to a country/topic) · **IP-Ratings**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] IP-Ratings
 - [ ] Inductor color code
 - [ ] Inductor SMD code
 - [ ] Ceramic capacitor code
