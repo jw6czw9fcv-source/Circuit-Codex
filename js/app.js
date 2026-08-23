@@ -166,6 +166,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "cap-series-parallel") return renderCapSeriesParallel(domain, tool, favId);
   if (calcId === "formula-search") return renderFormulaSearch(domain, tool, favId);
   if (calcId === "si-prefix") return renderSiPrefixConverter(domain, tool, favId);
+  if (calcId === "sci-eng") return renderSciEngNotation(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -2966,6 +2967,106 @@ function renderSiPrefixConverter(domain, tool, favId) {
       if (isFinite(v)) { state.value = v; refresh(); }
     };
     prefField.onchange = () => { state.prefix = prefField.value; refresh(); };
+  }
+
+  paint();
+}
+
+// ---------- Scientific ↔ engineering notation ----------
+// Scientific keeps the mantissa in [1, 10) — one digit before the point,
+// exponent free to land anywhere. Engineering restricts the exponent to
+// multiples of 3, at the cost of a mantissa in [1, 1000) — the trade that
+// makes the exponent line up with an SI prefix every time.
+const EXP_PREFIX = { "12": "tera (T)", "9": "giga (G)", "6": "mega (M)", "3": "kilo (k)", "0": "base unit", "-3": "milli (m)", "-6": "micro (µ)", "-9": "nano (n)", "-12": "pico (p)" };
+
+function superscript(n) {
+  const map = { "-": "⁻", "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹" };
+  return String(n).split("").map(c => map[c] ?? c).join("");
+}
+
+function splitNotation(v, step) {
+  if (v === 0) return { mantissa: 0, exp: 0 };
+  const sign = v < 0 ? -1 : 1;
+  const abs = Math.abs(v);
+  let exp = Math.floor(Math.log10(abs) / step) * step;
+  let mantissa = abs / Math.pow(10, exp);
+  // log10 rounding can land the mantissa just outside its band (e.g. 999.9999997
+  // instead of 1000) — nudge the exponent rather than print an out-of-band digit.
+  const band = Math.pow(10, step);
+  if (mantissa >= band) { exp += step; mantissa /= band; }
+  if (mantissa < 1) { exp -= step; mantissa *= band; }
+  return { mantissa: sign * mantissa, exp };
+}
+
+function fmtMantissa(m) {
+  return Number(m.toPrecision(6)).toString();
+}
+
+function renderSciEngNotation(domain, tool, favId) {
+  const state = { value: 47000 };
+
+  function results() {
+    const sci = splitNotation(state.value, 1);
+    const eng = splitNotation(state.value, 3);
+    return { sci, eng };
+  }
+
+  function refresh() {
+    const { sci, eng } = results();
+    app.querySelector('[data-res="sci"]').textContent = `${fmtMantissa(sci.mantissa)} × 10${superscript(sci.exp)}`;
+    app.querySelector('[data-res="eng"]').textContent = `${fmtMantissa(eng.mantissa)} × 10${superscript(eng.exp)}`;
+    app.querySelector('[data-res="eng-prefix"]').textContent = EXP_PREFIX[String(eng.exp)] ?? "outside the p–T prefix range";
+  }
+
+  function paint() {
+    const { sci, eng } = results();
+
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "a × 10ⁿ, two ways")}
+
+      <div class="section-label" style="color:#8FC1F5">Value</div>
+      <div class="field">
+        <label>Enter a value</label>
+        <input id="se-value" type="number" inputmode="decimal" step="any" value="${state.value}" />
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Scientific notation</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">1 ≤ mantissa &lt; 10</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="sci">${fmtMantissa(sci.mantissa)} × 10${superscript(sci.exp)}</span>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Engineering notation</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">exponent is a multiple of 3</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="eng">${fmtMantissa(eng.mantissa)} × 10${superscript(eng.exp)}</span>
+        </div>
+        <div class="result-sub" data-res="eng-prefix">${EXP_PREFIX[String(eng.exp)] ?? "outside the p–T prefix range"}</div>
+      </div>
+
+      ${formulaSection(
+        ["Scientific: v = m × 10ⁿ, 1 ≤ |m| < 10", "Engineering: v = m × 10ⁿ, 1 ≤ |m| < 1000, n a multiple of 3"],
+        "Engineering notation trades a wider mantissa range for an exponent that always matches an SI prefix, which is why datasheets and multimeters use it instead of scientific notation."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    const field = document.getElementById("se-value");
+    field.oninput = () => {
+      const v = parseFloat(field.value);
+      if (isFinite(v)) { state.value = v; refresh(); }
+    };
   }
 
   paint();

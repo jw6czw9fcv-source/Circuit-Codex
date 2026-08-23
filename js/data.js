@@ -189,7 +189,7 @@ const DOMAINS = [
           { name: "Basic calculator" },
           { name: "Circuit calculators (divider, attenuator, delta-Y)" },
           { name: "SI prefix converter", calc: "si-prefix" },
-          { name: "Scientific ↔ engineering notation" },
+          { name: "Scientific ↔ engineering notation", calc: "sci-eng" },
           { name: "Percent tolerance / error" },
           { name: "Generic dB ratio calculator" },
         ],
