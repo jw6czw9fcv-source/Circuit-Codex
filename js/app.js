@@ -182,6 +182,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "si-prefix") return renderSiPrefixConverter(domain, tool, favId);
   if (calcId === "sci-eng") return renderSciEngNotation(domain, tool, favId);
   if (calcId === "percent-tolerance") return renderPercentTolerance(domain, tool, favId);
+  if (calcId === "basic-calculator") return renderBasicCalculator(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -307,7 +308,7 @@ function calcHeader(tool, favId, subtitle) {
       <h1>${tool.name}</h1>
       <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
     </div>
-    <div class="sub">${subtitle}</div>`;
+    ${subtitle ? `<div class="sub">${subtitle}</div>` : ""}`;
 }
 
 // options is [value, label] pairs; the active one is tinted with the domain
@@ -3205,6 +3206,364 @@ function renderPercentTolerance(domain, tool, favId) {
       document.getElementById("pt-measured").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.measured = v; refresh(); } };
       document.getElementById("pt-expected").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.expected = v; refresh(); } };
     }
+  }
+
+  paint();
+}
+
+// ---------- Basic calculator ----------
+// Expression-based rather than "evaluate immediately on each key press":
+// keys build a text expression, tokenized and parsed only when "=" is
+// pressed. That's what real parentheses require — grouping is meaningless
+// without operator precedence to group against, so adding "(" and ")" meant
+// trading the old chained left-to-right model for a real (if small)
+// recursive-descent parser. One consequence worth knowing: "6+3×2" now
+// evaluates to 12 (standard precedence), not 18 (old left-to-right
+// chaining) — every calculator with real parentheses works this way, only
+// bare four-function calculators chain naively.
+function calcTokenize(s) {
+  const tokens = [];
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (/[0-9.]/.test(c)) {
+      let j = i + 1;
+      while (j < s.length && /[0-9.]/.test(s[j])) j++;
+      tokens.push({ type: "num", value: parseFloat(s.slice(i, j)) });
+      i = j;
+    } else if (/[a-zA-Z]/.test(c)) {
+      let j = i + 1;
+      while (j < s.length && /[a-zA-Z]/.test(s[j])) j++;
+      tokens.push({ type: "ident", value: s.slice(i, j).toLowerCase() });
+      i = j;
+    } else if (c === "π") {
+      tokens.push({ type: "num", value: Math.PI });
+      i++;
+    } else if ("+-×÷^".includes(c)) {
+      tokens.push({ type: "op", value: c });
+      i++;
+    } else if (c === "(") {
+      tokens.push({ type: "lparen" });
+      i++;
+    } else if (c === ")") {
+      tokens.push({ type: "rparen" });
+      i++;
+    } else {
+      i++;
+    }
+  }
+  return tokens;
+}
+
+const CALC_FN = {
+  sin: (v, deg) => Math.sin(deg ? (v * Math.PI) / 180 : v),
+  cos: (v, deg) => Math.cos(deg ? (v * Math.PI) / 180 : v),
+  tan: (v, deg) => Math.tan(deg ? (v * Math.PI) / 180 : v),
+  log: (v) => Math.log10(v),
+  ln: (v) => Math.log(v),
+  sqrt: (v) => Math.sqrt(v),
+  exp: (v) => Math.exp(v),
+};
+
+// Standard precedence: + - loosest, then × ÷ (which also absorb "implicit"
+// multiplication — "2(3+4)" and "2π" both need to parse without an explicit
+// × between the factors), then ^ (right-associative), then unary minus.
+function calcParse(tokens) {
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const next = () => tokens[pos++];
+  const canStartFactor = (t) => !!t && (t.type === "num" || t.type === "lparen" || t.type === "ident");
+
+  function parseExpression() {
+    let node = parseTerm();
+    while (peek() && peek().type === "op" && (peek().value === "+" || peek().value === "-")) {
+      const op = next().value;
+      node = { op, left: node, right: parseTerm() };
+    }
+    return node;
+  }
+
+  function parseTerm() {
+    let node = parsePower();
+    while (peek() && ((peek().type === "op" && (peek().value === "×" || peek().value === "÷")) || canStartFactor(peek()))) {
+      const op = peek().type === "op" ? next().value : "×";
+      node = { op, left: node, right: parsePower() };
+    }
+    return node;
+  }
+
+  function parsePower() {
+    const base = parseUnary();
+    if (peek() && peek().type === "op" && peek().value === "^") {
+      next();
+      return { op: "^", left: base, right: parsePower() };
+    }
+    return base;
+  }
+
+  function parseUnary() {
+    if (peek() && peek().type === "op" && peek().value === "-") {
+      next();
+      return { op: "neg", arg: parseUnary() };
+    }
+    return parsePrimary();
+  }
+
+  function parsePrimary() {
+    const tok = peek();
+    if (!tok) throw new Error("unexpected end");
+    if (tok.type === "num") { next(); return { op: "num", value: tok.value }; }
+    if (tok.type === "lparen") {
+      next();
+      const node = parseExpression();
+      if (peek() && peek().type === "rparen") next();
+      return node;
+    }
+    if (tok.type === "ident") {
+      next();
+      if (tok.value === "e") return { op: "num", value: Math.E };
+      if (peek() && peek().type === "lparen") {
+        next();
+        const arg = parseExpression();
+        if (peek() && peek().type === "rparen") next();
+        return { op: "fn", fn: tok.value, arg };
+      }
+      throw new Error("unknown identifier");
+    }
+    throw new Error("unexpected token");
+  }
+
+  const result = parseExpression();
+  if (pos !== tokens.length) throw new Error("trailing tokens");
+  return result;
+}
+
+function calcEval(node, deg) {
+  if (node.op === "num") return node.value;
+  if (node.op === "neg") return -calcEval(node.arg, deg);
+  if (node.op === "fn") {
+    const fn = CALC_FN[node.fn];
+    if (!fn) throw new Error("unknown function");
+    return fn(calcEval(node.arg, deg), deg);
+  }
+  const l = calcEval(node.left, deg);
+  const r = calcEval(node.right, deg);
+  if (node.op === "+") return l + r;
+  if (node.op === "-") return l - r;
+  if (node.op === "×") return l * r;
+  if (node.op === "÷") return r === 0 ? NaN : l / r;
+  if (node.op === "^") return Math.pow(l, r);
+  throw new Error("unknown operator");
+}
+
+function formatCalcResult(n) {
+  if (!isFinite(n)) return "Error";
+  if (n === 0) return "0";
+  const abs = Math.abs(n);
+  if (abs >= 1e12 || abs < 1e-9) return n.toExponential(6);
+  return Number(n.toPrecision(10)).toString();
+}
+
+const CALC_OP_SYMBOL = { add: "+", subtract: "-", multiply: "×", divide: "÷", power: "^" };
+
+function renderBasicCalculator(domain, tool, favId) {
+  const state = { expr: "0", justEvaluated: false, mode: "basic", angle: "deg" };
+
+  function updateDisplay() {
+    document.querySelector('[data-res="display"]').textContent = state.expr;
+  }
+
+  function currentNumberTail() {
+    const m = state.expr.match(/[0-9.]*$/);
+    return m ? m[0] : "";
+  }
+
+  function inputDigit(d) {
+    if (state.justEvaluated) { state.expr = d; state.justEvaluated = false; return; }
+    state.expr = state.expr === "0" ? d : state.expr + d;
+  }
+
+  function inputDecimal() {
+    if (state.justEvaluated) { state.expr = "0."; state.justEvaluated = false; return; }
+    const tail = currentNumberTail();
+    if (tail.includes(".")) return;
+    state.expr += tail === "" ? "0." : ".";
+  }
+
+  function clearAll() {
+    state.expr = "0";
+    state.justEvaluated = false;
+  }
+
+  function backspace() {
+    state.expr = state.expr.length > 1 ? state.expr.slice(0, -1) : "0";
+  }
+
+  function openParen() {
+    if (state.justEvaluated) { state.expr = "("; state.justEvaluated = false; return; }
+    state.expr = state.expr === "0" ? "(" : state.expr + "(";
+  }
+
+  function closeParen() {
+    const opens = (state.expr.match(/\(/g) || []).length;
+    const closes = (state.expr.match(/\)/g) || []).length;
+    if (opens > closes) state.expr += ")";
+  }
+
+  function appendRaw(text) {
+    state.expr = state.expr === "0" ? text : state.expr + text;
+  }
+
+  function insertFunction(name) {
+    appendRaw(`${name}(`);
+  }
+
+  function appendOperator(sym) {
+    if (state.expr === "0") {
+      if (sym === "-") state.expr = "-";
+      return;
+    }
+    const last = state.expr.slice(-1);
+    const isOp = (ch) => "+-×÷^".includes(ch);
+    if (isOp(last) && !(sym === "-" && "×÷^(".includes(last))) {
+      state.expr = state.expr.slice(0, -1) + sym;
+    } else {
+      state.expr += sym;
+    }
+  }
+
+  function toggleSign() {
+    if (state.expr.startsWith("-(") && state.expr.endsWith(")")) {
+      state.expr = state.expr.slice(2, -1);
+    } else {
+      state.expr = `-(${state.expr})`;
+    }
+  }
+
+  function inputPercent() {
+    state.expr = `(${state.expr})÷100`;
+  }
+
+  function applyReciprocal() {
+    state.expr = `1÷(${state.expr})`;
+  }
+
+  function equals() {
+    try {
+      const tokens = calcTokenize(state.expr);
+      if (!tokens.length) return;
+      const result = calcEval(calcParse(tokens), state.angle === "deg");
+      state.expr = formatCalcResult(result);
+    } catch (err) {
+      state.expr = "Error";
+    }
+    state.justEvaluated = true;
+  }
+
+  function press(key) {
+    // The angle-mode toggle changes a key's own label (DEG ↔ RAD), which a
+    // display-only update can't reach — it needs the keypad re-drawn.
+    if (key === "toggle-angle") { state.angle = state.angle === "deg" ? "rad" : "deg"; paint(); return; }
+    // A leftover "Error" is text, not a number — anything but Clear should
+    // discard it first rather than edit it character by character.
+    if (state.expr === "Error" && key !== "clear") clearAll();
+
+    if (/^[0-9]$/.test(key)) { inputDigit(key); updateDisplay(); return; }
+    if (key === "decimal") { inputDecimal(); updateDisplay(); return; }
+    if (key === "open") { openParen(); updateDisplay(); return; }
+
+    state.justEvaluated = false;
+    if (key === "clear") clearAll();
+    else if (key === "backspace") backspace();
+    else if (key === "close") closeParen();
+    else if (key === "sign") toggleSign();
+    else if (key === "percent") inputPercent();
+    else if (key === "square") state.expr += "^2";
+    else if (key === "reciprocal") applyReciprocal();
+    else if (key === "pi") appendRaw("π");
+    else if (key === "e") appendRaw("e");
+    else if (key === "pow10") appendRaw("10^(");
+    else if (key in CALC_FN) insertFunction(key);
+    else if (key in CALC_OP_SYMBOL) appendOperator(CALC_OP_SYMBOL[key]);
+    else if (key === "equals") equals();
+    updateDisplay();
+  }
+
+  // Keydown isn't scoped to the keypad's own DOM the way a click listener is,
+  // so it can't rely on paint() replacing app.innerHTML to clean it up when
+  // the user navigates away. It cleans itself up instead: once the display
+  // element it looks for is gone, it removes itself on the next keystroke.
+  function onKeyDown(e) {
+    if (!document.querySelector('[data-res="display"]')) { window.removeEventListener("keydown", onKeyDown); return; }
+    const map = {
+      "0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9",
+      ".": "decimal", "+": "add", "-": "subtract", "*": "multiply", "/": "divide", "^": "power",
+      "(": "open", ")": "close", "Enter": "equals", "=": "equals", "Backspace": "backspace",
+      "Escape": "clear", "Delete": "clear", "%": "percent",
+    };
+    const key = map[e.key];
+    if (!key) return;
+    e.preventDefault();
+    press(key);
+  }
+  window.addEventListener("keydown", onKeyDown);
+
+  // Matches the iPhone's own Calculator app: Standard carries no parentheses
+  // or power key at all — those, along with backspace, only showed up here
+  // because this screen used to be the only mode. Now that Scientific mode
+  // exists to hold them, Standard goes back to exactly what the real app
+  // ships: ⌫ C % ÷ / 7 8 9 × / 4 5 6 − / 1 2 3 + / ± 0 . =.
+  const BASE_KEYS = [
+    ["backspace", "⌫", "fn"], ["clear", "C", "fn"], ["percent", "%", "fn"], ["divide", "÷", "op"],
+    ["7", "7"], ["8", "8"], ["9", "9"], ["multiply", "×", "op"],
+    ["4", "4"], ["5", "5"], ["6", "6"], ["subtract", "−", "op"],
+    ["1", "1"], ["2", "2"], ["3", "3"], ["add", "+", "op"],
+    ["sign", "±", "fn"], ["0", "0"], ["decimal", ".", ""], ["equals", "=", "op"],
+  ];
+
+  // The parentheses and power operator that Standard no longer carries live
+  // here instead, alongside trig, logs and the constants that show up
+  // constantly in electronics math (reactance angles, RC time constants).
+  // Ordered to track the iPhone's own Scientific layout row by row — reading
+  // its six-column rows left to right and keeping only the functions this
+  // screen actually has, the sequence is: ( ) · x² xʸ eˣ 10ˣ · 1/x √ ln log ·
+  // sin cos tan e · π Deg. That's also why Deg/Rad ends up last: the photo
+  // puts it at the end of its own last row too.
+  function sciKeys() {
+    return [
+      ["open", "(", "fn"], ["close", ")", "fn"], ["square", "x²", "fn"], ["power", "xʸ", "fn"],
+      ["exp", "eˣ", "fn"], ["pow10", "10ˣ", "fn"], ["reciprocal", "1/x", "fn"], ["sqrt", "√", "fn"],
+      ["ln", "ln", "fn"], ["log", "log", "fn"], ["sin", "sin", "fn"], ["cos", "cos", "fn"],
+      ["tan", "tan", "fn"], ["e", "e", "fn"], ["pi", "π", "fn"], ["toggle-angle", state.angle === "deg" ? "DEG" : "RAD", "fn"],
+    ];
+  }
+
+  function keyBtn([key, label, kind]) {
+    return `<button class="calc-key${kind ? ` calc-key--${kind}` : ""}" data-key="${key}">${label}</button>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "")}
+
+      ${pillRow([["basic", "Standard"], ["sci", "Scientific"]], state.mode, domain.bg)}
+
+      <div class="calc-display">
+        <div class="calc-display-value" data-res="display">${state.expr}</div>
+      </div>
+      <div id="calc-keypad">
+        ${state.mode === "sci" ? `<div class="calc-keypad" style="margin-bottom:8px;">${sciKeys().map(keyBtn).join("")}</div>` : ""}
+        <div class="calc-keypad">${BASE_KEYS.map(keyBtn).join("")}</div>
+      </div>
+
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    document.getElementById("calc-keypad").addEventListener("click", (e) => {
+      const btn = e.target.closest(".calc-key");
+      if (btn) press(btn.dataset.key);
+    });
   }
 
   paint();

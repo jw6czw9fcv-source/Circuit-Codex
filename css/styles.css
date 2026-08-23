@@ -807,3 +807,47 @@ html, body {
   color: var(--text-secondary);
 }
 .placeholder i { font-size: 30px; color: var(--text-muted); display:block; margin-bottom: 10px; }
+
+/* Basic calculator — the one screen in the app that isn't a formula plugged
+   into a diagram, so it gets its own display + keypad rather than reusing
+   .field/.result-field. Four columns, "0" spans two so it reads as the widest
+   key the way a physical calculator lays it out. */
+.calc-display {
+  margin: 0 16px 12px;
+  background: var(--result-bg);
+  border: 1px solid var(--result-border);
+  border-radius: 14px;
+  padding: 18px 16px;
+  text-align: right;
+}
+.calc-display-value {
+  color: var(--result-text);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+  /* Reserves room for two lines up front so the keypad below doesn't jump
+     down the first time an expression wraps past one line. */
+  min-height: calc(1.15em * 2);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+.calc-keypad {
+  margin: 0 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.calc-key {
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  color: var(--text);
+  border-radius: 12px;
+  font-size: 19px;
+  font-weight: 600;
+  padding: 14px 0;
+  cursor: pointer;
+}
+.calc-key--fn { color: var(--text-secondary); }
+.calc-key--op { background: var(--result-bg); border-color: var(--result-border); color: var(--result-text); }
