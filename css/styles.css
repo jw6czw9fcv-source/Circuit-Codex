@@ -292,6 +292,36 @@ html, body {
 }
 .pill.active { color: #FFFFFF; }
 
+/* Filter buttons — same look as .mode-pills/.pill (Ohm's law's VI/VR/IR
+   toggle: one shared rounded container, active = domain-tinted background
+   + light-blue text), but .pill's flex:1 forces equal-width, which falls
+   apart past 3 items ("US" and "DIN 47100" would end up the same width).
+   These size to their own label instead, with tight padding so all five
+   still fit on one row instead of wrapping.
+   Named filter-btn rather than the more obvious "chip" because .chip was
+   already taken (the 40x40 domain-icon badge on the home screen) — reusing
+   it silently forced these into that fixed 40x40 box instead of sizing to
+   their own text, which is what actually prompted this rename. */
+.filter-row {
+  display: flex;
+  justify-content: space-between;
+  background: var(--card);
+  border-radius: 12px;
+  padding: 4px;
+  margin: 0 16px 14px;
+}
+.filter-btn {
+  padding: 7px 7px;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  white-space: nowrap;
+}
+.filter-btn.active { color: #FFFFFF; }
+
 /* Colour-band roller. One column per band, left to right in the order the
    bands sit on the part, so the picker reads like the resistor above it.
    Each column is a scroll-snap track; the centre slot is the selection. */

@@ -4234,14 +4234,26 @@ function renderCableResistanceDrop(domain, tool, favId) {
   paint();
 }
 
-// ---------- Cable colors (standard + DIN 47100) ----------
-// Cores 1-10 are solid colours; 11-44 add a second colour as a printed ring
-// around the base insulation colour (not a second solid, which is why the
-// note reads "X with a Y ring" rather than "X/Y"); 45-60 add a third ring,
-// always black. Cross-checked against three independent sources (Wikipedia,
-// Eland Cables, igus) for 1-40, and against a fourth for 41-60, rather than
-// taken from memory — a wiring reference is exactly the place a
-// misremembered stripe colour would actually cause someone a bad day.
+// ---------- Wire & cable colors ----------
+// Four genuinely different questions live on this one screen, ordered
+// simple to advanced so a beginner reads top-down instead of guessing which
+// of several tools to open:
+//  1. AC mains, single circuit — the 90% case (IEC 60445, NFPA 70/NEC).
+//  2. AC three-phase by voltage system (US) — the SAME function's color
+//     changes with which voltage class the circuit belongs to; mixing up a
+//     120/208V black hot with a 277/480V circuit is a real safety issue,
+//     not just a labeling one.
+//  3. DC — a different, much less formally standardized topic; mostly
+//     informal convention rather than a code, called out as such.
+//  4. DIN 47100 — not a voltage or safety code at all, just how individual
+//     cores in a multi-conductor cable are numbered. Grouped last and
+//     labeled "multi-core numbering" so it doesn't read as one more
+//     variation on the same theme as 1-3.
+// Every fact here was checked against a live source rather than taken from
+// memory (NEC's actual color requirements are narrower than the common
+// black/red/blue convention; IEC 60446 was merged into IEC 60445 in 2010) —
+// a wiring reference is exactly the place a misremembered detail causes
+// someone a bad day.
 const DIN47100_HEX = {
   white: "#F2F2ED", brown: "#8B5A2B", green: "#2E8B3D", yellow: "#E8C820", grey: "#8A8A8A",
   pink: "#F0A0B8", blue: "#2255CC", red: "#CC2222", black: "#1A1A1A", violet: "#7B4FA0",
@@ -4267,36 +4279,81 @@ const DIN47100_TRIPLE = [
 ];
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
+// Every entry carries a "cat" (category) tag so the top filter chips can
+// jump straight to a country/topic instead of making someone scroll a
+// ~90-row list to find the one group they came for.
 const CABLE_COLORS = [
-  { group: "IEC 60446 (international / EU)", label: "Live / Line (L)", swatch: "#8B5A2B", note: "Brown" },
-  { group: "IEC 60446 (international / EU)", label: "Neutral (N)", swatch: "#2255CC", note: "Blue" },
-  { group: "IEC 60446 (international / EU)", label: "Earth / protective earth (PE)", swatch: "linear-gradient(135deg, #2E8B3D 50%, #E8C820 50%)", note: "Green with a yellow stripe" },
-  { group: "IEC 60446 (international / EU)", label: "Line 2 — L2 (three-phase)", swatch: "#1A1A1A", note: "Black" },
-  { group: "IEC 60446 (international / EU)", label: "Line 3 — L3 (three-phase)", swatch: "#8A8A8A", note: "Grey" },
-  { group: "NEC (US)", label: "Hot / Line", swatch: "#1A1A1A", note: "Black — red or blue for additional hots" },
-  { group: "NEC (US)", label: "Neutral", swatch: "#F2F2ED", note: "White, sometimes grey" },
-  { group: "NEC (US)", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare copper" },
+  // 1. AC mains, single circuit — IEC's phase colors don't change with
+  // voltage class the way the US ones do, so its three-phase L2/L3 live
+  // here too rather than in a separate "by system" tier.
+  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Live / Line (L)", swatch: "#8B5A2B", note: "Brown" },
+  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Neutral (N)", swatch: "#2255CC", note: "Blue" },
+  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Earth / protective earth (PE)", swatch: "linear-gradient(135deg, #2E8B3D 50%, #E8C820 50%)", note: "Green with a yellow stripe" },
+  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Line 2 — L2 (three-phase)", swatch: "#1A1A1A", note: "Black — same regardless of voltage class" },
+  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Line 3 — L3 (three-phase)", swatch: "#8A8A8A", note: "Grey — same regardless of voltage class" },
+  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Hot / Line", swatch: "#1A1A1A", note: "Black — industry convention, not NEC-mandated" },
+  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Neutral", swatch: "#F2F2ED", note: "White — required by NEC" },
+  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare copper — required by NEC" },
+
+  // 2. AC three-phase by voltage system (US) — same function, different
+  // color depending which system it's wired into.
+  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Phase A (L1)", swatch: "#1A1A1A", note: "Black — industry convention" },
+  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Phase B (L2)", swatch: "#CC2222", note: "Red — industry convention" },
+  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Phase C (L3)", swatch: "#2255CC", note: "Blue — industry convention" },
+  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Neutral", swatch: "#F2F2ED", note: "White — required by NEC" },
+  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — required by NEC" },
+  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Phase A (L1)", swatch: "#8B5A2B", note: "Brown — industry convention" },
+  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Phase B (L2)", swatch: "#E08A2E", note: "Orange — industry convention" },
+  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Phase C (L3)", swatch: "#E8C820", note: "Yellow — industry convention" },
+  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Neutral", swatch: "#8A8A8A", note: "Grey — required by NEC" },
+  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — required by NEC" },
+  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Phase A", swatch: "#1A1A1A", note: "Black — industry convention" },
+  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Phase B — high leg", swatch: "#E08A2E", note: "Orange — required by NEC 110.15 (reads ~208 V to ground, not 120 V)" },
+  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Phase C", swatch: "#2255CC", note: "Blue — industry convention" },
+  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Neutral", swatch: "#F2F2ED", note: "White — required by NEC" },
+  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — required by NEC" },
+
+  // 3. Canada — its own code (CSA C22.1 / CEC), not NFPA 70. Genuinely
+  // different from the US: phase 1 is red rather than black, and the
+  // colors don't change with voltage system the way the US ones do.
+  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Phase 1", swatch: "#CC2222", note: "Red" },
+  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Phase 2", swatch: "#1A1A1A", note: "Black" },
+  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Phase 3", swatch: "#2255CC", note: "Blue" },
+  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Neutral", swatch: "linear-gradient(135deg, #F2F2ED 50%, #8A8A8A 50%)", note: "White or grey" },
+  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Ground", swatch: "#2E8B3D", note: "Green, bare, or green with a yellow stripe" },
+
+  // 4. DC — far less formally standardized than AC; mostly convention.
+  { cat: "dc", group: "DC", label: "Positive (+)", swatch: "#CC2222", note: "Red — near-universal informal convention (automotive, general DC, solar/PV)" },
+  { cat: "dc", group: "DC", label: "Negative (−)", swatch: "#1A1A1A", note: "Black — near-universal informal convention" },
+  { cat: "dc", group: "DC", label: "Grounded conductor, if the system uses one", swatch: "linear-gradient(135deg, #F2F2ED 50%, #8A8A8A 50%)", note: "White or grey — required by NEC 690 for grounded DC systems (e.g. some PV installs), same rule as AC" },
+  { cat: "dc", group: "DC", label: "Telecom −48 V systems", swatch: "linear-gradient(135deg, #1A1A1A 50%, #E8C820 50%)", note: "No universal colour — varies by vendor/telco. Check the equipment's documentation rather than assume." },
+
+  // 5. DIN 47100 — cable-core numbering, not a voltage or safety code.
   ...DIN47100_SOLID.map((c, i) => ({
-    group: "DIN 47100 (cores 1–10)", label: `Core ${i + 1}`, swatch: DIN47100_HEX[c], note: cap(c),
+    cat: "din", group: "DIN 47100 — cores 1–10 (multi-core numbering)", label: `Core ${i + 1}`, swatch: DIN47100_HEX[c], note: cap(c),
   })),
   ...DIN47100_RINGED.map(([base, ring], i) => ({
-    group: "DIN 47100 (cores 11–44)", label: `Core ${i + 11}`,
+    cat: "din", group: "DIN 47100 — cores 11–44 (multi-core numbering)", label: `Core ${i + 11}`,
     swatch: `linear-gradient(135deg, ${DIN47100_HEX[base]} 65%, ${DIN47100_HEX[ring]} 65%)`,
     note: `${cap(base)} with a ${ring} ring`,
   })),
   ...DIN47100_TRIPLE.map(([base, second], i) => ({
-    group: "DIN 47100 (cores 45–60)", label: `Core ${i + 45}`,
+    cat: "din", group: "DIN 47100 — cores 45–60 (multi-core numbering)", label: `Core ${i + 45}`,
     swatch: `linear-gradient(135deg, ${DIN47100_HEX[base]} 0%, ${DIN47100_HEX[base]} 45%, ${DIN47100_HEX[second]} 45%, ${DIN47100_HEX[second]} 75%, ${DIN47100_HEX.black} 75%, ${DIN47100_HEX.black} 100%)`,
     note: `${cap(base)} with ${second} and black rings`,
   })),
 ];
+const CABLE_COLOR_FILTERS = [
+  ["all", "All"], ["eu", "EU/Intl"], ["us", "US"], ["canada", "Canada"], ["din", "DIN 47100"],
+];
 
 function renderCableColors(domain, tool, favId) {
+  const state = { filter: "all", query: "" };
+
   function row(c) {
-    const bg = c.swatch.startsWith("#") ? `background:${c.swatch};` : `background:${c.swatch};`;
     return `
       <div class="color-row tap-select">
-        <div class="color-swatch" style="${bg}"></div>
+        <div class="color-swatch" style="background:${c.swatch};"></div>
         <div class="color-row-text">
           <div class="color-row-label">${c.label}</div>
           <div class="color-row-note">${c.note}</div>
@@ -4304,8 +4361,14 @@ function renderCableColors(domain, tool, favId) {
       </div>`;
   }
 
-  function matches(c, q) {
+  function matchesQuery(c, q) {
     return c.label.toLowerCase().includes(q) || c.note.toLowerCase().includes(q) || c.group.toLowerCase().includes(q);
+  }
+
+  function filteredList() {
+    let list = state.filter === "all" ? CABLE_COLORS : CABLE_COLORS.filter((c) => c.cat === state.filter);
+    if (state.query) list = list.filter((c) => matchesQuery(c, state.query));
+    return list;
   }
 
   function groupedHTML(list) {
@@ -4320,18 +4383,26 @@ function renderCableColors(domain, tool, favId) {
       <div class="color-list">${g.items.map(row).join("")}</div>`).join("");
   }
 
-  function renderList(list, emptyQuery) {
-    const results = document.getElementById("cc-results");
-    results.innerHTML = list.length ? groupedHTML(list) : `<div class="placeholder">${ICONS.search}<div>No match for "${emptyQuery}".</div></div>`;
+  function refreshResults() {
+    const list = filteredList();
+    document.getElementById("cc-results").innerHTML = list.length
+      ? groupedHTML(list)
+      : `<div class="placeholder">${ICONS.search}<div>No match${state.query ? ` for "${state.query}"` : ""}.</div></div>`;
   }
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Mains wiring and DIN 47100 multi-core numbering")}
+      ${calcHeader(tool, favId, "AC mains, three-phase by system, DC, and multi-core numbering")}
+
+      <div class="filter-row" id="cc-chips">
+        ${CABLE_COLOR_FILTERS.map(([value, label]) => `
+          <button class="filter-btn ${state.filter === value ? "active" : ""}" data-filter="${value}"
+                  style="${state.filter === value ? `background:${domain.bg};color:#8FC1F5;` : ""}">${label}</button>`).join("")}
+      </div>
 
       <div class="search-box">
         ${ICONS.search}
-        <input id="cc-input" type="text" placeholder="Search a colour, function, or standard" autocapitalize="off" spellcheck="false" />
+        <input id="cc-input" type="text" placeholder="Search a colour, function, or standard" autocapitalize="off" spellcheck="false" value="${state.query}" />
       </div>
       <div id="cc-results"></div>
       ${tabbarHTML("")}
@@ -4339,11 +4410,18 @@ function renderCableColors(domain, tool, favId) {
 
     document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
 
+    document.getElementById("cc-chips").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      state.filter = btn.dataset.filter;
+      paint();
+    });
+
     const input = document.getElementById("cc-input");
-    renderList(CABLE_COLORS, "");
+    refreshResults();
     input.oninput = () => {
-      const q = input.value.trim().toLowerCase();
-      renderList(q ? CABLE_COLORS.filter((c) => matches(c, q)) : CABLE_COLORS, q);
+      state.query = input.value.trim().toLowerCase();
+      refreshResults();
     };
   }
 
