@@ -4392,7 +4392,7 @@ function renderCableColors(domain, tool, favId) {
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, "AC mains, three-phase by system, DC, and multi-core numbering")}
+      ${calcHeader(tool, favId, "AC mains, three-phase by system, and multi-core numbering")}
 
       <div class="filter-row" id="cc-chips">
         ${CABLE_COLOR_FILTERS.map(([value, label]) => `
