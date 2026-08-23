@@ -17,6 +17,23 @@ app.addEventListener("click", (e) => {
   el.select();
 });
 
+// Reference rows (ASCII table, and any future lookup list) are read-only —
+// there's no field to select() — but the reason to tap one is usually to
+// copy it out, so a click selects the row's whole text instead. Opt in with
+// the "tap-select" class rather than making every card do this, since it
+// only makes sense for compact single-value rows.
+function selectElementText(el) {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+app.addEventListener("click", (e) => {
+  const row = e.target.closest(".tap-select");
+  if (row) selectElementText(row);
+});
+
 // Favourites are keyed by what a tool *is*, not where it sits. Position keys
 // (domain:section:index) silently repoint at a different tool whenever the list
 // is reordered or something is removed, which has already happened once.
@@ -187,6 +204,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "physical-constants") return renderPhysicalConstants(domain, tool, favId);
   if (calcId === "si-units") return renderSiUnits(domain, tool, favId);
   if (calcId === "dec-hex-bin") return renderDecHexBin(domain, tool, favId);
+  if (calcId === "ascii-table") return renderAsciiTable(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -3819,6 +3837,81 @@ function renderDecHexBin(domain, tool, favId) {
       if (filtered !== field.value) field.value = filtered;
       state.raw = filtered;
       refresh();
+    };
+  }
+
+  paint();
+}
+
+// ---------- ASCII table ----------
+const ASCII_CONTROL_NAMES = {
+  0: "NUL", 1: "SOH", 2: "STX", 3: "ETX", 4: "EOT", 5: "ENQ", 6: "ACK", 7: "BEL",
+  8: "BS", 9: "TAB", 10: "LF", 11: "VT", 12: "FF", 13: "CR", 14: "SO", 15: "SI",
+  16: "DLE", 17: "DC1", 18: "DC2", 19: "DC3", 20: "DC4", 21: "NAK", 22: "SYN", 23: "ETB",
+  24: "CAN", 25: "EM", 26: "SUB", 27: "ESC", 28: "FS", 29: "GS", 30: "RS", 31: "US",
+  127: "DEL",
+};
+
+// Generated rather than hand-listed — 128 entries hand-typed is 128 chances
+// to get a code point wrong, where String.fromCharCode can't.
+function asciiEntries() {
+  const rows = [];
+  for (let i = 0; i <= 127; i++) {
+    const printable = i >= 32 && i <= 126;
+    const glyph = i === 32 ? "Space" : printable ? String.fromCharCode(i) : (ASCII_CONTROL_NAMES[i] || "?");
+    rows.push({
+      dec: i,
+      hex: i.toString(16).toUpperCase().padStart(2, "0"),
+      bin: i.toString(2).padStart(7, "0"),
+      glyph,
+      printable,
+    });
+  }
+  return rows;
+}
+const ASCII_ENTRIES = asciiEntries();
+
+function renderAsciiTable(domain, tool, favId) {
+  function row(e) {
+    return `
+      <div class="ascii-row tap-select">
+        <span class="ascii-dec">${e.dec}</span>
+        <span class="ascii-hex">${e.hex}</span>
+        <span class="ascii-bin">${e.bin}</span>
+        <span class="ascii-char${e.printable ? "" : " muted"}">${e.glyph}</span>
+      </div>`;
+  }
+
+  function matches(e, q) {
+    return String(e.dec).includes(q) || e.hex.toLowerCase().includes(q) || e.glyph.toLowerCase().includes(q);
+  }
+
+  function renderList(list, emptyQuery) {
+    const results = document.getElementById("at-results");
+    results.innerHTML = list.length
+      ? `<div class="ascii-row head"><span>Dec</span><span>Hex</span><span>Bin</span><span>Char</span></div>${list.map(row).join("")}`
+      : `<div class="placeholder">${ICONS.search}<div>No character for "${emptyQuery}".</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "128 characters, codes 0-127")}
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="at-input" type="text" placeholder="Search a character, decimal or hex code" autocapitalize="off" spellcheck="false" />
+      </div>
+      <div class="ascii-list" id="at-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    const input = document.getElementById("at-input");
+    renderList(ASCII_ENTRIES, "");
+    input.oninput = () => {
+      const q = input.value.trim().toLowerCase();
+      renderList(q ? ASCII_ENTRIES.filter((e) => matches(e, q)) : ASCII_ENTRIES, q);
     };
   }
 

@@ -851,3 +851,33 @@ html, body {
 }
 .calc-key--fn { color: var(--text-secondary); }
 .calc-key--op { background: var(--result-bg); border-color: var(--result-border); color: var(--result-text); }
+
+/* ASCII table — 128 rows is too many to spend a whole formula-card on each,
+   so this is a plain compact grid instead: four columns, one row per code
+   point, monospace for the numeric columns so they line up. */
+.ascii-list { margin: 0 16px 12px; }
+.ascii-row {
+  display: grid;
+  grid-template-columns: 40px 36px 74px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 13px;
+}
+.ascii-row.head {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--card-border);
+}
+.ascii-dec, .ascii-hex, .ascii-bin {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-secondary);
+}
+.ascii-char { color: var(--text); font-weight: 600; }
+.ascii-char.muted { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+
+.tap-select { cursor: pointer; }
+.tap-select:active { background: var(--card); }
