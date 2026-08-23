@@ -98,7 +98,7 @@ const DOMAINS = [
     sections: [
       { title: "Logic gates", tools: [{ name: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)" }, { name: "Karnaugh map simplification" }] },
       { title: "Sequential logic", tools: [{ name: "Flip-flops (SR, D, JK, T)" }, { name: "Multivibrators (astable/monostable)" }, { name: "555 Timer (astable/monostable)" }] },
-      { title: "Number systems", tools: [{ name: "DEC / HEX / BIN conversion" }, { name: "ASCII table" }] },
+      { title: "Number systems", tools: [{ name: "DEC / HEX / BIN conversion", calc: "dec-hex-bin" }, { name: "ASCII table" }] },
       {
         title: "Timing & interfaces",
         tools: [
@@ -199,7 +199,7 @@ const DOMAINS = [
       {
         title: "Reference",
         tools: [
-          { name: "Formula", calc: "formula-search" }, { name: "Glossary" }, { name: "Physical constants", calc: "physical-constants" }, { name: "SI-Units" },
+          { name: "Formula", calc: "formula-search" }, { name: "Glossary" }, { name: "Physical constants", calc: "physical-constants" }, { name: "SI-Units", calc: "si-units" },
           { name: "RMS calculator" }, { name: "Quiescent current" }, { name: "4-20mA loop conversion" }, { name: "Lumen/Watt" },
         ],
       },

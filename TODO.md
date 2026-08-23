@@ -11,12 +11,10 @@ Resistor series/parallel · Voltage divider · Current divider · Wheatstone
 bridge · Capacitor series/parallel · Ohm's law · Kirchhoff's laws · Formula
 search · SI prefix converter · Scientific ↔ engineering notation ·
 Percent tolerance / error · Standard & Scientific Calculators ·
-**Physical constants**
+Physical constants · SI-Units · **DEC / HEX / BIN conversion**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] SI-Units
-- [ ] DEC / HEX / BIN conversion
 - [ ] ASCII table
 - [ ] Wire gauge (AWG/SWG)
 - [ ] Cable resistance

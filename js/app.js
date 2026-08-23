@@ -185,6 +185,8 @@ function renderTool(rawKey, calcId) {
   if (calcId === "percent-tolerance") return renderPercentTolerance(domain, tool, favId);
   if (calcId === "basic-calculator") return renderBasicCalculator(domain, tool, favId);
   if (calcId === "physical-constants") return renderPhysicalConstants(domain, tool, favId);
+  if (calcId === "si-units") return renderSiUnits(domain, tool, favId);
+  if (calcId === "dec-hex-bin") return renderDecHexBin(domain, tool, favId);
 
   // Placeholder screen for tools not yet built
   app.innerHTML = `
@@ -3653,6 +3655,170 @@ function renderPhysicalConstants(domain, tool, favId) {
     input.oninput = () => {
       const q = input.value.trim().toLowerCase();
       renderList(q ? PHYSICAL_CONSTANTS.filter((c) => matches(c, q)) : PHYSICAL_CONSTANTS, q);
+    };
+  }
+
+  paint();
+}
+
+// ---------- SI units ----------
+// Same browsable-reference shape as Physical constants. The seven base units
+// are here as the foundation the electrical ones are built from — a volt is
+// only "kg·m²·s⁻³·A⁻¹" if you know what kg, m, s and A are — but the real
+// content is the eleven derived units electronics actually runs on. Purely
+// mechanical derived units (newton, pascal) are left out on the same
+// electronics-only basis the physical-constants trim used.
+const SI_UNITS = [
+  { symbol: "m", name: "Metre", quantity: "Length", definition: "SI base unit", note: "Defined by fixing the speed of light c." },
+  { symbol: "kg", name: "Kilogram", quantity: "Mass", definition: "SI base unit", note: "Defined by fixing the Planck constant h." },
+  { symbol: "s", name: "Second", quantity: "Time", definition: "SI base unit", note: "Defined by a fixed number of caesium-133 hyperfine transitions." },
+  { symbol: "A", name: "Ampere", quantity: "Electric current", definition: "SI base unit", note: "Defined by fixing the elementary charge e — the base unit every electrical unit below is ultimately built from." },
+  { symbol: "K", name: "Kelvin", quantity: "Thermodynamic temperature", definition: "SI base unit", note: "Defined by fixing the Boltzmann constant k." },
+  { symbol: "mol", name: "Mole", quantity: "Amount of substance", definition: "SI base unit", note: "Defined by fixing the Avogadro constant." },
+  { symbol: "cd", name: "Candela", quantity: "Luminous intensity", definition: "SI base unit", note: "Rarely used directly in circuit work; relevant mainly to LED photometry." },
+  { symbol: "Hz", name: "Hertz", quantity: "Frequency", definition: "s⁻¹", note: "Cycles per second — clock speeds, signal frequency, sample rates." },
+  { symbol: "J", name: "Joule", quantity: "Energy", definition: "kg·m²·s⁻²", note: "= 1 W·s. Battery capacity in watt-hours is a scaled joule." },
+  { symbol: "W", name: "Watt", quantity: "Power", definition: "kg·m²·s⁻³", note: "= 1 J/s = 1 V·A. Power dissipation, ratings, and P = VI all live here." },
+  { symbol: "C", name: "Coulomb", quantity: "Electric charge", definition: "A·s", note: "= 1 A for 1 s. Battery capacity in amp-hours is a scaled coulomb." },
+  { symbol: "V", name: "Volt", quantity: "Electric potential", definition: "kg·m²·s⁻³·A⁻¹", note: "= 1 W/A = 1 J/C." },
+  { symbol: "F", name: "Farad", quantity: "Capacitance", definition: "s⁴·A²·kg⁻¹·m⁻²", note: "= 1 C/V. A real 1 F capacitor is enormous — µF, nF and pF are the everyday sizes." },
+  { symbol: "Ω", name: "Ohm", quantity: "Electrical resistance", definition: "kg·m²·s⁻³·A⁻²", note: "= 1 V/A." },
+  { symbol: "S", name: "Siemens", quantity: "Electrical conductance", definition: "kg⁻¹·m⁻²·s³·A²", note: "= 1/Ω — the reciprocal of resistance." },
+  { symbol: "Wb", name: "Weber", quantity: "Magnetic flux", definition: "kg·m²·s⁻²·A⁻¹", note: "= 1 V·s. Flux linkage in transformer and motor design." },
+  { symbol: "T", name: "Tesla", quantity: "Magnetic flux density", definition: "kg·s⁻²·A⁻¹", note: "= 1 Wb/m². Field strength in inductor and motor design." },
+  { symbol: "H", name: "Henry", quantity: "Inductance", definition: "kg·m²·s⁻²·A⁻²", note: "= 1 Wb/A = 1 V·s/A." },
+];
+
+function renderSiUnits(domain, tool, favId) {
+  function card(u) {
+    return `
+      <div class="formula-card formula-card--static">
+        <div class="formula-card-head">
+          <span class="formula-card-title">${u.symbol} — ${u.name}</span>
+        </div>
+        <div class="breadcrumb">${u.quantity}</div>
+        <div class="formula-line">${u.definition}</div>
+        ${u.note ? `<div class="formula-card-note">${u.note}</div>` : ""}
+      </div>`;
+  }
+
+  function matches(u, q) {
+    return u.name.toLowerCase().includes(q) || u.symbol.toLowerCase().includes(q) || u.quantity.toLowerCase().includes(q);
+  }
+
+  function renderList(list, emptyQuery) {
+    const results = document.getElementById("su-results");
+    results.innerHTML = list.length
+      ? list.map(card).join("")
+      : `<div class="placeholder">${ICONS.search}<div>No unit for "${emptyQuery}".</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `${SI_UNITS.length} units`)}
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="su-input" type="text" placeholder="Search a unit or quantity" autocapitalize="off" spellcheck="false" />
+      </div>
+      <div id="su-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    const input = document.getElementById("su-input");
+    renderList(SI_UNITS, "");
+    input.oninput = () => {
+      const q = input.value.trim().toLowerCase();
+      renderList(q ? SI_UNITS.filter((u) => matches(u, q)) : SI_UNITS, q);
+    };
+  }
+
+  paint();
+}
+
+// ---------- DEC / HEX / BIN conversion ----------
+const BASE_RADIX = { dec: 10, hex: 16, bin: 2 };
+const BASE_CHARS = { dec: /[^0-9]/g, hex: /[^0-9a-fA-F]/g, bin: /[^01]/g };
+
+// Binary reads better broken into nibbles — pad on the left so the grouping
+// lines up from the right, the same way you'd read it off a byte boundary.
+function groupNibbles(bin) {
+  const pad = (4 - (bin.length % 4)) % 4;
+  return ("0".repeat(pad) + bin).match(/.{1,4}/g).join(" ");
+}
+
+function renderDecHexBin(domain, tool, favId) {
+  const state = { base: "dec", raw: "255" };
+
+  function parsedValue() {
+    if (state.raw === "") return NaN;
+    return parseInt(state.raw, BASE_RADIX[state.base]);
+  }
+
+  function refresh() {
+    const v = parsedValue();
+    const ok = isFinite(v) && !isNaN(v);
+    app.querySelector('[data-res="dec"]').textContent = ok ? v.toString(10) : "—";
+    app.querySelector('[data-res="hex"]').textContent = ok ? v.toString(16).toUpperCase() : "—";
+    app.querySelector('[data-res="bin"]').textContent = ok ? groupNibbles(v.toString(2)) : "—";
+  }
+
+  // Switching base re-reads the field's digits under the OLD base and
+  // re-writes them in the new one, so the underlying value survives the
+  // switch instead of the field just going blank or keeping stale digits.
+  function switchBase(newBase) {
+    const v = parsedValue();
+    state.base = newBase;
+    state.raw = isFinite(v) && !isNaN(v) ? v.toString(BASE_RADIX[newBase]).toUpperCase() : "";
+    paint();
+  }
+
+  function paint() {
+    const v = parsedValue();
+    const ok = isFinite(v) && !isNaN(v);
+
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Enter a value in one base, read it in all three")}
+
+      ${pillRow([["dec", "DEC"], ["hex", "HEX"], ["bin", "BIN"]], state.base, domain.bg)}
+
+      <div class="field">
+        <label>Value (${state.base.toUpperCase()})</label>
+        <input id="dhb-value" type="text" inputmode="${state.base === "dec" ? "numeric" : "text"}" autocapitalize="characters" spellcheck="false" value="${state.raw}" />
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Decimal</div>
+      <div class="result-field">
+        <div class="result-value"><span class="num" data-res="dec">${ok ? v.toString(10) : "—"}</span></div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Hexadecimal</div>
+      <div class="result-field">
+        <div class="result-value"><span class="num" data-res="hex">${ok ? v.toString(16).toUpperCase() : "—"}</span></div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Binary</div>
+      <div class="result-field">
+        <div class="result-value" style="font-size:22px;"><span class="num" data-res="bin">${ok ? groupNibbles(v.toString(2)) : "—"}</span></div>
+      </div>
+
+      ${formulaSection(
+        ["Decimal: each digit × 10ⁿ", "Hexadecimal: each digit × 16ⁿ (a-f = 10-15)", "Binary: each digit × 2ⁿ — one hex digit is exactly 4 binary digits"],
+        "Hex is really just binary written in groups of 4, which is why register and memory values are usually shown in hex rather than decimal."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, switchBase);
+
+    const field = document.getElementById("dhb-value");
+    field.oninput = () => {
+      const filtered = field.value.replace(BASE_CHARS[state.base], "").toUpperCase();
+      if (filtered !== field.value) field.value = filtered;
+      state.raw = filtered;
+      refresh();
     };
   }
 
