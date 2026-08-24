@@ -40,7 +40,7 @@ const DOMAINS = [
       {
         title: "Inductors",
         tools: [
-          { name: "Color code" },
+          { name: "Color code", calc: "inductor-color-code" },
           { name: "SMD code" },
           { name: "Air-core coil (Wheeler)" },
           { name: "Toroid winding" },

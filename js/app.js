@@ -188,6 +188,7 @@ function renderTool(rawKey, calcId) {
 
   if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, favId);
   if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, favId);
+  if (calcId === "inductor-color-code") return renderInductorColorCode(domain, tool, favId);
   if (calcId === "smd-code") return renderSmdCode(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
@@ -602,7 +603,14 @@ function renderOhmsLaw(domain, tool, favId) {
 // is offered for a role only if it has a value for it — silver is a legal
 // multiplier and tolerance but never a digit.
 const BAND_COLORS = {
-  black:  { hex: "#1A1A1A", digit: 0, mult: 1,    tc: 250 },
+  // black's tol:20 is legal on inductors only, not resistors — IEC 60062
+  // marks a resistor's ±20% by omitting the tolerance band entirely (see
+  // "none" below), but several inductor manufacturer references use an
+  // actual black band for the same ±20% instead. Safe to carry here since
+  // the resistor screen's tolerance order is a fixed list that never
+  // includes "black" — this only becomes reachable where explicitly opted
+  // into, i.e. the inductor screen's own tolerance order.
+  black:  { hex: "#1A1A1A", digit: 0, mult: 1,    tol: 20, tc: 250 },
   brown:  { hex: "#7A4A21", digit: 1, mult: 1e1,  tol: 1,    tc: 100 },
   red:    { hex: "#C62828", digit: 2, mult: 1e2,  tol: 2,    tc: 50 },
   orange: { hex: "#EF6C00", digit: 3, mult: 1e3,             tc: 15 },
@@ -4514,6 +4522,279 @@ function renderIpRatings(domain, tool, favId) {
 
     document.getElementById("ip-first").onchange = (e) => { state.first = e.target.value; refresh(); };
     document.getElementById("ip-second").onchange = (e) => { state.second = e.target.value; refresh(); };
+  }
+
+  paint();
+}
+
+// ---------- Inductor color code ----------
+// IEC 60062 (the resistor standard) doesn't actually define an inductor
+// code at all — manufacturers just reuse the resistor digit/multiplier/
+// tolerance colours (BAND_COLORS, the roller UI) and read the result in
+// microhenries instead of ohms. That gap is exactly why online charts
+// disagree with each other: there's no single authoritative inductor-only
+// document to check against. Two real, checked additions on top of the
+// plain resistor scheme: black is a legal ±20% tolerance band here (several
+// manufacturer references use it, where the resistor convention only ever
+// leaves the band off), and "5-band" for inductors means a military-spec
+// identifier per MIL-PRF-15305 (formerly MIL-C-15305, the real military RF
+// inductor spec — not "MIL-STD-15305", a number that shows up in at least
+// one AI-generated summary but isn't a real document): a double-width
+// silver band prepended, NOT a third significant digit the way 5-band
+// resistors work. Confirmed against a worked example (silver-silver / blue
+// / green / brown / red = 650 µH ±2%): the value only comes out right if
+// the leading silver band carries no digit at all.
+// The roller wiring block below duplicates the resistor screen's rather
+// than sharing it — both are tightly closed over their own local state, and
+// extracting a shared helper would mean touching that already-shipped,
+// working code for a second consumer that doesn't exist yet beyond this one.
+const INDUCTOR_UNITS = { nH: 1e-3, "µH": 1, mH: 1e3, H: 1e6 };
+// Inductor-only: adds "black" (±20%, an alternate to leaving the band off)
+// ahead of "none" — kept separate from the resistor screen's TOL_ORDER so
+// that addition can't leak into the resistor tolerance picker.
+const INDUCTOR_TOL_ORDER = [...TOL_ORDER.slice(0, -1), "black", "none"];
+
+function formatInductance(uH) {
+  if (!isFinite(uH)) return "—";
+  if (uH === 0) return "0 µH";
+  for (const [scale, unit] of [[1e6, "H"], [1e3, "mH"], [1, "µH"]]) {
+    if (Math.abs(uH) >= scale) return `${trim(uH / scale)} ${unit}`;
+  }
+  return `${trim(uH / 1e-3)} nH`;
+}
+
+function renderInductorColorCode(domain, tool, favId) {
+  const ROLES = ["d1", "d2", "mult", "tol"];
+  const ITEM_H = 30;
+  const state = { unit: "µH", mil: false, bands: { d1: "brown", d2: "black", mult: "black", tol: "gold" } };
+
+  function optionsFor(role) {
+    if (role === "tol") return INDUCTOR_TOL_ORDER;
+    const prop = role === "mult" ? "mult" : "digit";
+    return Object.keys(BAND_COLORS).filter((c) => BAND_COLORS[c][prop] !== undefined);
+  }
+
+  function multLabel(v) {
+    if (v >= 1e9) return "×1G";
+    if (v >= 1e6) return `×${trim(v / 1e6)}M`;
+    if (v >= 1e3) return `×${trim(v / 1e3)}k`;
+    return `×${trim(v)}`;
+  }
+
+  function valueLabel(role, color) {
+    if (role === "mult") return multLabel(BAND_COLORS[color].mult);
+    if (role === "tol") return `±${BAND_COLORS[color].tol}%`;
+    return String(BAND_COLORS[color].digit);
+  }
+
+  function compute() {
+    const d1 = BAND_COLORS[state.bands.d1].digit;
+    const d2 = BAND_COLORS[state.bands.d2].digit;
+    const uH = (d1 * 10 + d2) * BAND_COLORS[state.bands.mult].mult;
+    const tol = BAND_COLORS[state.bands.tol].tol;
+    return { uH, tol, min: uH * (1 - tol / 100), max: uH * (1 + tol / 100) };
+  }
+
+  function colorWith(prop, value) {
+    return Object.keys(BAND_COLORS).find((c) => BAND_COLORS[c][prop] === value);
+  }
+
+  function bandsFromUH(uH) {
+    if (!isFinite(uH) || uH <= 0) return false;
+    let e = Math.floor(Math.log10(uH)) - 1;
+    let digits = Math.round(uH / Math.pow(10, e));
+    if (digits >= 100) { digits = Math.round(digits / 10); e += 1; }
+    const mult = Math.pow(10, e);
+    const multColor = Object.keys(BAND_COLORS)
+      .find((c) => BAND_COLORS[c].mult !== undefined && Math.abs(BAND_COLORS[c].mult - mult) <= mult * 1e-9);
+    if (!multColor) return false;
+    const c1 = colorWith("digit", Math.floor(digits / 10));
+    const c2 = colorWith("digit", digits % 10);
+    if (!c1 || !c2) return false;
+    return { d1: c1, d2: c2, mult: multColor };
+  }
+
+  // Physical part, not a schematic symbol — same reasoning as the resistor
+  // drawing. Teal body rather than the resistor's tan so the two are never
+  // mistaken for each other at a glance, and a taller radius since axial
+  // inductors read visually rounder than resistors. In MIL mode a
+  // double-width silver band leads the value bands — an identifier, not a
+  // digit, so it never shifts what the other bands mean.
+  function inductorBody() {
+    const valueStart = state.mil ? 78 : 71;
+    const bars = state.mil ? [`<rect x="63" y="12" width="11" height="40" fill="${BAND_COLORS.silver.hex}"/>`] : [];
+    bars.push(...["d1", "d2", "mult"].map((r, i) =>
+      `<rect x="${valueStart + i * 12}" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands[r]].hex}"/>`
+    ));
+    if (state.bands.tol !== "none") {
+      bars.push(`<rect x="132" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tol].hex}"/>`);
+    }
+    return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none">
+      <defs><clipPath id="ic-body"><rect x="62" y="10" width="96" height="44" rx="18"/></clipPath></defs>
+      <path d="M6 32 H62 M158 32 H214" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="62" y="10" width="96" height="44" rx="18" fill="#2E6B78"/>
+      <g clip-path="url(#ic-body)">${bars.join("")}</g>
+      <rect x="62" y="10" width="96" height="44" rx="18" fill="none" stroke="#00000055" stroke-width="1"/>
+    </svg>`;
+  }
+
+  function seriesLine(r) {
+    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
+      if (nearestESeries(r.uH, name).exact) return `${name} standard value`;
+    }
+    const grid = eSeriesForTolerance(r.tol);
+    return `Not standard — nearest ${grid} is ${formatInductance(nearestESeries(r.uH, grid).value)}`;
+  }
+
+  function applyTypedValue(raw) {
+    const err = app.querySelector('[data-res="err"]');
+    const uH = parseFloat(raw) * INDUCTOR_UNITS[state.unit];
+    if (!isFinite(uH) || uH <= 0) { err.textContent = ""; return; }
+    const picked = bandsFromUH(uH);
+    if (!picked) { err.textContent = "No band combination reaches that value."; return; }
+    err.textContent = "";
+    Object.assign(state.bands, picked);
+    syncRollers();
+  }
+
+  function syncRollers() {
+    ROLES.forEach((role) => {
+      const track = app.querySelector(`.roller-track[data-role="${role}"]`);
+      if (!track) return;
+      const i = optionsFor(role).indexOf(state.bands[role]);
+      if (i < 0) return;
+      delete track.dataset.user;
+      track.scrollTop = i * ITEM_H;
+    });
+    updateReadout();
+  }
+
+  function updateReadout() {
+    const r = compute();
+    app.querySelector(".diagram-box").innerHTML = inductorBody();
+    ROLES.forEach((role) => {
+      const el = app.querySelector(`[data-value="${role}"]`);
+      if (el) el.textContent = valueLabel(role, state.bands[role]);
+    });
+    app.querySelector('[data-res="uh"]').textContent = formatInductance(r.uH);
+    app.querySelector('[data-res="tol"]').textContent = `±${r.tol}%`;
+    app.querySelector('[data-res="sub"]').textContent = `${formatInductance(r.min)} – ${formatInductance(r.max)}`;
+    app.querySelector('[data-res="series"]').textContent = seriesLine(r);
+
+    const typed = app.querySelector("#ic-value");
+    if (typed && document.activeElement !== typed) typed.value = trim(r.uH / INDUCTOR_UNITS[state.unit]);
+    const tolSel = app.querySelector("#ic-tol");
+    if (tolSel) tolSel.value = state.bands.tol;
+  }
+
+  function paint() {
+    const r = compute();
+
+    app.innerHTML = `
+      ${calcHeader(tool, favId, state.mil ? "5-band (military ID + 4-band value)" : "4-band inductor code")}
+
+      <div class="diagram-box">${inductorBody()}</div>
+
+      ${pillRow([[4, "4-band"], [5, "5-band (MIL)"]], state.mil ? 5 : 4, domain.bg)}
+
+      <div class="field">
+        <label>Enter a value</label>
+        <div class="field-row">
+          <input id="ic-value" type="number" inputmode="decimal" step="any" value="${trim(r.uH / INDUCTOR_UNITS[state.unit])}" />
+          <select id="ic-unit">${Object.keys(INDUCTOR_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <select id="ic-tol">${INDUCTOR_TOL_ORDER.map((c) => `<option value="${c}" ${state.bands.tol === c ? "selected" : ""}>±${BAND_COLORS[c].tol}%</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#8FC1F5">Your bands</div>
+      <div class="rollers">
+        ${ROLES.map((role, i) => `
+          <div class="roller">
+            <div class="roller-name" title="Band ${i + 1} · ${BAND_ROLE_LABEL[role]}">${ROLLER_NAME[role]}</div>
+            <div class="roller-window">
+              <div class="roller-track" data-role="${role}">
+                ${optionsFor(role).map((c) => `
+                  <button class="roller-item${c === "none" ? " roller-item--none" : ""}" data-color="${c}" title="${c} · ${valueLabel(role, c)}"><span style="background:${BAND_COLORS[c].hex}">${c === "none" ? "—" : ""}</span></button>`).join("")}
+              </div>
+            </div>
+            <div class="roller-value" data-value="${role}">${valueLabel(role, state.bands[role])}</div>
+          </div>`).join("")}
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Inductance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="uh">${formatInductance(r.uH)}</span>
+          <span class="unit" data-res="tol">±${r.tol}%</span>
+        </div>
+        <div class="result-sub" data-res="series">${seriesLine(r)}</div>
+        <div class="result-sub" data-res="sub">${formatInductance(r.min)} – ${formatInductance(r.max)}</div>
+      </div>
+
+      ${formulaSection(
+        ["Value = (10 × D1 + D2) × Multiplier, in µH"],
+        state.mil
+          ? "The leading double-width silver band only marks the part as MIL-PRF-15305 (military-spec) — it carries no digit and doesn't change the value. IEC 60062 doesn't define an inductor code at all; this whole scheme is the resistor code, reused."
+          : "Same digit and multiplier colours as the resistor code — IEC 60062 doesn't actually define an inductor code of its own, so this is the resistor scheme, reused and read in µH."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mil = +v === 5; paint(); });
+    const typed = document.getElementById("ic-value");
+    typed.oninput = () => applyTypedValue(typed.value);
+    document.getElementById("ic-unit").onchange = (e) => { state.unit = e.target.value; applyTypedValue(typed.value); };
+    document.getElementById("ic-tol").onchange = (e) => { state.bands.tol = e.target.value; syncRollers(); };
+
+    app.querySelectorAll(".roller-track").forEach((track) => {
+      const role = track.dataset.role;
+      const opts = optionsFor(role);
+      const items = [...track.querySelectorAll(".roller-item")];
+
+      const shape = () => {
+        const centre = track.scrollTop / ITEM_H;
+        items.forEach((item, i) => {
+          const d = i - centre;
+          const angle = Math.max(-64, Math.min(64, d * 22));
+          item.style.transform = `rotateX(${-angle}deg) translateZ(${30 - Math.abs(d) * 5}px)`;
+          item.style.opacity = String(Math.max(0.18, 1 - Math.abs(d) * 0.3));
+        });
+      };
+
+      track.scrollTop = opts.indexOf(state.bands[role]) * ITEM_H;
+      shape();
+
+      let frame = 0;
+      let settle;
+      track.addEventListener("pointerdown", () => { track.dataset.user = "1"; }, { passive: true });
+      track.addEventListener("touchstart", () => { track.dataset.user = "1"; }, { passive: true });
+      track.addEventListener("wheel", () => { track.dataset.user = "1"; }, { passive: true });
+      track.addEventListener("keydown", () => { track.dataset.user = "1"; });
+
+      track.addEventListener("scroll", () => {
+        if (!frame) frame = requestAnimationFrame(() => { frame = 0; shape(); });
+        if (!track.dataset.user) return;
+        clearTimeout(settle);
+        settle = setTimeout(() => {
+          delete track.dataset.user;
+          const i = Math.min(opts.length - 1, Math.max(0, Math.round(track.scrollTop / ITEM_H)));
+          if (opts[i] !== state.bands[role]) { state.bands[role] = opts[i]; updateReadout(); }
+        }, 90);
+      });
+
+      items.forEach((item, i) => {
+        item.onclick = () => {
+          delete track.dataset.user;
+          if (opts[i] !== state.bands[role]) { state.bands[role] = opts[i]; updateReadout(); }
+          track.scrollTo({ top: i * ITEM_H, behavior: "smooth" });
+        };
+      });
+    });
   }
 
   paint();
