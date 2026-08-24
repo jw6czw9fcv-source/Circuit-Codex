@@ -189,6 +189,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "ohms-law") return renderOhmsLaw(domain, tool, favId);
   if (calcId === "resistor-color-code") return renderResistorColorCode(domain, tool, favId);
   if (calcId === "inductor-color-code") return renderInductorColorCode(domain, tool, favId);
+  if (calcId === "inductor-smd-code") return renderInductorSmdCode(domain, tool, favId);
   if (calcId === "smd-code") return renderSmdCode(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
@@ -4795,6 +4796,188 @@ function renderInductorColorCode(domain, tool, favId) {
         };
       });
     });
+  }
+
+  paint();
+}
+
+// ---------- Inductor SMD code ----------
+// Same digit/multiplier/R-notation scheme as the resistor SMD screen
+// (significant digits + a power-of-ten multiplier digit, or R standing in
+// for a decimal point below 10), just read in µH — the same EIA convention,
+// reused, the same way the color-code screen reuses the resistor bands.
+// The one real addition is a trailing tolerance letter (F/G/J/K/M), which
+// the resistor screen skips since resistor packages rarely carry one but
+// SMD inductors commonly do. This is genuinely one of several schemes in
+// use, though, not a universal one — manufacturer-specific codes and
+// unmarked parts (especially very small packages) are common enough that
+// a mismatch against a real part's datasheet isn't this screen being wrong,
+// just a different scheme.
+const SMD_IND_TOL_LETTER = { F: 1, G: 2, J: 5, K: 10, M: 20 };
+
+function renderInductorSmdCode(domain, tool, favId) {
+  const state = { mode: "3", uH: 100, unit: "µH", tol: "" };
+
+  function sig() {
+    return state.mode === "3" ? 2 : 3;
+  }
+
+  function numericCode(uH) {
+    const digits = Number(state.mode);
+    if (uH === 0) return "0".repeat(digits);
+    if (!isFinite(uH) || uH < 0) return null;
+    const n = sig();
+    const e = Math.floor(Math.log10(uH));
+    const d = String(Math.round(uH / Math.pow(10, e - n + 1)));
+    if (d.length > n) return numericCode(Math.pow(10, e + 1));
+    const exponent = e - n + 1;
+    if (exponent > 9) return null;
+    if (exponent >= 0) return d + String(exponent);
+    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
+    return code.length <= digits + 1 ? code : null;
+  }
+
+  function codeFor(uH) {
+    const n = numericCode(uH);
+    return n === null ? null : n + state.tol;
+  }
+
+  function uHFor(raw) {
+    let str = String(raw).trim().toUpperCase();
+    let tol = "";
+    if (str.length && SMD_IND_TOL_LETTER[str[str.length - 1]] !== undefined) {
+      tol = str[str.length - 1];
+      str = str.slice(0, -1);
+    }
+    if (!str) return { uH: NaN, tol };
+    const digits = Number(state.mode);
+    if (str.includes("R")) {
+      if ((str.match(/R/g) || []).length > 1 || /[^0-9R]/.test(str)) return { uH: NaN, tol };
+      const v = parseFloat(str.replace("R", "."));
+      return { uH: isFinite(v) ? v : NaN, tol };
+    }
+    if (!/^[0-9]+$/.test(str) || str.length !== digits) return { uH: NaN, tol };
+    if (Number(str) === 0) return { uH: 0, tol };
+    const n = sig();
+    return { uH: Number(str.slice(0, n)) * Math.pow(10, Number(str.slice(n))), tol };
+  }
+
+  function seriesLine(uH) {
+    if (!isFinite(uH) || uH <= 0) return "";
+    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
+      if (nearestESeries(uH, name).exact) return `${name} standard value`;
+    }
+    const grid = state.mode === "3" ? "E24" : "E96";
+    return `Not standard — nearest ${grid} is ${formatInductance(nearestESeries(uH, grid).value)}`;
+  }
+
+  // Same physical marking as the resistor SMD chip — a black body with
+  // metallised ends, code printed in white.
+  function chip(code) {
+    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
+      <rect x="44" y="16" width="132" height="48" rx="5" fill="#141619" stroke="#3A3F47" stroke-width="1"/>
+      <rect x="44" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
+      <rect x="156" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
+      <text x="110" y="48" fill="#FFFFFF" font-size="21" font-weight="600" text-anchor="middle"
+            font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1.5">${code || "—"}</text>
+    </svg>`;
+  }
+
+  function refresh(source, notice) {
+    const code = codeFor(state.uH);
+    app.querySelector(".diagram-box").innerHTML = chip(code);
+    app.querySelector('[data-res="uh"]').textContent = formatInductance(state.uH);
+    app.querySelector('[data-res="series"]').textContent = seriesLine(state.uH);
+    app.querySelector('[data-res="tol"]').textContent = state.tol ? `±${SMD_IND_TOL_LETTER[state.tol]}%` : "No tolerance letter";
+    const codeField = app.querySelector("#ismd-code");
+    const valueField = app.querySelector("#ismd-value");
+    if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    if (source !== "value" && document.activeElement !== valueField) {
+      valueField.value = trim(state.uH / INDUCTOR_UNITS[state.unit]);
+    }
+    app.querySelector('[data-res="err"]').textContent =
+      notice || (code === null ? `Out of range for a ${state.mode}-digit code.` : "");
+  }
+
+  function applyValue(raw) {
+    const v = parseFloat(raw) * INDUCTOR_UNITS[state.unit];
+    if (!isFinite(v) || v < 0) return;
+    state.uH = v;
+    refresh("value");
+  }
+
+  function paint() {
+    const code = codeFor(state.uH);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `${state.mode} digit codes + tolerance letter`)}
+
+      <div class="diagram-box">${chip(code)}</div>
+
+      ${pillRow([["3", "3 digit"], ["4", "4 digit"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Marking on the chip</div>
+      <div class="field">
+        <label>Code</label>
+        <div class="field-row">
+          <input id="ismd-code" type="text" autocapitalize="characters" spellcheck="false" maxlength="5" value="${code || ""}" />
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Or enter a value</div>
+      <div class="field">
+        <label>Inductance</label>
+        <div class="field-row">
+          <input id="ismd-value" type="number" inputmode="decimal" step="any" value="${trim(state.uH / INDUCTOR_UNITS[state.unit])}" />
+          <select id="ismd-unit">${Object.keys(INDUCTOR_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Tolerance letter</label>
+        <select id="ismd-tol">
+          <option value="" ${state.tol === "" ? "selected" : ""}>None</option>
+          ${Object.keys(SMD_IND_TOL_LETTER).map((l) => `<option value="${l}" ${state.tol === l ? "selected" : ""}>${l} — ±${SMD_IND_TOL_LETTER[l]}%</option>`).join("")}
+        </select>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Inductance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="uh">${formatInductance(state.uH)}</span>
+        </div>
+        <div class="result-sub" data-res="series">${seriesLine(state.uH)}</div>
+        <div class="result-sub" data-res="tol">${state.tol ? `±${SMD_IND_TOL_LETTER[state.tol]}%` : "No tolerance letter"}</div>
+      </div>
+
+      ${formulaSection(
+        [`Value = (${sig() === 2 ? "D1D2" : "D1D2D3"}) × 10^${sig() === 2 ? "D3" : "D4"}, in µH`],
+        "R replaces the decimal point below 10 µH (4R7 = 4.7 µH); a trailing letter sets tolerance. Not universal: \"100\" has meant 10 µH on one manufacturer's part, 10 nH on another's — confirm against the datasheet."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    const codeField = document.getElementById("ismd-code");
+    codeField.oninput = () => {
+      const { uH, tol } = uHFor(codeField.value);
+      if (!isNaN(uH)) { state.uH = uH; state.tol = tol; refresh("code"); }
+      else { app.querySelector('[data-res="err"]').textContent = "Not a valid marking."; }
+    };
+    const valueField = document.getElementById("ismd-value");
+    valueField.oninput = () => applyValue(valueField.value);
+    document.getElementById("ismd-unit").onchange = (e) => {
+      state.unit = e.target.value;
+      applyValue(valueField.value);
+    };
+    document.getElementById("ismd-tol").onchange = (e) => {
+      state.tol = e.target.value;
+      refresh("value");
+    };
   }
 
   paint();

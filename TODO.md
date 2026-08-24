@@ -17,11 +17,10 @@ Wire & cable colors (merged with the former "Wire color code by
 rating" — one screen covers AC mains (IEC, US, Canada), US three-phase
 by voltage system, DC, and DIN 47100 multi-core numbering, with filter
 chips to jump straight to a country/topic) · IP-Ratings ·
-**Inductor color code**
+Inductor color code · **Inductor SMD code**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] Inductor SMD code
 - [ ] Ceramic capacitor code
 - [ ] Film capacitor code
 - [ ] Capacitor SMD code
