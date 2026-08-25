@@ -17,19 +17,20 @@ Wire & cable colors (merged with the former "Wire color code by
 rating" — one screen covers AC mains (IEC, US, Canada), US three-phase
 by voltage system, DC, and DIN 47100 multi-core numbering, with filter
 chips to jump straight to a country/topic) · IP-Ratings ·
-Inductor color code · **Inductor SMD code**
+Inductor color code · Inductor SMD code · Ceramic capacitor code ·
+Film capacitor code · Capacitor SMD code · SMD package sizes (imperial
+and metric merged onto one screen — same physical bodies, two naming
+systems, and same-numbered codes collide between them, so splitting them
+across two screens would've hidden that instead of explaining it) ·
+Resistor power rating (wasn't on this list — Pierre noticed it was
+missing while looking at SMD package sizes; SMD ratings are a real
+per-package-code standard, through-hole ratings are organized by watt
+instead since there's no code system for THT body size) ·
+Basic logic gates · LED series resistor · Diode forward voltage / biasing ·
+**RMS calculator**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] Ceramic capacitor code
-- [ ] Film capacitor code
-- [ ] Capacitor SMD code
-- [ ] SMD package sizes — Imperial
-- [ ] SMD package sizes — Metric
-- [ ] Basic logic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)
-- [ ] LED series resistor
-- [ ] Diode forward voltage / biasing
-- [ ] RMS calculator
 - [ ] Generic dB ratio calculator
 - [ ] dB / dBm / dBu / dBV conversion
 - [ ] Battery runtime / capacity estimation

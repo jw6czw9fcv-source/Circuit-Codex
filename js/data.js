@@ -17,6 +17,7 @@ const DOMAINS = [
         tools: [
           { name: "Color code", calc: "resistor-color-code" },
           { name: "SMD code", calc: "smd-code" },
+          { name: "Power rating", calc: "resistor-power-rating" },
           { name: "E-series value", calc: "e-series" },
           { name: "Series/parallel", calc: "series-parallel" },
           { name: "Voltage divider", calc: "voltage-divider" },
@@ -29,9 +30,9 @@ const DOMAINS = [
       {
         title: "Capacitors",
         tools: [
-          { name: "Ceramic code" },
-          { name: "Film code" },
-          { name: "SMD code" },
+          { name: "Ceramic code", calc: "ceramic-code" },
+          { name: "Film code", calc: "film-code" },
+          { name: "SMD code", calc: "cap-smd-code" },
           { name: "Series/parallel", calc: "cap-series-parallel" },
           { name: "Charge/discharge (RC)" },
           { name: "Stored energy" },
@@ -60,7 +61,7 @@ const DOMAINS = [
       },
       {
         title: "Reference",
-        tools: [{ name: "SMD package sizes — Imperial" }, { name: "SMD package sizes — Metric" }],
+        tools: [{ name: "SMD package sizes", calc: "smd-package-sizes" }],
       },
     ],
   },
@@ -72,7 +73,7 @@ const DOMAINS = [
     bg: "#2A1B32",
     icon: "transistor",
     sections: [
-      { title: "Diodes", tools: [{ name: "Forward voltage / biasing" }, { name: "Zener regulation" }, { name: "LED series resistor" }] },
+      { title: "Diodes", tools: [{ name: "Forward voltage / biasing", calc: "diode-biasing" }, { name: "Zener regulation" }, { name: "LED series resistor", calc: "led-series-resistor" }] },
       { title: "Transistors (BJT)", tools: [{ name: "Biasing (voltage divider bias)" }, { name: "NPN/PNP as a switch" }, { name: "Example calculation (hFE, IC)" }] },
       { title: "FET / MOSFET / IGBT", tools: [{ name: "Biasing" }, { name: "Switching calculation" }] },
       { title: "Rectifiers", tools: [{ name: "Half-wave" }, { name: "Full-wave (bridge)" }, { name: "Full-wave with center tap" }, { name: "Half-wave with capacitor (ripple)" }] },
@@ -96,7 +97,7 @@ const DOMAINS = [
     bg: "#1F3B33",
     icon: "binary",
     sections: [
-      { title: "Logic gates", tools: [{ name: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)" }, { name: "Karnaugh map simplification" }] },
+      { title: "Logic gates", tools: [{ name: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)", calc: "logic-gates" }, { name: "Karnaugh map simplification" }] },
       { title: "Sequential logic", tools: [{ name: "Flip-flops (SR, D, JK, T)" }, { name: "Multivibrators (astable/monostable)" }, { name: "555 Timer (astable/monostable)" }] },
       { title: "Number systems", tools: [{ name: "DEC / HEX / BIN conversion", calc: "dec-hex-bin" }, { name: "ASCII table", calc: "ascii-table" }] },
       {
@@ -200,7 +201,7 @@ const DOMAINS = [
         title: "Reference",
         tools: [
           { name: "Formula", calc: "formula-search" }, { name: "Glossary" }, { name: "Physical constants", calc: "physical-constants" }, { name: "SI-Units", calc: "si-units" },
-          { name: "RMS calculator" }, { name: "Quiescent current" }, { name: "4-20mA loop conversion" }, { name: "Lumen/Watt" },
+          { name: "RMS calculator", calc: "rms-calculator" }, { name: "Quiescent current" }, { name: "4-20mA loop conversion" }, { name: "Lumen/Watt" },
         ],
       },
       { title: "Links", tools: [{ name: "Saved links" }] },

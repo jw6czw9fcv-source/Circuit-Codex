@@ -969,3 +969,35 @@ html, body {
 .color-row-text { flex: 1; min-width: 0; }
 .color-row-label { color: var(--text); font-weight: 600; font-size: 14px; }
 .color-row-note { color: var(--text-secondary); font-size: 12.5px; margin-top: 1px; }
+
+/* Logic gate truth tables — a plain grid, one row per input combination,
+   the output column picked out in the result colour so it reads apart from
+   the inputs at a glance the same way "Results" cards do elsewhere. */
+.truth-table {
+  margin: 0 16px 14px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.tt-row {
+  display: grid;
+  grid-template-columns: repeat(var(--tt-cols, 3), 1fr);
+  text-align: center;
+}
+.tt-row:not(:last-child) { border-bottom: 1px solid var(--card-border); }
+.tt-row span {
+  padding: 9px 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  color: var(--text);
+}
+.tt-head span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 4px 6px;
+}
+.tt-out { color: #5DCAA5; font-weight: 600; }

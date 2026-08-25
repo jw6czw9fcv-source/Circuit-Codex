@@ -191,6 +191,15 @@ function renderTool(rawKey, calcId) {
   if (calcId === "inductor-color-code") return renderInductorColorCode(domain, tool, favId);
   if (calcId === "inductor-smd-code") return renderInductorSmdCode(domain, tool, favId);
   if (calcId === "smd-code") return renderSmdCode(domain, tool, favId);
+  if (calcId === "ceramic-code") return renderCeramicCode(domain, tool, favId);
+  if (calcId === "film-code") return renderFilmCapacitorCode(domain, tool, favId);
+  if (calcId === "cap-smd-code") return renderCapSmdCode(domain, tool, favId);
+  if (calcId === "smd-package-sizes") return renderSmdPackageSizes(domain, tool, favId);
+  if (calcId === "resistor-power-rating") return renderResistorPowerRating(domain, tool, favId);
+  if (calcId === "logic-gates") return renderLogicGates(domain, tool, favId);
+  if (calcId === "led-series-resistor") return renderLedSeriesResistor(domain, tool, favId);
+  if (calcId === "diode-biasing") return renderDiodeBiasing(domain, tool, favId);
+  if (calcId === "rms-calculator") return renderRmsCalculator(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -4891,10 +4900,12 @@ function renderInductorSmdCode(domain, tool, favId) {
     app.querySelector('[data-res="tol"]').textContent = state.tol ? `±${SMD_IND_TOL_LETTER[state.tol]}%` : "No tolerance letter";
     const codeField = app.querySelector("#ismd-code");
     const valueField = app.querySelector("#ismd-value");
+    const tolField = app.querySelector("#ismd-tol");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
     if (source !== "value" && document.activeElement !== valueField) {
       valueField.value = trim(state.uH / INDUCTOR_UNITS[state.unit]);
     }
+    if (document.activeElement !== tolField) tolField.value = state.tol;
     app.querySelector('[data-res="err"]').textContent =
       notice || (code === null ? `Out of range for a ${state.mode}-digit code.` : "");
   }
@@ -4978,6 +4989,1393 @@ function renderInductorSmdCode(domain, tool, favId) {
       state.tol = e.target.value;
       refresh("value");
     };
+  }
+
+  paint();
+}
+
+// ---------- Ceramic capacitor code ----------
+// Same digit/multiplier/R-notation scheme as the resistor and inductor SMD
+// screens, but read in picofarads (pF) per EIA-198 — the standard 3/4-digit
+// ceramic capacitor marking. Unlike those two, the part it's actually printed
+// on is a leaded disc, not an SMD chip — see disc() below. Tolerance is where
+// ceramics genuinely differ:
+// below 10 pF the standard uses an absolute ± in pF (B/C/D/F/G); above 10 pF
+// the same letters F/G, plus J/K/M/Z, switch to a ± percentage instead. Both
+// tables are real EIA-198 letters, not a simplification — F and G legitimately
+// mean two different things depending on which side of 10 pF the value falls.
+const CERAMIC_TOL_ABS = { B: 0.1, C: 0.25, D: 0.5, F: 1, G: 2 }; // pF, value ≤ 10 pF
+const CERAMIC_TOL_PCT = { F: 1, G: 2, J: 5, K: 10, M: 20, Z: "+80% / −20%" }; // %, value > 10 pF
+const CERAMIC_TOL_LABEL = {
+  B: "±0.1 pF (≤10 pF)",
+  C: "±0.25 pF (≤10 pF)",
+  D: "±0.5 pF (≤10 pF)",
+  F: "±1 pF (≤10 pF) / ±1%",
+  G: "±2 pF (≤10 pF) / ±2%",
+  J: "±5%",
+  K: "±10%",
+  M: "±20%",
+  Z: "+80% / −20%",
+};
+const CERAMIC_TOL_LETTERS = new Set([...Object.keys(CERAMIC_TOL_ABS), ...Object.keys(CERAMIC_TOL_PCT)]);
+
+function renderCeramicCode(domain, tool, favId) {
+  const state = { mode: "3", farads: 100e-9, unit: "nF", tol: "" };
+
+  function sig() {
+    return state.mode === "3" ? 2 : 3;
+  }
+
+  function numericCode(pF) {
+    const digits = Number(state.mode);
+    if (pF === 0) return "0".repeat(digits);
+    if (!isFinite(pF) || pF < 0) return null;
+    const n = sig();
+    const e = Math.floor(Math.log10(pF));
+    const d = String(Math.round(pF / Math.pow(10, e - n + 1)));
+    if (d.length > n) return numericCode(Math.pow(10, e + 1));
+    const exponent = e - n + 1;
+    if (exponent > 9) return null;
+    if (exponent >= 0) return d + String(exponent);
+    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
+    return code.length <= digits + 1 ? code : null;
+  }
+
+  function codeFor(farads) {
+    const n = numericCode(farads / 1e-12);
+    return n === null ? null : n + state.tol;
+  }
+
+  function faradsFor(raw) {
+    let str = String(raw).trim().toUpperCase();
+    let tol = "";
+    if (str.length && CERAMIC_TOL_LETTERS.has(str[str.length - 1])) {
+      tol = str[str.length - 1];
+      str = str.slice(0, -1);
+    }
+    if (!str) return { farads: NaN, tol };
+    const digits = Number(state.mode);
+    if (str.includes("R")) {
+      if ((str.match(/R/g) || []).length > 1 || /[^0-9R]/.test(str)) return { farads: NaN, tol };
+      const v = parseFloat(str.replace("R", "."));
+      return { farads: isFinite(v) ? v * 1e-12 : NaN, tol };
+    }
+    if (!/^[0-9]+$/.test(str) || str.length !== digits) return { farads: NaN, tol };
+    if (Number(str) === 0) return { farads: 0, tol };
+    const n = sig();
+    const pF = Number(str.slice(0, n)) * Math.pow(10, Number(str.slice(n)));
+    return { farads: pF * 1e-12, tol };
+  }
+
+  function seriesLine(farads) {
+    if (!isFinite(farads) || farads <= 0) return "";
+    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
+      if (nearestESeries(farads, name).exact) return `${name} standard value`;
+    }
+    const grid = state.mode === "3" ? "E24" : "E96";
+    return `Not standard — nearest ${grid} is ${formatFarads(nearestESeries(farads, grid).value)}`;
+  }
+
+  function tolText(letter, farads) {
+    if (!letter) return "No tolerance letter";
+    const pF = farads / 1e-12;
+    if (pF > 0 && pF <= 10 && CERAMIC_TOL_ABS[letter] !== undefined) return `±${CERAMIC_TOL_ABS[letter]} pF`;
+    const p = CERAMIC_TOL_PCT[letter];
+    if (p !== undefined) return typeof p === "number" ? `±${p}%` : p;
+    if (CERAMIC_TOL_ABS[letter] !== undefined) return `±${CERAMIC_TOL_ABS[letter]} pF`;
+    return "";
+  }
+
+  // A leaded disc, not the black SMD chip the other "code" screens draw.
+  // Printed 3/4-digit ceramic codes are overwhelmingly a through-hole marking:
+  // SMD ceramic chips (0402/0603/0805) are almost never individually printed —
+  // they're too small, so the reel is marked instead of the part. The disc
+  // body and radial leads are what a real "104" is actually printed on.
+  function disc(code) {
+    return `<svg width="220" height="104" viewBox="0 0 220 104" fill="none">
+      <path d="M92 72 V100 M128 72 V100" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="110" cy="40" r="36" fill="#E3B54F" stroke="#00000055" stroke-width="1"/>
+      <text x="110" y="46" fill="#241C0C" font-size="18" font-weight="600" text-anchor="middle"
+            font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="0.5">${code || "—"}</text>
+    </svg>`;
+  }
+
+  function refresh(source, notice) {
+    const code = codeFor(state.farads);
+    app.querySelector(".diagram-box").innerHTML = disc(code);
+    app.querySelector('[data-res="value"]').textContent = formatFarads(state.farads);
+    app.querySelector('[data-res="series"]').textContent = seriesLine(state.farads);
+    app.querySelector('[data-res="tol"]').textContent = tolText(state.tol, state.farads);
+    const codeField = app.querySelector("#cer-code");
+    const valueField = app.querySelector("#cer-value");
+    const tolField = app.querySelector("#cer-tol");
+    if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    if (source !== "value" && document.activeElement !== valueField) {
+      valueField.value = trim(state.farads / CAP_UNITS[state.unit]);
+    }
+    if (document.activeElement !== tolField) tolField.value = state.tol;
+    app.querySelector('[data-res="err"]').textContent =
+      notice || (code === null ? `Out of range for a ${state.mode}-digit code.` : "");
+  }
+
+  function applyValue(raw) {
+    const v = parseFloat(raw) * CAP_UNITS[state.unit];
+    if (!isFinite(v) || v < 0) return;
+    state.farads = v;
+    refresh("value");
+  }
+
+  function paint() {
+    const code = codeFor(state.farads);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `${state.mode} digit codes + tolerance letter`)}
+
+      <div class="diagram-box">${disc(code)}</div>
+
+      ${pillRow([["3", "3 digit"], ["4", "4 digit"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Marking on the part</div>
+      <div class="field">
+        <label>Code</label>
+        <div class="field-row">
+          <input id="cer-code" type="text" autocapitalize="characters" spellcheck="false" maxlength="5" value="${code || ""}" />
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Or enter a value</div>
+      <div class="field">
+        <label>Capacitance</label>
+        <div class="field-row">
+          <input id="cer-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / CAP_UNITS[state.unit])}" />
+          <select id="cer-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Tolerance letter</label>
+        <select id="cer-tol">
+          <option value="" ${state.tol === "" ? "selected" : ""}>None</option>
+          ${Object.keys(CERAMIC_TOL_LABEL).map((l) => `<option value="${l}" ${state.tol === l ? "selected" : ""}>${l} — ${CERAMIC_TOL_LABEL[l]}</option>`).join("")}
+        </select>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Capacitance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="value">${formatFarads(state.farads)}</span>
+        </div>
+        <div class="result-sub" data-res="series">${seriesLine(state.farads)}</div>
+        <div class="result-sub" data-res="tol">${tolText(state.tol, state.farads)}</div>
+      </div>
+
+      ${formulaSection(
+        [`Value = (${sig() === 2 ? "D1D2" : "D1D2D3"}) × 10^${sig() === 2 ? "D3" : "D4"}, in pF`],
+        "R replaces the decimal point below 10 pF (4R7 = 4.7 pF). The trailing letter sets tolerance — B/C/D/F/G give an absolute ± in pF at or below 10 pF, while F/G/J/K/M/Z switch to a ± percentage above that. This is the same code on SMD ceramic chips, though those are rarely printed with it — too small to carry text, so the reel is marked instead. Parts often also carry a separate temperature-coefficient/dielectric code (C0G/NP0, X7R, X5R, Y5V…) — that's a different marking, not part of this numeric code."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    const codeField = document.getElementById("cer-code");
+    codeField.oninput = () => {
+      const { farads, tol } = faradsFor(codeField.value);
+      if (!isNaN(farads)) { state.farads = farads; state.tol = tol; refresh("code"); }
+      else { app.querySelector('[data-res="err"]').textContent = "Not a valid marking."; }
+    };
+    const valueField = document.getElementById("cer-value");
+    valueField.oninput = () => applyValue(valueField.value);
+    document.getElementById("cer-unit").onchange = (e) => {
+      state.unit = e.target.value;
+      applyValue(valueField.value);
+    };
+    document.getElementById("cer-tol").onchange = (e) => {
+      state.tol = e.target.value;
+      refresh("value");
+    };
+  }
+
+  paint();
+}
+
+// ---------- Film capacitor code ----------
+// Film caps carry two genuinely different markings in the wild, not one:
+// the same EIA-198 3-digit pF code ceramic discs use, and the IEC 60062
+// letter-for-decimal-point scheme (4n7 = 4.7 nF) that resistors use in
+// print (4k7) but rarely carry as an actual on-part marking the way film
+// caps do. Both modes share the same tolerance letters (F/G/J/K/M) — film
+// values are never small enough in practice to need ceramic's <10 pF
+// absolute-pF tolerance letters (B/C/D), so this tool skips that table
+// entirely rather than reuse it where it wouldn't apply.
+function renderFilmCapacitorCode(domain, tool, favId) {
+  const state = { mode: "code", farads: 100e-9, unit: "nF", tol: "" };
+
+  function numericCode(pF) {
+    if (pF === 0) return "000";
+    if (!isFinite(pF) || pF < 0) return null;
+    const e = Math.floor(Math.log10(pF));
+    const d = String(Math.round(pF / Math.pow(10, e - 1)));
+    if (d.length > 2) return numericCode(Math.pow(10, e + 1));
+    const exponent = e - 1;
+    if (exponent > 9) return null;
+    if (exponent >= 0) return d + String(exponent);
+    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
+    return code.length <= 3 ? code : null;
+  }
+
+  function stripTol(raw) {
+    let str = String(raw).trim();
+    let tol = "";
+    if (str.length && SMD_IND_TOL_LETTER[str[str.length - 1]] !== undefined) {
+      tol = str[str.length - 1];
+      str = str.slice(0, -1);
+    }
+    return { str, tol };
+  }
+
+  function numericValueFor(rawStr) {
+    const raw = rawStr.toUpperCase();
+    if (!raw) return NaN;
+    if (raw.includes("R")) {
+      if ((raw.match(/R/g) || []).length > 1 || /[^0-9R]/.test(raw)) return NaN;
+      const v = parseFloat(raw.replace("R", "."));
+      return isFinite(v) ? v : NaN;
+    }
+    if (!/^[0-9]+$/.test(raw) || raw.length !== 3) return NaN;
+    if (Number(raw) === 0) return 0;
+    return Number(raw.slice(0, 2)) * Math.pow(10, Number(raw.slice(2)));
+  }
+
+  // p/n/µ sit where the decimal point would: 4n7 is 4.7 nF, n33 is 0.33 nF,
+  // 100p is 100 pF. Deliberately no "m" (milli) or "F" (whole farads) letter —
+  // real film caps never reach either range, and skipping them keeps this
+  // parser from ever having to disambiguate a value letter from the
+  // capital-letter tolerance codes (M = ±20%, F = ±1%) that follow it.
+  const DIRECT_UNIT = { p: 1e-12, n: 1e-9, u: 1e-6, "µ": 1e-6 };
+  const DIRECT_LETTER = { p: "p", n: "n", u: "µ", "µ": "µ" };
+
+  function directValueFor(rawStr) {
+    const m = /^(\d*)([pnuµ])(\d*)$/.exec(rawStr);
+    if (!m) return NaN;
+    const [, before, letter, after] = m;
+    if (!before && !after) return NaN;
+    return parseFloat(`${before || "0"}.${after || "0"}`) * DIRECT_UNIT[letter];
+  }
+
+  function directCodeFor(farads) {
+    if (!isFinite(farads) || farads < 0) return null;
+    let scale = 1e-12, letter = "p";
+    for (const [s, l] of [[1e-6, "µ"], [1e-9, "n"], [1e-12, "p"]]) {
+      if (Math.abs(farads) >= s) { scale = s; letter = l; break; }
+    }
+    const num = trim(farads / scale);
+    const [before, after] = num.split(".");
+    return `${before === "0" ? "" : before}${letter}${after || ""}`;
+  }
+
+  function codeFor(farads) {
+    const code = state.mode === "code" ? numericCode(farads / 1e-12) : directCodeFor(farads);
+    return code === null ? null : code + state.tol;
+  }
+
+  function valueFor(rawStr) {
+    const { str, tol } = stripTol(rawStr);
+    const farads = state.mode === "code"
+      ? (isNaN(numericValueFor(str.toUpperCase())) ? NaN : numericValueFor(str.toUpperCase()) * 1e-12)
+      : directValueFor(str);
+    return { farads, tol };
+  }
+
+  function seriesLine(farads) {
+    if (!isFinite(farads) || farads <= 0) return "";
+    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
+      if (nearestESeries(farads, name).exact) return `${name} standard value`;
+    }
+    return `Not standard — nearest E24 is ${formatFarads(nearestESeries(farads, "E24").value)}`;
+  }
+
+  function tolText(letter) {
+    return letter ? `±${SMD_IND_TOL_LETTER[letter]}%` : "No tolerance letter";
+  }
+
+  function subtitle() {
+    return state.mode === "code" ? "3 digit code + tolerance letter" : "Direct p/n/µ marking + tolerance letter";
+  }
+
+  // A radial box, not a disc or an SMD chip — the small dipped/moulded body
+  // most film caps (polyester, polypropylene) actually ship in, leads out
+  // the bottom like the ceramic disc screen next to it.
+  function filmBox(code) {
+    return `<svg width="220" height="108" viewBox="0 0 220 108" fill="none">
+      <path d="M70 66 V100 M150 66 V100" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="58" y="8" width="104" height="58" rx="8" fill="#4C8C6B" stroke="#00000055" stroke-width="1"/>
+      <text x="110" y="43" fill="#0D1F17" font-size="17" font-weight="600" text-anchor="middle"
+            font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="0.5">${code || "—"}</text>
+    </svg>`;
+  }
+
+  function refresh(source, notice) {
+    const code = codeFor(state.farads);
+    app.querySelector(".diagram-box").innerHTML = filmBox(code);
+    app.querySelector('[data-res="value"]').textContent = formatFarads(state.farads);
+    app.querySelector('[data-res="series"]').textContent = seriesLine(state.farads);
+    app.querySelector('[data-res="tol"]').textContent = tolText(state.tol);
+    const codeField = app.querySelector("#film-code");
+    const valueField = app.querySelector("#film-value");
+    const tolField = app.querySelector("#film-tol");
+    if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    if (source !== "value" && document.activeElement !== valueField) {
+      valueField.value = trim(state.farads / CAP_UNITS[state.unit]);
+    }
+    if (document.activeElement !== tolField) tolField.value = state.tol;
+    app.querySelector('[data-res="err"]').textContent =
+      notice || (code === null ? "Out of range for this code." : "");
+  }
+
+  function applyValue(raw) {
+    const v = parseFloat(raw) * CAP_UNITS[state.unit];
+    if (!isFinite(v) || v < 0) return;
+    state.farads = v;
+    refresh("value");
+  }
+
+  function paint() {
+    const code = codeFor(state.farads);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, subtitle())}
+
+      <div class="diagram-box">${filmBox(code)}</div>
+
+      ${pillRow([["code", "3-digit code"], ["direct", "Direct (p/n/µ)"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Marking on the part</div>
+      <div class="field">
+        <label>Code</label>
+        <div class="field-row">
+          <input id="film-code" type="text" spellcheck="false" maxlength="7" value="${code || ""}" />
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Or enter a value</div>
+      <div class="field">
+        <label>Capacitance</label>
+        <div class="field-row">
+          <input id="film-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / CAP_UNITS[state.unit])}" />
+          <select id="film-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Tolerance letter</label>
+        <select id="film-tol">
+          <option value="" ${state.tol === "" ? "selected" : ""}>None</option>
+          ${Object.keys(SMD_IND_TOL_LETTER).map((l) => `<option value="${l}" ${state.tol === l ? "selected" : ""}>${l} — ±${SMD_IND_TOL_LETTER[l]}%</option>`).join("")}
+        </select>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Capacitance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="value">${formatFarads(state.farads)}</span>
+        </div>
+        <div class="result-sub" data-res="series">${seriesLine(state.farads)}</div>
+        <div class="result-sub" data-res="tol">${tolText(state.tol)}</div>
+      </div>
+
+      ${state.mode === "code"
+        ? formulaSection(
+            ["Value = (D1D2) × 10^D3, in pF"],
+            "R replaces the decimal point below 10 pF (4R7 = 4.7 pF). The trailing letter sets tolerance. This is the same EIA-198 scheme the ceramic disc and SMD screens use, reused here in pF — some film caps carry it, others don't."
+          )
+        : formulaSection(
+            ["p / n / µ = pF / nF / µF, in place of the decimal point"],
+            "4n7 = 4.7 nF, n33 = 0.33 nF, 100p = 100 pF. The lowercase letter sets the unit; an uppercase letter after it sets tolerance — the two can never be confused with each other. No milli or whole-farad letter: real film caps never reach that range."
+          )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    const codeField = document.getElementById("film-code");
+    codeField.oninput = () => {
+      const { farads, tol } = valueFor(codeField.value);
+      if (!isNaN(farads)) { state.farads = farads; state.tol = tol; refresh("code"); }
+      else { app.querySelector('[data-res="err"]').textContent = "Not a valid marking."; }
+    };
+    const valueField = document.getElementById("film-value");
+    valueField.oninput = () => applyValue(valueField.value);
+    document.getElementById("film-unit").onchange = (e) => {
+      state.unit = e.target.value;
+      applyValue(valueField.value);
+    };
+    document.getElementById("film-tol").onchange = (e) => {
+      state.tol = e.target.value;
+      refresh("value");
+    };
+  }
+
+  paint();
+}
+
+// ---------- Capacitor SMD code ----------
+// The black chip visual belongs here, unlike the ceramic disc and film box
+// screens next to it — this is the one capacitor "code" screen that's
+// actually decoding an SMD part. Most small MLCC ceramic chips (0402–0805)
+// aren't printed with anything at all, too small for text; this scheme is
+// really for tantalum, polymer, and larger chip sizes with room to print.
+// The capacitance digits are the same EIA-198 pF code as the ceramic disc
+// screen. The trailing letter is where it genuinely forks: some parts reuse
+// the ordinary tolerance letters, others use it for voltage instead (the
+// KEMET/AVX EIA table below) — and the two tables aren't just different
+// numbers, they share letters (G, J) with different meanings, so there's no
+// way to auto-detect which one a given part means. Hence the toggle.
+const SMD_CAP_VOLTAGE_LETTER = { G: 4, J: 6.3, A: 10, C: 16, D: 20, E: 25, V: 35, T: 50 };
+
+function renderCapSmdCode(domain, tool, favId) {
+  const state = { farads: 10e-6, mode: "voltage", letter: "" };
+
+  function letterTable() {
+    return state.mode === "voltage" ? SMD_CAP_VOLTAGE_LETTER : SMD_IND_TOL_LETTER;
+  }
+
+  function numericCode(pF) {
+    if (pF === 0) return "000";
+    if (!isFinite(pF) || pF < 0) return null;
+    const e = Math.floor(Math.log10(pF));
+    const d = String(Math.round(pF / Math.pow(10, e - 1)));
+    if (d.length > 2) return numericCode(Math.pow(10, e + 1));
+    const exponent = e - 1;
+    if (exponent > 9) return null;
+    if (exponent >= 0) return d + String(exponent);
+    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
+    return code.length <= 3 ? code : null;
+  }
+
+  function codeFor(farads) {
+    const n = numericCode(farads / 1e-12);
+    return n === null ? null : n + state.letter;
+  }
+
+  function faradsFor(raw) {
+    let str = String(raw).trim().toUpperCase();
+    let letter = "";
+    const table = letterTable();
+    if (str.length && table[str[str.length - 1]] !== undefined) {
+      letter = str[str.length - 1];
+      str = str.slice(0, -1);
+    }
+    if (!str) return { farads: NaN, letter };
+    if (str.includes("R")) {
+      if ((str.match(/R/g) || []).length > 1 || /[^0-9R]/.test(str)) return { farads: NaN, letter };
+      const v = parseFloat(str.replace("R", "."));
+      return { farads: isFinite(v) ? v * 1e-12 : NaN, letter };
+    }
+    if (!/^[0-9]+$/.test(str) || str.length !== 3) return { farads: NaN, letter };
+    if (Number(str) === 0) return { farads: 0, letter };
+    const pF = Number(str.slice(0, 2)) * Math.pow(10, Number(str.slice(2)));
+    return { farads: pF * 1e-12, letter };
+  }
+
+  function seriesLine(farads) {
+    if (!isFinite(farads) || farads <= 0) return "";
+    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
+      if (nearestESeries(farads, name).exact) return `${name} standard value`;
+    }
+    return `Not standard — nearest E24 is ${formatFarads(nearestESeries(farads, "E24").value)}`;
+  }
+
+  function letterText(letter) {
+    if (!letter) return state.mode === "voltage" ? "No voltage letter" : "No tolerance letter";
+    const v = letterTable()[letter];
+    return state.mode === "voltage" ? `Rated ${v}V` : `±${v}%`;
+  }
+
+  // Same physical marking as the resistor/inductor SMD screens — a black
+  // body with metallised ends, code printed in white. Unlike the ceramic
+  // disc and film box, this one really is what a tantalum or larger MLCC
+  // chip looks like.
+  function chip(code) {
+    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
+      <rect x="44" y="16" width="132" height="48" rx="5" fill="#141619" stroke="#3A3F47" stroke-width="1"/>
+      <rect x="44" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
+      <rect x="156" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
+      <text x="110" y="48" fill="#FFFFFF" font-size="21" font-weight="600" text-anchor="middle"
+            font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1.5">${code || "—"}</text>
+    </svg>`;
+  }
+
+  function refresh(source, notice) {
+    const code = codeFor(state.farads);
+    app.querySelector(".diagram-box").innerHTML = chip(code);
+    app.querySelector('[data-res="value"]').textContent = formatFarads(state.farads);
+    app.querySelector('[data-res="series"]').textContent = seriesLine(state.farads);
+    app.querySelector('[data-res="letter"]').textContent = letterText(state.letter);
+    const codeField = app.querySelector("#csmd-code");
+    const valueField = app.querySelector("#csmd-value");
+    const letterField = app.querySelector("#csmd-letter");
+    if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    if (source !== "value" && document.activeElement !== valueField) {
+      valueField.value = trim(state.farads / CAP_UNITS[state.unit || "µF"]);
+    }
+    if (document.activeElement !== letterField) letterField.value = state.letter;
+    app.querySelector('[data-res="err"]').textContent =
+      notice || (code === null ? "Out of range for a 3-digit code." : "");
+  }
+
+  function applyValue(raw) {
+    const v = parseFloat(raw) * CAP_UNITS[state.unit];
+    if (!isFinite(v) || v < 0) return;
+    state.farads = v;
+    refresh("value");
+  }
+
+  function paint() {
+    state.unit = state.unit || "µF";
+    const code = codeFor(state.farads);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "3 digit code + voltage or tolerance letter")}
+
+      <div class="diagram-box">${chip(code)}</div>
+
+      ${pillRow([["voltage", "Voltage letter"], ["tolerance", "Tolerance letter"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Marking on the chip</div>
+      <div class="field">
+        <label>Code</label>
+        <div class="field-row">
+          <input id="csmd-code" type="text" autocapitalize="characters" spellcheck="false" maxlength="4" value="${code || ""}" />
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Or enter a value</div>
+      <div class="field">
+        <label>Capacitance</label>
+        <div class="field-row">
+          <input id="csmd-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / CAP_UNITS[state.unit])}" />
+          <select id="csmd-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>${state.mode === "voltage" ? "Voltage letter" : "Tolerance letter"}</label>
+        <select id="csmd-letter">
+          <option value="" ${state.letter === "" ? "selected" : ""}>None</option>
+          ${Object.keys(letterTable()).map((l) => `<option value="${l}" ${state.letter === l ? "selected" : ""}>${l} — ${state.mode === "voltage" ? `${letterTable()[l]}V` : `±${letterTable()[l]}%`}</option>`).join("")}
+        </select>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Capacitance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="value">${formatFarads(state.farads)}</span>
+        </div>
+        <div class="result-sub" data-res="series">${seriesLine(state.farads)}</div>
+        <div class="result-sub" data-res="letter">${letterText(state.letter)}</div>
+      </div>
+
+      ${formulaSection(
+        ["Value = (D1D2) × 10^D3, in pF"],
+        "R replaces the decimal point below 10 pF (4R7 = 4.7 pF). Most small MLCC ceramic chips (0402–0805) carry no marking at all — too small for text; this really applies to tantalum, polymer, and larger chips with room to print. The trailing letter isn't standardized: some parts use the ordinary tolerance letters, others use it for voltage instead (KEMET/AVX's EIA table, shown here) — and G and J mean different things in each, so pick whichever your part's datasheet says before trusting the letter."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; state.letter = ""; paint(); });
+
+    const codeField = document.getElementById("csmd-code");
+    codeField.oninput = () => {
+      const { farads, letter } = faradsFor(codeField.value);
+      if (!isNaN(farads)) { state.farads = farads; state.letter = letter; refresh("code"); }
+      else { app.querySelector('[data-res="err"]').textContent = "Not a valid marking."; }
+    };
+    const valueField = document.getElementById("csmd-value");
+    valueField.oninput = () => applyValue(valueField.value);
+    document.getElementById("csmd-unit").onchange = (e) => {
+      state.unit = e.target.value;
+      applyValue(valueField.value);
+    };
+    document.getElementById("csmd-letter").onchange = (e) => {
+      state.letter = e.target.value;
+      refresh("value");
+    };
+  }
+
+  paint();
+}
+
+// ---------- SMD package sizes ----------
+// Imperial and metric are two independent naming systems for the same
+// physical bodies, not a unit conversion of each other — and they collide:
+// imperial 0402 (0.04" × 0.02", 1.0mm × 0.5mm) and metric 0402 (0.4mm ×
+// 0.2mm, imperial 01005) are completely different physical sizes that
+// happen to share a 4-digit string. Same trap with 0603. That's the actual
+// reason this screen shows both codes on every row instead of two separate
+// screens — a bare "0402" is genuinely ambiguous without knowing which
+// system it's from.
+//
+// Checked example of how the two systems relate for a size where they
+// don't collide: imperial 0402 and metric 1005 name the SAME body, and here
+// the metric code is a clean conversion —
+//   0.04in × 25.4 = 1.016mm ≈ 1.0mm  →  "10"
+//   0.02in × 25.4 = 0.508mm ≈ 0.5mm  →  "05"  →  metric code "1005"
+// Imperial 0603 and metric 1608 are also the SAME body, but there the
+// metric code is rounded to a "nicer" number rather than converted exactly —
+//   0.06in × 25.4 = 1.524mm  →  rounded up to 1.6mm  →  "16"
+//   0.03in × 25.4 = 0.762mm  →  rounded up to 0.8mm  →  "08"  →  "1608"
+//   (a strict conversion would land on "1508"/"0715", which nobody uses)
+//
+// Both code columns below are each system's own literal digit reading, not
+// a measured dimension — actual manufactured parts run a touch under the
+// metric code's nominal size the same way. Three imperial codes break their
+// own digit-reading rule outright: 1210, 1812 and 2512 all have an actual
+// nominal width of 0.125" (1/8", the "nicer" fraction), not the
+// 0.10"/0.12"/0.12" their second digit pair would suggest.
+const SMD_PACKAGE_SIZES = [
+  { imperial: "01005", metric: "0402", inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine-placement only — below practical hand-soldering size." },
+  { imperial: "0201", metric: "0603", inches: "0.02\" × 0.01\"", mm: "0.6 × 0.3 mm", note: "Hand-soldering needs a fine-tip iron or hot air; easy to tombstone." },
+  { imperial: "0402", metric: "1005", inches: "0.04\" × 0.02\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
+  { imperial: "0603", metric: "1608", inches: "0.06\" × 0.03\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size — easy to hand-solder." },
+  { imperial: "0805", metric: "2012", inches: "0.08\" × 0.05\"", mm: "2.0 × 1.2 mm", note: "The easiest common size to hand-solder; still widely used." },
+  { imperial: "1008", metric: "2520", inches: "0.10\" × 0.08\"", mm: "2.5 × 2.0 mm", note: "Uncommon — mostly seen on some inductors and RF parts." },
+  { imperial: "1206", metric: "3216", inches: "0.12\" × 0.06\"", mm: "3.2 × 1.6 mm", note: "More power dissipation than 0805; still easy to hand-solder." },
+  { imperial: "1210", metric: "3225", inches: "0.12\" × 0.125\"", mm: "3.2 × 2.5 mm", note: "Imperial width is 0.125\", not 0.10\" — see the note above. Higher-power resistors, larger MLCC capacitors." },
+  { imperial: "1806", metric: "4516", inches: "0.18\" × 0.06\"", mm: "4.5 × 1.6 mm", note: "Less common — narrow, high-voltage capacitor bodies." },
+  { imperial: "1812", metric: "4532", inches: "0.18\" × 0.125\"", mm: "4.5 × 3.2 mm", note: "Imperial width is 0.125\", not 0.12\". Power resistors, high-voltage capacitors." },
+  { imperial: "2010", metric: "5025", inches: "0.20\" × 0.10\"", mm: "5.0 × 2.5 mm", note: "Power resistors and higher-current sense resistors." },
+  { imperial: "2512", metric: "6332", inches: "0.25\" × 0.125\"", mm: "6.3 × 3.2 mm", note: "Imperial width is 0.125\", not 0.12\". The common largest standard size — power/fusible resistors, high-voltage caps." },
+];
+
+function renderSmdPackageSizes(domain, tool, favId) {
+  function card(p) {
+    return `
+      <div class="formula-card formula-card--static">
+        <div class="formula-card-head">
+          <span class="formula-card-title">${p.imperial} <span style="opacity:.55;font-weight:500">imperial</span> · ${p.metric} <span style="opacity:.55;font-weight:500">metric</span></span>
+        </div>
+        <div class="breadcrumb">${p.inches} &nbsp;·&nbsp; ${p.mm}</div>
+        ${p.note ? `<div class="formula-card-note">${p.note}</div>` : ""}
+      </div>`;
+  }
+
+  function matches(p, q) {
+    return p.imperial.toLowerCase().includes(q) || p.metric.toLowerCase().includes(q)
+      || p.inches.toLowerCase().includes(q) || p.mm.toLowerCase().includes(q);
+  }
+
+  function renderList(list, emptyQuery) {
+    const results = document.getElementById("sps-results");
+    results.innerHTML = list.length
+      ? list.map(card).join("")
+      : `<div class="placeholder">${ICONS.search}<div>No package for "${emptyQuery}".</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Imperial and metric name the same bodies")}
+
+      <div class="field">
+        <div class="color-row-note">Same-numbered codes collide across systems: imperial 0402 (1.0×0.5mm) and metric 0402 (0.4×0.2mm, = imperial 01005) are different physical sizes. Check which system a marking is in before ordering or laying out a footprint.</div>
+      </div>
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="sps-input" type="text" placeholder="Search an imperial or metric code" autocapitalize="off" spellcheck="false" />
+      </div>
+      <div id="sps-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    const input = document.getElementById("sps-input");
+    renderList(SMD_PACKAGE_SIZES, "");
+    input.oninput = () => {
+      const q = input.value.trim().toLowerCase();
+      renderList(q ? SMD_PACKAGE_SIZES.filter((p) => matches(p, q)) : SMD_PACKAGE_SIZES, q);
+    };
+  }
+
+  paint();
+}
+
+// ---------- Resistor power rating ----------
+// Two genuinely different kinds of table, not one. SMD power rating is set
+// by the package code the same way its physical size is — 0603 means
+// 1/10 W the way it means 1.6×0.8mm, a real industry-standard lookup.
+// Through-hole has no equivalent code: a "1/4W resistor" is a wattage spec,
+// not a size spec, and the body that delivers it is genuinely
+// manufacturer-dependent (carbon film and metal film parts rated the same
+// wattage aren't the same size) — confirmed against Digi-Key/manufacturer
+// listings, not assumed. The mm figures for SMD reuse the same nominal
+// sizes as the SMD package sizes screen; the THT figures are typical
+// ranges, not a spec to design against.
+const RESISTOR_POWER = [
+  { group: "smd", imperial: "01005", metric: "0402", watts: "1/32 W (≈0.031 W)", inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine-placement only — below practical hand-soldering size." },
+  { group: "smd", imperial: "0201", metric: "0603", watts: "1/20 W (0.05 W)", inches: "0.02\" × 0.01\"", mm: "0.6 × 0.3 mm", note: "Rare as a resistor outside very dense boards." },
+  { group: "smd", imperial: "0402", metric: "1005", watts: "1/16 W (0.0625 W)", inches: "0.04\" × 0.02\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
+  { group: "smd", imperial: "0603", metric: "1608", watts: "1/10 W (0.1 W)", inches: "0.06\" × 0.03\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size." },
+  { group: "smd", imperial: "0805", metric: "2012", watts: "1/8 W (0.125 W)", inches: "0.08\" × 0.05\"", mm: "2.0 × 1.2 mm", note: "The easiest common size to hand-solder." },
+  { group: "smd", imperial: "1206", metric: "3216", watts: "1/4 W (0.25 W)", inches: "0.12\" × 0.06\"", mm: "3.2 × 1.6 mm", note: "Reach for this over 0805 when a design needs the extra headroom." },
+  { group: "smd", imperial: "1210", metric: "3225", watts: "1/2 W (0.5 W)", inches: "0.12\" × 0.125\"", mm: "3.2 × 2.5 mm", note: "Getting into current-sense and small power-resistor territory." },
+  { group: "smd", imperial: "2010", metric: "5025", watts: "3/4 W (0.75 W)", inches: "0.20\" × 0.10\"", mm: "5.0 × 2.5 mm", note: "Less common — mostly current-sense and power applications." },
+  { group: "smd", imperial: "2512", metric: "6332", watts: "1 W (1.0 W)", inches: "0.25\" × 0.125\"", mm: "6.3 × 3.2 mm", note: "The common largest standard SMD size before wirewound/thick-film chips take over." },
+  { group: "tht", code: "1/8 W", watts: "0.125 W", size: "≈3.2–3.6 mm body × 1.6–1.8 mm dia.", note: "Small axial; used in dense hobbyist/prototyping boards where SMD isn't." },
+  { group: "tht", code: "1/4 W", watts: "0.25 W", size: "≈6.0–6.5 mm body × 2.2–2.6 mm dia.", note: "The classic general-purpose through-hole size — what most people picture as \"a resistor\"." },
+  { group: "tht", code: "1/2 W", watts: "0.5 W", size: "≈9.0–9.5 mm body × 3.4–3.6 mm dia.", note: "Reach for this when 1/4W runs too hot — higher-voltage pull-ups, LED strings." },
+  { group: "tht", code: "1 W", watts: "1 W", size: "≈10–11.5 mm body × 4.2–5.0 mm dia.", note: "Current-sense, snubber, and bleeder resistors." },
+  { group: "tht", code: "2 W", watts: "2 W", size: "≈14–15.5 mm body × 5.5–6.5 mm dia.", note: "Small power-resistor territory — wirewound/ceramic often takes over from here." },
+];
+const RESISTOR_POWER_FILTERS = [["all", "All"], ["smd", "SMD"], ["tht", "Through-hole"]];
+
+function renderResistorPowerRating(domain, tool, favId) {
+  const state = { filter: "all", query: "" };
+
+  function card(p) {
+    const title = p.group === "smd"
+      ? `${p.imperial} <span style="opacity:.55;font-weight:500">imperial</span> · ${p.metric} <span style="opacity:.55;font-weight:500">metric</span>`
+      : p.code;
+    const size = p.group === "smd" ? `${p.inches} &nbsp;·&nbsp; ${p.mm}` : p.size;
+    return `
+      <div class="formula-card formula-card--static">
+        <div class="formula-card-head">
+          <span class="formula-card-title">${title}</span>
+        </div>
+        <div class="breadcrumb">${p.watts}</div>
+        <div class="formula-line">${size}</div>
+        ${p.note ? `<div class="formula-card-note">${p.note}</div>` : ""}
+      </div>`;
+  }
+
+  function matchesQuery(p, q) {
+    const codeText = p.group === "smd" ? `${p.imperial} ${p.metric}` : p.code;
+    return codeText.toLowerCase().includes(q) || p.watts.toLowerCase().includes(q) || p.note.toLowerCase().includes(q);
+  }
+
+  function filteredList() {
+    let list = state.filter === "all" ? RESISTOR_POWER : RESISTOR_POWER.filter((p) => p.group === state.filter);
+    if (state.query) list = list.filter((p) => matchesQuery(p, state.query));
+    return list;
+  }
+
+  function groupedHTML(list) {
+    const groups = [
+      { key: "smd", name: "SMD — set by package code, standard across manufacturers" },
+      { key: "tht", name: "Through-hole — set by the part, not a code; sizes below are typical only" },
+    ];
+    return groups
+      .map((g) => ({ ...g, items: list.filter((p) => p.group === g.key) }))
+      .filter((g) => g.items.length)
+      .map((g) => `
+        <div class="section-label" style="color:#8FC1F5">${g.name}</div>
+        ${g.items.map(card).join("")}`)
+      .join("");
+  }
+
+  function refreshResults() {
+    const list = filteredList();
+    document.getElementById("rpr-results").innerHTML = list.length
+      ? groupedHTML(list)
+      : `<div class="placeholder">${ICONS.search}<div>No match${state.query ? ` for "${state.query}"` : ""}.</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Max power dissipation by package or body size")}
+
+      <div class="filter-row" id="rpr-chips">
+        ${RESISTOR_POWER_FILTERS.map(([value, label]) => `
+          <button class="filter-btn ${state.filter === value ? "active" : ""}" data-filter="${value}"
+                  style="${state.filter === value ? `background:${domain.bg};color:#8FC1F5;` : ""}">${label}</button>`).join("")}
+      </div>
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="rpr-input" type="text" placeholder="Search a package or wattage" autocapitalize="off" spellcheck="false" value="${state.query}" />
+      </div>
+      <div id="rpr-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    document.getElementById("rpr-chips").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      state.filter = btn.dataset.filter;
+      paint();
+    });
+
+    const input = document.getElementById("rpr-input");
+    refreshResults();
+    input.oninput = () => {
+      state.query = input.value.trim().toLowerCase();
+      refreshResults();
+    };
+  }
+
+  paint();
+}
+
+// ---------- Basic logic gates ----------
+// ANSI/IEEE 315 distinctive shapes (D-shaped AND, shield-shaped OR, triangle
+// NOT), same convention choice as every zigzag resistor in the app — US
+// shape symbols, never IEC rectangles. NAND/NOR/XNOR are their un-negated
+// body plus a bubble at the output; XOR/XNOR add the extra curved line
+// behind an OR body rather than being a shape of their own — that's the
+// real ANSI convention, not a simplification made here. Truth tables are
+// computed from each gate's boolean function rather than hand-typed, so
+// there's no way for a row to disagree with the symbol above it.
+const LOGIC_GATES = {
+  AND: { inputs: 2, family: "and", fn: (a, b) => a & b, expr: "Y = A · B" },
+  OR: { inputs: 2, family: "or", fn: (a, b) => a | b, expr: "Y = A + B" },
+  NOT: { inputs: 1, family: "not", bubble: true, fn: (a) => a ^ 1, expr: `Y = <span style="text-decoration:overline">A</span>` },
+  NAND: { inputs: 2, family: "and", bubble: true, fn: (a, b) => 1 - (a & b), expr: `Y = <span style="text-decoration:overline">A · B</span>` },
+  NOR: { inputs: 2, family: "or", bubble: true, fn: (a, b) => 1 - (a | b), expr: `Y = <span style="text-decoration:overline">A + B</span>` },
+  XOR: { inputs: 2, family: "or", extra: true, fn: (a, b) => a ^ b, expr: "Y = A ⊕ B" },
+  XNOR: { inputs: 2, family: "or", extra: true, bubble: true, fn: (a, b) => 1 - (a ^ b), expr: `Y = <span style="text-decoration:overline">A ⊕ B</span>` },
+};
+const LOGIC_GATE_ROWS = [["AND", "OR", "NOT"], ["NAND", "NOR", "XOR", "XNOR"]];
+
+function renderLogicGates(domain, tool, favId) {
+  const state = { gate: "AND" };
+
+  function gateSymbol(type) {
+    const g = LOGIC_GATES[type];
+    const color = domain.color;
+    const wire = "#5A6169";
+    let body, tipX, backX;
+
+    if (g.family === "not") {
+      body = `<path d="M60,15 L60,95 L140,55 Z" stroke="${color}" stroke-width="2" stroke-linejoin="round" fill="none"/>`;
+      tipX = 140; backX = 60;
+    } else if (g.family === "and") {
+      body = `<path d="M60,20 H100 A35,35 0 0 1 100,90 H60 Z" stroke="${color}" stroke-width="2" stroke-linejoin="round" fill="none"/>`;
+      tipX = 135; backX = 60;
+    } else {
+      body = `<path d="M60,20 Q100,20 140,55 Q100,90 60,90 Q80,55 60,20 Z" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
+      tipX = 140; backX = 64;
+    }
+
+    const extra = g.extra ? `<path d="M50,20 Q70,55 50,90" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round"/>` : "";
+    const inLeftX = g.extra ? 52 : backX;
+    const bubbleR = 8;
+    const outStartX = g.bubble ? tipX + bubbleR * 2 : tipX;
+    const bubbleSvg = g.bubble ? `<circle cx="${tipX + bubbleR}" cy="55" r="${bubbleR}" stroke="${color}" stroke-width="2" fill="var(--card)"/>` : "";
+    const outputLine = `<path d="M${outStartX},55 H185" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const inputLines = g.inputs === 1
+      ? `<path d="M15,55 H${inLeftX}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`
+      : `<path d="M15,35 H${inLeftX} M15,75 H${inLeftX}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const labels = g.inputs === 1
+      ? `<text x="4" y="59" fill="#8FC1F5" font-size="13" font-weight="600">A</text>`
+      : `<text x="4" y="39" fill="#8FC1F5" font-size="13" font-weight="600">A</text><text x="4" y="79" fill="#8FC1F5" font-size="13" font-weight="600">B</text>`;
+
+    return `<svg width="220" height="110" viewBox="0 0 200 110" fill="none">
+      ${inputLines}${extra}${body}${bubbleSvg}${outputLine}${labels}
+      <text x="192" y="59" fill="#5DCAA5" font-size="13" font-weight="600">Y</text>
+    </svg>`;
+  }
+
+  function truthRows(type) {
+    const g = LOGIC_GATES[type];
+    const rows = [];
+    if (g.inputs === 1) { for (const a of [0, 1]) rows.push([a, g.fn(a)]); }
+    else { for (const a of [0, 1]) for (const b of [0, 1]) rows.push([a, b, g.fn(a, b)]); }
+    return rows;
+  }
+
+  function truthTableHTML(type) {
+    const g = LOGIC_GATES[type];
+    const heads = g.inputs === 1 ? ["A", "Y"] : ["A", "B", "Y"];
+    return `
+      <div class="truth-table" style="--tt-cols:${heads.length}">
+        <div class="tt-row tt-head">${heads.map((l) => `<span>${l}</span>`).join("")}</div>
+        ${truthRows(type).map((r) => `<div class="tt-row">${r.map((v, i) => `<span${i === r.length - 1 ? ' class="tt-out"' : ""}>${v}</span>`).join("")}</div>`).join("")}
+      </div>`;
+  }
+
+  function filterRow(id, gates) {
+    return `
+      <div class="filter-row" id="${id}">
+        ${gates.map((g) => `
+          <button class="filter-btn ${state.gate === g ? "active" : ""}" data-gate="${g}"
+                  style="${state.gate === g ? `background:${domain.bg};color:#8FC1F5;` : ""}">${g}</button>`).join("")}
+      </div>`;
+  }
+
+  function paint() {
+    const g = LOGIC_GATES[state.gate];
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "ANSI/IEEE 315 shapes + truth table")}
+
+      <div class="diagram-box">${gateSymbol(state.gate)}</div>
+
+      ${filterRow("lg-basic", LOGIC_GATE_ROWS[0])}
+      ${filterRow("lg-derived", LOGIC_GATE_ROWS[1])}
+
+      <div class="section-label" style="color:#8FC1F5">Boolean expression</div>
+      <div class="field"><div class="formula-line" style="margin:0">${g.expr}</div></div>
+
+      <div class="section-label" style="color:#5DCAA5">Truth table</div>
+      ${truthTableHTML(state.gate)}
+
+      ${calcFooter()}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    ["lg-basic", "lg-derived"].forEach((id) => {
+      document.getElementById(id).addEventListener("click", (e) => {
+        const btn = e.target.closest(".filter-btn");
+        if (!btn) return;
+        state.gate = btn.dataset.gate;
+        paint();
+      });
+    });
+  }
+
+  paint();
+}
+
+// ---------- LED series resistor ----------
+// R = (Vs − n·Vf) / I. The n (LEDs in series under one resistor) is a real
+// extension worth having, not scope creep — it's the same formula, and
+// stacking LEDs off a single resistor is common enough in practice that
+// leaving it out would just push the user to do the subtraction by hand.
+// Common-colour Vf presets are approximate starting points, not a spec —
+// real forward voltage depends on the specific part and drive current, so
+// they fill the field rather than lock it, and the note says so.
+const LED_VF_PRESETS = {
+  "Infrared (~1.2 V)": 1.2,
+  "Red (~2.0 V)": 2.0,
+  "Yellow / amber (~2.1 V)": 2.1,
+  "Green (~2.2 V)": 2.2,
+  "Blue (~3.2 V)": 3.2,
+  "White (~3.2 V)": 3.2,
+};
+
+function renderLedSeriesResistor(domain, tool, favId) {
+  const state = { n: 1, vs: 9, vsUnit: "V", vf: 2, vfUnit: "V", i: 20, iUnit: "mA", series: "E24" };
+
+  function compute() {
+    const vs = state.vs * VOLT_UNITS[state.vsUnit];
+    const vf = state.vf * VOLT_UNITS[state.vfUnit];
+    const i = state.i * AMP_UNITS[state.iUnit];
+    const vr = vs - state.n * vf;
+    const r = vr / i;
+    return { vs, vf, i, vr, r, p: vr * i };
+  }
+
+  function problem(r) {
+    if (!isFinite(r.i) || r.i <= 0) return "LED current must be greater than zero.";
+    if (r.vr <= 0) return `Supply voltage must exceed ${state.n > 1 ? `${state.n} × ` : ""}LED forward voltage.`;
+    return "";
+  }
+
+  // Diode with two light-rays — the ANSI LED symbol, not a plain diode.
+  // "×n" only appears once more than one LED is stacked, so the single-LED
+  // case (by far the common one) stays uncluttered.
+  function diagram() {
+    const wire = "#5A6169";
+    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
+      <path d="M30,20 H70 M110,20 H135 M165,20 H190 M190,20 V80 M190,80 H30 M30,80 V57 M30,43 V20"
+            stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M20,44 H40 M26,56 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+      <path d="M70,20 L73,13 L79,27 L85,13 L91,27 L97,13 L103,27 L110,20"
+            stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M140,12 L140,28 L155,20 Z M155,12 V28" stroke="#5DCAA5" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+      <path d="M143,10 L149,3 M146,3 H149 V6 M150,10 L156,3 M153,3 H156 V6" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="90" y="12" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
+      <text x="149" y="42" fill="#5DCAA5" font-size="12" font-weight="600" text-anchor="middle">${state.n > 1 ? `×${state.n}` : "LED"}</text>
+      <text x="12" y="53" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Vs</text>
+    </svg>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    const err = problem(r);
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="err"]').textContent = err;
+    if (err) {
+      app.querySelector('[data-res="r"]').textContent = "—";
+      app.querySelector('[data-res="p"]').textContent = "—";
+      app.querySelector('[data-res="e24"]').textContent = "";
+      return;
+    }
+    app.querySelector('[data-res="r"]').textContent = siFormat(r.r, "Ω");
+    app.querySelector('[data-res="p"]').textContent = `${siFormat(r.p, "W")} dissipated in the resistor`;
+    const snap = nearestESeries(r.r, state.series);
+    const actualI = r.vr / snap.value;
+    app.querySelector('[data-res="e24"]').textContent = snap.exact
+      ? `${formatOhms(snap.value)} is already a ${state.series} standard value.`
+      : `Nearest ${state.series}: ${formatOhms(snap.value)} → ${siFormat(actualI, "A", 3)} through the LED${state.n > 1 ? "s" : ""}.`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "R = (Vs − n·Vf) / I")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field">
+        <label>LEDs in series (same Vf each)</label>
+        <div class="field-row">
+          <input id="led-n" type="number" inputmode="numeric" step="1" min="1" value="${state.n}" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Supply voltage (Vs)</label>
+        <div class="field-row">
+          <input id="led-vs" type="number" inputmode="decimal" step="any" value="${trim(state.vs)}" />
+          <select id="led-vs-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>LED forward voltage (Vf)</label>
+        <div class="field-row">
+          <input id="led-vf" type="number" inputmode="decimal" step="any" value="${trim(state.vf)}" />
+          <select id="led-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Common colour (fills Vf)</label>
+        <select id="led-vf-preset">
+          <option value="">Custom</option>
+          ${Object.keys(LED_VF_PRESETS).map((k) => `<option value="${k}">${k}</option>`).join("")}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>LED current (I)</label>
+        <div class="field-row">
+          <input id="led-i" type="number" inputmode="decimal" step="any" value="${trim(state.i)}" />
+          <select id="led-i-unit">${Object.keys(AMP_UNITS).map((u) => `<option ${state.iUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results
+        <select id="led-series" class="label-select">
+          ${Object.keys(E_TOLERANCE).map((s) => `<option value="${s}" ${state.series === s ? "selected" : ""}>Snap to ${s} (${E_TOLERANCE[s]})</option>`).join("")}
+        </select>
+      </div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Series resistor</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="r">—</span>
+        </div>
+        <div class="result-sub" data-res="p"></div>
+        <div class="result-sub" data-res="e24"></div>
+      </div>
+
+      ${formulaSection(
+        ["R = (Vs − n·Vf) / I", "P = (Vs − n·Vf) · I"],
+        "n is how many LEDs sit in series under this one resistor (1 for a single LED). Forward voltage varies by part, colour, and drive current — the colour presets are typical starting points, not a spec; check the datasheet for the actual part."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+    document.getElementById("led-series").onchange = (e) => { state.series = e.target.value; refresh(); };
+
+    const nField = document.getElementById("led-n");
+    const vsField = document.getElementById("led-vs");
+    const vfField = document.getElementById("led-vf");
+    const iField = document.getElementById("led-i");
+
+    nField.oninput = () => { state.n = Math.max(1, parseInt(nField.value, 10) || 1); refresh(); };
+    vsField.oninput = () => { const v = parseFloat(vsField.value); if (isFinite(v)) { state.vs = v; refresh(); } };
+    vfField.oninput = () => { const v = parseFloat(vfField.value); if (isFinite(v)) { state.vf = v; refresh(); } };
+    iField.oninput = () => { const v = parseFloat(iField.value); if (isFinite(v)) { state.i = v; refresh(); } };
+
+    document.getElementById("led-vs-unit").onchange = (e) => { state.vsUnit = e.target.value; refresh(); };
+    document.getElementById("led-vf-unit").onchange = (e) => { state.vfUnit = e.target.value; refresh(); };
+    document.getElementById("led-i-unit").onchange = (e) => { state.iUnit = e.target.value; refresh(); };
+    document.getElementById("led-vf-preset").onchange = (e) => {
+      if (!e.target.value) return;
+      state.vf = LED_VF_PRESETS[e.target.value];
+      state.vfUnit = "V";
+      vfField.value = trim(state.vf);
+      document.getElementById("led-vf-unit").value = "V";
+      refresh();
+    };
+
+    refresh();
+  }
+
+  paint();
+}
+
+// ---------- Diode forward voltage / biasing ----------
+// A concept-and-reference screen, not a calculator — the actual "given Vs,
+// Vf, and I, solve for R" arithmetic already lives on the LED series
+// resistor screen and shouldn't be duplicated here. What's missing without
+// this screen is the two things that formula assumes you already know:
+// which bias direction makes a diode conduct at all, and what Vf to plug
+// in for a given diode type. LED colour Vf specifically stays on the LED
+// screen — this table covers diode families in general, and points there
+// rather than repeating it.
+const DIODE_VF_TYPES = [
+  { type: "Germanium", vf: "≈0.2–0.3 V", note: "Older/specialty parts — lower drop, more temperature-sensitive, mostly obsolete for new designs." },
+  { type: "Schottky", vf: "≈0.15–0.45 V", note: "Fast switching, low forward drop — common in rectification and reverse-polarity protection where drop matters." },
+  { type: "Silicon (standard / signal)", vf: "≈0.6–0.7 V", note: "The default assumption for a generic diode unless stated otherwise — 1N4148, 1N400x rectifiers, etc." },
+  { type: "LED", vf: "≈1.2–3.4 V", note: "Varies by colour and part — see the LED series resistor screen for typical values by colour." },
+];
+
+function renderDiodeBiasing(domain, tool, favId) {
+  const state = { bias: "forward" };
+
+  function diagram() {
+    const wire = "#5A6169";
+    const forward = state.bias === "forward";
+    const diodeColor = forward ? "#5DCAA5" : "#E08585";
+    const battery = forward
+      ? `<path d="M20,44 H40 M26,56 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+         <text x="8" y="41" fill="#8FC1F5" font-size="11" font-weight="700">+</text>
+         <text x="8" y="66" fill="#8FC1F5" font-size="11" font-weight="700">−</text>`
+      : `<path d="M26,44 H34 M20,56 H40" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+         <text x="8" y="41" fill="#8FC1F5" font-size="11" font-weight="700">−</text>
+         <text x="8" y="66" fill="#8FC1F5" font-size="11" font-weight="700">+</text>`;
+    const arrow = forward
+      ? `<path d="M115,20 H130 M124,16 L130,20 L124,24" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
+      : `<circle cx="122" cy="20" r="6" stroke="#E08585" stroke-width="1.6" fill="none"/><path d="M118,16 L126,24" stroke="#E08585" stroke-width="1.6" stroke-linecap="round"/>`;
+    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
+      <path d="M30,20 H190 M190,20 V80 M190,80 H30 M30,80 V57 M30,43 V20"
+            stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${battery}
+      ${arrow}
+      <path d="M140,12 L140,28 L155,20 Z M155,12 V28" stroke="${diodeColor}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+      <text x="147" y="42" fill="${diodeColor}" font-size="12" font-weight="600" text-anchor="middle">${forward ? "conducting" : "blocked"}</text>
+    </svg>`;
+  }
+
+  function card(d) {
+    return `
+      <div class="formula-card formula-card--static">
+        <div class="formula-card-head"><span class="formula-card-title">${d.type}</span></div>
+        <div class="breadcrumb">${d.vf}</div>
+        <div class="formula-card-note">${d.note}</div>
+      </div>`;
+  }
+
+  function paint() {
+    const forward = state.bias === "forward";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "What makes a diode conduct, and what it drops")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["forward", "Forward bias"], ["reverse", "Reverse bias"]], state.bias, domain.bg)}
+
+      <div class="field">
+        <div class="color-row-note">${forward
+          ? "Anode more positive than cathode. Once that difference reaches the diode's forward voltage (Vf), it conducts — current flows anode → cathode, and the voltage across it stays pinned near Vf regardless of current."
+          : "Cathode more positive than anode. The diode blocks conduction — only a tiny reverse leakage current flows — until the reverse voltage exceeds the diode's breakdown rating, which (outside a Zener diode used deliberately in that region) usually means failure."}</div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Typical forward voltage by type</div>
+      ${DIODE_VF_TYPES.map(card).join("")}
+
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.bias = v; paint(); });
+  }
+
+  paint();
+}
+
+// ---------- RMS calculator ----------
+// "Average" here is the full-wave rectified average (mean of |v(t)|), the
+// figure that's actually useful — the true average of a symmetric AC
+// waveform is zero, not a number worth a field. This is also why cheap
+// average-responding multimeters, calibrated to read RMS correctly only
+// for a sine wave, read wrong on square/triangle signals: they're
+// measuring average and multiplying by the sine wave's form factor
+// regardless of what shape you actually handed them.
+const RMS_WAVEFORMS = {
+  sine: { label: "Sine", rms: 1 / Math.SQRT2, avg: 2 / Math.PI },
+  square: { label: "Square", rms: 1, avg: 1 },
+  triangle: { label: "Triangle", rms: 1 / Math.sqrt(3), avg: 0.5 },
+};
+const RMS_KNOWN = { peak: "Peak", pp: "Peak-to-peak", rms: "RMS", avg: "Average (rectified)" };
+
+function renderRmsCalculator(domain, tool, favId) {
+  const state = { waveform: "sine", known: "peak", value: 10, qty: "V", unit: "V", dc: 0 };
+
+  function peakFrom(value, known, w) {
+    if (known === "peak") return value;
+    if (known === "pp") return value / 2;
+    if (known === "rms") return value / w.rms;
+    return value / w.avg;
+  }
+
+  // Everything above assumes the waveform swings symmetrically about 0 —
+  // "0V in the middle." Riding it on a DC level instead ("0V at the
+  // bottom," e.g. a sensor output or ripple on a supply) changes the total
+  // RMS: it's the quadrature sum √(Vdc² + Vac_rms²), not a multiple of
+  // peak anymore, because the cross term averages to zero over a period
+  // but the DC term doesn't. True average becomes Vdc itself — no longer
+  // zero, unlike the symmetric case.
+  function compute() {
+    const units = state.qty === "V" ? VOLT_UNITS : AMP_UNITS;
+    const value = state.value * units[state.unit];
+    const dc = state.dc * units[state.unit];
+    const w = RMS_WAVEFORMS[state.waveform];
+    const peak = peakFrom(value, state.known, w);
+    const rms = peak * w.rms;
+    const max = dc + peak, min = dc - peak;
+    return {
+      peak, pp: peak * 2, rms, avg: peak * w.avg,
+      crest: 1 / w.rms, form: w.rms / w.avg,
+      dc, max, min,
+      rmsTotal: Math.sqrt(dc * dc + rms * rms),
+      crestTotal: Math.max(Math.abs(max), Math.abs(min)) / Math.sqrt(dc * dc + rms * rms),
+    };
+  }
+
+  function waveformPoints(type) {
+    const width = 175, top = 12, bottom = 82, periods = 2, samples = 120;
+    const pts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const phase = (t * periods) % 1;
+      let v;
+      if (type === "sine") v = Math.sin(phase * 2 * Math.PI);
+      else if (type === "square") v = phase < 0.5 ? 1 : -1;
+      else v = phase < 0.25 ? phase * 4 : phase < 0.75 ? 2 - phase * 4 : phase * 4 - 4;
+      const x = 10 + t * width;
+      const y = (top + bottom) / 2 - v * ((bottom - top) / 2 - 6);
+      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    }
+    return pts.join(" ");
+  }
+
+  function diagram() {
+    const w = RMS_WAVEFORMS[state.waveform];
+    const mid = 47, half = 35 - 6;
+    const rmsY = mid - w.rms * half;
+    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
+      <path d="M10,${mid} H185" stroke="#3A3F47" stroke-width="1" stroke-dasharray="2 3"/>
+      <path d="M10,${rmsY} H185" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <polyline points="${waveformPoints(state.waveform)}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="190" y="${rmsY + 4}" fill="#5DCAA5" font-size="10" font-weight="600">RMS</text>
+    </svg>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    const tone = (k) => (k === state.known ? "#8FC1F5" : "#5DCAA5");
+    app.querySelector('[data-res="peak"]').innerHTML = `<span style="color:${tone("peak")}">${siFormat(r.peak, state.qty)}</span>`;
+    app.querySelector('[data-res="pp"]').innerHTML = `<span style="color:${tone("pp")}">${siFormat(r.pp, state.qty)}</span>`;
+    app.querySelector('[data-res="rms"]').innerHTML = `<span style="color:${tone("rms")}">${siFormat(r.rms, state.qty)}</span>`;
+    app.querySelector('[data-res="avg"]').innerHTML = `<span style="color:${tone("avg")}">${siFormat(r.avg, state.qty)}</span>`;
+    app.querySelector('[data-res="crest"]').textContent = trim(r.crest);
+    app.querySelector('[data-res="form"]').textContent = trim(r.form);
+    app.querySelector('[data-res="max"]').textContent = siFormat(r.max, state.qty);
+    app.querySelector('[data-res="min"]').textContent = siFormat(r.min, state.qty);
+    app.querySelector('[data-res="rmsTotal"]').textContent = siFormat(r.rmsTotal, state.qty);
+    app.querySelector('[data-res="trueAvg"]').textContent = siFormat(r.dc, state.qty);
+  }
+
+  function formulaLines() {
+    if (state.waveform === "sine") return ["RMS = Peak / √2 ≈ 0.707 × Peak", "Average = Peak × 2/π ≈ 0.637 × Peak"];
+    if (state.waveform === "square") return ["RMS = Peak", "Average = Peak"];
+    return ["RMS = Peak / √3 ≈ 0.577 × Peak", "Average = Peak / 2"];
+  }
+
+  function paint() {
+    const units = state.qty === "V" ? VOLT_UNITS : AMP_UNITS;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Peak, RMS, and rectified average for a periodic waveform")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.keys(RMS_WAVEFORMS).map((k) => [k, RMS_WAVEFORMS[k].label]), state.waveform, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">What you know</div>
+      <div class="field">
+        <select id="rms-known" class="label-select" style="float:none;width:100%;font-size:15px;padding:2px 0">
+          ${Object.keys(RMS_KNOWN).map((k) => `<option value="${k}" ${state.known === k ? "selected" : ""}>${RMS_KNOWN[k]}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label>Value<span>
+          <button class="tap-select" id="rms-qty" style="color:var(--text-secondary);font-size:12.5px;cursor:pointer;background:none;border:none;">${state.qty === "V" ? "Voltage" : "Current"} — tap to switch</button>
+        </span></label>
+        <div class="field-row">
+          <input id="rms-value" type="number" inputmode="decimal" step="any" value="${trim(state.value)}" />
+          <select id="rms-unit">${Object.keys(units).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Results — AC part only, 0V in the middle</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Peak</span></div>
+        <div class="result-value"><span class="num" data-res="peak"></span></div>
+        <div class="result-sub">Peak-to-peak: <span data-res="pp"></span></div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">RMS</span></div>
+        <div class="result-value"><span class="num" data-res="rms"></span></div>
+        <div class="result-sub">Average (rectified): <span data-res="avg"></span></div>
+        <div class="result-sub">Crest factor: <span data-res="crest"></span> &nbsp;·&nbsp; Form factor: <span data-res="form"></span></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">DC offset — riding on a level instead of 0V</div>
+      <div class="field">
+        <label>DC offset (0 = symmetric about 0V)</label>
+        <div class="field-row">
+          <input id="rms-dc" type="number" inputmode="decimal" step="any" value="${trim(state.dc)}" />
+          <span style="color:var(--text-secondary);font-size:14px;padding-right:2px">${state.unit}</span>
+        </div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Total RMS (DC + AC)</span></div>
+        <div class="result-value"><span class="num" data-res="rmsTotal"></span></div>
+        <div class="result-sub">Swings from <span data-res="min"></span> to <span data-res="max"></span></div>
+        <div class="result-sub">True average: <span data-res="trueAvg"></span> (= the DC offset itself)</div>
+      </div>
+
+      ${formulaSection(
+        [...formulaLines(), "Total RMS = √(DC² + RMS_ac²)"],
+        "The Peak/RMS/Average block above assumes the waveform swings symmetrically about 0V — \"0V in the middle.\" A signal riding on a DC level instead (\"0V at the bottom\" is the DC-offset = Peak case) needs the DC offset folded in: total RMS is the quadrature sum of the DC level and the AC part's own RMS, not a plain multiple of peak. Average means the full-wave rectified average up top — a symmetric AC waveform's true average is zero — but once there's a DC offset, the true average is just that offset, shown below instead."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.waveform = v; paint(); });
+
+    const valueField = document.getElementById("rms-value");
+    valueField.oninput = () => { const v = parseFloat(valueField.value); if (isFinite(v)) { state.value = v; refresh(); } };
+    document.getElementById("rms-unit").onchange = (e) => { state.unit = e.target.value; refresh(); };
+    document.getElementById("rms-known").onchange = (e) => { state.known = e.target.value; refresh(); };
+    const dcField = document.getElementById("rms-dc");
+    dcField.oninput = () => { const v = parseFloat(dcField.value); if (isFinite(v)) { state.dc = v; refresh(); } };
+    document.getElementById("rms-qty").onclick = () => {
+      state.qty = state.qty === "V" ? "A" : "V";
+      state.unit = state.qty === "V" ? "V" : "A";
+      paint();
+    };
+
+    refresh();
   }
 
   paint();
