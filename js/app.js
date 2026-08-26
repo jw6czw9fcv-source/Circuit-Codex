@@ -200,6 +200,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "led-series-resistor") return renderLedSeriesResistor(domain, tool, favId);
   if (calcId === "diode-biasing") return renderDiodeBiasing(domain, tool, favId);
   if (calcId === "rms-calculator") return renderRmsCalculator(domain, tool, favId);
+  if (calcId === "db-ratio") return renderDbRatio(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -6316,6 +6317,9 @@ function renderRmsCalculator(domain, tool, favId) {
 
   function diagram() {
     const r = compute();
+    if (!isFinite(r.peak)) {
+      return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none"></svg>`;
+    }
     const toY = worldScale(r.max, r.min);
     const zeroY = toY(0);
     const dcY = toY(r.dc);
@@ -6365,7 +6369,7 @@ function renderRmsCalculator(domain, tool, favId) {
   function paint() {
     const units = state.qty === "V" ? VOLT_UNITS : AMP_UNITS;
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Peak, RMS, and rectified average for a periodic waveform")}
+      ${calcHeader(tool, favId, "Peak, peak-to-peak, RMS, and average — DC offset included")}
 
       <div class="diagram-box">${diagram()}</div>
 
@@ -6432,6 +6436,165 @@ function renderRmsCalculator(domain, tool, favId) {
       state.qty = state.qty === "V" ? "A" : "V";
       state.unit = state.qty === "V" ? "V" : "A";
       paint();
+    };
+
+    refresh();
+  }
+
+  paint();
+}
+
+// ---------- Generic dB ratio calculator ----------
+// The dimensionless core the dBm/dBu/dBV screen builds on: dB always
+// compares two values of the SAME quantity, and the multiplier depends on
+// which kind — 10·log10 for power (energy-like: P = V²/R), 20·log10 for
+// voltage and current (both field-like: either one enters power squared,
+// P = V²/R = I²R). Each kind picks a concrete unit (W, V, A) rather than
+// staying abstract, so the field labels mean something on sight.
+// P1/P2 each still get a unit toggle between the kind's native unit and dB,
+// since it's common to already have one or both values as a dB figure (a
+// meter reading, a spec sheet number) — switching just re-displays the
+// current value, it doesn't change what it means.
+const DB_KIND = {
+  power: { label: "Power", k: 10, sym: "P", unit: "W" },
+  voltage: { label: "Voltage", k: 20, sym: "V", unit: "V" },
+  current: { label: "Current", k: 20, sym: "I", unit: "A" },
+};
+const DB_REFERENCE = [-20, -10, -6, -3, -1, 0, 1, 3, 6, 10, 20];
+
+function renderDbRatio(domain, tool, favId) {
+  const state = { kind: "power", v1: 1, v1IsDb: false, v2: 2, v2IsDb: false };
+
+  function kFor() {
+    return DB_KIND[state.kind].k;
+  }
+
+  // A field's own dB reading is just its linear value relative to 1 —
+  // there's no separate absolute reference in a *generic* ratio tool the
+  // way dBm has 1mW. That keeps switching a field's unit reversible: dB
+  // in, same linear value out, round-trip exact.
+  function toLinear(value, isDb) {
+    if (!isFinite(value)) return NaN;
+    return isDb ? Math.pow(10, value / kFor()) : value;
+  }
+
+  function fromLinear(value, isDb) {
+    if (!isFinite(value) || value <= 0) return NaN;
+    return isDb ? kFor() * Math.log10(value) : value;
+  }
+
+  function linearV1() { return toLinear(state.v1, state.v1IsDb); }
+  function linearV2() { return toLinear(state.v2, state.v2IsDb); }
+
+  function dbBetween() {
+    const l1 = linearV1(), l2 = linearV2();
+    if (!isFinite(l1) || !isFinite(l2) || l1 <= 0 || l2 <= 0) return NaN;
+    return kFor() * Math.log10(l2 / l1);
+  }
+
+  function refTable() {
+    const k = kFor();
+    return DB_REFERENCE.map((db) => ({ db, ratio: Math.pow(10, db / k) }));
+  }
+
+  function refresh(source) {
+    const l1 = linearV1(), l2 = linearV2();
+    const db = dbBetween();
+    const v1Field = app.querySelector("#db-v1");
+    const v2Field = app.querySelector("#db-v2");
+    const dbField = app.querySelector("#db-db");
+    if (source !== "v1" && document.activeElement !== v1Field) v1Field.value = isFinite(state.v1) ? trim(state.v1) : "";
+    if (source !== "v2" && document.activeElement !== v2Field) v2Field.value = isFinite(state.v2) ? trim(state.v2) : "";
+    if (source !== "db" && document.activeElement !== dbField) dbField.value = isFinite(db) ? trim(db) : "";
+    app.querySelector('[data-res="ratio"]').textContent = isFinite(l2 / l1) ? `×${trim(l2 / l1)}` : "—";
+    app.querySelector('[data-res="db"]').textContent = isFinite(db) ? `${trim(db)} dB` : "—";
+    app.querySelector('[data-res="err"]').textContent = l1 > 0 && l2 > 0 ? "" : "Both values must resolve to something greater than zero — dB of a zero or negative ratio isn't defined.";
+    app.querySelector('[data-res="reftable"]').innerHTML = refTable()
+      .map((r) => `<div class="tt-row"><span>${r.db > 0 ? "+" : ""}${r.db} dB</span><span class="tt-out">×${trim(r.ratio)}</span></div>`)
+      .join("");
+  }
+
+  function unitSelect(id, isDb) {
+    const nativeUnit = DB_KIND[state.kind].unit;
+    return `<select id="${id}">${[nativeUnit, "dB"].map((u) => `<option ${(u === "dB") === isDb ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+  }
+
+  function paint() {
+    const sym = DB_KIND[state.kind].sym;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `dB = ${kFor()} · log₁₀(${sym}2 / ${sym}1)`)}
+
+      ${pillRow(Object.keys(DB_KIND).map((k) => [k, DB_KIND[k].label]), state.kind, domain.bg)}
+
+      <div class="field">
+        <label>Reference value (${sym}1)</label>
+        <div class="field-row">
+          <input id="db-v1" type="number" inputmode="decimal" step="any" value="${isFinite(state.v1) ? trim(state.v1) : ""}" />
+          ${unitSelect("db-v1-unit", state.v1IsDb)}
+        </div>
+      </div>
+      <div class="field">
+        <label>Second value (${sym}2)</label>
+        <div class="field-row">
+          <input id="db-v2" type="number" inputmode="decimal" step="any" value="${isFinite(state.v2) ? trim(state.v2) : ""}" />
+          ${unitSelect("db-v2-unit", state.v2IsDb)}
+        </div>
+      </div>
+      <div class="field">
+        <label>Difference (dB)</label>
+        <div class="field-row"><input id="db-db" type="number" inputmode="decimal" step="any" placeholder="edit to solve for ${sym}2" /></div>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Gain (${sym}2 / ${sym}1 ratio)</span></div>
+        <div class="result-value"><span class="num" data-res="ratio"></span></div>
+        <div class="result-sub" data-res="db"></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Quick reference — Gain in dB and as a ratio</div>
+      <div class="truth-table" style="--tt-cols:2" data-res="reftable"></div>
+
+      ${formulaSection(
+        [`dB = ${kFor()} · log₁₀(${sym}2 / ${sym}1)`, `${sym}2 = ${sym}1 · 10^(dB / ${kFor()})`],
+        "Power uses 10·log₁₀ because power is already a squared (energy-like) quantity; voltage and current use 20·log₁₀ because doubling either one quadruples the power it delivers into a fixed load — the extra factor of 2 keeps a given dB figure meaning the same power change either way you measured it. Mixing the two up is the single most common dB mistake. The 20·log₁₀ shortcut only equals the true power-ratio dB when V1/V2 (or I1/I2) are measured across the same impedance — across different impedances, doubling voltage doesn't quadruple power, so the figure quietly stops meaning a power ratio. A field's own \"dB\" unit reads it relative to 1 (no separate absolute reference here) — that's what makes Gain in dB just the difference of two such readings."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => {
+      const l1 = linearV1(), l2 = linearV2();
+      state.kind = v;
+      state.v1 = fromLinear(l1, state.v1IsDb);
+      state.v2 = fromLinear(l2, state.v2IsDb);
+      paint();
+    });
+
+    const v1Field = document.getElementById("db-v1");
+    const v2Field = document.getElementById("db-v2");
+    const dbField = document.getElementById("db-db");
+    v1Field.oninput = () => { const v = parseFloat(v1Field.value); if (isFinite(v)) { state.v1 = v; refresh("v1"); } };
+    v2Field.oninput = () => { const v = parseFloat(v2Field.value); if (isFinite(v)) { state.v2 = v; refresh("v2"); } };
+    dbField.oninput = () => {
+      const db = parseFloat(dbField.value);
+      const l1 = linearV1();
+      if (isFinite(db) && isFinite(l1) && l1 > 0) {
+        state.v2 = fromLinear(l1 * Math.pow(10, db / kFor()), state.v2IsDb);
+        refresh("db");
+      }
+    };
+    document.getElementById("db-v1-unit").onchange = (e) => {
+      const l1 = linearV1();
+      state.v1IsDb = e.target.value === "dB";
+      state.v1 = fromLinear(l1, state.v1IsDb);
+      refresh();
+    };
+    document.getElementById("db-v2-unit").onchange = (e) => {
+      const l2 = linearV2();
+      state.v2IsDb = e.target.value === "dB";
+      state.v2 = fromLinear(l2, state.v2IsDb);
+      refresh();
     };
 
     refresh();

@@ -192,7 +192,7 @@ const DOMAINS = [
           { name: "SI prefix converter", calc: "si-prefix" },
           { name: "Scientific ↔ engineering notation", calc: "sci-eng" },
           { name: "Percent tolerance / error", calc: "percent-tolerance" },
-          { name: "Generic dB ratio calculator" },
+          { name: "Generic dB ratio calculator", calc: "db-ratio" },
         ],
       },
       { title: "Converters", tools: [{ name: "Unit converter" }, { name: "PPM calculator" }] },
