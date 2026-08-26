@@ -6555,6 +6555,9 @@ function renderDbRatio(domain, tool, favId) {
 
       <div class="section-label" style="color:#8FC1F5">Quick reference — Gain in dB and as a ratio</div>
       <div class="truth-table" style="--tt-cols:2" data-res="reftable"></div>
+      <div class="field">
+        <div class="color-row-note">"3 dB ≈ ×2" and "6 dB ≈ ×4" are popular roundings, not exact — 10·log₁₀(2) is 3.0103 dB, so exactly 3.00 dB is really ×1.995. Close enough for almost everything, but not the same number.</div>
+      </div>
 
       ${formulaSection(
         [`dB = ${kFor()} · log₁₀(${sym}2 / ${sym}1)`, `${sym}2 = ${sym}1 · 10^(dB / ${kFor()})`],
