@@ -6209,73 +6209,126 @@ function renderDiodeBiasing(domain, tool, favId) {
 // for a sine wave, read wrong on square/triangle signals: they're
 // measuring average and multiplying by the sine wave's form factor
 // regardless of what shape you actually handed them.
+//
+// Half-wave (one diode) and full-wave (bridge) rectified sine are real
+// waveform shapes, not just a ratio table — they never go negative, so
+// minR/maxR is 0/1 here instead of the -1/1 every symmetric shape above
+// uses. That also means their own true average isn't zero the way a plain
+// sine's is: trueAvg carries that inherent bias so an added DC offset
+// stacks correctly via the full cross term, not the zero-mean shortcut.
 const RMS_WAVEFORMS = {
-  sine: { label: "Sine", rms: 1 / Math.SQRT2, avg: 2 / Math.PI },
-  square: { label: "Square", rms: 1, avg: 1 },
-  triangle: { label: "Triangle", rms: 1 / Math.sqrt(3), avg: 0.5 },
+  sine: { label: "Sine", rms: 1 / Math.SQRT2, avg: 2 / Math.PI, trueAvg: 0, minR: -1, maxR: 1 },
+  square: { label: "Square", rms: 1, avg: 1, trueAvg: 0, minR: -1, maxR: 1 },
+  triangle: { label: "Triangle", rms: 1 / Math.sqrt(3), avg: 0.5, trueAvg: 0, minR: -1, maxR: 1 },
+  halfwave: { label: "Half-wave (1 diode)", rms: 0.5, avg: 1 / Math.PI, trueAvg: 1 / Math.PI, minR: 0, maxR: 1 },
+  fullwave: { label: "Full-wave (bridge)", rms: 1 / Math.SQRT2, avg: 2 / Math.PI, trueAvg: 2 / Math.PI, minR: 0, maxR: 1 },
 };
 const RMS_KNOWN = { peak: "Peak", pp: "Peak-to-peak", rms: "RMS", avg: "Average (rectified)" };
 
 function renderRmsCalculator(domain, tool, favId) {
   const state = { waveform: "sine", known: "peak", value: 10, qty: "V", unit: "V", dc: 0 };
 
-  function peakFrom(value, known, w) {
+  // "RMS" in the known-value picker means the real, DC-inclusive total —
+  // the number you'd actually read off a meter — not the AC part alone.
+  // Solving that back to a peak means inverting RMS_total² = Vdc² +
+  // 2·Vdc·(Peak·trueAvg) + (Peak·rms)², a quadratic in Peak. It reduces to
+  // the plain √(RMS² − Vdc²)/rms shortcut whenever trueAvg = 0 (every
+  // waveform here except half/full-wave), but stays exact either way.
+  function peakFromRmsTotal(rmsKnown, dc, w) {
+    const a = w.rms * w.rms;
+    const b = 2 * dc * w.trueAvg;
+    const c = dc * dc - rmsKnown * rmsKnown;
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return NaN;
+    return (-b + Math.sqrt(disc)) / (2 * a);
+  }
+
+  function peakFrom(value, known, w, dc) {
     if (known === "peak") return value;
-    if (known === "pp") return value / 2;
-    if (known === "rms") return value / w.rms;
+    if (known === "pp") return value / (w.maxR - w.minR);
+    if (known === "rms") return peakFromRmsTotal(value, dc, w);
     return value / w.avg;
   }
 
-  // Everything above assumes the waveform swings symmetrically about 0 —
+  // Everything else assumes the waveform swings symmetrically about 0 —
   // "0V in the middle." Riding it on a DC level instead ("0V at the
-  // bottom," e.g. a sensor output or ripple on a supply) changes the total
-  // RMS: it's the quadrature sum √(Vdc² + Vac_rms²), not a multiple of
-  // peak anymore, because the cross term averages to zero over a period
-  // but the DC term doesn't. True average becomes Vdc itself — no longer
-  // zero, unlike the symmetric case.
+  // bottom," e.g. a sensor output, or a rectifier feeding a filter) changes
+  // the total RMS: it's the quadrature sum √(Vdc² + Vac_rms²) only when the
+  // AC shape itself has zero mean. Half/full-wave rectified shapes don't —
+  // they're already biased positive — so the general form keeps the cross
+  // term: RMS_total² = Vdc² + 2·Vdc·(Peak·trueAvg) + Vac_rms², which
+  // reduces to the simple quadrature sum exactly when trueAvg = 0.
   function compute() {
     const units = state.qty === "V" ? VOLT_UNITS : AMP_UNITS;
     const value = state.value * units[state.unit];
     const dc = state.dc * units[state.unit];
     const w = RMS_WAVEFORMS[state.waveform];
-    const peak = peakFrom(value, state.known, w);
+    const peak = peakFrom(value, state.known, w, dc);
     const rms = peak * w.rms;
-    const max = dc + peak, min = dc - peak;
+    const shapeTrueAvg = peak * w.trueAvg;
+    const max = dc + peak * w.maxR, min = dc + peak * w.minR;
+    const totalTrueAvg = dc + shapeTrueAvg;
+    const rmsTotal = Math.sqrt(Math.max(0, dc * dc + 2 * dc * shapeTrueAvg + rms * rms));
     return {
-      peak, pp: peak * 2, rms, avg: peak * w.avg,
+      peak, pp: peak * (w.maxR - w.minR), rms, avg: peak * w.avg,
       crest: 1 / w.rms, form: w.rms / w.avg,
-      dc, max, min,
-      rmsTotal: Math.sqrt(dc * dc + rms * rms),
-      crestTotal: Math.max(Math.abs(max), Math.abs(min)) / Math.sqrt(dc * dc + rms * rms),
+      dc, max, min, rmsTotal,
+      trueAvg: totalTrueAvg,
+      crestTotal: Math.max(Math.abs(max), Math.abs(min)) / rmsTotal,
+      impossible: state.known === "rms" && isNaN(peak),
     };
   }
 
-  function waveformPoints(type) {
-    const width = 175, top = 12, bottom = 82, periods = 2, samples = 120;
+  // Maps the world (actual signal levels, in the same units as peak/dc) onto
+  // the diagram's fixed pixel box, always including 0 in view — that's what
+  // makes "0V at the bottom" visible as the waveform sitting entirely above
+  // the 0V line rather than straddling it. Takes the waveform's own min/max
+  // (not a blanket ±peak) so half/full-wave, which never go negative, don't
+  // get drawn as if they swing below 0.
+  function worldScale(max, min) {
+    const pxTop = 12, pxBottom = 82;
+    const worldMax = Math.max(max, 0);
+    const worldMin = Math.min(min, 0);
+    const worldRange = (worldMax - worldMin) || 1;
+    const scale = (pxBottom - pxTop) / worldRange;
+    return (v) => pxBottom - (v - worldMin) * scale;
+  }
+
+  function waveformShape(type, phase) {
+    if (type === "sine") return Math.sin(phase * 2 * Math.PI);
+    if (type === "square") return phase < 0.5 ? 1 : -1;
+    if (type === "triangle") return phase < 0.25 ? phase * 4 : phase < 0.75 ? 2 - phase * 4 : phase * 4 - 4;
+    if (type === "halfwave") return phase < 0.5 ? Math.sin(phase * 2 * Math.PI) : 0;
+    return Math.abs(Math.sin(phase * 2 * Math.PI)); // fullwave
+  }
+
+  function waveformPoints(type, peak, dc, toY) {
+    const width = 175, periods = 2, samples = 120;
     const pts = [];
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
       const phase = (t * periods) % 1;
-      let v;
-      if (type === "sine") v = Math.sin(phase * 2 * Math.PI);
-      else if (type === "square") v = phase < 0.5 ? 1 : -1;
-      else v = phase < 0.25 ? phase * 4 : phase < 0.75 ? 2 - phase * 4 : phase * 4 - 4;
       const x = 10 + t * width;
-      const y = (top + bottom) / 2 - v * ((bottom - top) / 2 - 6);
-      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+      pts.push(`${x.toFixed(1)},${toY(dc + peak * waveformShape(type, phase)).toFixed(1)}`);
     }
     return pts.join(" ");
   }
 
   function diagram() {
-    const w = RMS_WAVEFORMS[state.waveform];
-    const mid = 47, half = 35 - 6;
-    const rmsY = mid - w.rms * half;
+    const r = compute();
+    const toY = worldScale(r.max, r.min);
+    const zeroY = toY(0);
+    const dcY = toY(r.dc);
+    const rmsY = toY(r.rmsTotal);
+    const showDc = Math.abs(r.dc) > (r.peak || 1) * 1e-6;
     return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
-      <path d="M10,${mid} H185" stroke="#3A3F47" stroke-width="1" stroke-dasharray="2 3"/>
+      <path d="M10,${zeroY} H185" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      ${showDc ? `<path d="M10,${dcY} H185" stroke="#8FC1F5" stroke-width="1" stroke-dasharray="2 3"/>` : ""}
       <path d="M10,${rmsY} H185" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
-      <polyline points="${waveformPoints(state.waveform)}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="190" y="${rmsY + 4}" fill="#5DCAA5" font-size="10" font-weight="600">RMS</text>
+      <polyline points="${waveformPoints(state.waveform, r.peak, r.dc, toY)}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="190" y="${zeroY + 4}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      ${showDc ? `<text x="190" y="${dcY + 4}" fill="#8FC1F5" font-size="9" font-weight="600">DC</text>` : ""}
+      <text x="190" y="${rmsY + 4}" fill="#5DCAA5" font-size="9" font-weight="600">RMS</text>
     </svg>`;
   }
 
@@ -6283,22 +6336,30 @@ function renderRmsCalculator(domain, tool, favId) {
     const r = compute();
     app.querySelector(".diagram-box").innerHTML = diagram();
     const tone = (k) => (k === state.known ? "#8FC1F5" : "#5DCAA5");
+    // Enter any one of Peak / Peak-to-peak / RMS (with a DC offset if there
+    // is one) and the other two show right below it, in the same card —
+    // RMS here is the real, DC-inclusive total, since that's the number
+    // that answers "what would I actually measure," not the AC-only figure.
     app.querySelector('[data-res="peak"]').innerHTML = `<span style="color:${tone("peak")}">${siFormat(r.peak, state.qty)}</span>`;
     app.querySelector('[data-res="pp"]').innerHTML = `<span style="color:${tone("pp")}">${siFormat(r.pp, state.qty)}</span>`;
-    app.querySelector('[data-res="rms"]').innerHTML = `<span style="color:${tone("rms")}">${siFormat(r.rms, state.qty)}</span>`;
+    app.querySelector('[data-res="rms"]').innerHTML = `<span style="color:${tone("rms")}">${siFormat(r.rmsTotal, state.qty)}</span>`;
+    app.querySelector('[data-res="range"]').textContent = `${siFormat(r.min, state.qty)} to ${siFormat(r.max, state.qty)}`;
+    app.querySelector('[data-res="trueAvg"]').textContent = siFormat(r.trueAvg, state.qty);
+    app.querySelector('[data-res="rmsAc"]').textContent = siFormat(r.rms, state.qty);
     app.querySelector('[data-res="avg"]').innerHTML = `<span style="color:${tone("avg")}">${siFormat(r.avg, state.qty)}</span>`;
     app.querySelector('[data-res="crest"]').textContent = trim(r.crest);
     app.querySelector('[data-res="form"]').textContent = trim(r.form);
-    app.querySelector('[data-res="max"]').textContent = siFormat(r.max, state.qty);
-    app.querySelector('[data-res="min"]').textContent = siFormat(r.min, state.qty);
-    app.querySelector('[data-res="rmsTotal"]').textContent = siFormat(r.rmsTotal, state.qty);
-    app.querySelector('[data-res="trueAvg"]').textContent = siFormat(r.dc, state.qty);
+    app.querySelector('[data-res="err"]').textContent = r.impossible
+      ? `No waveform reaches that RMS with a ${siFormat(r.dc, state.qty)} DC offset — total RMS can't go below the DC offset itself. Lower the DC offset or raise the RMS value.`
+      : "";
   }
 
   function formulaLines() {
     if (state.waveform === "sine") return ["RMS = Peak / √2 ≈ 0.707 × Peak", "Average = Peak × 2/π ≈ 0.637 × Peak"];
     if (state.waveform === "square") return ["RMS = Peak", "Average = Peak"];
-    return ["RMS = Peak / √3 ≈ 0.577 × Peak", "Average = Peak / 2"];
+    if (state.waveform === "triangle") return ["RMS = Peak / √3 ≈ 0.577 × Peak", "Average = Peak / 2"];
+    if (state.waveform === "halfwave") return ["RMS = Peak / 2", "Average = Peak / π ≈ 0.318 × Peak"];
+    return ["RMS = Peak / √2 ≈ 0.707 × Peak (same as a plain sine)", "Average = Peak × 2/π ≈ 0.637 × Peak"];
   }
 
   function paint() {
@@ -6326,37 +6387,35 @@ function renderRmsCalculator(domain, tool, favId) {
         </div>
       </div>
 
-      <div class="section-label" style="color:#5DCAA5">Results — AC part only, 0V in the middle</div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">Peak</span></div>
-        <div class="result-value"><span class="num" data-res="peak"></span></div>
-        <div class="result-sub">Peak-to-peak: <span data-res="pp"></span></div>
-      </div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">RMS</span></div>
-        <div class="result-value"><span class="num" data-res="rms"></span></div>
-        <div class="result-sub">Average (rectified): <span data-res="avg"></span></div>
-        <div class="result-sub">Crest factor: <span data-res="crest"></span> &nbsp;·&nbsp; Form factor: <span data-res="form"></span></div>
-      </div>
-
-      <div class="section-label" style="color:#8FC1F5">DC offset — riding on a level instead of 0V</div>
       <div class="field">
-        <label>DC offset (0 = symmetric about 0V)</label>
+        <label>DC offset (0 = symmetric about 0V — "0V in the middle")</label>
         <div class="field-row">
           <input id="rms-dc" type="number" inputmode="decimal" step="any" value="${trim(state.dc)}" />
           <span style="color:var(--text-secondary);font-size:14px;padding-right:2px">${state.unit}</span>
         </div>
       </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results — enter any one above, the other two follow</div>
       <div class="result-field">
-        <div class="result-head"><span class="label">Total RMS (DC + AC)</span></div>
-        <div class="result-value"><span class="num" data-res="rmsTotal"></span></div>
-        <div class="result-sub">Swings from <span data-res="min"></span> to <span data-res="max"></span></div>
-        <div class="result-sub">True average: <span data-res="trueAvg"></span> (= the DC offset itself)</div>
+        <div class="result-head"><span class="label">Peak</span></div>
+        <div class="result-value"><span class="num" data-res="peak"></span></div>
+        <div class="result-sub">Peak-to-peak: <span data-res="pp"></span></div>
+        <div class="result-sub">RMS: <span data-res="rms"></span></div>
+        <div class="result-sub">Swings from <span data-res="range"></span> &nbsp;·&nbsp; True average (DC level): <span data-res="trueAvg"></span></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">This waveform alone, before any added DC offset</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Average (rectified)</span></div>
+        <div class="result-value"><span class="num" data-res="avg"></span></div>
+        <div class="result-sub">RMS of the AC part alone (no DC offset): <span data-res="rmsAc"></span></div>
+        <div class="result-sub">Crest factor: <span data-res="crest"></span> &nbsp;·&nbsp; Form factor: <span data-res="form"></span></div>
       </div>
 
       ${formulaSection(
-        [...formulaLines(), "Total RMS = √(DC² + RMS_ac²)"],
-        "The Peak/RMS/Average block above assumes the waveform swings symmetrically about 0V — \"0V in the middle.\" A signal riding on a DC level instead (\"0V at the bottom\" is the DC-offset = Peak case) needs the DC offset folded in: total RMS is the quadrature sum of the DC level and the AC part's own RMS, not a plain multiple of peak. Average means the full-wave rectified average up top — a symmetric AC waveform's true average is zero — but once there's a DC offset, the true average is just that offset, shown below instead."
+        [...formulaLines(), "Total RMS = √(DC² + 2·DC·True avg + RMS_ac²)"],
+        "Sine/Square/Triangle swing symmetrically about 0V — \"0V in the middle\" — with zero true average on their own. Half-wave and full-wave (rectifier) shapes never go negative, so they're already biased positive before any DC offset is added — that's the \"0V at the bottom\" case, and it's why they carry their own non-zero True average even with DC set to 0. Add a DC offset on top of any shape and the Results above fold it in correctly either way. Average (rectified) in the block below is only a separate, useful figure for the symmetric shapes — for half/full-wave it's already the same number as True average, since the whole waveform is already ≥ 0."
       )}
       ${calcFooter()}
     `;
