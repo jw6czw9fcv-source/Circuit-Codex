@@ -201,6 +201,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "diode-biasing") return renderDiodeBiasing(domain, tool, favId);
   if (calcId === "rms-calculator") return renderRmsCalculator(domain, tool, favId);
   if (calcId === "db-ratio") return renderDbRatio(domain, tool, favId);
+  if (calcId === "db-absolute") return renderDbAbsolute(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -6599,6 +6600,211 @@ function renderDbRatio(domain, tool, favId) {
       state.v2 = fromLinear(l2, state.v2IsDb);
       refresh();
     };
+
+    refresh();
+  }
+
+  paint();
+}
+
+// ---------- dB / dBm / dBu / dBV conversion ----------
+// Where the Generic dB ratio screen is pure ratio (no reference needed),
+// these four ARE the reference: dBm is power relative to 1mW, dBV is
+// voltage relative to 1V, dBu is voltage relative to √0.6 V (≈0.7746V —
+// the voltage that puts 1mW into 600Ω, the old telephone-line impedance),
+// and dBµV is voltage relative to 1µV — the one RF/EMC and receiver
+// datasheets actually use, since signal and noise-floor levels there sit
+// in the µV range where dBV/dBu would just be large negative numbers.
+// Converting a field's own value to/from its dB figure never needs an
+// impedance — dBm↔W and dBV/dBu/dBµV↔V are each self-contained. Impedance
+// only enters when crossing power to voltage (the "equivalent in other
+// units" card), and 600Ω is a historical broadcast/telecom convention, not
+// a property of the actual device being measured — most modern audio gear
+// is voltage-bridging, not impedance-matched, so that card is a reference
+// figure, not a guaranteed real-world equivalence. (dBµV's own local unit
+// set adds µV rather than widening the app-wide VOLT_UNITS — a plain "µV"
+// option would be an odd fit on every other voltage field in the app that
+// has no reason to expect it.)
+const WATT_UNITS = { "µW": 1e-6, mW: 1e-3, W: 1, kW: 1e3 };
+const MICROVOLT_UNITS = { "µV": 1e-6, mV: 1e-3, V: 1 };
+const DBU_REF_V = Math.sqrt(0.6); // ≈ 0.7746 V
+const DB_ABS_KIND = {
+  dbm: { label: "dBm", sub: "Power, ref 1 mW", ref: 0.001, mult: 10, units: WATT_UNITS, defaultUnit: "mW", qty: "power" },
+  dbv: { label: "dBV", sub: "Voltage, ref 1 V", ref: 1, mult: 20, units: VOLT_UNITS, defaultUnit: "V", qty: "voltage" },
+  dbu: { label: "dBu", sub: "Voltage, ref √0.6 V ≈ 0.775 V", ref: DBU_REF_V, mult: 20, units: VOLT_UNITS, defaultUnit: "V", qty: "voltage" },
+  dbuv: { label: "dBµV", sub: "Voltage, ref 1 µV", ref: 1e-6, mult: 20, units: MICROVOLT_UNITS, defaultUnit: "µV", qty: "voltage" },
+};
+
+// dBV/dBu/dBµV are defined against RMS voltage by convention — a scope
+// handing you Vp or Vpp needs converting first, or the dB figure is wrong
+// by a real factor (√2 for peak, 2√2 for peak-to-peak on a sine), not a
+// rounding error. Same sine-based ratios as the RMS calculator, on purpose
+// — this is the same conversion, just applied going into a dB formula
+// instead of read out on its own.
+const READING_TYPE = {
+  rms: { label: "Vrms", toRms: (v) => v, fromRms: (v) => v },
+  peak: { label: "Vp (peak)", toRms: (v) => v / Math.SQRT2, fromRms: (v) => v * Math.SQRT2 },
+  pp: { label: "Vpp (peak-to-peak)", toRms: (v) => v / (2 * Math.SQRT2), fromRms: (v) => v * 2 * Math.SQRT2 },
+};
+
+function renderDbAbsolute(domain, tool, favId) {
+  const state = { kind: "dbm", value: 1, unit: "mW", impedance: 600, reading: "rms" };
+
+  function k() { return DB_ABS_KIND[state.kind]; }
+
+  // The raw number typed, in its own reading type (Vrms/Vp/Vpp) — not yet
+  // converted to what the dB formula actually needs.
+  function rawLinear() { return state.value * k().units[state.unit]; }
+
+  // What every dB/impedance formula actually operates on: RMS, always.
+  // Power has no reading-type concept, so it passes through unchanged.
+  function linear() {
+    const raw = rawLinear();
+    return k().qty === "voltage" ? READING_TYPE[state.reading].toRms(raw) : raw;
+  }
+
+  function dbFromLinear(lin) {
+    if (!isFinite(lin) || lin <= 0) return NaN;
+    return k().mult * Math.log10(lin / k().ref);
+  }
+
+  // Solving dB back to a value returns RMS — convert to whichever reading
+  // type is currently selected before handing it back to the value field.
+  function linearFromDb(db) {
+    if (!isFinite(db)) return NaN;
+    const rms = k().ref * Math.pow(10, db / k().mult);
+    return k().qty === "voltage" ? READING_TYPE[state.reading].fromRms(rms) : rms;
+  }
+
+  // Crossing power to voltage (or back) to fill the other two units needs
+  // an impedance — user-set below, 600Ω by default (the classic telecom
+  // reference). dBu only comes back out exactly equal to dBm when that
+  // impedance is actually 600Ω, since dBu's reference voltage was chosen
+  // specifically to make that true at 600Ω, not at any other value.
+  function crossKind(lin, fromKind) {
+    const R = state.impedance;
+    const watts = fromKind === "dbm" ? lin : (lin * lin) / R;
+    const volts = fromKind === "dbm" ? Math.sqrt(lin * R) : lin;
+    return {
+      dbm: 10 * Math.log10(watts / 0.001),
+      dbv: 20 * Math.log10(volts / 1),
+      dbu: 20 * Math.log10(volts / DBU_REF_V),
+      dbuv: 20 * Math.log10(volts / 1e-6),
+    };
+  }
+
+  function refresh(source) {
+    const lin = linear();
+    const db = dbFromLinear(lin);
+    const valueField = app.querySelector("#dba-value");
+    const dbField = app.querySelector("#dba-db");
+    if (source !== "value" && document.activeElement !== valueField) valueField.value = isFinite(state.value) ? trim(state.value) : "";
+    if (source !== "db" && document.activeElement !== dbField) dbField.value = isFinite(db) ? trim(db) : "";
+    app.querySelector('[data-res="db"]').textContent = isFinite(db) ? `${trim(db)} ${k().label}` : "—";
+    const linearNote = k().qty === "voltage" && state.reading !== "rms" && isFinite(lin)
+      ? ` (from ${trim(rawLinear())} ${READING_TYPE[state.reading].label})`
+      : "";
+    app.querySelector('[data-res="linear"]').textContent = isFinite(lin)
+      ? `${siFormat(lin, k().qty === "power" ? "W" : "V")}${k().qty === "voltage" ? " rms" : ""}${linearNote}`
+      : "—";
+    app.querySelector('[data-res="err"]').textContent = lin > 0 ? "" : `${k().qty === "power" ? "Power" : "Voltage"} must be greater than zero.`;
+
+    const zOk = isFinite(state.impedance) && state.impedance > 0;
+    const cross = isFinite(lin) && lin > 0 && zOk ? crossKind(lin, state.kind) : null;
+    ["dbm", "dbv", "dbu", "dbuv"].forEach((kk) => {
+      app.querySelector(`[data-res="cross-${kk}"]`).textContent = cross ? `${trim(cross[kk])} ${DB_ABS_KIND[kk].label}` : "—";
+    });
+    app.querySelector('[data-res="zerr"]').textContent = zOk ? "" : "Impedance must be greater than zero.";
+  }
+
+  function paint() {
+    const kind = k();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Absolute dB — each referenced to a fixed level, not to each other")}
+
+      ${pillRow(Object.keys(DB_ABS_KIND).map((kk) => [kk, DB_ABS_KIND[kk].label]), state.kind, domain.bg)}
+      <div class="field"><div class="color-row-note">${kind.sub}</div></div>
+
+      <div class="field">
+        <label>${kind.qty === "power" ? "Power" : "Voltage"}</label>
+        <div class="field-row">
+          <input id="dba-value" type="number" inputmode="decimal" step="any" value="${trim(state.value)}" />
+          <select id="dba-unit">${Object.keys(kind.units).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      ${kind.qty === "voltage" ? `
+      <div class="field">
+        <label>This reading is
+          <select id="dba-reading" class="label-select">
+            ${Object.keys(READING_TYPE).map((r) => `<option value="${r}" ${state.reading === r ? "selected" : ""}>${READING_TYPE[r].label}</option>`).join("")}
+          </select>
+        </label>
+      </div>` : ""}
+      <div class="field">
+        <label>Level (${kind.label})${kind.qty === "voltage" ? " — always RMS-based" : ""}</label>
+        <div class="field-row"><input id="dba-db" type="number" inputmode="decimal" step="any" /></div>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">${kind.label}</span></div>
+        <div class="result-value"><span class="num" data-res="db"></span></div>
+        <div class="result-sub" data-res="linear"></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Equivalent in other units</div>
+      <div class="field">
+        <label>Impedance (R) — 600 Ω is the telecom default</label>
+        <div class="field-row"><input id="dba-z" type="number" inputmode="decimal" step="any" value="${trim(state.impedance)}" /><span style="color:var(--text-secondary);font-size:14px;padding-right:2px">Ω</span></div>
+      </div>
+      <div class="error-text" data-res="zerr"></div>
+      <div class="result-field">
+        <div class="result-sub">dBm: <span data-res="cross-dbm"></span></div>
+        <div class="result-sub">dBV: <span data-res="cross-dbv"></span></div>
+        <div class="result-sub">dBu: <span data-res="cross-dbu"></span></div>
+        <div class="result-sub">dBµV: <span data-res="cross-dbuv"></span></div>
+      </div>
+
+      ${formulaSection(
+        [`dBm = 10 · log₁₀(P / 1 mW)`, `dBV = 20 · log₁₀(V / 1 V)`, `dBu = 20 · log₁₀(V / 0.7746 V)`, `dBµV = 20 · log₁₀(V / 1 µV)`],
+        "dBm needs no impedance to convert — it's power relative to a fixed power. dBV, dBu, and dBµV are voltage relative to a fixed voltage, also impedance-free. 0 dBu equals exactly 0 dBm only at 600Ω, because dBu's reference voltage was specifically chosen to make that true there — set the impedance above to your actual system (50Ω for RF, 8Ω for a speaker load, 600Ω for legacy audio/telecom) and the \"equivalent in other units\" card recalculates for real, not just illustratively. dBV/dBu/dBµV are defined against RMS voltage — a scope usually hands you Vp or Vpp instead, so entering it as-is without converting would be wrong by a real factor (√2 for peak, 2√2 for peak-to-peak on a sine), not a rounding error. The reading-type picker above the Level field does that conversion for you."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => {
+      state.kind = v;
+      state.unit = DB_ABS_KIND[v].defaultUnit;
+      state.reading = "rms";
+      paint();
+    });
+
+    const valueField = document.getElementById("dba-value");
+    const dbField = document.getElementById("dba-db");
+    valueField.oninput = () => { const v = parseFloat(valueField.value); if (isFinite(v)) { state.value = v; refresh("value"); } };
+    document.getElementById("dba-unit").onchange = (e) => { state.unit = e.target.value; refresh(); };
+    dbField.oninput = () => {
+      const db = parseFloat(dbField.value);
+      if (isFinite(db)) {
+        const lin = linearFromDb(db);
+        state.value = lin / k().units[state.unit];
+        refresh("db");
+      }
+    };
+    document.getElementById("dba-z").oninput = (e) => {
+      const z = parseFloat(e.target.value);
+      if (isFinite(z)) { state.impedance = z; refresh(); }
+    };
+    const readingSel = document.getElementById("dba-reading");
+    if (readingSel) {
+      readingSel.onchange = (e) => {
+        const rms = linear(); // capture before switching reading type
+        state.reading = e.target.value;
+        state.value = READING_TYPE[state.reading].fromRms(rms) / k().units[state.unit];
+        refresh();
+      };
+    }
 
     refresh();
   }

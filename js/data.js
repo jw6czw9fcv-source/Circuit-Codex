@@ -120,7 +120,7 @@ const DOMAINS = [
     sections: [
       { title: "Antennas & propagation", tools: [{ name: "Path loss" }, { name: "Wavelength" }, { name: "Beamwidth & gain" }, { name: "Fresnel zone" }, { name: "Antenna length (dipole/monopole)" }] },
       { title: "Transmission lines", tools: [{ name: "VSWR / Return loss" }, { name: "Velocity factor" }, { name: "Coax impedance" }, { name: "Smith chart matching" }, { name: "Skin depth" }, { name: "Coax cable standards" }] },
-      { title: "Power & gain", tools: [{ name: "dB / dBm / dBu / dBV conversion" }, { name: "Cascade gain, noise figure, P1dB" }, { name: "Intercept point" }, { name: "Intermodulation" }, { name: "Attenuator (Pi, T, bridged-T)" }, { name: "Power divider" }] },
+      { title: "Power & gain", tools: [{ name: "Cascade gain, noise figure, P1dB" }, { name: "Intercept point" }, { name: "Intermodulation" }, { name: "Attenuator (Pi, T, bridged-T)" }, { name: "Power divider" }] },
       { title: "Mixing & conversion", tools: [{ name: "IF calculator" }, { name: "Image frequency" }] },
       { title: "RF components", tools: [{ name: "Common mode choke" }, { name: "Balun" }, { name: "SAW filter" }, { name: "RF diode types" }] },
       { title: "Reference", tools: [{ name: "Microwave bands & frequencies" }] },
@@ -193,9 +193,10 @@ const DOMAINS = [
           { name: "Scientific ↔ engineering notation", calc: "sci-eng" },
           { name: "Percent tolerance / error", calc: "percent-tolerance" },
           { name: "Generic dB ratio calculator", calc: "db-ratio" },
+          { name: "dB / dBm / dBu / dBV conversion", calc: "db-absolute" },
         ],
       },
-      { title: "Converters", tools: [{ name: "Unit converter" }, { name: "PPM calculator" }] },
+      { title: "Converters", tools: [{ name: "Unit converter" }, { name: "PPM converter" }] },
       { title: "Signal & test", tools: [{ name: "Signal generator" }, { name: "Two-tone generator" }, { name: "Oscilloscope" }, { name: "Frequency counter" }] },
       {
         title: "Reference",

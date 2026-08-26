@@ -27,11 +27,11 @@ missing while looking at SMD package sizes; SMD ratings are a real
 per-package-code standard, through-hole ratings are organized by watt
 instead since there's no code system for THT body size) ·
 Basic logic gates · LED series resistor · Diode forward voltage / biasing ·
-RMS calculator · **Generic dB ratio calculator**
+RMS calculator · Generic dB ratio calculator · **dB / dBm / dBu / dBV
+conversion**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] dB / dBm / dBu / dBV conversion
 - [ ] Battery runtime / capacity estimation
 - [ ] C-rate
 - [ ] Battery types & sizes
@@ -46,7 +46,7 @@ RMS calculator · **Generic dB ratio calculator**
 - [ ] Delta-Y transform
 - [ ] NTC/PTC thermistor
 - [ ] Unit converter
-- [ ] PPM calculator
+- [ ] PPM converter
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
