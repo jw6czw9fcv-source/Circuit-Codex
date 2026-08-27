@@ -202,6 +202,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rms-calculator") return renderRmsCalculator(domain, tool, favId);
   if (calcId === "db-ratio") return renderDbRatio(domain, tool, favId);
   if (calcId === "db-absolute") return renderDbAbsolute(domain, tool, favId);
+  if (calcId === "battery-runtime") return renderBatteryRuntime(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -6807,6 +6808,155 @@ function renderDbAbsolute(domain, tool, favId) {
     }
 
     refresh();
+  }
+
+  paint();
+}
+
+// ---------- Battery runtime / capacity estimation ----------
+// Runtime = Capacity / Current, the naive constant-current model — real
+// packs run out sooner than that because the usable capacity depends on
+// the discharge rate (Peukert's effect, mainly in lead-acid) and on the
+// cutoff voltage arriving before the charge is nominally spent. Rather
+// than assert a specific derating number as fact, "Usable capacity" is
+// left at 100% (the ideal case) and adjustable — the note says why a real
+// runtime is usually shorter, without pretending 80% or any other figure
+// is universally correct. Battery type/size capacities are a separate,
+// later tool (Battery types & sizes); this one is just the Ah/A/h math.
+const CAPACITY_UNITS = { mAh: 1e-3, Ah: 1 };
+const RUNTIME_UNITS = { min: 1 / 60, h: 1 };
+const BATTERY_FIELD = {
+  capacity: { label: "Battery capacity", units: CAPACITY_UNITS },
+  current: { label: "Load current", units: AMP_UNITS },
+  runtime: { label: "Runtime", units: RUNTIME_UNITS },
+};
+
+function renderBatteryRuntime(domain, tool, favId) {
+  const state = {
+    mode: "runtime",
+    values: { capacity: 2000, current: 500, runtime: 4 },
+    units: { capacity: "mAh", current: "mA", runtime: "h" },
+    efficiency: 100,
+  };
+
+  function inputsFor(mode) {
+    if (mode === "runtime") return ["capacity", "current"];
+    if (mode === "current") return ["capacity", "runtime"];
+    return ["current", "runtime"];
+  }
+
+  function si(name) {
+    return state.values[name] * BATTERY_FIELD[name].units[state.units[name]];
+  }
+
+  function compute() {
+    let capacity = si("capacity"), current = si("current"), runtime = si("runtime");
+    const eff = state.efficiency / 100;
+    if (state.mode === "runtime") runtime = (capacity * eff) / current;
+    if (state.mode === "current") current = (capacity * eff) / runtime;
+    if (state.mode === "capacity") capacity = (current * runtime) / eff;
+    return { capacity, current, runtime };
+  }
+
+  function problem(r) {
+    if (state.efficiency <= 0 || state.efficiency > 100) return "Usable capacity must be between 0 and 100%.";
+    if (!isFinite(r.current) || r.current <= 0) return "Load current must be greater than zero.";
+    if (!isFinite(r.capacity) || r.capacity <= 0) return "Battery capacity must be greater than zero.";
+    if (!isFinite(r.runtime) || r.runtime <= 0) return "Runtime must be greater than zero.";
+    return "";
+  }
+
+  function formatRuntime(h) {
+    if (!isFinite(h) || h < 0) return "—";
+    if (h >= 100) return `${trim(h)} h`;
+    const totalMin = Math.round(h * 60);
+    const hh = Math.floor(totalMin / 60), mm = totalMin % 60;
+    if (hh === 0) return `${mm} min`;
+    if (mm === 0) return `${hh} h`;
+    return `${hh} h ${mm} min`;
+  }
+
+  function solvedLabel() {
+    return { runtime: "Runtime", current: "Max. load current", capacity: "Battery capacity needed" }[state.mode];
+  }
+
+  function solvedValue(r) {
+    if (problem(r)) return "—";
+    if (state.mode === "runtime") return formatRuntime(r.runtime);
+    if (state.mode === "current") return siFormat(r.current, "A", 3);
+    return siFormat(r.capacity, "Ah", 3);
+  }
+
+  // Battery symbol (long/short plates) feeding a load box, current arrow
+  // along the top wire — same loop convention as the LED/diode screens.
+  function diagram() {
+    const wire = "#5A6169";
+    return `<svg width="220" height="90" viewBox="0 0 220 90" fill="none">
+      <path d="M30,18 H80 M140,18 H190 M190,18 V72 M190,72 H30 M30,72 V49 M30,35 V18" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+      <rect x="80" y="8" width="60" height="20" rx="3" stroke="${domain.color}" stroke-width="1.6" fill="none"/>
+      <text x="110" y="22" fill="${domain.color}" font-size="11" font-weight="600" text-anchor="middle">Load</text>
+      <text x="12" y="51" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Bat</text>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="err"]').textContent = issue;
+    app.querySelector('[data-res="label"]').textContent = solvedLabel();
+  }
+
+  function paint() {
+    const inputs = inputsFor(state.mode);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Runtime = Capacity × Usable% / Current")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["runtime", "Runtime"], ["current", "Current"], ["capacity", "Capacity"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="batt-eff" class="label-select">
+          ${[100, 90, 85, 80, 70, 60, 50].map((e) => `<option value="${e}" ${state.efficiency === e ? "selected" : ""}>${e}% usable</option>`).join("")}
+        </select>
+      </div>
+      ${inputs.map((name) => `
+        <div class="field">
+          <label>${BATTERY_FIELD[name].label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${trim(state.values[name])}" />
+            <select data-unit="${name}">${Object.keys(BATTERY_FIELD[name].units).map((u) => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label" data-res="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="solved">${solvedValue(compute())}</span></div>
+      </div>
+
+      ${formulaSection(
+        ["Runtime (h) = Capacity (Ah) × Usable% / Current (A)"],
+        "\"Usable capacity\" defaults to 100% — the ideal, constant-current case. A real battery usually delivers less than that before its cutoff voltage arrives, and how much less depends on the discharge rate and chemistry (most pronounced in lead-acid, via Peukert's effect) — there's no single correct derating figure, so pick one that matches the pack and load you actually have, or leave it at 100% for the theoretical best case."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    app.querySelectorAll("input[data-var]").forEach((inp) => {
+      inp.oninput = () => { state.values[inp.dataset.var] = parseFloat(inp.value); updateResults(); };
+    });
+    app.querySelectorAll("select[data-unit]").forEach((sel) => {
+      sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; updateResults(); };
+    });
+    document.getElementById("batt-eff").onchange = (e) => { state.efficiency = Number(e.target.value); updateResults(); };
   }
 
   paint();
