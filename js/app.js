@@ -206,6 +206,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "c-rate") return renderCRate(domain, tool, favId);
   if (calcId === "battery-sizes") return renderBatterySizes(domain, tool, favId);
   if (calcId === "button-cells") return renderButtonCells(domain, tool, favId);
+  if (calcId === "rc-charge") return renderRcCharge(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -7307,6 +7308,191 @@ function renderButtonCells(domain, tool, favId) {
       state.query = input.value.trim().toLowerCase();
       refreshResults();
     };
+  }
+
+  paint();
+}
+
+// ---------- Capacitor charge/discharge (RC) ----------
+// The exponential is the whole story: charging climbs toward Vs as
+// Vs·(1 − e^(−t/RC)), discharging falls toward 0 as V0·e^(−t/RC) — same
+// time constant τ = R·C either way, just approached from opposite ends.
+// "Time" and "Voltage at that time" are linked both directions, same
+// pattern as the dB ratio screen: edit either one and the other follows,
+// inverting the exponential (t = −τ·ln(1 − V/Vs) charging, −τ·ln(V/Vs)
+// discharging) when voltage is what's known.
+const RC_TIME_UNITS = { µs: 1e-6, ms: 1e-3, s: 1, min: 60 };
+const RC_TAU_REFERENCE = [0, 1, 2, 3, 4, 5];
+
+function renderRcCharge(domain, tool, favId) {
+  const state = {
+    mode: "charging",
+    r: 10, rUnit: "kΩ",
+    c: 100, cUnit: "µF",
+    vs: 5,
+    known: "time", time: 1, timeUnit: "s", voltage: null,
+  };
+
+  function tau() {
+    return state.r * OHM_UNITS[state.rUnit] * state.c * CAP_UNITS[state.cUnit];
+  }
+
+  function vAtT(t) {
+    const T = tau();
+    if (!isFinite(t) || t < 0 || !isFinite(T) || T <= 0) return NaN;
+    const frac = Math.exp(-t / T);
+    return state.mode === "charging" ? state.vs * (1 - frac) : state.vs * frac;
+  }
+
+  function tAtV(v) {
+    const T = tau();
+    if (!isFinite(v) || !isFinite(T) || T <= 0 || state.vs <= 0) return NaN;
+    if (state.mode === "charging") {
+      if (v < 0 || v >= state.vs) return NaN;
+      return -T * Math.log(1 - v / state.vs);
+    }
+    if (v <= 0 || v > state.vs) return NaN;
+    return -T * Math.log(v / state.vs);
+  }
+
+  function refTable() {
+    const T = tau();
+    return RC_TAU_REFERENCE.map((n) => {
+      const pct = state.mode === "charging" ? (1 - Math.exp(-n)) * 100 : Math.exp(-n) * 100;
+      return { n, t: n * T, pct };
+    });
+  }
+
+  function diagram() {
+    const wire = "#5A6169";
+    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
+      <path d="M30,20 H70 M110,20 H190 M190,20 V44 M190,58 V80 M190,80 H30 M30,80 V56 M30,32 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+      <path d="M70,20 L73,13 L79,27 L85,13 L91,27 L97,13 L103,27 L110,20" stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M180,47 H200 M180,53 H200" stroke="${domain.color}" stroke-width="2" stroke-linecap="round"/>
+      <text x="90" y="12" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
+      <text x="207" y="53" fill="${domain.color}" font-size="12" font-weight="600">C</text>
+      <text x="12" y="51" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Vs</text>
+    </svg>`;
+  }
+
+  function refresh(source) {
+    const T = tau();
+    const timeField = app.querySelector("#rc-time");
+    const voltField = app.querySelector("#rc-volt");
+    let t, v;
+    if (state.known === "voltage" && source !== "time") {
+      v = state.voltage;
+      t = tAtV(v);
+    } else {
+      t = state.time * RC_TIME_UNITS[state.timeUnit];
+      v = vAtT(t);
+    }
+    if (source !== "time" && document.activeElement !== timeField) timeField.value = isFinite(t) ? trim(t / RC_TIME_UNITS[state.timeUnit]) : "";
+    if (source !== "voltage" && document.activeElement !== voltField) voltField.value = isFinite(v) ? trim(v) : "";
+    app.querySelector('[data-res="tau"]').textContent = isFinite(T) ? siFormat(T, "s") : "—";
+    app.querySelector('[data-res="volt"]').textContent = isFinite(v) ? siFormat(v, "V") : "—";
+    app.querySelector('[data-res="pct"]').textContent = isFinite(v) && state.vs > 0
+      ? `${trim((v / state.vs) * 100)}% of ${state.mode === "charging" ? "the way to Vs" : "Vs remaining"}`
+      : "";
+    app.querySelector('[data-res="err"]').textContent = (!isFinite(t) || !isFinite(v))
+      ? (state.mode === "charging" ? "Target voltage must be between 0 and Vs (charging only approaches Vs, never reaches it)." : "Target voltage must be between 0 and Vs (discharging only approaches 0, never reaches it).")
+      : "";
+    app.querySelector('[data-res="reftable"]').innerHTML = refTable()
+      .map((r) => `<div class="tt-row"><span>${r.n}τ</span><span class="tt-out">${trim(r.pct)}%</span></div>`)
+      .join("");
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "τ = R × C — the exponential time constant")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["charging", "Charging"], ["discharging", "Discharging"]], state.mode, domain.bg)}
+
+      <div class="field">
+        <label>Resistance (R)</label>
+        <div class="field-row">
+          <input id="rc-r" type="number" inputmode="decimal" step="any" value="${trim(state.r)}" />
+          <select id="rc-r-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Capacitance (C)</label>
+        <div class="field-row">
+          <input id="rc-c" type="number" inputmode="decimal" step="any" value="${trim(state.c)}" />
+          <select id="rc-c-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.cUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>${state.mode === "charging" ? "Supply voltage (Vs)" : "Initial voltage (V0)"}</label>
+        <div class="field-row"><input id="rc-vs" type="number" inputmode="decimal" step="any" value="${trim(state.vs)}" /></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Time ↔ voltage — enter either one</div>
+      <div class="field">
+        <label>Time</label>
+        <div class="field-row">
+          <input id="rc-time" type="number" inputmode="decimal" step="any" value="${trim(state.time)}" />
+          <select id="rc-time-unit">${Object.keys(RC_TIME_UNITS).map((u) => `<option ${state.timeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Voltage at that time</label>
+        <div class="field-row"><input id="rc-volt" type="number" inputmode="decimal" step="any" /></div>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Time constant (τ = R × C)</span></div>
+        <div class="result-value"><span class="num" data-res="tau"></span></div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Voltage</span></div>
+        <div class="result-value"><span class="num" data-res="volt"></span></div>
+        <div class="result-sub" data-res="pct"></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Quick reference — % after n time constants</div>
+      <div class="truth-table" style="--tt-cols:2" data-res="reftable"></div>
+
+      ${formulaSection(
+        ["τ = R × C", "Charging: V(t) = Vs · (1 − e^(−t/τ))", "Discharging: V(t) = V0 · e^(−t/τ)"],
+        "Neither curve ever actually reaches Vs or 0 — they only approach it. \"Fully charged/discharged\" in practice means 5τ (≈99.3%), the conventional cutoff, not a hard endpoint the math itself defines."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    const rField = document.getElementById("rc-r");
+    const cField = document.getElementById("rc-c");
+    const vsField = document.getElementById("rc-vs");
+    const timeField = document.getElementById("rc-time");
+    const voltField = document.getElementById("rc-volt");
+
+    rField.oninput = () => { const v = parseFloat(rField.value); if (isFinite(v)) { state.r = v; refresh(); } };
+    cField.oninput = () => { const v = parseFloat(cField.value); if (isFinite(v)) { state.c = v; refresh(); } };
+    vsField.oninput = () => { const v = parseFloat(vsField.value); if (isFinite(v)) { state.vs = v; refresh(); } };
+    document.getElementById("rc-r-unit").onchange = (e) => { state.rUnit = e.target.value; refresh(); };
+    document.getElementById("rc-c-unit").onchange = (e) => { state.cUnit = e.target.value; refresh(); };
+    document.getElementById("rc-time-unit").onchange = (e) => {
+      state.timeUnit = e.target.value;
+      state.known = "time";
+      refresh();
+    };
+    timeField.oninput = () => {
+      const v = parseFloat(timeField.value);
+      if (isFinite(v)) { state.time = v; state.known = "time"; refresh("time"); }
+    };
+    voltField.oninput = () => {
+      const v = parseFloat(voltField.value);
+      if (isFinite(v)) { state.voltage = v; state.known = "voltage"; refresh("voltage"); }
+    };
+
+    refresh();
   }
 
   paint();

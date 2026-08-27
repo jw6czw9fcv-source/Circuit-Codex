@@ -34,7 +34,7 @@ const DOMAINS = [
           { name: "Film code", calc: "film-code" },
           { name: "SMD code", calc: "cap-smd-code" },
           { name: "Series/parallel", calc: "cap-series-parallel" },
-          { name: "Charge/discharge (RC)" },
+          { name: "Charge/discharge (RC)", calc: "rc-charge" },
           { name: "Stored energy" },
         ],
       },
