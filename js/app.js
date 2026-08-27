@@ -7074,7 +7074,7 @@ function renderCRate(domain, tool, favId) {
 
       ${formulaSection(
         ["Current (A) = C-rate × Capacity (Ah)", "Time (h) = 1 / C-rate"],
-        "1C is the current that moves a battery's full rated capacity in exactly one hour — 2C does it in half an hour, 0.5C in two. It's a notation for the rate itself, not a guarantee the battery can actually deliver it safely; a cell's real maximum charge/discharge C-rate is set by its chemistry and construction and is always in its datasheet."
+        "1C is the current that moves a battery's full rated capacity in exactly one hour — 2C does it in half an hour, 0.5C in two. It's a notation for the rate itself, not a guarantee the battery can actually deliver it safely; a cell's real maximum charge/discharge C-rate is set by its chemistry and construction and is always in its datasheet. The \"C\" stands for Capacity, not the coulomb (charge) unit, even though they're spelled the same — though they're not unrelated: a battery's capacity in Ah is itself an amount of charge (1 Ah = 3600 coulombs, since charge = current × time)."
       )}
       ${calcFooter()}
     `;
