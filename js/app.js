@@ -7114,17 +7114,21 @@ function renderCRate(domain, tool, favId) {
 // a third lighter, usable well below freezing, and a much longer shelf
 // life — real, checked differences, not a marketing rebrand of alkaline.
 const BATTERY_SIZES = [
+  { code: "AAAA", iec: "LR8D425", chem: "Alkaline, 1.5V", dims: "⌀8.3 × 42.5 mm", capacity: "≈500–625 mAh", group: "common" },
   { code: "AAA", iec: "LR03", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀10.5 × 44.5 mm", capacity: "≈800–1200 mAh", group: "common" },
+  { code: "N", iec: "LR1", chem: "Alkaline, 1.5V", dims: "⌀12 × 30.2 mm", capacity: "≈800–1000 mAh", group: "common" },
   { code: "AA", iec: "LR6", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀14.5 × 50.5 mm", capacity: "≈1800–3000 mAh", group: "common" },
   { code: "C", iec: "LR14", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀26.2 × 50 mm", capacity: "≈6000–8000 mAh", group: "common" },
   { code: "D", iec: "LR20", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀34.2 × 61.5 mm", capacity: "≈12,000–18,000 mAh", group: "common" },
   { code: "9V (PP3)", iec: "6LR61", chem: "Alkaline, 9V (six 1.5V cells in series)", dims: "48.5 × 26.5 × 17.5 mm", capacity: "≈400–600 mAh", group: "common" },
-  { code: "AA (Lithium)", iec: "L91", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AA, flatter discharge curve, ~⅓ lighter, works well below freezing", dims: "⌀14.5 × 50.5 mm", capacity: "≈3000–3500 mAh", group: "lithium" },
-  { code: "AAA (Lithium)", iec: "L92", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AAA, same advantages as the AA (L91)", dims: "⌀10.5 × 44.5 mm", capacity: "≈1200–1300 mAh", group: "lithium" },
-  { code: "CR123A", iec: "—", chem: "Lithium primary, 3V", dims: "⌀17 × 34.5 mm", capacity: "≈1500 mAh", group: "lithium" },
+  { code: "AAA (Lithium)", iec: "L92", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AAA, flatter discharge curve, ~⅓ lighter, works well below freezing", dims: "⌀10.5 × 44.5 mm", capacity: "≈1200–1300 mAh", group: "lithium" },
   { code: "14500", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀14 × 50 mm", capacity: "≈600–900 mAh", group: "lithium" },
+  { code: "AA (Lithium)", iec: "L91", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AA, same advantages as the AAA (L92)", dims: "⌀14.5 × 50.5 mm", capacity: "≈3000–3500 mAh", group: "lithium" },
+  { code: "CR2", iec: "—", chem: "Lithium primary, 3V — cameras, flashlights, some smoke detectors; a shorter, different cell than CR123A despite the similar name", dims: "⌀15.6 × 27 mm", capacity: "≈800–850 mAh", group: "lithium" },
+  { code: "CR123A", iec: "—", chem: "Lithium primary, 3V", dims: "⌀17 × 34.5 mm", capacity: "≈1500 mAh", group: "lithium" },
   { code: "18650", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀18 × 65 mm", capacity: "≈2000–3600 mAh", group: "lithium" },
   { code: "21700", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀21 × 70 mm", capacity: "≈4000–5000 mAh", group: "lithium" },
+  { code: "26650", iec: "—", chem: "Li-ion, 3.6–3.7V — larger than 21700; flashlights, e-bikes, power tools", dims: "⌀26 × 65 mm", capacity: "≈4000–6000 mAh", group: "lithium" },
 ];
 const BATTERY_SIZE_FILTERS = [["all", "All"], ["common", "Alkaline / NiMH"], ["lithium", "Lithium"]];
 
@@ -7216,6 +7220,12 @@ function renderBatterySizes(domain, tool, favId) {
 // opened they run down over days whether the device uses them or not,
 // unlike a lithium or alkaline cell just sitting in a drawer.
 const BUTTON_CELLS = [
+  { code: "LR44 (AG13)", chem: "Alkaline, 1.5V", dims: "⌀11.6 × 5.4 mm", capacity: "≈100–150 mAh", note: "Calculators, small toys, laser pointers. Same size as SR44 — see its note before substituting.", group: "alkaline" },
+  { code: "LR1130 (AG10)", chem: "Alkaline, 1.5V", dims: "⌀11.6 × 3.1 mm", capacity: "≈50–80 mAh", note: "Small electronics, laser pointers, glucose meters. Its silver-oxide same-size equivalent is sold as 389/390 — same swap caveat as LR44/SR44.", group: "alkaline" },
+  { code: "SR44 (357)", chem: "Silver oxide, 1.55V", dims: "⌀11.6 × 5.4 mm", capacity: "≈150–200 mAh", note: "Watches, precision instruments — flatter discharge curve than LR44. Can replace an LR44; an LR44 replacing an SR44 can throw off precision timing.", group: "silveroxide" },
+  { code: "SR621 (364)", chem: "Silver oxide, 1.55V", dims: "⌀6.8 × 2.1 mm", capacity: "≈18–23 mAh", note: "Same diameter as SR626, thinner — not interchangeable despite the similar size.", group: "silveroxide" },
+  { code: "SR626 (377)", chem: "Silver oxide, 1.55V", dims: "⌀6.8 × 2.6 mm", capacity: "≈25–27 mAh", note: "One of the most common watch battery sizes.", group: "silveroxide" },
+  { code: "SR920 (371)", chem: "Silver oxide, 1.55V", dims: "⌀9.5 × 2.1 mm", capacity: "≈35–55 mAh", note: "A common watch battery size.", group: "silveroxide" },
   { code: "CR1220", chem: "Lithium (Li/MnO2), 3V", dims: "⌀12 × 2.0 mm", capacity: "≈35–40 mAh", note: "One of the smallest common lithium coin cells — small remotes, medical devices.", group: "lithium" },
   { code: "CR1616", chem: "Lithium (Li/MnO2), 3V", dims: "⌀16 × 1.6 mm", capacity: "≈50–55 mAh", note: "Small remotes, key fobs.", group: "lithium" },
   { code: "CR1632", chem: "Lithium (Li/MnO2), 3V", dims: "⌀16 × 3.2 mm", capacity: "≈120–130 mAh", note: "Car key fobs, TPMS tire-pressure sensors.", group: "lithium" },
@@ -7223,12 +7233,6 @@ const BUTTON_CELLS = [
   { code: "CR2025", chem: "Lithium (Li/MnO2), 3V", dims: "⌀20 × 2.5 mm", capacity: "≈150–165 mAh", note: "Same diameter as CR2032, thinner.", group: "lithium" },
   { code: "CR2032", chem: "Lithium (Li/MnO2), 3V", dims: "⌀20 × 3.2 mm", capacity: "≈220–240 mAh", note: "The most common lithium coin cell — motherboard/RTC battery, remotes, key fobs.", group: "lithium" },
   { code: "CR2450", chem: "Lithium (Li/MnO2), 3V", dims: "⌀24.5 × 5.0 mm", capacity: "≈550–620 mAh", note: "Larger, higher-capacity lithium coin — remote controls, medical/POS devices.", group: "lithium" },
-  { code: "LR44 (AG13)", chem: "Alkaline, 1.5V", dims: "⌀11.6 × 5.4 mm", capacity: "≈100–150 mAh", note: "Calculators, small toys, laser pointers. Same size as SR44 — see its note before substituting.", group: "alkaline" },
-  { code: "LR1130 (AG10)", chem: "Alkaline, 1.5V", dims: "⌀11.6 × 3.1 mm", capacity: "≈50–80 mAh", note: "Small electronics, laser pointers, glucose meters. Its silver-oxide same-size equivalent is sold as 389/390 — same swap caveat as LR44/SR44.", group: "alkaline" },
-  { code: "SR44 (357)", chem: "Silver oxide, 1.55V", dims: "⌀11.6 × 5.4 mm", capacity: "≈150–200 mAh", note: "Watches, precision instruments — flatter discharge curve than LR44. Can replace an LR44; an LR44 replacing an SR44 can throw off precision timing.", group: "silveroxide" },
-  { code: "SR621 (364)", chem: "Silver oxide, 1.55V", dims: "⌀6.8 × 2.1 mm", capacity: "≈18–23 mAh", note: "Same diameter as SR626, thinner — not interchangeable despite the similar size.", group: "silveroxide" },
-  { code: "SR626 (377)", chem: "Silver oxide, 1.55V", dims: "⌀6.8 × 2.6 mm", capacity: "≈25–27 mAh", note: "One of the most common watch battery sizes.", group: "silveroxide" },
-  { code: "SR920 (371)", chem: "Silver oxide, 1.55V", dims: "⌀9.5 × 2.1 mm", capacity: "≈35–55 mAh", note: "A common watch battery size.", group: "silveroxide" },
   { code: "A10 (yellow)", chem: "Zinc-air, 1.4V", dims: "⌀5.8 × 3.6 mm", capacity: "≈90–100 mAh", note: "The smallest common hearing aid size.", group: "zincair" },
   { code: "A13 (orange)", chem: "Zinc-air, 1.4V", dims: "⌀7.9 × 5.4 mm", capacity: "≈260–300 mAh", note: "One of the most common hearing aid sizes.", group: "zincair" },
   { code: "A312 (brown)", chem: "Zinc-air, 1.4V", dims: "⌀7.9 × 3.6 mm", capacity: "≈140–180 mAh", note: "Same diameter as A13, thinner.", group: "zincair" },
