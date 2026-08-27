@@ -142,7 +142,7 @@ const DOMAINS = [
           { name: "Inrush current limiter (NTC)" }, { name: "Constant current source/driver" }, { name: "Power factor" }, { name: "POE classes" },
         ],
       },
-      { title: "Battery", tools: [{ name: "Runtime / capacity estimation", calc: "battery-runtime" }, { name: "C-rate" }, { name: "Internal resistance" }, { name: "Battery types & sizes" }, { name: "Button cells" }, { name: "Accumulators" }] },
+      { title: "Battery", tools: [{ name: "Runtime / capacity estimation", calc: "battery-runtime" }, { name: "C-rate", calc: "c-rate" }, { name: "Internal resistance" }, { name: "Battery types & sizes" }, { name: "Button cells" }, { name: "Accumulators" }] },
       { title: "Thermal management", tools: [{ name: "Thermal resistance (θJA / θJC)" }, { name: "Heat sink sizing" }, { name: "Power derating" }, { name: "Power density" }] },
       { title: "Motors", tools: [{ name: "Torque & power conversion" }, { name: "Back-EMF / Lenz's law" }, { name: "Stepper motor torque/step" }, { name: "RPM ↔ frequency conversion" }, { name: "Starting current estimation" }] },
       { title: "Switching & control", tools: [{ name: "Relay driver" }] },

@@ -203,6 +203,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "db-ratio") return renderDbRatio(domain, tool, favId);
   if (calcId === "db-absolute") return renderDbAbsolute(domain, tool, favId);
   if (calcId === "battery-runtime") return renderBatteryRuntime(domain, tool, favId);
+  if (calcId === "c-rate") return renderCRate(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -6957,6 +6958,137 @@ function renderBatteryRuntime(domain, tool, favId) {
       sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; updateResults(); };
     });
     document.getElementById("batt-eff").onchange = (e) => { state.efficiency = Number(e.target.value); updateResults(); };
+  }
+
+  paint();
+}
+
+// ---------- C-rate ----------
+// The notation datasheets actually use for charge/discharge current: 1C is
+// the current that would move the full rated capacity in exactly one hour,
+// 2C in half an hour, 0.5C in two hours — Current (A) = C-rate × Capacity
+// (Ah), and Time (h) = 1 / C-rate. It's the same underlying relationship as
+// Battery runtime, but that tool starts from a real load current; this one
+// starts from a spec sheet's "nC" rating and converts it to actual amps
+// (or the reverse — what C-rate a measured current actually represents).
+const C_RATE_REFERENCE = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
+
+function renderCRate(domain, tool, favId) {
+  const state = {
+    mode: "current",
+    values: { capacity: 2000, crate: 1, current: 2000 },
+    units: { capacity: "mAh", current: "mA" },
+  };
+
+  function si(name) {
+    if (name === "crate") return state.values.crate;
+    return state.values[name] * (name === "capacity" ? CAPACITY_UNITS : AMP_UNITS)[state.units[name]];
+  }
+
+  function compute() {
+    let capacity = si("capacity"), crate = si("crate"), current = si("current");
+    if (state.mode === "current") current = crate * capacity;
+    if (state.mode === "crate") crate = capacity > 0 ? current / capacity : NaN;
+    if (state.mode === "capacity") capacity = crate > 0 ? current / crate : NaN;
+    return { capacity, crate, current, time: crate > 0 ? 1 / crate : NaN };
+  }
+
+  function problem(r) {
+    if (!isFinite(r.capacity) || r.capacity <= 0) return "Battery capacity must be greater than zero.";
+    if (!isFinite(r.crate) || r.crate <= 0) return "C-rate must be greater than zero.";
+    if (!isFinite(r.current) || r.current <= 0) return "Current must be greater than zero.";
+    return "";
+  }
+
+  function formatTime(h) {
+    if (!isFinite(h) || h < 0) return "—";
+    if (h >= 100) return `${trim(h)} h`;
+    const totalMin = Math.round(h * 60);
+    const hh = Math.floor(totalMin / 60), mm = totalMin % 60;
+    if (hh === 0) return `${mm} min`;
+    if (mm === 0) return `${hh} h`;
+    return `${hh} h ${mm} min`;
+  }
+
+  function fieldsFor(mode) {
+    if (mode === "current") return ["capacity", "crate"];
+    if (mode === "crate") return ["capacity", "current"];
+    return ["current", "crate"];
+  }
+
+  function solvedLabel() {
+    return { current: "Current", crate: "C-rate", capacity: "Battery capacity" }[state.mode];
+  }
+
+  function solvedValue(r) {
+    if (problem(r)) return "—";
+    if (state.mode === "current") return siFormat(r.current, "A", 3);
+    if (state.mode === "crate") return `${trim(r.crate)}C`;
+    return siFormat(r.capacity, "Ah", 3);
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="label"]').textContent = solvedLabel();
+    app.querySelector('[data-res="time"]').textContent = issue ? "" : `Full charge/discharge in ${formatTime(r.time)} at this rate`;
+    app.querySelector('[data-res="err"]').textContent = issue;
+  }
+
+  function refTable() {
+    return C_RATE_REFERENCE.map((c) => `<div class="tt-row"><span>${trim(c)}C</span><span class="tt-out">${formatTime(1 / c)}</span></div>`).join("");
+  }
+
+  function paint() {
+    const fields = fieldsFor(state.mode);
+    const FIELD_LABEL = { capacity: "Battery capacity", crate: "C-rate (e.g. 0.5, 1, 2)", current: "Current" };
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Current = C-rate × Capacity")}
+
+      ${pillRow([["current", "Current"], ["crate", "C-rate"], ["capacity", "Capacity"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${fields.map((name) => `
+        <div class="field">
+          <label>${FIELD_LABEL[name]}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${trim(state.values[name])}" />
+            ${name === "crate" ? `<span style="color:var(--text-secondary);font-size:14px;padding-right:2px">C</span>` : `<select data-unit="${name}">${Object.keys(name === "capacity" ? CAPACITY_UNITS : AMP_UNITS).map((u) => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`}
+          </div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label" data-res="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="solved">${solvedValue(compute())}</span></div>
+        <div class="result-sub" data-res="time"></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Quick reference — time for a full cycle at this rate</div>
+      <div class="truth-table" style="--tt-cols:2">${refTable()}</div>
+
+      ${formulaSection(
+        ["Current (A) = C-rate × Capacity (Ah)", "Time (h) = 1 / C-rate"],
+        "1C is the current that moves a battery's full rated capacity in exactly one hour — 2C does it in half an hour, 0.5C in two. It's a notation for the rate itself, not a guarantee the battery can actually deliver it safely; a cell's real maximum charge/discharge C-rate is set by its chemistry and construction and is always in its datasheet."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    app.querySelectorAll("input[data-var]").forEach((inp) => {
+      inp.oninput = () => { state.values[inp.dataset.var] = parseFloat(inp.value); updateResults(); };
+    });
+    app.querySelectorAll("select[data-unit]").forEach((sel) => {
+      sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; updateResults(); };
+    });
+
+    updateResults();
   }
 
   paint();
