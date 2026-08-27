@@ -205,6 +205,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "battery-runtime") return renderBatteryRuntime(domain, tool, favId);
   if (calcId === "c-rate") return renderCRate(domain, tool, favId);
   if (calcId === "battery-sizes") return renderBatterySizes(domain, tool, favId);
+  if (calcId === "button-cells") return renderButtonCells(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -7190,6 +7191,113 @@ function renderBatterySizes(domain, tool, favId) {
     });
 
     const input = document.getElementById("bs-input");
+    refreshResults();
+    input.oninput = () => {
+      state.query = input.value.trim().toLowerCase();
+      refreshResults();
+    };
+  }
+
+  paint();
+}
+
+// ---------- Button cells ----------
+// Same self-documenting numeric convention as the cylindrical Li-ion sizes
+// on the previous screen: the 4 digits ARE the dimensions, first two =
+// diameter in mm, last two = thickness in tenths of mm — CR2032 is 20mm
+// across, 3.2mm thick, not an arbitrary part number. The one genuine "watch
+// out" here: LR44/SR44 and LR1130/389-390 each share one physical size
+// across two chemistries at different voltages (1.5V alkaline vs 1.55V
+// silver oxide) sold as drop-in substitutes — the silver-oxide one can
+// replace the alkaline one fine, but the reverse can throw off precision
+// devices like watches, since silver oxide holds a flatter voltage curve.
+// Zinc-air (hearing aid) cells are their own chemistry again: sealed with
+// a tab that has to be peeled to let air in and start the reaction — once
+// opened they run down over days whether the device uses them or not,
+// unlike a lithium or alkaline cell just sitting in a drawer.
+const BUTTON_CELLS = [
+  { code: "CR1220", chem: "Lithium (Li/MnO2), 3V", dims: "⌀12 × 2.0 mm", capacity: "≈35–40 mAh", note: "One of the smallest common lithium coin cells — small remotes, medical devices.", group: "lithium" },
+  { code: "CR1616", chem: "Lithium (Li/MnO2), 3V", dims: "⌀16 × 1.6 mm", capacity: "≈50–55 mAh", note: "Small remotes, key fobs.", group: "lithium" },
+  { code: "CR1632", chem: "Lithium (Li/MnO2), 3V", dims: "⌀16 × 3.2 mm", capacity: "≈120–130 mAh", note: "Car key fobs, TPMS tire-pressure sensors.", group: "lithium" },
+  { code: "CR2016", chem: "Lithium (Li/MnO2), 3V", dims: "⌀20 × 1.6 mm", capacity: "≈75–90 mAh", note: "Same diameter as CR2032/CR2025, thinner.", group: "lithium" },
+  { code: "CR2025", chem: "Lithium (Li/MnO2), 3V", dims: "⌀20 × 2.5 mm", capacity: "≈150–165 mAh", note: "Same diameter as CR2032, thinner.", group: "lithium" },
+  { code: "CR2032", chem: "Lithium (Li/MnO2), 3V", dims: "⌀20 × 3.2 mm", capacity: "≈220–240 mAh", note: "The most common lithium coin cell — motherboard/RTC battery, remotes, key fobs.", group: "lithium" },
+  { code: "CR2450", chem: "Lithium (Li/MnO2), 3V", dims: "⌀24.5 × 5.0 mm", capacity: "≈550–620 mAh", note: "Larger, higher-capacity lithium coin — remote controls, medical/POS devices.", group: "lithium" },
+  { code: "LR44 (AG13)", chem: "Alkaline, 1.5V", dims: "⌀11.6 × 5.4 mm", capacity: "≈100–150 mAh", note: "Calculators, small toys, laser pointers. Same size as SR44 — see its note before substituting.", group: "alkaline" },
+  { code: "LR1130 (AG10)", chem: "Alkaline, 1.5V", dims: "⌀11.6 × 3.1 mm", capacity: "≈50–80 mAh", note: "Small electronics, laser pointers, glucose meters. Its silver-oxide same-size equivalent is sold as 389/390 — same swap caveat as LR44/SR44.", group: "alkaline" },
+  { code: "SR44 (357)", chem: "Silver oxide, 1.55V", dims: "⌀11.6 × 5.4 mm", capacity: "≈150–200 mAh", note: "Watches, precision instruments — flatter discharge curve than LR44. Can replace an LR44; an LR44 replacing an SR44 can throw off precision timing.", group: "silveroxide" },
+  { code: "SR621 (364)", chem: "Silver oxide, 1.55V", dims: "⌀6.8 × 2.1 mm", capacity: "≈18–23 mAh", note: "Same diameter as SR626, thinner — not interchangeable despite the similar size.", group: "silveroxide" },
+  { code: "SR626 (377)", chem: "Silver oxide, 1.55V", dims: "⌀6.8 × 2.6 mm", capacity: "≈25–27 mAh", note: "One of the most common watch battery sizes.", group: "silveroxide" },
+  { code: "SR920 (371)", chem: "Silver oxide, 1.55V", dims: "⌀9.5 × 2.1 mm", capacity: "≈35–55 mAh", note: "A common watch battery size.", group: "silveroxide" },
+  { code: "A10 (yellow)", chem: "Zinc-air, 1.4V", dims: "⌀5.8 × 3.6 mm", capacity: "≈90–100 mAh", note: "The smallest common hearing aid size.", group: "zincair" },
+  { code: "A13 (orange)", chem: "Zinc-air, 1.4V", dims: "⌀7.9 × 5.4 mm", capacity: "≈260–300 mAh", note: "One of the most common hearing aid sizes.", group: "zincair" },
+  { code: "A312 (brown)", chem: "Zinc-air, 1.4V", dims: "⌀7.9 × 3.6 mm", capacity: "≈140–180 mAh", note: "Same diameter as A13, thinner.", group: "zincair" },
+  { code: "A675 (blue)", chem: "Zinc-air, 1.4V", dims: "⌀11.6 × 5.4 mm", capacity: "≈550–620 mAh", note: "The largest common hearing aid size — some cochlear implant sound processors too.", group: "zincair" },
+];
+const BUTTON_CELL_FILTERS = [["all", "All"], ["alkaline", "Alkaline"], ["silveroxide", "Silver oxide"], ["lithium", "Lithium"], ["zincair", "Zinc-air"]];
+
+function renderButtonCells(domain, tool, favId) {
+  const state = { filter: "all", query: "" };
+
+  function card(b) {
+    return `
+      <div class="formula-card formula-card--static">
+        <div class="formula-card-head"><span class="formula-card-title">${b.code}</span></div>
+        <div class="breadcrumb">${b.dims} &nbsp;·&nbsp; ${b.capacity}</div>
+        <div class="formula-line">${b.chem}</div>
+        <div class="formula-card-note">${b.note}</div>
+      </div>`;
+  }
+
+  function matches(b, q) {
+    return b.code.toLowerCase().includes(q) || b.chem.toLowerCase().includes(q);
+  }
+
+  function filteredList() {
+    let list = state.filter === "all" ? BUTTON_CELLS : BUTTON_CELLS.filter((b) => b.group === state.filter);
+    if (state.query) list = list.filter((b) => matches(b, state.query));
+    return list;
+  }
+
+  function refreshResults() {
+    const list = filteredList();
+    document.getElementById("bc-results").innerHTML = list.length
+      ? list.map(card).join("")
+      : `<div class="placeholder">${ICONS.search}<div>No match${state.query ? ` for "${state.query}"` : ""}.</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Coin/button cells — the digits are the dimensions in mm")}
+
+      <div class="field">
+        <div class="color-row-note">Some sizes share a case but not a chemistry (LR44/SR44, LR1130/389-390) — check the note on each before treating them as interchangeable. Zinc-air cells are sealed with a tab that starts a days-long countdown once peeled, whether the device is on or not.</div>
+      </div>
+
+      <div class="filter-row" id="bc-chips">
+        ${BUTTON_CELL_FILTERS.map(([value, label]) => `
+          <button class="filter-btn ${state.filter === value ? "active" : ""}" data-filter="${value}"
+                  style="${state.filter === value ? `background:${domain.bg};color:#8FC1F5;` : ""}">${label}</button>`).join("")}
+      </div>
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="bc-input" type="text" placeholder="Search a code or chemistry" autocapitalize="off" spellcheck="false" value="${state.query}" />
+      </div>
+      <div id="bc-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    document.getElementById("bc-chips").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      state.filter = btn.dataset.filter;
+      paint();
+    });
+
+    const input = document.getElementById("bc-input");
     refreshResults();
     input.oninput = () => {
       state.query = input.value.trim().toLowerCase();

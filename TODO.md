@@ -29,11 +29,10 @@ instead since there's no code system for THT body size) ·
 Basic logic gates · LED series resistor · Diode forward voltage / biasing ·
 RMS calculator · Generic dB ratio calculator · dB / dBm / dBu / dBV
 conversion · Battery runtime / capacity estimation · C-rate ·
-**Battery types & sizes**
+Battery types & sizes · **Button cells**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] Button cells
 - [ ] Capacitor charge/discharge (RC)
 - [ ] Capacitor stored energy
 - [ ] RC filter
