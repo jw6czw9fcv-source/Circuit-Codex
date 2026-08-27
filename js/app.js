@@ -204,6 +204,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "db-absolute") return renderDbAbsolute(domain, tool, favId);
   if (calcId === "battery-runtime") return renderBatteryRuntime(domain, tool, favId);
   if (calcId === "c-rate") return renderCRate(domain, tool, favId);
+  if (calcId === "battery-sizes") return renderBatterySizes(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -7089,6 +7090,111 @@ function renderCRate(domain, tool, favId) {
     });
 
     updateResults();
+  }
+
+  paint();
+}
+
+// ---------- Battery types & sizes ----------
+// Cylindrical cells only — button/coin cells are their own tool right
+// after this one, so covering them here too would just be the same
+// content twice. Capacities are ranges, not single numbers: they're a
+// genuinely brand/quality-dependent spec, not a fixed physical constant
+// the way the dimensions are. Li-ion sizes (18650, 21700, 14500) follow
+// their own real naming convention worth calling out explicitly, the same
+// way the SMD package size screen does: the digits ARE the dimensions in
+// mm (first two = diameter, next two = length), not an arbitrary model
+// number — 21700 is 21mm × 70mm, not a coincidence.
+//
+// AA/AAA also come in a genuinely different primary-lithium chemistry
+// (Li/FeS2, e.g. Energizer's L91/L92) — same 1.5V nominal and the exact
+// same physical size as alkaline, drop-in compatible, but a flatter
+// discharge curve (stays near 1.5V much longer instead of sagging), about
+// a third lighter, usable well below freezing, and a much longer shelf
+// life — real, checked differences, not a marketing rebrand of alkaline.
+const BATTERY_SIZES = [
+  { code: "AAA", iec: "LR03", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀10.5 × 44.5 mm", capacity: "≈800–1200 mAh", group: "common" },
+  { code: "AA", iec: "LR6", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀14.5 × 50.5 mm", capacity: "≈1800–3000 mAh", group: "common" },
+  { code: "C", iec: "LR14", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀26.2 × 50 mm", capacity: "≈6000–8000 mAh", group: "common" },
+  { code: "D", iec: "LR20", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀34.2 × 61.5 mm", capacity: "≈12,000–18,000 mAh", group: "common" },
+  { code: "9V (PP3)", iec: "6LR61", chem: "Alkaline, 9V (six 1.5V cells in series)", dims: "48.5 × 26.5 × 17.5 mm", capacity: "≈400–600 mAh", group: "common" },
+  { code: "AA (Lithium)", iec: "L91", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AA, flatter discharge curve, ~⅓ lighter, works well below freezing", dims: "⌀14.5 × 50.5 mm", capacity: "≈3000–3500 mAh", group: "lithium" },
+  { code: "AAA (Lithium)", iec: "L92", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AAA, same advantages as the AA (L91)", dims: "⌀10.5 × 44.5 mm", capacity: "≈1200–1300 mAh", group: "lithium" },
+  { code: "CR123A", iec: "—", chem: "Lithium primary, 3V", dims: "⌀17 × 34.5 mm", capacity: "≈1500 mAh", group: "lithium" },
+  { code: "14500", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀14 × 50 mm", capacity: "≈600–900 mAh", group: "lithium" },
+  { code: "18650", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀18 × 65 mm", capacity: "≈2000–3600 mAh", group: "lithium" },
+  { code: "21700", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀21 × 70 mm", capacity: "≈4000–5000 mAh", group: "lithium" },
+];
+const BATTERY_SIZE_FILTERS = [["all", "All"], ["common", "Alkaline / NiMH"], ["lithium", "Lithium"]];
+
+function renderBatterySizes(domain, tool, favId) {
+  const state = { filter: "all", query: "" };
+
+  function card(b) {
+    return `
+      <div class="formula-card formula-card--static">
+        <div class="formula-card-head">
+          <span class="formula-card-title">${b.code}${b.iec !== "—" ? ` <span style="opacity:.55;font-weight:500">${b.iec}</span>` : ""}</span>
+        </div>
+        <div class="breadcrumb">${b.dims} &nbsp;·&nbsp; ${b.capacity}</div>
+        <div class="formula-card-note">${b.chem}</div>
+      </div>`;
+  }
+
+  function matches(b, q) {
+    return b.code.toLowerCase().includes(q) || b.iec.toLowerCase().includes(q) || b.chem.toLowerCase().includes(q);
+  }
+
+  function filteredList() {
+    let list = state.filter === "all" ? BATTERY_SIZES : BATTERY_SIZES.filter((b) => b.group === state.filter);
+    if (state.query) list = list.filter((b) => matches(b, state.query));
+    return list;
+  }
+
+  function refreshResults() {
+    const list = filteredList();
+    document.getElementById("bs-results").innerHTML = list.length
+      ? list.map(card).join("")
+      : `<div class="placeholder">${ICONS.search}<div>No match${state.query ? ` for "${state.query}"` : ""}.</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Cylindrical cells — button/coin cells are their own screen")}
+
+      <div class="field">
+        <div class="color-row-note">Capacities are typical ranges, not a fixed spec — they vary by brand and quality. Li-ion sizes (18650, 21700, 14500) encode their own dimensions: the first two digits are the diameter in mm, the next two are the length.</div>
+      </div>
+
+      <div class="filter-row" id="bs-chips">
+        ${BATTERY_SIZE_FILTERS.map(([value, label]) => `
+          <button class="filter-btn ${state.filter === value ? "active" : ""}" data-filter="${value}"
+                  style="${state.filter === value ? `background:${domain.bg};color:#8FC1F5;` : ""}">${label}</button>`).join("")}
+      </div>
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="bs-input" type="text" placeholder="Search a size or chemistry" autocapitalize="off" spellcheck="false" value="${state.query}" />
+      </div>
+      <div id="bs-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+
+    document.getElementById("bs-chips").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      state.filter = btn.dataset.filter;
+      paint();
+    });
+
+    const input = document.getElementById("bs-input");
+    refreshResults();
+    input.oninput = () => {
+      state.query = input.value.trim().toLowerCase();
+      refreshResults();
+    };
   }
 
   paint();
