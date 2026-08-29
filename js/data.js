@@ -35,7 +35,7 @@ const DOMAINS = [
           { name: "SMD code", calc: "cap-smd-code" },
           { name: "Series/parallel", calc: "cap-series-parallel" },
           { name: "Charge/discharge (RC)", calc: "rc-charge" },
-          { name: "Stored energy" },
+          { name: "Stored energy", calc: "cap-stored-energy" },
         ],
       },
       {

@@ -207,6 +207,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "battery-sizes") return renderBatterySizes(domain, tool, favId);
   if (calcId === "button-cells") return renderButtonCells(domain, tool, favId);
   if (calcId === "rc-charge") return renderRcCharge(domain, tool, favId);
+  if (calcId === "cap-stored-energy") return renderCapStoredEnergy(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -7493,6 +7494,150 @@ function renderRcCharge(domain, tool, favId) {
     };
 
     refresh();
+  }
+
+  paint();
+}
+
+// ---------- Capacitor stored energy ----------
+// E = ½ × C × V² — the energy held in the electric field between the
+// plates. Same "solve for one of three" shape as Ohm's law and the
+// dividers: pick which quantity is unknown, the other two become the
+// inputs. Charge (Q = C × V) comes along for free once C and V are both
+// known, so it rides along as a bonus result in every mode rather than
+// being a fourth solve target of its own.
+const ENERGY_UNITS = { "µJ": 1e-6, mJ: 1e-3, J: 1, kJ: 1e3 };
+
+function renderCapStoredEnergy(domain, tool, favId) {
+  const state = {
+    solve: "energy",
+    values: { c: 1000, v: 12, e: 72 },
+    units: { c: "µF", v: "V", e: "mJ" },
+  };
+
+  const FIELD = {
+    c: { label: "Capacitance (C)", units: CAP_UNITS },
+    v: { label: "Voltage (V)", units: VOLT_UNITS },
+    e: { label: "Energy (E)", units: ENERGY_UNITS },
+  };
+
+  function inputsFor(solve) {
+    if (solve === "energy") return ["c", "v"];
+    if (solve === "voltage") return ["c", "e"];
+    return ["v", "e"]; // capacitance
+  }
+
+  function si(name) {
+    return state.values[name] * FIELD[name].units[state.units[name]];
+  }
+
+  function compute() {
+    let c = si("c");
+    let v = si("v");
+    let e = si("e");
+
+    if (state.solve === "energy") e = 0.5 * c * v * v;
+    if (state.solve === "voltage") v = c > 0 && e >= 0 ? Math.sqrt((2 * e) / c) : NaN;
+    if (state.solve === "capacitance") c = v !== 0 ? (2 * e) / (v * v) : NaN;
+
+    return { c, v, e, q: c * v };
+  }
+
+  function problem(r) {
+    if (state.solve === "capacitance" && si("v") === 0) return "Voltage cannot be zero when solving for capacitance.";
+    if (!isFinite(r.c) || !isFinite(r.v) || !isFinite(r.e) || r.c < 0 || r.e < 0) return "No solution for those values.";
+    return "";
+  }
+
+  function solvedLabel() {
+    return { energy: "Stored energy (E)", voltage: "Voltage (V)", capacitance: "Capacitance (C)" }[state.solve];
+  }
+
+  function solvedValue(r) {
+    if (problem(r)) return "—";
+    if (state.solve === "energy") return siFormat(r.e, "J");
+    if (state.solve === "voltage") return siFormat(r.v, "V");
+    return formatFarads(r.c);
+  }
+
+  // Battery-and-capacitor loop, no resistor — charge/discharge speed isn't
+  // this screen's business, only how much energy ends up stored. Known legs
+  // draw in the input blue, the one being solved for in the result green,
+  // matching every other solve-for-one-of-N screen.
+  function diagram() {
+    const known = inputsFor(state.solve);
+    const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
+    const wire = "#5A6169";
+    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
+      <path d="M30,20 H190 M190,20 V44 M190,58 V80 M190,80 H30 M30,80 V56 M30,32 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M20,42 H40 M26,54 H34" stroke="${tone("v")}" stroke-width="2" stroke-linecap="round"/>
+      <path d="M180,47 H200 M180,53 H200" stroke="${tone("c")}" stroke-width="2" stroke-linecap="round"/>
+      <text x="207" y="53" fill="${tone("c")}" font-size="12" font-weight="600">C</text>
+      <text x="12" y="51" fill="${tone("v")}" font-size="12" font-weight="600" text-anchor="middle">V</text>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="charge"]').textContent = issue ? "—" : siFormat(r.q, "C");
+    app.querySelector('[data-res="err"]').textContent = issue;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "E = ½CV² — energy stored in the electric field")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["energy", "Energy"], ["voltage", "Voltage"], ["capacitance", "Capacitance"]], state.solve, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${inputsFor(state.solve).map(name => `
+        <div class="field">
+          <label>${FIELD[name].label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${trim(state.values[name])}" />
+            <select data-unit="${name}">
+              ${Object.keys(FIELD[name].units).map(u => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err">${problem(r)}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="solved">${solvedValue(r)}</span></div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Charge stored (Q = C × V)</span></div>
+        <div class="result-value"><span class="num" data-res="charge">${problem(r) ? "—" : siFormat(r.q, "C")}</span></div>
+      </div>
+
+      ${formulaSection(
+        ["E = ½ × C × V²", "V = √(2E / C)", "C = 2E / V²", "Q = C × V"],
+        "Same energy either way it's found — from the capacitor's own C and V, or handed to you as a target to solve toward."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+
+    app.querySelectorAll("input[data-var]").forEach(input => {
+      input.oninput = () => {
+        state.values[input.dataset.var] = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach(select => {
+      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+    });
   }
 
   paint();
