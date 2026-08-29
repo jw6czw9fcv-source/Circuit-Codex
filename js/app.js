@@ -208,6 +208,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "button-cells") return renderButtonCells(domain, tool, favId);
   if (calcId === "rc-charge") return renderRcCharge(domain, tool, favId);
   if (calcId === "cap-stored-energy") return renderCapStoredEnergy(domain, tool, favId);
+  if (calcId === "rc-filter") return renderRcFilter(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -7638,6 +7639,269 @@ function renderCapStoredEnergy(domain, tool, favId) {
     app.querySelectorAll("select[data-unit]").forEach(select => {
       select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
     });
+  }
+
+  paint();
+}
+
+// ---------- RC filter ----------
+// One reactive part, one resistor, one pole: fc = 1 / (2piRC) is where the
+// output has fallen 3.01 dB and shifted 45 deg from the input, and every
+// decade past it the response keeps falling (or, high-pass, keeps rising)
+// at 20 dB. Low-pass is series R then shunt C to ground; high-pass swaps
+// them — same formula either way, just measured from the opposite element.
+// Same "solve for one of three" shape as Ohm's law and the dividers.
+const FREQ_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+
+function renderRcFilter(domain, tool, favId) {
+  const state = {
+    topology: "lowpass",
+    solve: "fc",
+    values: { r: 10, c: 100, fc: 159.2 },
+    units: { r: "kΩ", c: "nF", fc: "Hz" },
+    freqVal: 159.2, freqUnit: "Hz",
+  };
+
+  const FIELD = {
+    r: { label: "Resistance (R)", units: OHM_UNITS },
+    c: { label: "Capacitance (C)", units: CAP_UNITS },
+    fc: { label: "Cutoff frequency (fc)", units: FREQ_UNITS },
+  };
+
+  function inputsFor(solve) {
+    if (solve === "fc") return ["r", "c"];
+    if (solve === "r") return ["c", "fc"];
+    return ["r", "fc"]; // capacitance
+  }
+
+  function si(name) {
+    return state.values[name] * FIELD[name].units[state.units[name]];
+  }
+
+  function compute() {
+    let r = si("r"), c = si("c"), fc = si("fc");
+    if (state.solve === "fc") fc = 1 / (2 * Math.PI * r * c);
+    if (state.solve === "r") r = 1 / (2 * Math.PI * fc * c);
+    if (state.solve === "c") c = 1 / (2 * Math.PI * fc * r);
+    return { r, c, fc };
+  }
+
+  function problem(r) {
+    if (!isFinite(r.r) || !isFinite(r.c) || !isFinite(r.fc) || r.r < 0 || r.c < 0 || r.fc < 0) return "No solution for those values.";
+    return "";
+  }
+
+  function solvedLabel() {
+    return { fc: "Cutoff frequency (fc)", r: "Resistance (R)", c: "Capacitance (C)" }[state.solve];
+  }
+
+  function solvedValue(r) {
+    if (problem(r)) return "—";
+    if (state.solve === "fc") return siFormat(r.fc, "Hz");
+    if (state.solve === "r") return formatOhms(r.r);
+    return formatFarads(r.c);
+  }
+
+  // Single-pole response as a function of f/fc alone — same shape no matter
+  // what R and C actually are. Low-pass falls away above fc; high-pass is
+  // its mirror image, read with fc/f in place of f/fc.
+  function response(ratio) {
+    if (!isFinite(ratio) || ratio < 0) return { db: NaN, phase: NaN };
+    if (state.topology === "lowpass") {
+      return { db: -10 * Math.log10(1 + ratio * ratio), phase: -Math.atan(ratio) * (180 / Math.PI) };
+    }
+    if (ratio === 0) return { db: -Infinity, phase: 90 };
+    return { db: 20 * Math.log10(ratio) - 10 * Math.log10(1 + ratio * ratio), phase: Math.atan(1 / ratio) * (180 / Math.PI) };
+  }
+
+  function dbText(db) {
+    if (db === -Infinity) return "−∞ dB";
+    return isFinite(db) ? `${trim(db)} dB` : "—";
+  }
+
+  // Bode magnitude plot, log-frequency x-axis (0.01fc to 100fc, 4 decades)
+  // against dB y-axis (0 to -50). The curve shape depends only on topology,
+  // not on the actual R/C/fc values, so it only needs redrawing when
+  // topology changes — but the dot tracking "Explore a frequency" moves on
+  // every input edit, so its position is recomputed separately in
+  // updateResults() using these same coordinate functions.
+  const CHART = { l: 26, r: 208, t: 14, b: 86 };
+  function chartX(ratio) {
+    const clamped = Math.max(0.01, Math.min(100, ratio));
+    return CHART.l + (Math.log10(clamped) + 2) * ((CHART.r - CHART.l) / 4);
+  }
+  function chartY(db) {
+    const clamped = Math.max(0, Math.min(50, isFinite(db) ? -db : 50));
+    return CHART.t + clamped * ((CHART.b - CHART.t) / 50);
+  }
+
+  function chartSvg() {
+    const decades = [-2, -1, 0, 1, 2];
+    const decadeLabel = { "-2": "0.01fc", "-1": "0.1fc", "0": "fc", "1": "10fc", "2": "100fc" };
+    const dbTicks = [0, -10, -20, -30, -40, -50];
+    const samples = 80;
+    const pts = [];
+    for (let i = 0; i <= samples; i++) {
+      const ratio = Math.pow(10, -2 + (4 * i) / samples);
+      pts.push(`${chartX(ratio).toFixed(1)},${chartY(response(ratio).db).toFixed(1)}`);
+    }
+    return `<svg width="220" height="102" viewBox="0 0 220 102" fill="none">
+      ${dbTicks.map((db) => `<path d="M${CHART.l},${chartY(db)} H${CHART.r}" stroke="#22262D" stroke-width="1"/>`).join("")}
+      ${decades.map((t) => `<path d="M${chartX(Math.pow(10, t))},${CHART.t} V${CHART.b}" stroke="#22262D" stroke-width="1"/>`).join("")}
+      <path d="M${CHART.l},${chartY(-3)} H${CHART.r}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
+      <path d="M${chartX(1)},${CHART.t} V${CHART.b}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
+      <polyline points="${pts.join(" ")}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${chartX(1)}" cy="${chartY(-3)}" r="2.5" fill="${domain.color}"/>
+      <circle data-res="freqdot" cx="${chartX(1)}" cy="${chartY(-3)}" r="4" fill="#5DCAA5" stroke="#0E1013" stroke-width="1.5"/>
+      ${decades.map((t) => `<text x="${chartX(Math.pow(10, t))}" y="97" fill="#8A9099" font-size="8" text-anchor="middle">${decadeLabel[t]}</text>`).join("")}
+      <text x="${CHART.l - 4}" y="${CHART.t + 3}" fill="#8A9099" font-size="8" text-anchor="end">0dB</text>
+      <text x="${CHART.l - 4}" y="${CHART.b + 3}" fill="#8A9099" font-size="8" text-anchor="end">−50dB</text>
+    </svg>`;
+  }
+
+  // Series element then shunt-to-ground, tapped at the junction — the
+  // standard two-part RC divider, in whichever order the topology calls
+  // for. Known legs draw in the input blue, the solved-for one in result
+  // green, same convention as every other solve-for-one-of-N screen.
+  function diagram() {
+    const known = inputsFor(state.solve);
+    const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
+    const wire = "#5A6169";
+    const seriesIsR = state.topology === "lowpass";
+    const seriesTone = tone(seriesIsR ? "r" : "c");
+    const shuntTone = tone(seriesIsR ? "c" : "r");
+    const hZig = "M72 30 L75 23 L81 37 L87 23 L93 37 L99 23 L105 37 L108 30";
+    const hPlates = "M84 16 V44 M96 16 V44";
+    const vZig = "M150 48 L143 51 L157 57 L143 63 L157 69 L143 75 L157 81 L150 84";
+    const vPlates = "M136 63 H164 M136 69 H164";
+    const seriesSymbol = seriesIsR ? hZig : hPlates;
+    const shuntSymbol = seriesIsR ? vPlates : vZig;
+    return `<svg width="220" height="120" viewBox="0 0 220 120" fill="none">
+      <path d="M20 30 H72 M108 30 H200" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${seriesSymbol}" stroke="${seriesTone}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M150 30 V48 M150 84 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${shuntSymbol}" stroke="${shuntTone}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <circle cx="150" cy="30" r="2.6" fill="${wire}"/>
+      <path d="M138 100 H162 M142 105 H158 M146 110 H154" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="20" y="20" fill="#8FC1F5" font-size="12" font-weight="600">Vin</text>
+      <text x="200" y="20" fill="#5DCAA5" font-size="12" font-weight="600" text-anchor="end">Vout</text>
+      <text x="90" y="12" fill="${seriesTone}" font-size="12" font-weight="600" text-anchor="middle">${seriesIsR ? "R" : "C"}</text>
+      <text x="172" y="70" fill="${shuntTone}" font-size="12" font-weight="600">${seriesIsR ? "C" : "R"}</text>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="err"]').textContent = issue;
+    const ratio = issue ? NaN : (state.freqVal * FREQ_UNITS[state.freqUnit]) / r.fc;
+    const resp = response(ratio);
+    app.querySelector('[data-res="db"]').textContent = dbText(resp.db);
+    app.querySelector('[data-res="phase"]').textContent = isFinite(resp.phase)
+      ? `${trim(resp.phase)}° phase shift (${state.topology === "lowpass" ? "output lags" : "output leads"} input)`
+      : "";
+    const dot = app.querySelector('[data-res="freqdot"]');
+    if (dot) {
+      const onChart = !issue && isFinite(ratio) && ratio > 0;
+      dot.style.display = onChart ? "" : "none";
+      if (onChart) {
+        dot.setAttribute("cx", chartX(ratio).toFixed(1));
+        dot.setAttribute("cy", chartY(resp.db).toFixed(1));
+      }
+    }
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "fc = 1 / (2πRC) — the −3 dB point")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="filter-row" id="rcf-topology">
+        ${[["lowpass", "Low-pass"], ["highpass", "High-pass"]].map(([v, l]) => `
+          <button class="filter-btn ${state.topology === v ? "active" : ""}" data-topo="${v}"
+                  style="${state.topology === v ? `background:${domain.bg};color:#8FC1F5;` : ""}">${l}</button>`).join("")}
+      </div>
+
+      ${pillRow([["fc", "Cutoff (fc)"], ["r", "R"], ["c", "C"]], state.solve, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${inputsFor(state.solve).map((name) => `
+        <div class="field">
+          <label>${FIELD[name].label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${trim(state.values[name])}" />
+            <select data-unit="${name}">
+              ${Object.keys(FIELD[name].units).map((u) => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err">${problem(r)}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="solved">${solvedValue(r)}</span></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Explore a frequency</div>
+      <div class="field">
+        <label>Signal frequency</label>
+        <div class="field-row">
+          <input id="rcf-freq" type="number" inputmode="decimal" step="any" value="${trim(state.freqVal)}" />
+          <select id="rcf-freq-unit">${Object.keys(FREQ_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Attenuation at this frequency</span></div>
+        <div class="result-value"><span class="num" data-res="db"></span></div>
+        <div class="result-sub" data-res="phase"></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Frequency response</div>
+      <div class="diagram-box" style="padding:6px 6px 2px;">${chartSvg()}</div>
+      <div class="result-sub" style="margin:-4px 16px 14px;">Dashed lines mark fc and −3 dB · the dot tracks the frequency above</div>
+
+      ${formulaSection(
+        ["fc = 1 / (2π × R × C)", "R = 1 / (2π × fc × C)", "C = 1 / (2π × fc × R)"],
+        "First-order (single-pole) filter — the response rolls off at 20 dB/decade past fc. At fc itself: −3.01 dB, 45° lag (low-pass) or 45° lead (high-pass)."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+
+    document.getElementById("rcf-topology").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      state.topology = btn.dataset.topo;
+      paint();
+    });
+
+    app.querySelectorAll("input[data-var]").forEach((input) => {
+      input.oninput = () => {
+        state.values[input.dataset.var] = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach((select) => {
+      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+    });
+    document.getElementById("rcf-freq").oninput = (e) => {
+      state.freqVal = parseFloat(e.target.value);
+      updateResults();
+    };
+    document.getElementById("rcf-freq-unit").onchange = (e) => {
+      state.freqUnit = e.target.value;
+      updateResults();
+    };
+
+    updateResults();
   }
 
   paint();

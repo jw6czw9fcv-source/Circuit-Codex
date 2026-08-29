@@ -53,7 +53,7 @@ const DOMAINS = [
       {
         title: "Passive filters",
         tools: [
-          { name: "RC filter" },
+          { name: "RC filter", calc: "rc-filter" },
           { name: "RL filter" },
           { name: "LC filter (band-pass/notch)" },
           { name: "RLC filter" },
