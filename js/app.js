@@ -7679,8 +7679,8 @@ function renderRcFilter(domain, tool, favId) {
 
   function inputsFor(solve) {
     if (solve === "fc") return ["r", "c"];
-    if (solve === "r") return ["c", "fc"];
-    return ["r", "fc"]; // capacitance
+    if (solve === "r") return ["fc", "c"];
+    return ["fc", "r"]; // capacitance
   }
 
   function si(name) {
@@ -7807,21 +7807,28 @@ function renderRcFilter(domain, tool, favId) {
     // path starts/ends exactly on the wire, but two floating bars need their
     // own lead-in/lead-out segments or they read as disconnected.
     const hPlates = "M72 30 H84 M84 16 V44 M96 16 V44 M96 30 H108";
-    const vZig = "M150 48 L143 51 L157 57 L143 63 L157 69 L143 75 L157 81 L150 84";
-    const vPlates = "M150 48 V63 M136 63 H164 M136 69 H164 M150 69 V84";
+    const vZig = "M128 50 L121 53 L135 59 L121 65 L135 71 L121 77 L135 83 L128 86";
+    const vPlates = "M128 50 V65 M114 65 H142 M114 71 H142 M128 71 V86";
     const seriesSymbol = seriesIsR ? hZig : hPlates;
     const shuntSymbol = seriesIsR ? vPlates : vZig;
-    return `<svg width="220" height="120" viewBox="0 0 220 120" fill="none">
-      <path d="M20 30 H72 M108 30 H200" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    return `<svg width="208" height="124" viewBox="0 0 208 124" fill="none">
+      <!-- Vin's full-size sine sits right at the diagram's open left edge —
+           no lead before it, nothing for one to connect to. Vout's, shrunk
+           to a third of the amplitude, sits the same way at the open right
+           edge, with a 3x gap (12px vs 4px) before it. All three legs off
+           the tap node — to R, down to the shunt part, and out to the
+           sine — run the same 20px, so the node sits as a symmetric
+           three-way junction rather than an arbitrary bend. -->
+      <path d="M60 30 H72 M108 30 H148" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M20 30 Q27 14 34 30 Q41 46 48 30" stroke="#8FC1F5" stroke-width="1.6" fill="none" stroke-linecap="round"/>
       <path d="${seriesSymbol}" stroke="${seriesTone}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="M150 30 V48 M150 84 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M128 30 V50 M128 86 V102" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${shuntSymbol}" stroke="${shuntTone}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <circle cx="150" cy="30" r="2.6" fill="${wire}"/>
-      <path d="M138 100 H162 M142 105 H158 M146 110 H154" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <text x="20" y="20" fill="#8FC1F5" font-size="12" font-weight="600">Vin</text>
-      <text x="200" y="20" fill="#5DCAA5" font-size="12" font-weight="600" text-anchor="end">Vout</text>
+      <circle cx="128" cy="30" r="2.6" fill="${wire}"/>
+      <path d="M160 30 Q167 24 174 30 Q181 36 188 30" stroke="#5DCAA5" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <path d="M116 102 H140 M120 107 H136 M124 112 H132" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <text x="90" y="12" fill="${seriesTone}" font-size="12" font-weight="600" text-anchor="middle">${seriesIsR ? "R" : "C"}</text>
-      <text x="172" y="70" fill="${shuntTone}" font-size="12" font-weight="600">${seriesIsR ? "C" : "R"}</text>
+      <text x="150" y="72" fill="${shuntTone}" font-size="12" font-weight="600">${seriesIsR ? "C" : "R"}</text>
     </svg>`;
   }
 
