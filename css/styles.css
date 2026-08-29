@@ -16,6 +16,20 @@
 
 * { box-sizing: border-box; }
 
+/* Every numeric field in the app is already paired with its own touch-sized
+   control (a slider, +/- steppers, unit pills) — the browser's native spin
+   arrows are redundant on top of that and, on desktop, too small to hit
+   with a finger. Hidden everywhere rather than field-by-field so a new
+   number input never grows them by accident. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 html, body {
   margin: 0;
   padding: 0;

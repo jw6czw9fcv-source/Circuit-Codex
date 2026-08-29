@@ -7657,10 +7657,19 @@ function renderRcFilter(domain, tool, favId) {
   const state = {
     topology: "lowpass",
     solve: "fc",
+    poles: 1,
     values: { r: 10, c: 100, fc: 159.2 },
     units: { r: "kΩ", c: "nF", fc: "Hz" },
-    freqVal: 159.2, freqUnit: "Hz",
+    freqVal: 159.2, freqUnit: "Hz", // typable, same as the slider only reads/writes
   };
+
+  // Best-fitting unit for a raw Hz value, largest-first — same cascade
+  // siFormat uses, so dragging the slider lands on units that read the way
+  // typing them would.
+  function pickFreqUnit(hz) {
+    for (const u of ["GHz", "MHz", "kHz"]) { if (Math.abs(hz) >= FREQ_UNITS[u]) return u; }
+    return "Hz";
+  }
 
   const FIELD = {
     r: { label: "Resistance (R)", units: OHM_UNITS },
@@ -7702,10 +7711,10 @@ function renderRcFilter(domain, tool, favId) {
     return formatFarads(r.c);
   }
 
-  // Single-pole response as a function of f/fc alone — same shape no matter
+  // Single-stage response as a function of f/fc alone — same shape no matter
   // what R and C actually are. Low-pass falls away above fc; high-pass is
   // its mirror image, read with fc/f in place of f/fc.
-  function response(ratio) {
+  function stageResponse(ratio) {
     if (!isFinite(ratio) || ratio < 0) return { db: NaN, phase: NaN };
     if (state.topology === "lowpass") {
       return { db: -10 * Math.log10(1 + ratio * ratio), phase: -Math.atan(ratio) * (180 / Math.PI) };
@@ -7714,9 +7723,28 @@ function renderRcFilter(domain, tool, favId) {
     return { db: 20 * Math.log10(ratio) - 10 * Math.log10(1 + ratio * ratio), phase: Math.atan(1 / ratio) * (180 / Math.PI) };
   }
 
+  // N identical stages cascaded: magnitudes multiply, so dB (a log measure)
+  // and phase both just scale by N — but only holds if each stage is
+  // buffered (e.g. by an op-amp) so it isn't loaded by the one after it.
+  // Unbuffered RC stages interact and roll off less steeply than this.
+  function response(ratio) {
+    const s = stageResponse(ratio);
+    const db = s.db === -Infinity ? -Infinity : s.db * state.poles;
+    return { db, phase: s.phase * state.poles };
+  }
+
   function dbText(db) {
     if (db === -Infinity) return "−∞ dB";
     return isFinite(db) ? `${trim(db)} dB` : "—";
+  }
+
+  // Where N cascaded identical stages actually cross -3 dB as a system —
+  // pulled in from each stage's own fc, since N stages each already down a
+  // bit at fc combine to more than -3 dB there. Standard result:
+  // f(-3dB) = fc x sqrt(2^(1/N) - 1), mirrored for high-pass.
+  function systemCutoffRatio() {
+    const shrink = Math.sqrt(Math.pow(2, 1 / state.poles) - 1);
+    return state.topology === "lowpass" ? shrink : 1 / shrink;
   }
 
   // Bode magnitude plot, log-frequency x-axis (0.01fc to 100fc, 4 decades)
@@ -7745,13 +7773,17 @@ function renderRcFilter(domain, tool, favId) {
       const ratio = Math.pow(10, -2 + (4 * i) / samples);
       pts.push(`${chartX(ratio).toFixed(1)},${chartY(response(ratio).db).toFixed(1)}`);
     }
+    const sysRatio = systemCutoffRatio();
+    const showSysLine = state.poles > 1;
     return `<svg width="220" height="102" viewBox="0 0 220 102" fill="none">
       ${dbTicks.map((db) => `<path d="M${CHART.l},${chartY(db)} H${CHART.r}" stroke="#22262D" stroke-width="1"/>`).join("")}
       ${decades.map((t) => `<path d="M${chartX(Math.pow(10, t))},${CHART.t} V${CHART.b}" stroke="#22262D" stroke-width="1"/>`).join("")}
       <path d="M${CHART.l},${chartY(-3)} H${CHART.r}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
       <path d="M${chartX(1)},${CHART.t} V${CHART.b}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
+      ${showSysLine ? `<path d="M${chartX(sysRatio)},${CHART.t} V${CHART.b}" stroke="#5DCAA5" stroke-width="1" stroke-dasharray="3 3"/>` : ""}
       <polyline points="${pts.join(" ")}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-      <circle cx="${chartX(1)}" cy="${chartY(-3)}" r="2.5" fill="${domain.color}"/>
+      <circle cx="${chartX(1)}" cy="${chartY(-3)}" r="2.5" fill="${state.poles > 1 ? "#5A6169" : domain.color}"/>
+      ${showSysLine ? `<circle cx="${chartX(sysRatio)}" cy="${chartY(-3)}" r="2.5" fill="#5DCAA5"/>` : ""}
       <circle data-res="freqdot" cx="${chartX(1)}" cy="${chartY(-3)}" r="4" fill="#5DCAA5" stroke="#0E1013" stroke-width="1.5"/>
       ${decades.map((t) => `<text x="${chartX(Math.pow(10, t))}" y="97" fill="#8A9099" font-size="8" text-anchor="middle">${decadeLabel[t]}</text>`).join("")}
       <text x="${CHART.l - 4}" y="${CHART.t + 3}" fill="#8A9099" font-size="8" text-anchor="end">0dB</text>
@@ -7771,9 +7803,12 @@ function renderRcFilter(domain, tool, favId) {
     const seriesTone = tone(seriesIsR ? "r" : "c");
     const shuntTone = tone(seriesIsR ? "c" : "r");
     const hZig = "M72 30 L75 23 L81 37 L87 23 L93 37 L99 23 L105 37 L108 30";
-    const hPlates = "M84 16 V44 M96 16 V44";
+    // Plate bars alone don't reach the wire break either side — the zigzag's
+    // path starts/ends exactly on the wire, but two floating bars need their
+    // own lead-in/lead-out segments or they read as disconnected.
+    const hPlates = "M72 30 H84 M84 16 V44 M96 16 V44 M96 30 H108";
     const vZig = "M150 48 L143 51 L157 57 L143 63 L157 69 L143 75 L157 81 L150 84";
-    const vPlates = "M136 63 H164 M136 69 H164";
+    const vPlates = "M150 48 V63 M136 63 H164 M136 69 H164 M150 69 V84";
     const seriesSymbol = seriesIsR ? hZig : hPlates;
     const shuntSymbol = seriesIsR ? vPlates : vZig;
     return `<svg width="220" height="120" viewBox="0 0 220 120" fill="none">
@@ -7790,22 +7825,37 @@ function renderRcFilter(domain, tool, favId) {
     </svg>`;
   }
 
+  // Ratio is always derived from the typed/selected Hz value, never stored on
+  // its own — so a typed frequency stays put (50 Hz mains hum stays 50 Hz)
+  // when R/C change fc out from under it, and only its position relative to
+  // the new fc moves.
+  function freqRatio(r) {
+    if (!isFinite(r.fc) || r.fc <= 0) return NaN;
+    return (state.freqVal * FREQ_UNITS[state.freqUnit]) / r.fc;
+  }
+
   function updateResults() {
     const r = compute();
     const issue = problem(r);
     app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
     app.querySelector('[data-res="err"]').textContent = issue;
-    const ratio = issue ? NaN : (state.freqVal * FREQ_UNITS[state.freqUnit]) / r.fc;
+    const ratio = issue ? NaN : freqRatio(r);
     const resp = response(ratio);
     app.querySelector('[data-res="db"]').textContent = dbText(resp.db);
     app.querySelector('[data-res="phase"]').textContent = isFinite(resp.phase)
       ? `${trim(resp.phase)}° phase shift (${state.topology === "lowpass" ? "output lags" : "output leads"} input)`
       : "";
+    app.querySelector('[data-res="syscutoff"]').textContent = state.poles > 1 && !issue
+      ? `System −3 dB point (${state.poles} poles): ${siFormat(r.fc * systemCutoffRatio(), "Hz")}`
+      : "";
+    const slider = app.querySelector("#rcf-freq-slider");
+    if (slider && document.activeElement !== slider) {
+      slider.value = isFinite(ratio) && ratio > 0 ? Math.max(-2, Math.min(2, Math.log10(ratio))) : 0;
+    }
     const dot = app.querySelector('[data-res="freqdot"]');
     if (dot) {
-      const onChart = !issue && isFinite(ratio) && ratio > 0;
-      dot.style.display = onChart ? "" : "none";
-      if (onChart) {
+      dot.style.display = issue ? "none" : "";
+      if (!issue) {
         dot.setAttribute("cx", chartX(ratio).toFixed(1));
         dot.setAttribute("cy", chartY(resp.db).toFixed(1));
       }
@@ -7818,11 +7868,18 @@ function renderRcFilter(domain, tool, favId) {
       ${calcHeader(tool, favId, "fc = 1 / (2πRC) — the −3 dB point")}
 
       <div class="diagram-box">${diagram()}</div>
+      ${state.poles > 1 ? `<div class="result-sub" style="margin:-8px 16px 10px;">× ${state.poles} identical stages, each buffered so it doesn't load the next</div>` : ""}
 
       <div class="filter-row" id="rcf-topology">
         ${[["lowpass", "Low-pass"], ["highpass", "High-pass"]].map(([v, l]) => `
           <button class="filter-btn ${state.topology === v ? "active" : ""}" data-topo="${v}"
                   style="${state.topology === v ? `background:${domain.bg};color:#8FC1F5;` : ""}">${l}</button>`).join("")}
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Poles (identical, buffered stages)
+        <select id="rcf-poles" class="label-select">
+          ${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}" ${state.poles === n ? "selected" : ""}>${n}</option>`).join("")}
+        </select>
       </div>
 
       ${pillRow([["fc", "Cutoff (fc)"], ["r", "R"], ["c", "C"]], state.solve, domain.bg)}
@@ -7847,14 +7904,28 @@ function renderRcFilter(domain, tool, favId) {
           <span class="badge-calc">${ICONS.bolt2}Calculated</span>
         </div>
         <div class="result-value"><span class="num" data-res="solved">${solvedValue(r)}</span></div>
+        <div class="result-sub" data-res="syscutoff"></div>
       </div>
 
+      <div class="section-label" style="color:#8FC1F5">Frequency response</div>
+      <div class="diagram-box" style="padding:6px 6px 2px;">${chartSvg()}</div>
+      <div class="result-sub" style="margin:-4px 16px 14px;">Gray dashed line marks the single stage's fc${state.poles > 1 ? " · green marks the system's actual −3 dB point" : ""} · the dot tracks the slider below</div>
+
       <div class="section-label" style="color:#8FC1F5">Explore a frequency</div>
-      <div class="field">
-        <label>Signal frequency</label>
-        <div class="field-row">
-          <input id="rcf-freq" type="number" inputmode="decimal" step="any" value="${trim(state.freqVal)}" />
-          <select id="rcf-freq-unit">${Object.keys(FREQ_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+      <div class="r-list">
+        <div class="r-item">
+          <div class="r-line">
+            <span class="r-index">Freq</span>
+            <input type="number" inputmode="decimal" step="any" id="rcf-freq-input" value="${trim(state.freqVal)}" />
+            <select id="rcf-freq-unit">${Object.keys(FREQ_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+          <div class="slider-row">
+            <button type="button" class="slider-step" id="rcf-freq-dec" aria-label="Decrease frequency">−</button>
+            <input type="range" class="series-slider" id="rcf-freq-slider" min="-2" max="2" step="0.01"
+                   value="${(() => { const ratio = freqRatio(r); return isFinite(ratio) && ratio > 0 ? Math.max(-2, Math.min(2, Math.log10(ratio))) : 0; })()}"
+                   aria-label="Drag to explore a frequency relative to fc, log scale" />
+            <button type="button" class="slider-step" id="rcf-freq-inc" aria-label="Increase frequency">+</button>
+          </div>
         </div>
       </div>
       <div class="result-field">
@@ -7863,13 +7934,11 @@ function renderRcFilter(domain, tool, favId) {
         <div class="result-sub" data-res="phase"></div>
       </div>
 
-      <div class="section-label" style="color:#8FC1F5">Frequency response</div>
-      <div class="diagram-box" style="padding:6px 6px 2px;">${chartSvg()}</div>
-      <div class="result-sub" style="margin:-4px 16px 14px;">Dashed lines mark fc and −3 dB · the dot tracks the frequency above</div>
-
       ${formulaSection(
-        ["fc = 1 / (2π × R × C)", "R = 1 / (2π × fc × C)", "C = 1 / (2π × fc × R)"],
-        "First-order (single-pole) filter — the response rolls off at 20 dB/decade past fc. At fc itself: −3.01 dB, 45° lag (low-pass) or 45° lead (high-pass)."
+        ["fc = 1 / (2π × R × C)", "R = 1 / (2π × fc × C)", "C = 1 / (2π × fc × R)", "f(−3dB, N poles) = fc × √(2^(1/N) − 1)"],
+        state.poles > 1
+          ? `Each stage rolls off at 20 dB/decade past its own fc; ${state.poles} identical, buffered stages together give ${state.poles * 20} dB/decade — but the system's own −3 dB point sits below the single stage's fc, not at it.`
+          : "First-order (single-pole) filter — the response rolls off at 20 dB/decade past fc. At fc itself: −3.01 dB, 45° lag (low-pass) or 45° lead (high-pass)."
       )}
       ${calcFooter()}
     `;
@@ -7883,6 +7952,11 @@ function renderRcFilter(domain, tool, favId) {
       paint();
     });
 
+    document.getElementById("rcf-poles").onchange = (e) => {
+      state.poles = parseInt(e.target.value, 10);
+      paint();
+    };
+
     app.querySelectorAll("input[data-var]").forEach((input) => {
       input.oninput = () => {
         state.values[input.dataset.var] = parseFloat(input.value);
@@ -7892,14 +7966,39 @@ function renderRcFilter(domain, tool, favId) {
     app.querySelectorAll("select[data-unit]").forEach((select) => {
       select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
     });
-    document.getElementById("rcf-freq").oninput = (e) => {
-      state.freqVal = parseFloat(e.target.value);
+    const freqInput = document.getElementById("rcf-freq-input");
+    const freqUnitSelect = document.getElementById("rcf-freq-unit");
+    const freqSlider = document.getElementById("rcf-freq-slider");
+
+    // Whichever control moved (typed value, unit, slider drag, or a nudge
+    // button) writes the canonical Hz value into state, then this repaints
+    // the other two so all three always agree — same bidirectional pattern
+    // as the RC charge/discharge screen's time/voltage pair.
+    function applyRatio(ratio) {
+      const r = compute();
+      if (!isFinite(r.fc) || r.fc <= 0 || !isFinite(ratio) || ratio <= 0) return;
+      const hz = ratio * r.fc;
+      const unit = pickFreqUnit(hz);
+      state.freqVal = hz / FREQ_UNITS[unit];
+      state.freqUnit = unit;
+      if (document.activeElement !== freqInput) freqInput.value = trim(state.freqVal);
+      freqUnitSelect.value = unit;
       updateResults();
+    }
+
+    freqInput.oninput = () => {
+      const v = parseFloat(freqInput.value);
+      if (isFinite(v)) { state.freqVal = v; updateResults(); }
     };
-    document.getElementById("rcf-freq-unit").onchange = (e) => {
-      state.freqUnit = e.target.value;
-      updateResults();
+    freqUnitSelect.onchange = (e) => { state.freqUnit = e.target.value; updateResults(); };
+    freqSlider.oninput = () => applyRatio(Math.pow(10, parseFloat(freqSlider.value)));
+    const nudgeFreq = (dir) => {
+      const cur = freqRatio(compute());
+      const base = isFinite(cur) && cur > 0 ? Math.log10(cur) : 0;
+      applyRatio(Math.pow(10, Math.max(-2, Math.min(2, base + dir * 0.1))));
     };
+    document.getElementById("rcf-freq-dec").onclick = () => nudgeFreq(-1);
+    document.getElementById("rcf-freq-inc").onclick = () => nudgeFreq(1);
 
     updateResults();
   }
