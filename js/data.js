@@ -103,7 +103,7 @@ const DOMAINS = [
       {
         title: "Timing & interfaces",
         tools: [
-          { name: "PWM (duty cycle)" }, { name: "Debounce / RC timing" }, { name: "I2C pull-up resistor" }, { name: "UART baud rate" },
+          { name: "PWM (duty cycle)", calc: "pwm-duty" }, { name: "Debounce / RC timing" }, { name: "I2C pull-up resistor" }, { name: "UART baud rate" },
           { name: "Crystal load capacitance" }, { name: "Oscillator stability (ppm → Hz)" }, { name: "PLL multiplication factor" },
         ],
       },

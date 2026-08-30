@@ -211,6 +211,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "cap-stored-energy") return renderCapStoredEnergy(domain, tool, favId);
   if (calcId === "rc-filter") return renderRcFilter(domain, tool, favId);
   if (calcId === "rl-filter") return renderRlFilter(domain, tool, favId);
+  if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -8347,6 +8348,236 @@ function renderRlFilter(domain, tool, favId) {
     document.getElementById("rlf-freq-dec").onclick = () => nudgeFreq(-1);
     document.getElementById("rlf-freq-inc").onclick = () => nudgeFreq(1);
     document.getElementById("rlf-freq-reset").onclick = () => applyRatio(1);
+
+    updateResults();
+  }
+
+  paint();
+}
+
+// ---------- PWM (duty cycle) ----------
+// D = Ton / T x 100%. Two ways people actually have the numbers: spec'd by
+// frequency + duty (designing a PWM signal), or read Ton/Toff off a scope
+// (measuring one). Either way the same three other quantities fall out —
+// this mirrors the RC/RL filter screens' "pick what you know" shape rather
+// than a single fixed direction.
+function renderPwmDutyCycle(domain, tool, favId) {
+  const state = {
+    mode: "freq",
+    freqVal: 1, freqUnit: "kHz",
+    duty: 50,
+    tonVal: 500, tonUnit: "µs",
+    toffVal: 500, toffUnit: "µs",
+    vHigh: 5, vLow: 0,
+  };
+
+  function compute() {
+    let T, f, d, ton, toff;
+    if (state.mode === "freq") {
+      f = state.freqVal * FREQ_UNITS[state.freqUnit];
+      T = f > 0 ? 1 / f : NaN;
+      d = Math.max(0, Math.min(100, state.duty)) / 100;
+      ton = d * T;
+      toff = T - ton;
+    } else {
+      ton = state.tonVal * RC_TIME_UNITS[state.tonUnit];
+      toff = state.toffVal * RC_TIME_UNITS[state.toffUnit];
+      T = ton + toff;
+      f = T > 0 ? 1 / T : NaN;
+      d = T > 0 ? ton / T : NaN;
+    }
+    const vavg = state.vLow + d * (state.vHigh - state.vLow);
+    const vrms = Math.sqrt(state.vLow * state.vLow * (1 - d) + state.vHigh * state.vHigh * d);
+    return { T, f, d, ton, toff, vavg, vrms };
+  }
+
+  function problem(r) {
+    if (!isFinite(r.T) || r.T <= 0) return "Period must be greater than zero.";
+    if (r.ton < 0 || r.toff < 0) return "Ton and Toff cannot be negative.";
+    return "";
+  }
+
+  // Rise-high-fall-low, one full cycle, with Ton and the full period
+  // dimensioned underneath — d=0 or d=1 just degenerate to a flat line at
+  // the appropriate level instead of needing special-casing.
+  function diagram(r) {
+    const wire = "#5A6169";
+    const x0 = 26, x1 = 194, yHi = 24, yLo = 64;
+    const d = isFinite(r.d) ? Math.max(0, Math.min(1, r.d)) : 0;
+    const fallX = x0 + (x1 - x0) * d;
+    return `<svg width="220" height="120" viewBox="0 0 220 120" fill="none">
+      <path d="M${x0},${yLo} V${yHi} H${fallX.toFixed(1)} V${yLo} H${x1}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <path d="M${x0},${yLo} H${x1}" stroke="${wire}" stroke-width="1" stroke-dasharray="2 3"/>
+      <path d="M${x0},72 V80 M${x0},76 H${fallX.toFixed(1)} M${fallX.toFixed(1)},72 V80" stroke="${wire}" stroke-width="1.2"/>
+      <text x="${((x0 + fallX) / 2).toFixed(1)}" y="92" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="middle">Ton</text>
+      <path d="M${x0},96 V104 M${x0},100 H${x1} M${x1},96 V104" stroke="${wire}" stroke-width="1.2"/>
+      <text x="${((x0 + x1) / 2).toFixed(1)}" y="116" fill="#8A9099" font-size="11" font-weight="600" text-anchor="middle">T</text>
+      <text x="14" y="${yHi + 4}" fill="#8A9099" font-size="9" text-anchor="end">hi</text>
+      <text x="14" y="${yLo + 4}" fill="#8A9099" font-size="9" text-anchor="end">lo</text>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="err"]').textContent = issue;
+    app.querySelector(".diagram-box").innerHTML = diagram(r);
+    if (state.mode === "freq") {
+      app.querySelector('[data-res="period"]').textContent = issue ? "—" : siFormat(r.T, "s");
+      app.querySelector('[data-res="ton"]').textContent = issue ? "—" : siFormat(r.ton, "s");
+      app.querySelector('[data-res="toff"]').textContent = issue ? "—" : siFormat(r.toff, "s");
+    } else {
+      app.querySelector('[data-res="period"]').textContent = issue ? "—" : siFormat(r.T, "s");
+      app.querySelector('[data-res="freqOut"]').textContent = issue ? "—" : siFormat(r.f, "Hz");
+      app.querySelector('[data-res="dutyOut"]').textContent = issue || !isFinite(r.d) ? "—" : `${trim(r.d * 100)}%`;
+    }
+    app.querySelector('[data-res="vavg"]').textContent = issue ? "—" : `${trim(r.vavg)} V`;
+    app.querySelector('[data-res="vrms"]').textContent = issue ? "—" : `${trim(r.vrms)} V`;
+  }
+
+  function paint() {
+    const r = compute();
+    const issue = problem(r);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "D = Ton / T × 100%")}
+
+      <div class="diagram-box">${diagram(r)}</div>
+
+      ${pillRow([["freq", "Freq + Duty"], ["time", "Ton + Toff"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${state.mode === "freq" ? `
+        <div class="field">
+          <label>Frequency</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="pwm-freq" value="${trim(state.freqVal)}" />
+            <select id="pwm-freq-unit">${Object.keys(FREQ_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="r-list">
+          <div class="r-item">
+            <div class="r-line">
+              <span class="r-index">Duty</span>
+              <input type="number" inputmode="decimal" step="any" id="pwm-duty-input" style="font-size:26px;font-weight:600;" value="${trim(state.duty)}" />
+              <span class="r-hint" style="font-size:15px;">%</span>
+              <button type="button" class="r-reset" id="pwm-duty-reset" aria-label="Reset to 50%">${ICONS.reset}</button>
+            </div>
+            <div class="slider-row">
+              <button type="button" class="slider-step" id="pwm-duty-dec" aria-label="Decrease duty cycle">−</button>
+              <input type="range" class="series-slider" id="pwm-duty-slider" min="0" max="100" step="0.1" value="${state.duty}" aria-label="Drag to set duty cycle" />
+              <button type="button" class="slider-step" id="pwm-duty-inc" aria-label="Increase duty cycle">+</button>
+            </div>
+          </div>
+        </div>
+      ` : `
+        <div class="field-pair">
+          <div class="field">
+            <label>Ton (pulse width)</label>
+            <div class="field-row">
+              <input type="number" inputmode="decimal" step="any" id="pwm-ton" value="${trim(state.tonVal)}" />
+              <select id="pwm-ton-unit">${Object.keys(RC_TIME_UNITS).map((u) => `<option ${state.tonUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Toff</label>
+            <div class="field-row">
+              <input type="number" inputmode="decimal" step="any" id="pwm-toff" value="${trim(state.toffVal)}" />
+              <select id="pwm-toff-unit">${Object.keys(RC_TIME_UNITS).map((u) => `<option ${state.toffUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            </div>
+          </div>
+        </div>
+      `}
+      <div class="error-text" data-res="err">${issue}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Period (T)</span></div>
+        <div class="result-value"><span class="num" data-res="period"></span></div>
+      </div>
+      ${state.mode === "freq" ? `
+        <div class="result-field">
+          <div class="result-head"><span class="label">Ton (pulse width)</span></div>
+          <div class="result-value"><span class="num" data-res="ton"></span></div>
+        </div>
+        <div class="result-field">
+          <div class="result-head"><span class="label">Toff</span></div>
+          <div class="result-value"><span class="num" data-res="toff"></span></div>
+        </div>
+      ` : `
+        <div class="result-field">
+          <div class="result-head"><span class="label">Frequency</span></div>
+          <div class="result-value"><span class="num" data-res="freqOut"></span></div>
+        </div>
+        <div class="result-field">
+          <div class="result-head"><span class="label">Duty cycle</span></div>
+          <div class="result-value"><span class="num" data-res="dutyOut"></span></div>
+        </div>
+      `}
+
+      <div class="section-label" style="color:#8FC1F5">Average output (if filtered to DC)</div>
+      <div class="field-pair">
+        <div class="field">
+          <label>High level (V)</label>
+          <input type="number" inputmode="decimal" step="any" id="pwm-vhigh" value="${trim(state.vHigh)}" />
+        </div>
+        <div class="field">
+          <label>Low level (V)</label>
+          <input type="number" inputmode="decimal" step="any" id="pwm-vlow" value="${trim(state.vLow)}" />
+        </div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Average (DC) voltage</span></div>
+        <div class="result-value"><span class="num" data-res="vavg"></span></div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">RMS voltage</span></div>
+        <div class="result-value"><span class="num" data-res="vrms"></span></div>
+      </div>
+
+      ${formulaSection(
+        ["D = Ton / T × 100%", "T = Ton + Toff = 1 / f", "Vavg = Vlow + D × (Vhigh − Vlow)", "Vrms = √(Vlow² × (1−D) + Vhigh² × D)"],
+        "Vavg is what a low-pass filter — or any load too slow to follow the switching — turns a PWM signal into. That's the basis of PWM dimming and simple filtered-PWM DC outputs."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    if (state.mode === "freq") {
+      const freqField = document.getElementById("pwm-freq");
+      const freqUnitField = document.getElementById("pwm-freq-unit");
+      const dutyInput = document.getElementById("pwm-duty-input");
+      const dutySlider = document.getElementById("pwm-duty-slider");
+      freqField.oninput = () => { const v = parseFloat(freqField.value); if (isFinite(v)) { state.freqVal = v; updateResults(); } };
+      freqUnitField.onchange = (e) => { state.freqUnit = e.target.value; updateResults(); };
+      const syncDuty = () => {
+        dutyInput.value = trim(state.duty);
+        dutySlider.value = state.duty;
+        updateResults();
+      };
+      dutyInput.oninput = () => {
+        const v = parseFloat(dutyInput.value);
+        if (isFinite(v)) { state.duty = Math.max(0, Math.min(100, v)); dutySlider.value = state.duty; updateResults(); }
+      };
+      dutySlider.oninput = () => { state.duty = parseFloat(dutySlider.value); dutyInput.value = trim(state.duty); updateResults(); };
+      document.getElementById("pwm-duty-dec").onclick = () => { state.duty = Math.max(0, state.duty - 1); syncDuty(); };
+      document.getElementById("pwm-duty-inc").onclick = () => { state.duty = Math.min(100, state.duty + 1); syncDuty(); };
+      document.getElementById("pwm-duty-reset").onclick = () => { state.duty = 50; syncDuty(); };
+    } else {
+      const tonField = document.getElementById("pwm-ton");
+      const tonUnitField = document.getElementById("pwm-ton-unit");
+      const toffField = document.getElementById("pwm-toff");
+      const toffUnitField = document.getElementById("pwm-toff-unit");
+      tonField.oninput = () => { const v = parseFloat(tonField.value); if (isFinite(v)) { state.tonVal = v; updateResults(); } };
+      tonUnitField.onchange = (e) => { state.tonUnit = e.target.value; updateResults(); };
+      toffField.oninput = () => { const v = parseFloat(toffField.value); if (isFinite(v)) { state.toffVal = v; updateResults(); } };
+      toffUnitField.onchange = (e) => { state.toffUnit = e.target.value; updateResults(); };
+    }
+
+    const vHighField = document.getElementById("pwm-vhigh");
+    const vLowField = document.getElementById("pwm-vlow");
+    vHighField.oninput = () => { const v = parseFloat(vHighField.value); if (isFinite(v)) { state.vHigh = v; updateResults(); } };
+    vLowField.oninput = () => { const v = parseFloat(vLowField.value); if (isFinite(v)) { state.vLow = v; updateResults(); } };
 
     updateResults();
   }
