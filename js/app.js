@@ -212,6 +212,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rc-filter") return renderRcFilter(domain, tool, favId);
   if (calcId === "rl-filter") return renderRlFilter(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
+  if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -812,6 +813,12 @@ function wireSlider(fieldId, getRange, onPick) {
 function syncSliderPositions(series, getOhms, getBounds) {
   app.querySelectorAll(".series-slider").forEach(el => {
     const name = el.dataset.slider;
+    // .series-slider is also the base style for continuous sliders that
+    // aren't E-series fields at all (PWM's duty cycle, this screen's
+    // margin) — those never carry data-slider, since only
+    // seriesSliderHTML() sets it. Skipping them here is what keeps this
+    // shared sync from overwriting a slider that isn't its to manage.
+    if (name === undefined) return;
     const bounds = getBounds(name);
     const range = eSeriesRange(series, bounds[0], bounds[1]);
     el.max = Math.max(0, range.length - 1);
@@ -8578,6 +8585,308 @@ function renderPwmDutyCycle(domain, tool, favId) {
     const vLowField = document.getElementById("pwm-vlow");
     vHighField.oninput = () => { const v = parseFloat(vHighField.value); if (isFinite(v)) { state.vHigh = v; updateResults(); } };
     vLowField.oninput = () => { const v = parseFloat(vLowField.value); if (isFinite(v)) { state.vLow = v; updateResults(); } };
+
+    updateResults();
+  }
+
+  paint();
+}
+
+// ---------- Debounce / RC timing ----------
+// A pull-up (or pull-down) resistor plus a capacitor at a switch node forms
+// a low-pass filter that slows the edge so contact bounce — a burst of
+// make/break within a few ms of the press — never crosses the logic
+// threshold more than once. The design question is just: does the time to
+// cross that threshold, t = -tau * ln(1 - Vth/Vcc), comfortably outlast the
+// bounce window? "Check" verifies a chosen R/C; "Size" solves the
+// capacitor needed for a target safety margin over a given bounce time.
+function renderDebounceRc(domain, tool, favId) {
+  const state = {
+    mode: "check",
+    values: { r: 10, c: 4.7 },
+    units: { r: "kΩ", c: "µF" },
+    tol: 5,
+    vcc: 5,
+    vth: 50,
+    bounceVal: 10, bounceUnit: "ms",
+    margin: 3,
+  };
+
+  function rSI() { return state.values.r * OHM_UNITS[state.units.r]; }
+  function cSI() { return state.values.c * CAP_UNITS[state.units.c]; }
+  function bounceSI() { return state.bounceVal * RC_TIME_UNITS[state.bounceUnit]; }
+
+  // R's slider explores the plain E-series range; C's covers the same
+  // decade families but clamped to a realistic 1pF-1mF, same split the
+  // capacitor series/parallel screen uses for the same reason — farads
+  // span a much wider practical range than ohms do.
+  function boundsFor(name) {
+    return name === "r" ? unitSliderBounds(OHM_UNITS[state.units.r]) : unitSliderBounds(CAP_UNITS[state.units.c], CAP_SLIDER_MIN, CAP_SLIDER_MAX);
+  }
+  function valueFor(name) {
+    return name === "r" ? rSI() : cSI();
+  }
+  function seriesHint(name) {
+    const value = valueFor(name);
+    if (!isFinite(value) || value <= 0) return "";
+    const series = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(value, series);
+    return near.exact ? series : `${series} → ${name === "r" ? formatOhms(near.value) : formatFarads(near.value)}`;
+  }
+
+  // -ln(1 - Vth/Vcc): how many time constants it takes an RC charging from
+  // 0 to cross a given fraction of Vcc. NaN outside (0,100) since the
+  // curve only ever approaches Vcc, never reaches or exceeds it.
+  function thresholdFactor() {
+    const frac = state.vth / 100;
+    if (!(frac > 0) || !(frac < 1)) return NaN;
+    return -Math.log(1 - frac);
+  }
+
+  function compute() {
+    const k = thresholdFactor();
+    const bounce = bounceSI();
+    if (state.mode === "check") {
+      const r = rSI(), c = cSI();
+      const tau = r * c;
+      const tth = tau * k;
+      const margin = bounce > 0 ? tth / bounce : NaN;
+      return { r, c, tau, tth, bounce, margin };
+    }
+    const r = rSI();
+    const tth = state.margin * bounce;
+    const tau = k > 0 ? tth / k : NaN;
+    const c = r > 0 ? tau / r : NaN;
+    return { r, c, tau, tth, bounce, margin: state.margin };
+  }
+
+  function problem(res) {
+    if (!(state.vth > 0 && state.vth < 100)) return "Threshold must be between 0% and 100% of Vcc.";
+    if (!isFinite(res.r) || res.r <= 0) return "Resistance must be greater than zero.";
+    if (!isFinite(res.c) || res.c <= 0) return "Capacitance must be greater than zero.";
+    if (!isFinite(res.bounce) || res.bounce <= 0) return "Bounce time must be greater than zero.";
+    return "";
+  }
+
+  function verdict(res) {
+    if (!isFinite(res.margin)) return { text: "", color: "" };
+    const m = trim(res.margin);
+    if (res.margin >= 2) return { text: `Comfortable margin — crosses threshold at ${m}× the bounce time.`, color: "#5DCAA5" };
+    if (res.margin >= 1) return { text: `Marginal — only ${m}× the bounce time. More R or C would be safer.`, color: "#F0C24A" };
+    return { text: `Not enough — only ${m}× the bounce time. Bounce will likely glitch through.`, color: "#E24B4A" };
+  }
+
+  // Pull-up debounce: Vcc through R to the switch node, C and the switch
+  // both to ground off that same node, node feeds the logic input. The
+  // switch symbol is drawn open — pressing it shorts the node low, and C
+  // is what keeps that transition (and the release afterward) from
+  // chattering across the threshold.
+  function diagram() {
+    const wire = "#5A6169";
+    const ink = "#8FC1F5";
+    // Same symmetric-node convention as the RC/RL filter screens: every leg
+    // off a node runs the same 20px, except the run between the two nodes
+    // themselves — widened so C and the switch each land far enough apart
+    // to get their own ground symbol instead of sharing one. Node A (R
+    // meets C's drop) and node B (the switch's drop meets the output tap)
+    // are two separate, genuine junctions, each with its own dot.
+    return `<svg width="240" height="120" viewBox="0 0 240 120" fill="none">
+      <text x="40" y="10" fill="${ink}" font-size="12" font-weight="600" text-anchor="middle">Vcc</text>
+      <path d="M40,16 V30 M40,30 H60" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M60 30 L63 23 L69 37 L75 23 L81 37 L87 23 L93 37 L96 30" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M96,30 H180" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="116" cy="30" r="2.6" fill="${wire}"/>
+      <circle cx="160" cy="30" r="2.6" fill="${wire}"/>
+      <text x="185" y="34" fill="#8A9099" font-size="10">to logic</text>
+      <path d="M116,30 V50 M160,30 V62" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M116,50 V64 M109,64 H123 M109,69 H123 M116,69 V92" stroke="${ink}" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="100" y="69" fill="${ink}" font-size="12" font-weight="600" text-anchor="end">C</text>
+      <path d="M116,92 V98 M104,98 H128 M108,103 H124 M112,108 H120" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="160" cy="62" r="1.8" fill="${wire}"/>
+      <path d="M160,62 L169,74" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="160" cy="78" r="1.8" fill="${wire}"/>
+      <path d="M160,78 V92" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="172" y="58" fill="#8A9099" font-size="10">SW</text>
+      <path d="M160,92 V98 M148,98 H172 M152,103 H168 M156,108 H164" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    const v = verdict(r);
+    app.querySelector('[data-res="err"]').textContent = issue;
+    app.querySelector('[data-res="tau"]').textContent = issue ? "—" : siFormat(r.tau, "s");
+    app.querySelector('[data-res="tth"]').textContent = issue ? "—" : siFormat(r.tth, "s");
+    const vEl = app.querySelector('[data-res="verdict"]');
+    if (issue) { vEl.textContent = ""; } else { vEl.textContent = v.text; vEl.style.color = v.color; }
+    if (state.mode === "size") {
+      app.querySelector('[data-res="reqC"]').textContent = issue ? "—" : formatFarads(r.c);
+    } else {
+      const mEl = app.querySelector('[data-res="margin"]');
+      if (mEl) {
+        mEl.textContent = issue || !isFinite(r.margin) ? "—" : `${trim(r.margin)}×`;
+        mEl.style.color = v.color;
+      }
+    }
+    app.querySelectorAll("[data-hint]").forEach((el) => { el.textContent = seriesHint(el.dataset.hint); });
+    syncSliderPositions(eSeriesForTolerance(state.tol), valueFor, boundsFor);
+  }
+
+  function paint() {
+    const r = compute();
+    const issue = problem(r);
+    const v = verdict(r);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "t = −τ × ln(1 − Vth/Vcc) — time to cross the logic threshold")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["check", "Check R/C"], ["size", "Size C"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="db-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label><span class="field-name">Resistance (R)</span><span class="field-hint" data-hint="r">${seriesHint("r")}</span></label>
+        <div class="field-row">
+          <input type="number" inputmode="decimal" step="any" id="db-r" value="${trim(state.values.r)}" />
+          <select id="db-r-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.units.r === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+        ${seriesSliderHTML("r", eSeriesForTolerance(state.tol), rSI(), boundsFor("r"))}
+      </div>
+      ${state.mode === "check" ? `
+        <div class="field">
+          <label><span class="field-name">Capacitance (C)</span><span class="field-hint" data-hint="c">${seriesHint("c")}</span></label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="db-c" value="${trim(state.values.c)}" />
+            <select id="db-c-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.units.c === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+          ${seriesSliderHTML("c", eSeriesForTolerance(state.tol), cSI(), boundsFor("c"))}
+        </div>` : ""}
+      <div class="field-pair">
+        <div class="field">
+          <label>Supply (Vcc)</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="db-vcc" value="${trim(state.vcc)}" /></div>
+        </div>
+        <div class="field">
+          <label>Threshold (% of Vcc)</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="db-vth" value="${trim(state.vth)}" /></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Expected bounce time</label>
+        <div class="field-row">
+          <input type="number" inputmode="decimal" step="any" id="db-bounce" value="${trim(state.bounceVal)}" />
+          <select id="db-bounce-unit">${Object.keys(RC_TIME_UNITS).map((u) => `<option ${state.bounceUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      ${state.mode === "size" ? `
+        <div class="r-list">
+          <div class="r-item">
+            <div class="r-line">
+              <span class="r-index">Margin</span>
+              <input type="number" inputmode="decimal" step="any" id="db-margin-input" style="font-size:26px;font-weight:600;" value="${trim(state.margin)}" />
+              <span class="r-hint" style="font-size:15px;">×</span>
+              <button type="button" class="r-reset" id="db-margin-reset" aria-label="Reset to 3×">${ICONS.reset}</button>
+            </div>
+            <div class="slider-row">
+              <button type="button" class="slider-step" id="db-margin-dec" aria-label="Decrease margin">−</button>
+              <input type="range" class="series-slider" id="db-margin-slider" min="1" max="10" step="0.1" value="${state.margin}" aria-label="Drag to set the target safety margin" />
+              <button type="button" class="slider-step" id="db-margin-inc" aria-label="Increase margin">+</button>
+            </div>
+          </div>
+        </div>` : ""}
+      <div class="error-text" data-res="err">${issue}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      ${state.mode === "size" ? `
+        <div class="result-field">
+          <div class="result-head">
+            <span class="label">Required capacitance (C)</span>
+            <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+          </div>
+          <div class="result-value"><span class="num" data-res="reqC">${issue ? "—" : formatFarads(r.c)}</span></div>
+        </div>` : ""}
+      <div class="result-field">
+        <div class="result-head"><span class="label">Time constant (τ = R × C)</span></div>
+        <div class="result-value"><span class="num" data-res="tau">${issue ? "—" : siFormat(r.tau, "s")}</span></div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Time to cross threshold</span></div>
+        <div class="result-value"><span class="num" data-res="tth">${issue ? "—" : siFormat(r.tth, "s")}</span></div>
+        <div class="result-sub" data-res="verdict" style="color:${v.color}">${issue ? "" : v.text}</div>
+      </div>
+      ${state.mode === "check" ? `
+        <div class="result-field">
+          <div class="result-head"><span class="label">Margin (threshold time ÷ bounce time)</span></div>
+          <div class="result-value"><span class="num" data-res="margin" style="color:${v.color}">${issue || !isFinite(r.margin) ? "—" : `${trim(r.margin)}×`}</span></div>
+        </div>` : ""}
+
+      <div class="section-label" style="color:#8FC1F5">Typical contact bounce, for reference</div>
+      <div class="truth-table" style="--tt-cols:2">
+        <div class="tt-row"><span>Tactile / miniature pushbutton</span><span class="tt-out">≈1–10 ms</span></div>
+        <div class="tt-row"><span>Standard pushbutton</span><span class="tt-out">≈5–20 ms</span></div>
+        <div class="tt-row"><span>Toggle / slide switch</span><span class="tt-out">≈10–30 ms</span></div>
+        <div class="tt-row"><span>Relay / contactor contacts</span><span class="tt-out">≈10–25 ms</span></div>
+      </div>
+
+      ${formulaSection(
+        ["τ = R × C", "t = −τ × ln(1 − Vth/Vcc)", "C = t / (R × (−ln(1 − Vth/Vcc)))"],
+        "This models one clean charge from 0 V — the standard shortcut for RC debounce sizing, not a simulation of the actual bounce pulses. It also assumes a Schmitt-trigger input for the hysteresis; a plain comparator-style input can still glitch on a slow edge even with a wide margin here. Many designs pair this with a firmware debounce as a backstop rather than relying on the RC alone."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v2) => { state.mode = v2; paint(); });
+
+    document.getElementById("db-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); updateResults(); };
+
+    const rField = document.getElementById("db-r");
+    rField.oninput = () => { const v = parseFloat(rField.value); if (isFinite(v)) { state.values.r = v; updateResults(); } };
+    document.getElementById("db-r-unit").onchange = (e) => { state.units.r = e.target.value; updateResults(); };
+    wireSlider("r",
+      () => eSeriesRange(eSeriesForTolerance(state.tol), ...boundsFor("r")),
+      (ohms) => {
+        state.values.r = ohms / OHM_UNITS[state.units.r];
+        rField.value = trim(state.values.r);
+        updateResults();
+      });
+    if (state.mode === "check") {
+      const cField = document.getElementById("db-c");
+      cField.oninput = () => { const v = parseFloat(cField.value); if (isFinite(v)) { state.values.c = v; updateResults(); } };
+      document.getElementById("db-c-unit").onchange = (e) => { state.units.c = e.target.value; updateResults(); };
+      wireSlider("c",
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...boundsFor("c")),
+        (farads) => {
+          state.values.c = farads / CAP_UNITS[state.units.c];
+          cField.value = trim(state.values.c);
+          updateResults();
+        });
+    }
+    const vccField = document.getElementById("db-vcc");
+    vccField.oninput = () => { const v = parseFloat(vccField.value); if (isFinite(v)) { state.vcc = v; updateResults(); } };
+    const vthField = document.getElementById("db-vth");
+    vthField.oninput = () => { const v = parseFloat(vthField.value); if (isFinite(v)) { state.vth = v; updateResults(); } };
+    const bounceField = document.getElementById("db-bounce");
+    bounceField.oninput = () => { const v = parseFloat(bounceField.value); if (isFinite(v)) { state.bounceVal = v; updateResults(); } };
+    document.getElementById("db-bounce-unit").onchange = (e) => { state.bounceUnit = e.target.value; updateResults(); };
+
+    if (state.mode === "size") {
+      const marginInput = document.getElementById("db-margin-input");
+      const marginSlider = document.getElementById("db-margin-slider");
+      const syncMargin = () => { marginInput.value = trim(state.margin); marginSlider.value = state.margin; updateResults(); };
+      marginInput.oninput = () => {
+        const val = parseFloat(marginInput.value);
+        if (isFinite(val)) { state.margin = Math.max(1, Math.min(10, val)); marginSlider.value = state.margin; updateResults(); }
+      };
+      marginSlider.oninput = () => { state.margin = parseFloat(marginSlider.value); marginInput.value = trim(state.margin); updateResults(); };
+      document.getElementById("db-margin-dec").onclick = () => { state.margin = Math.max(1, state.margin - 0.5); syncMargin(); };
+      document.getElementById("db-margin-inc").onclick = () => { state.margin = Math.min(10, state.margin + 0.5); syncMargin(); };
+      document.getElementById("db-margin-reset").onclick = () => { state.margin = 3; syncMargin(); };
+    }
 
     updateResults();
   }
