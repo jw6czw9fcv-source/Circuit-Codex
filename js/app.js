@@ -87,6 +87,7 @@ const ICONS = {
   chevronRight: `<svg viewBox="0 0 24 24" fill="none"><path d="M9 5 L16 12 L9 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   info: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11 V16 M12 8 V8.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   bolt2: `<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 L4 14 H11 L9 22 L20 9 H13 L15 2 Z" fill="currentColor"/></svg>`,
+  reset: `<svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 4 V9 H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 
 // ---------- Router ----------
@@ -209,6 +210,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rc-charge") return renderRcCharge(domain, tool, favId);
   if (calcId === "cap-stored-energy") return renderCapStoredEnergy(domain, tool, favId);
   if (calcId === "rc-filter") return renderRcFilter(domain, tool, favId);
+  if (calcId === "rl-filter") return renderRlFilter(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -7925,6 +7927,7 @@ function renderRcFilter(domain, tool, favId) {
             <span class="r-index">Freq</span>
             <input type="number" inputmode="decimal" step="any" id="rcf-freq-input" value="${trim(state.freqVal)}" />
             <select id="rcf-freq-unit">${Object.keys(FREQ_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <button type="button" class="r-reset" id="rcf-freq-reset" aria-label="Reset to fc">${ICONS.reset}</button>
           </div>
           <div class="slider-row">
             <button type="button" class="slider-step" id="rcf-freq-dec" aria-label="Decrease frequency">−</button>
@@ -8006,6 +8009,344 @@ function renderRcFilter(domain, tool, favId) {
     };
     document.getElementById("rcf-freq-dec").onclick = () => nudgeFreq(-1);
     document.getElementById("rcf-freq-inc").onclick = () => nudgeFreq(1);
+    document.getElementById("rcf-freq-reset").onclick = () => applyRatio(1);
+
+    updateResults();
+  }
+
+  paint();
+}
+
+// ---------- RL filter ----------
+// The inductive cousin of the RC filter: fc = R / (2piL) instead of
+// 1 / (2piRC), and the topology roles flip — an inductor's impedance
+// climbs with frequency (opposite a capacitor's), so the part that has
+// to be in series vs shunt swaps too. Low-pass: series L, shunt R
+// (L blocks the highs). High-pass: series R, shunt L (L shorts the
+// lows). Same "solve for one of three," same N-pole cascade, same Bode
+// chart and frequency-explorer slider as the RC filter screen — only
+// the physics and the schematic symbol change.
+const HENRY_UNITS = { nH: 1e-9, "µH": 1e-6, mH: 1e-3, H: 1 };
+
+function renderRlFilter(domain, tool, favId) {
+  const state = {
+    topology: "lowpass",
+    solve: "fc",
+    poles: 1,
+    values: { r: 100, l: 100, fc: 159.2 },
+    units: { r: "Ω", l: "mH", fc: "Hz" },
+    freqVal: 159.2, freqUnit: "Hz",
+  };
+
+  function pickFreqUnit(hz) {
+    for (const u of ["GHz", "MHz", "kHz"]) { if (Math.abs(hz) >= FREQ_UNITS[u]) return u; }
+    return "Hz";
+  }
+
+  const FIELD = {
+    r: { label: "Resistance (R)", units: OHM_UNITS },
+    l: { label: "Inductance (L)", units: HENRY_UNITS },
+    fc: { label: "Cutoff frequency (fc)", units: FREQ_UNITS },
+  };
+
+  function inputsFor(solve) {
+    if (solve === "fc") return ["r", "l"];
+    if (solve === "r") return ["fc", "l"];
+    return ["fc", "r"]; // inductance
+  }
+
+  function si(name) {
+    return state.values[name] * FIELD[name].units[state.units[name]];
+  }
+
+  function compute() {
+    let r = si("r"), l = si("l"), fc = si("fc");
+    if (state.solve === "fc") fc = r / (2 * Math.PI * l);
+    if (state.solve === "r") r = 2 * Math.PI * fc * l;
+    if (state.solve === "l") l = r / (2 * Math.PI * fc);
+    return { r, l, fc };
+  }
+
+  function problem(r) {
+    if (!isFinite(r.r) || !isFinite(r.l) || !isFinite(r.fc) || r.r < 0 || r.l < 0 || r.fc < 0) return "No solution for those values.";
+    return "";
+  }
+
+  function solvedLabel() {
+    return { fc: "Cutoff frequency (fc)", r: "Resistance (R)", l: "Inductance (L)" }[state.solve];
+  }
+
+  function solvedValue(r) {
+    if (problem(r)) return "—";
+    if (state.solve === "fc") return siFormat(r.fc, "Hz");
+    if (state.solve === "r") return formatOhms(r.r);
+    return siFormat(r.l, "H");
+  }
+
+  // Same single-pole shape as the RC screen — the response only depends on
+  // f/fc, not on which reactive part produced that fc.
+  function stageResponse(ratio) {
+    if (!isFinite(ratio) || ratio < 0) return { db: NaN, phase: NaN };
+    if (state.topology === "lowpass") {
+      return { db: -10 * Math.log10(1 + ratio * ratio), phase: -Math.atan(ratio) * (180 / Math.PI) };
+    }
+    if (ratio === 0) return { db: -Infinity, phase: 90 };
+    return { db: 20 * Math.log10(ratio) - 10 * Math.log10(1 + ratio * ratio), phase: Math.atan(1 / ratio) * (180 / Math.PI) };
+  }
+
+  function response(ratio) {
+    const s = stageResponse(ratio);
+    const db = s.db === -Infinity ? -Infinity : s.db * state.poles;
+    return { db, phase: s.phase * state.poles };
+  }
+
+  function dbText(db) {
+    if (db === -Infinity) return "−∞ dB";
+    return isFinite(db) ? `${trim(db)} dB` : "—";
+  }
+
+  function systemCutoffRatio() {
+    const shrink = Math.sqrt(Math.pow(2, 1 / state.poles) - 1);
+    return state.topology === "lowpass" ? shrink : 1 / shrink;
+  }
+
+  const CHART = { l: 26, r: 208, t: 14, b: 86 };
+  function chartX(ratio) {
+    const clamped = Math.max(0.01, Math.min(100, ratio));
+    return CHART.l + (Math.log10(clamped) + 2) * ((CHART.r - CHART.l) / 4);
+  }
+  function chartY(db) {
+    const clamped = Math.max(0, Math.min(50, isFinite(db) ? -db : 50));
+    return CHART.t + clamped * ((CHART.b - CHART.t) / 50);
+  }
+
+  function chartSvg() {
+    const decades = [-2, -1, 0, 1, 2];
+    const decadeLabel = { "-2": "0.01fc", "-1": "0.1fc", "0": "fc", "1": "10fc", "2": "100fc" };
+    const dbTicks = [0, -10, -20, -30, -40, -50];
+    const samples = 80;
+    const pts = [];
+    for (let i = 0; i <= samples; i++) {
+      const ratio = Math.pow(10, -2 + (4 * i) / samples);
+      pts.push(`${chartX(ratio).toFixed(1)},${chartY(response(ratio).db).toFixed(1)}`);
+    }
+    const sysRatio = systemCutoffRatio();
+    const showSysLine = state.poles > 1;
+    return `<svg width="220" height="102" viewBox="0 0 220 102" fill="none">
+      ${dbTicks.map((db) => `<path d="M${CHART.l},${chartY(db)} H${CHART.r}" stroke="#22262D" stroke-width="1"/>`).join("")}
+      ${decades.map((t) => `<path d="M${chartX(Math.pow(10, t))},${CHART.t} V${CHART.b}" stroke="#22262D" stroke-width="1"/>`).join("")}
+      <path d="M${CHART.l},${chartY(-3)} H${CHART.r}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
+      <path d="M${chartX(1)},${CHART.t} V${CHART.b}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
+      ${showSysLine ? `<path d="M${chartX(sysRatio)},${CHART.t} V${CHART.b}" stroke="#5DCAA5" stroke-width="1" stroke-dasharray="3 3"/>` : ""}
+      <polyline points="${pts.join(" ")}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${chartX(1)}" cy="${chartY(-3)}" r="2.5" fill="${state.poles > 1 ? "#5A6169" : domain.color}"/>
+      ${showSysLine ? `<circle cx="${chartX(sysRatio)}" cy="${chartY(-3)}" r="2.5" fill="#5DCAA5"/>` : ""}
+      <circle data-res="freqdot" cx="${chartX(1)}" cy="${chartY(-3)}" r="4" fill="#5DCAA5" stroke="#0E1013" stroke-width="1.5"/>
+      ${decades.map((t) => `<text x="${chartX(Math.pow(10, t))}" y="97" fill="#8A9099" font-size="8" text-anchor="middle">${decadeLabel[t]}</text>`).join("")}
+      <text x="${CHART.l - 4}" y="${CHART.t + 3}" fill="#8A9099" font-size="8" text-anchor="end">0dB</text>
+      <text x="${CHART.l - 4}" y="${CHART.b + 3}" fill="#8A9099" font-size="8" text-anchor="end">−50dB</text>
+    </svg>`;
+  }
+
+  // Same layout as the RC filter's diagram — sine-in/sine-out, symmetric
+  // 20px node — but the coil symbol takes over whichever slot (series or
+  // shunt) an inductor's impedance-vs-frequency behavior puts it in, which
+  // is the opposite slot a capacitor would use for the same topology name.
+  function diagram() {
+    const known = inputsFor(state.solve);
+    const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
+    const wire = "#5A6169";
+    const seriesIsR = state.topology === "highpass";
+    const seriesTone = tone(seriesIsR ? "r" : "l");
+    const shuntTone = tone(seriesIsR ? "l" : "r");
+    const hZig = "M72 30 L75 23 L81 37 L87 23 L93 37 L99 23 L105 37 L108 30";
+    const hCoil = "M72 30 A4.5 4.5 0 0 1 81 30 A4.5 4.5 0 0 1 90 30 A4.5 4.5 0 0 1 99 30 A4.5 4.5 0 0 1 108 30";
+    const vZig = "M128 50 L121 53 L135 59 L121 65 L135 71 L121 77 L135 83 L128 86";
+    const vCoil = "M128 50 A4.5 4.5 0 0 1 128 59 A4.5 4.5 0 0 1 128 68 A4.5 4.5 0 0 1 128 77 A4.5 4.5 0 0 1 128 86";
+    const seriesSymbol = seriesIsR ? hZig : hCoil;
+    const shuntSymbol = seriesIsR ? vCoil : vZig;
+    return `<svg width="208" height="124" viewBox="0 0 208 124" fill="none">
+      <path d="M60 30 H72 M108 30 H148" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M20 30 Q27 14 34 30 Q41 46 48 30" stroke="#8FC1F5" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <path d="${seriesSymbol}" stroke="${seriesTone}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M128 30 V50 M128 86 V102" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${shuntSymbol}" stroke="${shuntTone}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <circle cx="128" cy="30" r="2.6" fill="${wire}"/>
+      <path d="M160 30 Q167 24 174 30 Q181 36 188 30" stroke="#5DCAA5" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <path d="M116 102 H140 M120 107 H136 M124 112 H132" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="90" y="12" fill="${seriesTone}" font-size="12" font-weight="600" text-anchor="middle">${seriesIsR ? "R" : "L"}</text>
+      <text x="150" y="72" fill="${shuntTone}" font-size="12" font-weight="600">${seriesIsR ? "L" : "R"}</text>
+    </svg>`;
+  }
+
+  function freqRatio(r) {
+    if (!isFinite(r.fc) || r.fc <= 0) return NaN;
+    return (state.freqVal * FREQ_UNITS[state.freqUnit]) / r.fc;
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="err"]').textContent = issue;
+    const ratio = issue ? NaN : freqRatio(r);
+    const resp = response(ratio);
+    app.querySelector('[data-res="db"]').textContent = dbText(resp.db);
+    app.querySelector('[data-res="phase"]').textContent = isFinite(resp.phase)
+      ? `${trim(resp.phase)}° phase shift (${state.topology === "lowpass" ? "output lags" : "output leads"} input)`
+      : "";
+    app.querySelector('[data-res="syscutoff"]').textContent = state.poles > 1 && !issue
+      ? `System −3 dB point (${state.poles} poles): ${siFormat(r.fc * systemCutoffRatio(), "Hz")}`
+      : "";
+    const slider = app.querySelector("#rlf-freq-slider");
+    if (slider && document.activeElement !== slider) {
+      slider.value = isFinite(ratio) && ratio > 0 ? Math.max(-2, Math.min(2, Math.log10(ratio))) : 0;
+    }
+    const dot = app.querySelector('[data-res="freqdot"]');
+    if (dot) {
+      dot.style.display = issue ? "none" : "";
+      if (!issue) {
+        dot.setAttribute("cx", chartX(ratio).toFixed(1));
+        dot.setAttribute("cy", chartY(resp.db).toFixed(1));
+      }
+    }
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "fc = R / (2πL) — the −3 dB point")}
+
+      <div class="diagram-box">${diagram()}</div>
+      ${state.poles > 1 ? `<div class="result-sub" style="margin:-8px 16px 10px;">× ${state.poles} identical stages, each buffered so it doesn't load the next</div>` : ""}
+
+      <div class="filter-row" id="rlf-topology">
+        ${[["lowpass", "Low-pass"], ["highpass", "High-pass"]].map(([v, l]) => `
+          <button class="filter-btn ${state.topology === v ? "active" : ""}" data-topo="${v}"
+                  style="${state.topology === v ? `background:${domain.bg};color:#8FC1F5;` : ""}">${l}</button>`).join("")}
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Poles (identical, buffered stages)
+        <select id="rlf-poles" class="label-select">
+          ${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}" ${state.poles === n ? "selected" : ""}>${n}</option>`).join("")}
+        </select>
+      </div>
+
+      ${pillRow([["fc", "Cutoff (fc)"], ["r", "R"], ["l", "L"]], state.solve, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${inputsFor(state.solve).map((name) => `
+        <div class="field">
+          <label>${FIELD[name].label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${trim(state.values[name])}" />
+            <select data-unit="${name}">
+              ${Object.keys(FIELD[name].units).map((u) => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err">${problem(r)}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="solved">${solvedValue(r)}</span></div>
+        <div class="result-sub" data-res="syscutoff"></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Frequency response</div>
+      <div class="diagram-box" style="padding:6px 6px 2px;">${chartSvg()}</div>
+      <div class="result-sub" style="margin:-4px 16px 14px;">Gray dashed line marks the single stage's fc${state.poles > 1 ? " · green marks the system's actual −3 dB point" : ""} · the dot tracks the slider below</div>
+
+      <div class="section-label" style="color:#8FC1F5">Explore a frequency</div>
+      <div class="r-list">
+        <div class="r-item">
+          <div class="r-line">
+            <span class="r-index">Freq</span>
+            <input type="number" inputmode="decimal" step="any" id="rlf-freq-input" value="${trim(state.freqVal)}" />
+            <select id="rlf-freq-unit">${Object.keys(FREQ_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <button type="button" class="r-reset" id="rlf-freq-reset" aria-label="Reset to fc">${ICONS.reset}</button>
+          </div>
+          <div class="slider-row">
+            <button type="button" class="slider-step" id="rlf-freq-dec" aria-label="Decrease frequency">−</button>
+            <input type="range" class="series-slider" id="rlf-freq-slider" min="-2" max="2" step="0.01"
+                   value="${(() => { const ratio = freqRatio(r); return isFinite(ratio) && ratio > 0 ? Math.max(-2, Math.min(2, Math.log10(ratio))) : 0; })()}"
+                   aria-label="Drag to explore a frequency relative to fc, log scale" />
+            <button type="button" class="slider-step" id="rlf-freq-inc" aria-label="Increase frequency">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Attenuation at this frequency</span></div>
+        <div class="result-value"><span class="num" data-res="db"></span></div>
+        <div class="result-sub" data-res="phase"></div>
+      </div>
+
+      ${formulaSection(
+        ["fc = R / (2π × L)", "R = 2π × fc × L", "L = R / (2π × fc)", "f(−3dB, N poles) = fc × √(2^(1/N) − 1)"],
+        state.poles > 1
+          ? `Each stage rolls off at 20 dB/decade past its own fc; ${state.poles} identical, buffered stages together give ${state.poles * 20} dB/decade — but the system's own −3 dB point sits below the single stage's fc, not at it.`
+          : "First-order (single-pole) filter — the response rolls off at 20 dB/decade past fc. At fc itself: −3.01 dB, 45° lag (low-pass) or 45° lead (high-pass)."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+
+    document.getElementById("rlf-topology").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      state.topology = btn.dataset.topo;
+      paint();
+    });
+
+    document.getElementById("rlf-poles").onchange = (e) => {
+      state.poles = parseInt(e.target.value, 10);
+      paint();
+    };
+
+    app.querySelectorAll("input[data-var]").forEach((input) => {
+      input.oninput = () => {
+        state.values[input.dataset.var] = parseFloat(input.value);
+        updateResults();
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach((select) => {
+      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+    });
+    const freqInput = document.getElementById("rlf-freq-input");
+    const freqUnitSelect = document.getElementById("rlf-freq-unit");
+    const freqSlider = document.getElementById("rlf-freq-slider");
+
+    function applyRatio(ratio) {
+      const r = compute();
+      if (!isFinite(r.fc) || r.fc <= 0 || !isFinite(ratio) || ratio <= 0) return;
+      const hz = ratio * r.fc;
+      const unit = pickFreqUnit(hz);
+      state.freqVal = hz / FREQ_UNITS[unit];
+      state.freqUnit = unit;
+      if (document.activeElement !== freqInput) freqInput.value = trim(state.freqVal);
+      freqUnitSelect.value = unit;
+      updateResults();
+    }
+
+    freqInput.oninput = () => {
+      const v = parseFloat(freqInput.value);
+      if (isFinite(v)) { state.freqVal = v; updateResults(); }
+    };
+    freqUnitSelect.onchange = (e) => { state.freqUnit = e.target.value; updateResults(); };
+    freqSlider.oninput = () => applyRatio(Math.pow(10, parseFloat(freqSlider.value)));
+    const nudgeFreq = (dir) => {
+      const cur = freqRatio(compute());
+      const base = isFinite(cur) && cur > 0 ? Math.log10(cur) : 0;
+      applyRatio(Math.pow(10, Math.max(-2, Math.min(2, base + dir * 0.1))));
+    };
+    document.getElementById("rlf-freq-dec").onclick = () => nudgeFreq(-1);
+    document.getElementById("rlf-freq-inc").onclick = () => nudgeFreq(1);
+    document.getElementById("rlf-freq-reset").onclick = () => applyRatio(1);
 
     updateResults();
   }

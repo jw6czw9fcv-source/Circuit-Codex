@@ -755,6 +755,18 @@ html, body {
   padding: 0 2px;
   cursor: pointer;
 }
+/* Same slot as .r-drop, for an icon instead of the "x" glyph — the
+   frequency-explorer's reset-to-fc button reuses this. */
+.r-reset {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.r-reset svg { width: 15px; height: 15px; }
 .r-drop:disabled { opacity: 0.25; cursor: default; }
 
 /* A control that rides a section heading, like .label-select. */
