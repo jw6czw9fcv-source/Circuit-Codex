@@ -24,7 +24,7 @@ const DOMAINS = [
           { name: "Current divider", calc: "current-divider" },
           { name: "Wheatstone bridge", calc: "wheatstone-bridge" },
           { name: "Delta-Y transform", calc: "delta-y" },
-          { name: "NTC/PTC thermistor" },
+          { name: "NTC/PTC thermistor", calc: "thermistor" },
         ],
       },
       {

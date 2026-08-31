@@ -31,11 +31,11 @@ RMS calculator · Generic dB ratio calculator · dB / dBm / dBu / dBV
 conversion · Battery runtime / capacity estimation · C-rate ·
 Battery types & sizes · Button cells · Capacitor charge/discharge (RC) ·
 Capacitor stored energy · RC filter · RL filter · PWM (duty cycle) ·
-Debounce / RC timing · Wavelength (RF) · **Delta-Y transform**
+Debounce / RC timing · Wavelength (RF) · Delta-Y transform ·
+**NTC/PTC thermistor**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] NTC/PTC thermistor
 - [ ] Unit converter
 - [ ] PPM converter
 

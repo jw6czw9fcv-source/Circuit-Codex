@@ -215,6 +215,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
   if (calcId === "delta-y") return renderDeltaY(domain, tool, favId);
+  if (calcId === "thermistor") return renderThermistor(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -9300,6 +9301,227 @@ function renderDeltaY(domain, tool, favId) {
     app.querySelectorAll("select[data-unit]").forEach((select) => {
       select.onchange = () => { state[inputUnitGroup][select.dataset.unit] = select.value; updateResults(); };
     });
+
+    updateResults();
+  }
+
+  paint();
+}
+
+// ---------- NTC/PTC thermistor ----------
+// NTC follows the standard B-parameter model, R(T) = R0 * e^(B*(1/T-1/T0)) —
+// what's actually printed on datasheets ("10k, B25/50=3950K"), simpler than
+// Steinhart-Hart and accurate enough for most work over a normal range.
+// PTC here means the *linear* silicon/RTD-style sensor (a %/degC
+// coefficient), not a switching polymer resettable fuse or ceramic PTC
+// heater — those jump sharply at a trip temperature and aren't describable
+// by one formula, which the caveat below says outright rather than
+// pretending this covers them.
+function renderThermistor(domain, tool, favId) {
+  const state = {
+    mode: "ntc",
+    values: { r0: 10, t0: 25, b: 3950, alpha: 0.7 },
+    r0Unit: "kΩ",
+    tempC: 25,
+    resVal: 10, resUnit: "kΩ",
+  };
+
+  function r0SI() { return state.values.r0 * OHM_UNITS[state.r0Unit]; }
+  function toK(c) { return c + 273.15; }
+
+  function resistanceAtTemp(tempC) {
+    const R0 = r0SI();
+    const T0K = toK(state.values.t0);
+    if (state.mode === "ntc") {
+      const TK = toK(tempC);
+      if (!(R0 > 0) || !(TK > 0) || !(T0K > 0)) return NaN;
+      return R0 * Math.exp(state.values.b * (1 / TK - 1 / T0K));
+    }
+    return R0 * (1 + (state.values.alpha / 100) * (tempC - state.values.t0));
+  }
+
+  function tempAtResistance(R) {
+    const R0 = r0SI();
+    const T0K = toK(state.values.t0);
+    if (state.mode === "ntc") {
+      if (!(R > 0) || !(R0 > 0) || !(T0K > 0) || state.values.b === 0) return NaN;
+      const invT = 1 / T0K + (1 / state.values.b) * Math.log(R / R0);
+      return invT > 0 ? 1 / invT - 273.15 : NaN;
+    }
+    if (state.values.alpha === 0 || !(R0 > 0)) return NaN;
+    return state.values.t0 + (R / R0 - 1) / (state.values.alpha / 100);
+  }
+
+  // %/degC sensitivity at the current point — constant for the linear PTC
+  // model by definition, but NTC's sensitivity itself changes with
+  // temperature (steepest when cold), which is worth surfacing since the
+  // single B number on a datasheet doesn't show that directly.
+  function sensitivityAt(tempC) {
+    if (state.mode !== "ntc") return state.values.alpha;
+    const TK = toK(tempC);
+    return TK > 0 ? (-state.values.b / (TK * TK)) * 100 : NaN;
+  }
+
+  function problem() {
+    if (!(r0SI() > 0)) return "R0 must be greater than zero.";
+    if (state.mode === "ntc" && !(state.values.b > 0)) return "B must be greater than zero.";
+    if (!isFinite(state.tempC) || !isFinite(state.resVal) || state.resVal <= 0) return "No solution for those values.";
+    return "";
+  }
+
+  // Log-scaled illustrative curve over a fixed -20 to 100 degC span, built
+  // from the actual R0/B (or R0/alpha) entered rather than a generic
+  // stand-in shape — the current point is a real, live position on it.
+  function diagram() {
+    const wire = "#5A6169";
+    const loT = -20, hiT = 100;
+    const x0 = 24, x1 = 200, y0 = 16, y1 = 74;
+    const samples = 30;
+    const logRs = [];
+    let minLogR = Infinity, maxLogR = -Infinity;
+    for (let i = 0; i <= samples; i++) {
+      const t = loT + (hiT - loT) * (i / samples);
+      const R = resistanceAtTemp(t);
+      const logR = isFinite(R) && R > 0 ? Math.log10(R) : 0;
+      logRs.push(logR);
+      if (logR < minLogR) minLogR = logR;
+      if (logR > maxLogR) maxLogR = logR;
+    }
+    const range = (maxLogR - minLogR) || 1;
+    const pts = logRs.map((logR, i) => {
+      const x = x0 + (x1 - x0) * (i / samples);
+      const y = y1 - ((logR - minLogR) / range) * (y1 - y0);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const curT = Math.max(loT, Math.min(hiT, isFinite(state.tempC) ? state.tempC : 25));
+    const curR = resistanceAtTemp(curT);
+    const curLogR = isFinite(curR) && curR > 0 ? Math.log10(curR) : minLogR;
+    const curX = x0 + (x1 - x0) * ((curT - loT) / (hiT - loT));
+    const curY = y1 - ((curLogR - minLogR) / range) * (y1 - y0);
+    return `<svg width="220" height="92" viewBox="0 0 220 92" fill="none">
+      <path d="M${x0},${y1} H${x1}" stroke="${wire}" stroke-width="1" stroke-dasharray="2 3"/>
+      <polyline points="${pts.join(" ")}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${curX.toFixed(1)}" cy="${curY.toFixed(1)}" r="3.5" fill="#5DCAA5" stroke="#0E1013" stroke-width="1.2"/>
+      <text x="${x0}" y="88" fill="#8A9099" font-size="9">${loT}°C</text>
+      <text x="${x1}" y="88" fill="#8A9099" font-size="9" text-anchor="end">${hiT}°C</text>
+      <text x="${x0 - 4}" y="${y0 + 3}" fill="#8A9099" font-size="9" text-anchor="end">R</text>
+    </svg>`;
+  }
+
+  function fromTemp() {
+    const R = resistanceAtTemp(state.tempC);
+    if (isFinite(R) && R > 0) {
+      state.resVal = R / OHM_UNITS[state.resUnit];
+      const resField = document.getElementById("th-res");
+      if (resField && document.activeElement !== resField) resField.value = trim(state.resVal);
+    }
+    updateResults();
+  }
+
+  function fromRes() {
+    const R = state.resVal * OHM_UNITS[state.resUnit];
+    const T = tempAtResistance(R);
+    if (isFinite(T)) {
+      state.tempC = T;
+      const tempField = document.getElementById("th-temp");
+      if (tempField && document.activeElement !== tempField) tempField.value = trim(state.tempC);
+    }
+    updateResults();
+  }
+
+  function updateResults() {
+    const issue = problem();
+    app.querySelector('[data-res="err"]').textContent = issue;
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    const sens = sensitivityAt(state.tempC);
+    const sensEl = app.querySelector('[data-res="sens"]');
+    if (sensEl) sensEl.textContent = issue || !isFinite(sens) ? "—" : `${trim(sens)} %/°C`;
+  }
+
+  function paint() {
+    const issue = problem();
+    const isNtc = state.mode === "ntc";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, isNtc ? "R(T) = R0 × e^(B×(1/T − 1/T0)) — B-parameter model" : "R(T) = R0 × (1 + α×(T − T0)) — linear model")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["ntc", "NTC (B-parameter)"], ["ptc", "PTC (linear α)"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Thermistor spec</div>
+      <div class="field">
+        <label>R0 (resistance at T0)</label>
+        <div class="field-row">
+          <input type="number" inputmode="decimal" step="any" id="th-r0" value="${trim(state.values.r0)}" />
+          <select id="th-r0-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r0Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>T0 (reference, °C)</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="th-t0" value="${trim(state.values.t0)}" /></div>
+        </div>
+        <div class="field">
+          <label>${isNtc ? "B value (K)" : "α (%/°C)"}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="th-coef" value="${trim(isNtc ? state.values.b : state.values.alpha)}" /></div>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Either one — edit whichever you know</div>
+      <div class="field">
+        <label>Temperature (°C)</label>
+        <div class="field-row"><input type="number" inputmode="decimal" step="any" id="th-temp" value="${trim(state.tempC)}" /></div>
+      </div>
+      <div class="field">
+        <label>Resistance</label>
+        <div class="field-row">
+          <input type="number" inputmode="decimal" step="any" id="th-res" value="${trim(state.resVal)}" />
+          <select id="th-res-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.resUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="error-text" data-res="err">${issue}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Sensitivity at this temperature</span></div>
+        <div class="result-value"><span class="num" data-res="sens"></span></div>
+        <div class="result-sub">${isNtc ? "Changes with temperature — NTC is steepest when cold, unlike a fixed α." : "Constant by definition for this linear model."}</div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Typical B-values, for reference</div>
+      <div class="truth-table" style="--tt-cols:2">
+        <div class="tt-row"><span>General-purpose 10 kΩ NTC</span><span class="tt-out">≈3950 K</span></div>
+        <div class="tt-row"><span>Common range across families</span><span class="tt-out">≈3000–4500 K</span></div>
+        <div class="tt-row"><span>High-sensitivity / specialty types</span><span class="tt-out">up to ≈5000 K</span></div>
+      </div>
+
+      ${formulaSection(
+        ["NTC: R = R0 × e^(B×(1/T − 1/T0))", "NTC: T = 1 / (1/T0 + (1/B)×ln(R/R0))", "PTC: R = R0 × (1 + α×(T − T0))", "T, T0 in kelvin = °C + 273.15"],
+        isNtc
+          ? "The B-parameter model is a two-point fit, accurate enough for most work near T0 but not as precise across a wide range as the full Steinhart-Hart equation. Sensitivity here means the linear model's alpha — it doesn't cover switching-type PTC (resettable fuses, ceramic PTC heaters), which jump sharply at a trip temperature rather than following one smooth curve."
+          : "This is the linear silicon/RTD-style PTC model (a steady %/°C), not a switching polymer resettable fuse or ceramic PTC heater — those trip sharply at a threshold temperature instead of following one smooth curve, and aren't representable by a single formula."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    const r0Field = document.getElementById("th-r0");
+    r0Field.oninput = () => { const v = parseFloat(r0Field.value); if (isFinite(v)) { state.values.r0 = v; fromTemp(); } };
+    document.getElementById("th-r0-unit").onchange = (e) => { state.r0Unit = e.target.value; fromTemp(); };
+    const t0Field = document.getElementById("th-t0");
+    t0Field.oninput = () => { const v = parseFloat(t0Field.value); if (isFinite(v)) { state.values.t0 = v; fromTemp(); } };
+    const coefField = document.getElementById("th-coef");
+    coefField.oninput = () => {
+      const v = parseFloat(coefField.value);
+      if (isFinite(v)) { state.values[isNtc ? "b" : "alpha"] = v; fromTemp(); }
+    };
+
+    const tempField = document.getElementById("th-temp");
+    const resField = document.getElementById("th-res");
+    tempField.oninput = () => { const v = parseFloat(tempField.value); if (isFinite(v)) { state.tempC = v; fromTemp(); } };
+    resField.oninput = () => { const v = parseFloat(resField.value); if (isFinite(v)) { state.resVal = v; fromRes(); } };
+    document.getElementById("th-res-unit").onchange = (e) => { state.resUnit = e.target.value; fromTemp(); };
 
     updateResults();
   }
