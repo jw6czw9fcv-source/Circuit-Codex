@@ -32,11 +32,11 @@ conversion · Battery runtime / capacity estimation · C-rate ·
 Battery types & sizes · Button cells · Capacitor charge/discharge (RC) ·
 Capacitor stored energy · RC filter · RL filter · PWM (duty cycle) ·
 Debounce / RC timing · Wavelength (RF) · Delta-Y transform ·
-**NTC/PTC thermistor**
+NTC/PTC thermistor · **Unit converter** (Temperature, Length, Area,
+Volume, Mass, Speed, Force, Pressure, Energy, Time, Angle)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
-- [ ] Unit converter
 - [ ] PPM converter
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)

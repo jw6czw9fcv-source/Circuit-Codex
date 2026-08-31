@@ -216,6 +216,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
   if (calcId === "delta-y") return renderDeltaY(domain, tool, favId);
   if (calcId === "thermistor") return renderThermistor(domain, tool, favId);
+  if (calcId === "unit-converter") return renderUnitConverter(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -9524,6 +9525,189 @@ function renderThermistor(domain, tool, favId) {
     document.getElementById("th-res-unit").onchange = (e) => { state.resUnit = e.target.value; fromTemp(); };
 
     updateResults();
+  }
+
+  paint();
+}
+
+// ---------- Unit converter ----------
+// Scoped to what electronics work actually needs and doesn't already have
+// its own screen for: temperature (datasheets split between C and F, K for
+// physics), length (mil is the working unit for PCB fab, everything else
+// shows up on a caliper or a drawing), and angle (AC phase, RF). All the
+// fields in a category stay linked — type into any one, the rest follow —
+// rather than a fixed "from/to" pair.
+// Every category but Temperature is a straight proportional conversion —
+// one base unit, everything else a fixed multiple of it. linearCategory()
+// builds the shared fromUnit() for those so each entry below only has to
+// state its base-unit factors, not repeat the conversion math.
+function linearCategory(label, short, fields, toBase, def, formula, note) {
+  return {
+    label, short, fields, toBase, default: def, formula, note: note || "",
+    fromUnit(unit, v) {
+      const base = v * this.toBase[unit];
+      const r = {};
+      Object.keys(this.toBase).forEach((u) => { r[u] = base / this.toBase[u]; });
+      return r;
+    },
+    problem: () => "",
+  };
+}
+
+const UNIT_CONVERTER_CATEGORIES = {
+  temp: {
+    label: "Temperature",
+    short: "Temp",
+    fields: [["c", "°C"], ["f", "°F"], ["k", "K"]],
+    default: ["c", 25],
+    fromC: (c) => ({ c, f: c * 9 / 5 + 32, k: c + 273.15 }),
+    fromUnit(unit, v) {
+      const c = unit === "c" ? v : unit === "f" ? (v - 32) * 5 / 9 : v - 273.15;
+      return this.fromC(c);
+    },
+    problem: (r) => (r.k < 0 ? "Temperature cannot go below absolute zero (0 K)." : ""),
+    formula: ["°F = °C × 9/5 + 32", "K = °C + 273.15"],
+  },
+  length: linearCategory(
+    "Length", "Length",
+    [["mm", "mm"], ["cm", "cm"], ["m", "m"], ["in", "in"], ["mil", "mil"], ["um", "µm"]],
+    { mm: 1e-3, cm: 1e-2, m: 1, in: 0.0254, mil: 0.0000254, um: 1e-6 },
+    ["in", 1],
+    ["1 in = 25.4 mm = 1000 mil", "1 mil = 0.001 in = 0.0254 mm"],
+    "Mil (thousandth of an inch) is the working unit on most PCB fab drawings and stackup specs — not to be confused with mm, and definitely not with \"millimeter\" despite the name."
+  ),
+  area: linearCategory(
+    "Area", "Area",
+    [["mm2", "mm²"], ["cm2", "cm²"], ["m2", "m²"], ["in2", "in²"], ["ft2", "ft²"]],
+    { mm2: 1e-6, cm2: 1e-4, m2: 1, in2: 0.00064516, ft2: 0.09290304 },
+    ["cm2", 1],
+    ["1 in² = 645.16 mm²", "1 ft² = 0.0929 m²"]
+  ),
+  volume: linearCategory(
+    "Volume", "Volume",
+    [["cm3", "cm³"], ["l", "L"], ["m3", "m³"], ["in3", "in³"], ["ft3", "ft³"]],
+    { cm3: 1e-3, l: 1, m3: 1000, in3: 0.0163871, ft3: 28.316846592 },
+    ["cm3", 100],
+    ["1 in³ = 16.387 cm³", "1 L = 1000 cm³"]
+  ),
+  mass: linearCategory(
+    "Mass", "Mass",
+    [["mg", "mg"], ["g", "g"], ["kg", "kg"], ["oz", "oz"], ["lb", "lb"]],
+    { mg: 1e-3, g: 1, kg: 1000, oz: 28.349523125, lb: 453.59237 },
+    ["g", 100],
+    ["1 oz = 28.3495 g", "1 lb = 453.592 g"]
+  ),
+  speed: linearCategory(
+    "Speed", "Speed",
+    [["mps", "m/s"], ["kmh", "km/h"], ["mph", "mph"], ["fps", "ft/s"]],
+    { mps: 1, kmh: 1000 / 3600, mph: 0.44704, fps: 0.3048 },
+    ["mps", 1],
+    ["1 m/s = 3.6 km/h", "1 mph = 0.44704 m/s"]
+  ),
+  force: linearCategory(
+    "Force", "Force",
+    [["n", "N"], ["kn", "kN"], ["kgf", "kgf"], ["lbf", "lbf"]],
+    { n: 1, kn: 1000, kgf: 9.80665, lbf: 4.4482216153 },
+    ["n", 1],
+    ["1 kgf = 9.80665 N", "1 lbf = 4.4482 N"],
+    "Connector mating force and switch/button actuation force are usually specced in N or kgf on datasheets."
+  ),
+  pressure: linearCategory(
+    "Pressure", "Pressure",
+    [["pa", "Pa"], ["kpa", "kPa"], ["bar", "bar"], ["psi", "psi"], ["atm", "atm"]],
+    { pa: 1, kpa: 1000, bar: 100000, psi: 6894.757293168, atm: 101325 },
+    ["kpa", 100],
+    ["1 bar = 100 kPa = 14.5038 psi", "1 atm = 101.325 kPa"],
+    "Shows up on IP-rated enclosure specs (waterproof depth/pressure ratings) and pressure-sensor datasheets."
+  ),
+  energy: linearCategory(
+    "Energy", "Energy",
+    [["j", "J"], ["kj", "kJ"], ["wh", "Wh"], ["kwh", "kWh"], ["cal", "cal"]],
+    { j: 1, kj: 1000, wh: 3600, kwh: 3600000, cal: 4.184 },
+    ["wh", 10],
+    ["1 Wh = 3600 J", "1 kWh = 1000 Wh"],
+    "Wh/kWh is how battery capacity is usually rated once you go past mAh — see Battery runtime for the mAh↔Wh conversion at a given voltage."
+  ),
+  time: linearCategory(
+    "Time", "Time",
+    [["us", "µs"], ["ms", "ms"], ["s", "s"], ["min", "min"], ["hr", "hr"]],
+    { us: 1e-6, ms: 1e-3, s: 1, min: 60, hr: 3600 },
+    ["ms", 100],
+    ["1 min = 60 s", "1 hr = 3600 s"]
+  ),
+  angle: linearCategory(
+    "Angle", "Angle",
+    [["deg", "degrees"], ["rad", "radians"]],
+    { deg: Math.PI / 180, rad: 1 },
+    ["deg", 45],
+    ["radians = degrees × π / 180"]
+  ),
+};
+
+function renderUnitConverter(domain, tool, favId) {
+  const state = { category: "temp" };
+  Object.keys(UNIT_CONVERTER_CATEGORIES).forEach((k) => {
+    const c = UNIT_CONVERTER_CATEGORIES[k];
+    state[k] = c.fromUnit(c.default[0], c.default[1]);
+  });
+
+  function cat() { return UNIT_CONVERTER_CATEGORIES[state.category]; }
+
+  function applyUnit(unit, val) {
+    if (!isFinite(val)) return;
+    state[state.category] = cat().fromUnit(unit, val);
+    syncFields(unit);
+  }
+
+  function syncFields(sourceUnit) {
+    const values = state[state.category];
+    const issue = cat().problem(values);
+    app.querySelector('[data-res="err"]').textContent = issue;
+    cat().fields.forEach(([unit]) => {
+      const field = document.getElementById(`uc-${unit}`);
+      if (field && unit !== sourceUnit && document.activeElement !== field) {
+        field.value = trim(values[unit]);
+      }
+    });
+  }
+
+  function paint() {
+    const values = state[state.category];
+    const issue = cat().problem(values);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Type into any field — the rest follow")}
+
+      <div class="filter-row" id="uc-cats" style="flex-wrap:wrap;justify-content:flex-start;gap:6px;row-gap:8px;">
+        ${Object.keys(UNIT_CONVERTER_CATEGORIES).map((k) => `
+          <button class="filter-btn ${k === state.category ? "active" : ""}" data-cat="${k}"
+                  style="${k === state.category ? `background:${domain.bg};color:${domain.color};` : ""}">${UNIT_CONVERTER_CATEGORIES[k].short}</button>`).join("")}
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">${cat().label}</div>
+      ${cat().fields.map(([unit, label]) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="uc-${unit}" value="${trim(values[unit])}" /></div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err">${issue}</div>
+
+      ${formulaSection(cat().formula, cat().note)}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    document.getElementById("uc-cats").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      state.category = btn.dataset.cat;
+      paint();
+    });
+
+    cat().fields.forEach(([unit]) => {
+      const field = document.getElementById(`uc-${unit}`);
+      field.oninput = () => applyUnit(unit, parseFloat(field.value));
+    });
   }
 
   paint();
