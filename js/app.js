@@ -214,6 +214,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
+  if (calcId === "delta-y") return renderDeltaY(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -9113,6 +9114,187 @@ function renderWavelength(domain, tool, favId) {
       if (!btn) return;
       jumpToBand(btn.dataset.band);
       paint();
+    });
+
+    updateResults();
+  }
+
+  paint();
+}
+
+// ---------- Delta-Y transform ----------
+// Two three-terminal resistor networks that behave identically from
+// outside: a triangle (Rab, Rbc, Rca) and a star (Ra, Rb, Rc meeting at
+// a common center). Delta -> Y divides; Y -> Delta multiplies — the
+// symmetric case (300ohm delta <-> 100ohm star) is the textbook example
+// of both directions at once.
+function renderDeltaY(domain, tool, favId) {
+  const state = {
+    mode: "d2y",
+    d: { ab: 300, bc: 300, ca: 300 },
+    dUnit: { ab: "Ω", bc: "Ω", ca: "Ω" },
+    y: { a: 100, b: 100, c: 100 },
+    yUnit: { a: "Ω", b: "Ω", c: "Ω" },
+  };
+
+  function si(group, name) {
+    return state[group][name] * OHM_UNITS[state[group + "Unit"][name]];
+  }
+
+  function compute() {
+    if (state.mode === "d2y") {
+      const ab = si("d", "ab"), bc = si("d", "bc"), ca = si("d", "ca");
+      const sum = ab + bc + ca;
+      return {
+        ab, bc, ca,
+        a: sum > 0 ? (ab * ca) / sum : NaN,
+        b: sum > 0 ? (ab * bc) / sum : NaN,
+        c: sum > 0 ? (bc * ca) / sum : NaN,
+      };
+    }
+    const a = si("y", "a"), b = si("y", "b"), c = si("y", "c");
+    const rt = a * b + b * c + c * a;
+    return {
+      a, b, c,
+      ab: c > 0 ? rt / c : NaN,
+      bc: a > 0 ? rt / a : NaN,
+      ca: b > 0 ? rt / b : NaN,
+    };
+  }
+
+  function problem(r) {
+    const vals = state.mode === "d2y" ? [r.ab, r.bc, r.ca] : [r.a, r.b, r.c];
+    if (vals.some((v) => !isFinite(v) || v <= 0)) return "All three resistances must be greater than zero.";
+    return "";
+  }
+
+  // Same diagonal-edge zigzag as the Wheatstone bridge diagram, reused here
+  // for both the triangle's edges and the star's legs.
+  function edgeZigzag(x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    const ux = dx / len, uy = dy / len;
+    const px = -uy, py = ux;
+    const amp = 4;
+    const bx1 = x1 + dx * 0.28, by1 = y1 + dy * 0.28;
+    const bx2 = x1 + dx * 0.72, by2 = y1 + dy * 0.72;
+    const pts = [[bx1, by1]];
+    for (let i = 1; i < 6; i++) {
+      const t = i / 6;
+      const side = i % 2 === 1 ? 1 : -1;
+      pts.push([bx1 + (bx2 - bx1) * t + px * amp * side, by1 + (by2 - by1) * t + py * amp * side]);
+    }
+    pts.push([bx2, by2]);
+    const zig = pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" L");
+    return `M${x1},${y1} L${bx1.toFixed(1)},${by1.toFixed(1)} M${zig} M${bx2.toFixed(1)},${by2.toFixed(1)} L${x2},${y2}`;
+  }
+
+  // Delta on the left, its equivalent Y on the right, sharing the same A/B/C
+  // terminal labels — known legs draw in the input blue, the solved-for
+  // side in result green.
+  function diagram() {
+    const wire = "#5A6169";
+    const known = "#8FC1F5";
+    const result = "#5DCAA5";
+    const dTone = state.mode === "d2y" ? known : result;
+    const yTone = state.mode === "d2y" ? result : known;
+    const A = [70, 12], B = [18, 92], C = [122, 92];
+    const A2 = [210, 12], B2 = [150, 98], C2 = [270, 98], N = [210, 68];
+    return `<svg width="280" height="118" viewBox="0 0 280 118" fill="none">
+      <path d="${edgeZigzag(A[0], A[1], B[0], B[1])}" stroke="${dTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="${edgeZigzag(B[0], B[1], C[0], C[1])}" stroke="${dTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="${edgeZigzag(C[0], C[1], A[0], A[1])}" stroke="${dTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="${A[0]}" y="8" fill="#9AA0A8" font-size="10" text-anchor="middle">A</text>
+      <text x="${B[0] - 5}" y="${B[1] + 4}" fill="#9AA0A8" font-size="10" text-anchor="end">B</text>
+      <text x="${C[0] + 5}" y="${C[1] + 4}" fill="#9AA0A8" font-size="10" text-anchor="start">C</text>
+      <text x="34" y="48" fill="${dTone}" font-size="10" font-weight="600" text-anchor="middle">Rab</text>
+      <text x="70" y="106" fill="${dTone}" font-size="10" font-weight="600" text-anchor="middle">Rbc</text>
+      <text x="106" y="48" fill="${dTone}" font-size="10" font-weight="600" text-anchor="middle">Rca</text>
+
+      <text x="140" y="56" fill="#8A9099" font-size="13" text-anchor="middle">≡</text>
+
+      <path d="${edgeZigzag(N[0], N[1], A2[0], A2[1])}" stroke="${yTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="${edgeZigzag(N[0], N[1], B2[0], B2[1])}" stroke="${yTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="${edgeZigzag(N[0], N[1], C2[0], C2[1])}" stroke="${yTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <circle cx="${N[0]}" cy="${N[1]}" r="2" fill="${wire}"/>
+      <text x="${A2[0]}" y="8" fill="#9AA0A8" font-size="10" text-anchor="middle">A</text>
+      <text x="${B2[0] - 6}" y="${B2[1] + 5}" fill="#9AA0A8" font-size="10" text-anchor="end">B</text>
+      <text x="${C2[0] + 6}" y="${C2[1] + 5}" fill="#9AA0A8" font-size="10" text-anchor="start">C</text>
+      <text x="192" y="38" fill="${yTone}" font-size="10" font-weight="600" text-anchor="middle">Ra</text>
+      <text x="187" y="97" fill="${yTone}" font-size="10" font-weight="600" text-anchor="middle">Rb</text>
+      <text x="233" y="97" fill="${yTone}" font-size="10" font-weight="600" text-anchor="middle">Rc</text>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const r = compute();
+    const issue = problem(r);
+    app.querySelector('[data-res="err"]').textContent = issue;
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    const targets = state.mode === "d2y" ? { a: r.a, b: r.b, c: r.c } : { ab: r.ab, bc: r.bc, ca: r.ca };
+    Object.keys(targets).forEach((k) => {
+      const el = app.querySelector(`[data-res="${k}"]`);
+      if (el) el.textContent = issue ? "—" : formatOhms(targets[k]);
+    });
+  }
+
+  function paint() {
+    const r = compute();
+    const issue = problem(r);
+    const isD2Y = state.mode === "d2y";
+    const inputGroup = isD2Y ? "d" : "y";
+    const inputUnitGroup = isD2Y ? "dUnit" : "yUnit";
+    const inputFields = isD2Y ? [["ab", "Rab"], ["bc", "Rbc"], ["ca", "Rca"]] : [["a", "Ra"], ["b", "Rb"], ["c", "Rc"]];
+    const outputFields = isD2Y ? [["a", "Ra"], ["b", "Rb"], ["c", "Rc"]] : [["ab", "Rab"], ["bc", "Rbc"], ["ca", "Rca"]];
+
+    app.innerHTML = `
+      ${calcHeader(tool, favId, isD2Y ? "Divide: Y legs from the Delta's product over its sum" : "Multiply: Delta sides from the Y's product-sum over the opposite leg")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["d2y", "Δ → Y"], ["y2d", "Y → Δ"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs — the ${isD2Y ? "Delta" : "Y"}</div>
+      ${inputFields.map(([name, label]) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${trim(state[inputGroup][name])}" />
+            <select data-unit="${name}">
+              ${Object.keys(OHM_UNITS).map((u) => `<option ${state[inputUnitGroup][name] === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+        </div>`).join("")}
+      <div class="error-text" data-res="err">${issue}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Results — the ${isD2Y ? "Y" : "Delta"}</div>
+      ${outputFields.map(([name, label]) => `
+        <div class="result-field">
+          <div class="result-head">
+            <span class="label">${label}</span>
+            <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+          </div>
+          <div class="result-value"><span class="num" data-res="${name}">${issue ? "—" : formatOhms(r[name])}</span></div>
+        </div>`).join("")}
+
+      ${formulaSection(
+        ["Ra = Rab·Rca / (Rab+Rbc+Rca)   Rb = Rab·Rbc / (Rab+Rbc+Rca)   Rc = Rbc·Rca / (Rab+Rbc+Rca)",
+         "Rab = (Ra·Rb+Rb·Rc+Rc·Ra) / Rc   Rbc = (…) / Ra   Rca = (…) / Rb"],
+        "A symmetric Delta (all three sides equal) always converts to a Y a third the value, and back again at three times — the classic worked example, and the tool's own defaults. The transform is purely topological — it holds for any impedance (add reactance from an L or C, not just plain resistance), but this calculator only works in real ohms, matching where it lives under Resistors."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+
+    app.querySelectorAll("input[data-var]").forEach((input) => {
+      input.oninput = () => {
+        const v = parseFloat(input.value);
+        if (isFinite(v)) { state[inputGroup][input.dataset.var] = v; updateResults(); }
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach((select) => {
+      select.onchange = () => { state[inputUnitGroup][select.dataset.unit] = select.value; updateResults(); };
     });
 
     updateResults();

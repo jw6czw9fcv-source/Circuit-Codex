@@ -23,7 +23,7 @@ const DOMAINS = [
           { name: "Voltage divider", calc: "voltage-divider" },
           { name: "Current divider", calc: "current-divider" },
           { name: "Wheatstone bridge", calc: "wheatstone-bridge" },
-          { name: "Delta-Y transform" },
+          { name: "Delta-Y transform", calc: "delta-y" },
           { name: "NTC/PTC thermistor" },
         ],
       },
