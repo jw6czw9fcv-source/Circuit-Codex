@@ -213,6 +213,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rl-filter") return renderRlFilter(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
+  if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -8887,6 +8888,208 @@ function renderDebounceRc(domain, tool, favId) {
       document.getElementById("db-margin-inc").onclick = () => { state.margin = Math.min(10, state.margin + 0.5); syncMargin(); };
       document.getElementById("db-margin-reset").onclick = () => { state.margin = 3; syncMargin(); };
     }
+
+    updateResults();
+  }
+
+  paint();
+}
+
+// ---------- Wavelength (RF) ----------
+// lambda = c / f, c exact by SI definition (299,792,458 m/s) since 1983 —
+// frequency and free-space wavelength are two names for the same thing,
+// so both fields are editable and typing either one derives the other,
+// same bidirectional pattern as the RC charge/discharge screen's
+// time/voltage pair. This is free-space only; a cable or PCB trace
+// propagates slower than c, which is exactly what a velocity factor is
+// for — that's its own future tool, not folded in here.
+const LENGTH_UNITS = { mm: 1e-3, cm: 1e-2, m: 1, km: 1e3 };
+const ITU_BANDS = [
+  { name: "VLF", full: "Very Low Frequency", lo: 3e3, hi: 30e3 },
+  { name: "LF", full: "Low Frequency", lo: 30e3, hi: 300e3 },
+  { name: "MF", full: "Medium Frequency", lo: 300e3, hi: 3e6 },
+  { name: "HF", full: "High Frequency", lo: 3e6, hi: 30e6 },
+  { name: "VHF", full: "Very High Frequency", lo: 30e6, hi: 300e6 },
+  { name: "UHF", full: "Ultra High Frequency", lo: 300e6, hi: 3e9 },
+  { name: "SHF", full: "Super High Frequency", lo: 3e9, hi: 30e9 },
+  { name: "EHF", full: "Extremely High Frequency", lo: 30e9, hi: 300e9 },
+];
+const WAVELENGTH_REFS = [
+  { label: "AM broadcast (~1 MHz)", hz: 1e6 },
+  { label: "FM broadcast (~100 MHz)", hz: 100e6 },
+  { label: "Wi-Fi / Bluetooth / microwave oven (2.4 GHz)", hz: 2.4e9 },
+  { label: "GPS L1 (1575.42 MHz)", hz: 1575.42e6 },
+  { label: "Wi-Fi 5 GHz band", hz: 5e9 },
+];
+
+function renderWavelength(domain, tool, favId) {
+  const C = 299792458; // m/s
+
+  const state = { freqVal: 100, freqUnit: "MHz", waveVal: C / 1e8, waveUnit: "m" };
+
+  function freqSI() { return state.freqVal * FREQ_UNITS[state.freqUnit]; }
+  function waveSI() { return state.waveVal * LENGTH_UNITS[state.waveUnit]; }
+
+  function bandFor(hz) {
+    if (!isFinite(hz) || hz <= 0) return null;
+    return ITU_BANDS.find((b) => hz >= b.lo && hz < b.hi) || null;
+  }
+
+  // Best-fitting unit for a raw Hz value, same cascade the filter screens
+  // use, so jumping to a band lands on the unit that reads the way typing
+  // it would.
+  function pickFreqUnit(hz) {
+    for (const u of ["GHz", "MHz", "kHz"]) { if (Math.abs(hz) >= FREQ_UNITS[u]) return u; }
+    return "Hz";
+  }
+
+  // The geometric mean of a band's edges — centered on it on the log scale
+  // every one of these bands is defined by, so it lands solidly inside
+  // instead of right on a boundary the band itself doesn't include. Only
+  // touches state; the caller repaints, since the frequency field, its
+  // unit select, and the picker's own highlighted chip all need to move
+  // together.
+  function jumpToBand(name) {
+    const band = ITU_BANDS.find((b) => b.name === name);
+    if (!band) return;
+    const hz = Math.sqrt(band.lo * band.hi);
+    const unit = pickFreqUnit(hz);
+    state.freqVal = hz / FREQ_UNITS[unit];
+    state.freqUnit = unit;
+    const wl = C / hz;
+    state.waveVal = wl / LENGTH_UNITS[state.waveUnit];
+  }
+
+  // One full sine cycle sampled into a smooth curve, with lambda
+  // dimensioned underneath — illustrative only, not to scale with the
+  // actual entered frequency.
+  function diagram() {
+    const wire = "#5A6169";
+    const pts = [];
+    const samples = 40;
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const x = 20 + t * 180;
+      const y = 40 - 25 * Math.sin(t * 2 * Math.PI);
+      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    }
+    return `<svg width="220" height="108" viewBox="0 0 220 108" fill="none">
+      <path d="M20,40 H200" stroke="${wire}" stroke-width="1" stroke-dasharray="2 3"/>
+      <polyline points="${pts.join(" ")}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="M20,84 V90 M20,87 H200 M200,84 V90" stroke="${wire}" stroke-width="1.2"/>
+      <text x="110" y="104" fill="#8A9099" font-size="12" font-weight="600" text-anchor="middle">λ</text>
+    </svg>`;
+  }
+
+  function updateResults() {
+    const f = freqSI();
+    const wl = waveSI();
+    const T = f > 0 ? 1 / f : NaN;
+    const band = bandFor(f);
+    app.querySelector('[data-res="period"]').textContent = isFinite(T) ? siFormat(T, "s") : "—";
+    app.querySelector('[data-res="band"]').textContent = band ? `${band.name} — ${band.full}` : "—";
+    app.querySelector('[data-res="bandrange"]').textContent = band ? `${siFormat(band.lo, "Hz")} – ${siFormat(band.hi, "Hz")}` : "";
+    app.querySelector('[data-res="err"]').textContent = (f > 0 && isFinite(wl)) ? "" : "Frequency and wavelength must be greater than zero.";
+    app.querySelectorAll("#wl-band-picker .filter-btn").forEach((btn) => {
+      const isActive = !!band && btn.dataset.band === band.name;
+      btn.classList.toggle("active", isActive);
+      btn.style.background = isActive ? domain.bg : "";
+      btn.style.color = isActive ? domain.color : "";
+    });
+  }
+
+  function fromFreq() {
+    const f = freqSI();
+    if (!(f > 0)) { updateResults(); return; }
+    const wl = C / f;
+    state.waveVal = wl / LENGTH_UNITS[state.waveUnit];
+    const waveField = document.getElementById("wl-wave");
+    if (waveField && document.activeElement !== waveField) waveField.value = trim(state.waveVal);
+    updateResults();
+  }
+
+  function fromWave() {
+    const wl = waveSI();
+    if (!(wl > 0)) { updateResults(); return; }
+    const f = C / wl;
+    state.freqVal = f / FREQ_UNITS[state.freqUnit];
+    const freqField = document.getElementById("wl-freq");
+    if (freqField && document.activeElement !== freqField) freqField.value = trim(state.freqVal);
+    updateResults();
+  }
+
+  function paint() {
+    const currentBand = bandFor(freqSI());
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "λ = c / f — free-space wavelength")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Either one — edit whichever you know</div>
+      <div class="field">
+        <label>Frequency</label>
+        <div class="field-row">
+          <input type="number" inputmode="decimal" step="any" id="wl-freq" value="${trim(state.freqVal)}" />
+          <select id="wl-freq-unit">${Object.keys(FREQ_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Wavelength</label>
+        <div class="field-row">
+          <input type="number" inputmode="decimal" step="any" id="wl-wave" value="${trim(state.waveVal)}" />
+          <select id="wl-wave-unit">${Object.keys(LENGTH_UNITS).map((u) => `<option ${state.waveUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">Period (T = 1/f)</span></div>
+        <div class="result-value"><span class="num" data-res="period"></span></div>
+      </div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">ITU radio band</span></div>
+        <div class="result-value"><span class="num" data-res="band"></span></div>
+        <div class="result-sub" data-res="bandrange"></div>
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Jump to a band</div>
+      <div class="filter-row" id="wl-band-picker">
+        ${ITU_BANDS.map((b) => `
+          <button class="filter-btn ${currentBand && currentBand.name === b.name ? "active" : ""}" data-band="${b.name}"
+                  style="${currentBand && currentBand.name === b.name ? `background:${domain.bg};color:${domain.color};` : ""}">${b.name}</button>`).join("")}
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Common frequencies, for reference</div>
+      <div class="truth-table" style="--tt-cols:2">
+        ${WAVELENGTH_REFS.map((r) => `<div class="tt-row"><span>${r.label}</span><span class="tt-out">${siFormat(C / r.hz, "m")}</span></div>`).join("")}
+      </div>
+
+      ${formulaSection(
+        ["λ = c / f", "f = c / λ", "c = 299,792,458 m/s (exact, by SI definition)"],
+        "Free-space only. A cable or PCB trace propagates slower than c — that ratio is the velocity factor, its own separate calculator, not folded into this one."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, null);
+
+    const freqField = document.getElementById("wl-freq");
+    const freqUnitField = document.getElementById("wl-freq-unit");
+    const waveField = document.getElementById("wl-wave");
+    const waveUnitField = document.getElementById("wl-wave-unit");
+
+    freqField.oninput = () => { const v = parseFloat(freqField.value); if (isFinite(v)) { state.freqVal = v; fromFreq(); } };
+    freqUnitField.onchange = (e) => { state.freqUnit = e.target.value; fromWave(); };
+    waveField.oninput = () => { const v = parseFloat(waveField.value); if (isFinite(v)) { state.waveVal = v; fromWave(); } };
+    waveUnitField.onchange = (e) => { state.waveUnit = e.target.value; fromFreq(); };
+
+    document.getElementById("wl-band-picker").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      jumpToBand(btn.dataset.band);
+      paint();
+    });
 
     updateResults();
   }

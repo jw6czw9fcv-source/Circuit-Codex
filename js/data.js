@@ -118,7 +118,7 @@ const DOMAINS = [
     bg: "#3B1E22",
     icon: "antenna",
     sections: [
-      { title: "Antennas & propagation", tools: [{ name: "Path loss" }, { name: "Wavelength" }, { name: "Beamwidth & gain" }, { name: "Fresnel zone" }, { name: "Antenna length (dipole/monopole)" }] },
+      { title: "Antennas & propagation", tools: [{ name: "Path loss" }, { name: "Wavelength", calc: "wavelength" }, { name: "Beamwidth & gain" }, { name: "Fresnel zone" }, { name: "Antenna length (dipole/monopole)" }] },
       { title: "Transmission lines", tools: [{ name: "VSWR / Return loss" }, { name: "Velocity factor" }, { name: "Coax impedance" }, { name: "Smith chart matching" }, { name: "Skin depth" }, { name: "Coax cable standards" }] },
       { title: "Power & gain", tools: [{ name: "Cascade gain, noise figure, P1dB" }, { name: "Intercept point" }, { name: "Intermodulation" }, { name: "Attenuator (Pi, T, bridged-T)" }, { name: "Power divider" }] },
       { title: "Mixing & conversion", tools: [{ name: "IF calculator" }, { name: "Image frequency" }] },
