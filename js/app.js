@@ -9278,8 +9278,12 @@ function renderDeltaY(domain, tool, favId) {
         </div>`).join("")}
 
       ${formulaSection(
-        ["Ra = Rab·Rca / (Rab+Rbc+Rca)   Rb = Rab·Rbc / (Rab+Rbc+Rca)   Rc = Rbc·Rca / (Rab+Rbc+Rca)",
-         "Rab = (Ra·Rb+Rb·Rc+Rc·Ra) / Rc   Rbc = (…) / Ra   Rca = (…) / Rb"],
+        ["Ra = Rab·Rca / (Rab+Rbc+Rca)",
+         "Rb = Rab·Rbc / (Rab+Rbc+Rca)",
+         "Rc = Rbc·Rca / (Rab+Rbc+Rca)",
+         "Rab = (Ra·Rb + Rb·Rc + Rc·Ra) / Rc",
+         "Rbc = (Ra·Rb + Rb·Rc + Rc·Ra) / Ra",
+         "Rca = (Ra·Rb + Rb·Rc + Rc·Ra) / Rb"],
         "A symmetric Delta (all three sides equal) always converts to a Y a third the value, and back again at three times — the classic worked example, and the tool's own defaults. The transform is purely topological — it holds for any impedance (add reactance from an L or C, not just plain resistance), but this calculator only works in real ohms, matching where it lives under Resistors."
       )}
       ${calcFooter()}
