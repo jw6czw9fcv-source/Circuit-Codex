@@ -8914,18 +8914,33 @@ const ITU_BANDS = [
   { name: "SHF", full: "Super High Frequency", lo: 3e9, hi: 30e9 },
   { name: "EHF", full: "Extremely High Frequency", lo: 30e9, hi: 300e9 },
 ];
+// AM/FM are real allocated bands, not single frequencies — shown as their
+// actual range (North America: 525-1705 kHz, 88-108 MHz) with the
+// wavelength range that range maps to, rather than one approximate point.
 const WAVELENGTH_REFS = [
-  { label: "AM broadcast (~1 MHz)", hz: 1e6 },
-  { label: "FM broadcast (~100 MHz)", hz: 100e6 },
-  { label: "Wi-Fi / Bluetooth / microwave oven (2.4 GHz)", hz: 2.4e9 },
-  { label: "GPS L1 (1575.42 MHz)", hz: 1575.42e6 },
-  { label: "Wi-Fi 5 GHz band", hz: 5e9 },
+  { label: "AM broadcast", loHz: 525e3, hiHz: 1705e3 },
+  { label: "FM broadcast", loHz: 88e6, hiHz: 108e6 },
+  { label: "Wi-Fi 2.4 GHz (shared with Bluetooth, microwave ovens)", hz: 2.4e9 },
+  { label: "Wi-Fi 5 GHz", hz: 5e9 },
+  { label: "Wi-Fi 6 GHz (Wi-Fi 6E / 7)", loHz: 5.925e9, hiHz: 7.125e9 },
+  { label: "GPS L1", hz: 1575.42e6, digits: 6 }, // the .42 is the point of citing this one
 ];
 
 function renderWavelength(domain, tool, favId) {
   const C = 299792458; // m/s
 
   const state = { freqVal: 100, freqUnit: "MHz", waveVal: C / 1e8, waveUnit: "m" };
+
+  // Drop the low end's unit only when it actually matches the high end's —
+  // AM's range spans kHz to MHz, where dropping it would misstate the low
+  // number's magnitude, so that one keeps both units explicit.
+  function siRange(lo, hi, unit) {
+    const loStr = siFormat(lo, unit);
+    const hiStr = siFormat(hi, unit);
+    const loUnit = loStr.split(" ")[1];
+    const hiUnit = hiStr.split(" ")[1];
+    return loUnit === hiUnit ? `${loStr.split(" ")[0]}–${hiStr}` : `${loStr}–${hiStr}`;
+  }
 
   function freqSI() { return state.freqVal * FREQ_UNITS[state.freqUnit]; }
   function waveSI() { return state.waveVal * LENGTH_UNITS[state.waveUnit]; }
@@ -9062,7 +9077,16 @@ function renderWavelength(domain, tool, favId) {
 
       <div class="section-label" style="color:#8FC1F5">Common frequencies, for reference</div>
       <div class="truth-table" style="--tt-cols:2">
-        ${WAVELENGTH_REFS.map((r) => `<div class="tt-row"><span>${r.label}</span><span class="tt-out">${siFormat(C / r.hz, "m")}</span></div>`).join("")}
+        ${WAVELENGTH_REFS.map((r) => {
+          const isRange = r.loHz && r.hiHz;
+          const freqText = isRange ? siRange(r.loHz, r.hiHz, "Hz") : siFormat(r.hz, "Hz", r.digits || 4);
+          const wlText = isRange ? siRange(C / r.hiHz, C / r.loHz, "m") : siFormat(C / r.hz, "m");
+          // The frequency detail always sits on its own line rather than
+          // wrapping wherever it happens to run out of room next to the
+          // label — a fixed second line reads clean at any length.
+          const freqLine = r.showFreq === false ? "" : `<div style="color:var(--text-muted);font-size:11px;margin-top:1px;">${freqText}</div>`;
+          return `<div class="tt-row"><span>${r.label}${freqLine}</span><span class="tt-out">${wlText}</span></div>`;
+        }).join("")}
       </div>
 
       ${formulaSection(

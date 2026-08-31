@@ -93,6 +93,7 @@ Debounce / RC timing · **Wavelength (RF)**
 - [ ] SAW filter
 - [ ] RF diode types
 - [ ] Microwave bands & frequencies
+- [ ] Amateur radio bands
 - [ ] Linear regulator (LDO)
 - [ ] Zener voltage stabilization
 - [ ] Zener + transistor stabilization

@@ -123,7 +123,7 @@ const DOMAINS = [
       { title: "Power & gain", tools: [{ name: "Cascade gain, noise figure, P1dB" }, { name: "Intercept point" }, { name: "Intermodulation" }, { name: "Attenuator (Pi, T, bridged-T)" }, { name: "Power divider" }] },
       { title: "Mixing & conversion", tools: [{ name: "IF calculator" }, { name: "Image frequency" }] },
       { title: "RF components", tools: [{ name: "Common mode choke" }, { name: "Balun" }, { name: "SAW filter" }, { name: "RF diode types" }] },
-      { title: "Reference", tools: [{ name: "Microwave bands & frequencies" }] },
+      { title: "Reference", tools: [{ name: "Microwave bands & frequencies" }, { name: "Amateur radio bands" }] },
     ],
   },
   {
