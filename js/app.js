@@ -3801,9 +3801,9 @@ function renderSiUnits(domain, tool, favId) {
   paint();
 }
 
-// ---------- DEC / HEX / BIN conversion ----------
-const BASE_RADIX = { dec: 10, hex: 16, bin: 2 };
-const BASE_CHARS = { dec: /[^0-9]/g, hex: /[^0-9a-fA-F]/g, bin: /[^01]/g };
+// ---------- DEC / HEX / OCT / BIN conversion ----------
+const BASE_RADIX = { dec: 10, hex: 16, oct: 8, bin: 2 };
+const BASE_CHARS = { dec: /[^0-9]/g, hex: /[^0-9a-fA-F]/g, oct: /[^0-7]/g, bin: /[^01]/g };
 
 // Binary reads better broken into nibbles — pad on the left so the grouping
 // lines up from the right, the same way you'd read it off a byte boundary.
@@ -3825,6 +3825,7 @@ function renderDecHexBin(domain, tool, favId) {
     const ok = isFinite(v) && !isNaN(v);
     app.querySelector('[data-res="dec"]').textContent = ok ? v.toString(10) : "—";
     app.querySelector('[data-res="hex"]').textContent = ok ? v.toString(16).toUpperCase() : "—";
+    app.querySelector('[data-res="oct"]').textContent = ok ? v.toString(8) : "—";
     app.querySelector('[data-res="bin"]').textContent = ok ? groupNibbles(v.toString(2)) : "—";
   }
 
@@ -3843,9 +3844,9 @@ function renderDecHexBin(domain, tool, favId) {
     const ok = isFinite(v) && !isNaN(v);
 
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Enter a value in one base, read it in all three")}
+      ${calcHeader(tool, favId, "Enter a value in one base, read it in all four")}
 
-      ${pillRow([["dec", "DEC"], ["hex", "HEX"], ["bin", "BIN"]], state.base, domain.bg)}
+      ${pillRow([["dec", "DEC"], ["hex", "HEX"], ["oct", "OCT"], ["bin", "BIN"]], state.base, domain.bg)}
 
       <div class="field">
         <label>Value (${state.base.toUpperCase()})</label>
@@ -3862,14 +3863,19 @@ function renderDecHexBin(domain, tool, favId) {
         <div class="result-value"><span class="num" data-res="hex">${ok ? v.toString(16).toUpperCase() : "—"}</span></div>
       </div>
 
+      <div class="section-label" style="color:#5DCAA5">Octal</div>
+      <div class="result-field">
+        <div class="result-value"><span class="num" data-res="oct">${ok ? v.toString(8) : "—"}</span></div>
+      </div>
+
       <div class="section-label" style="color:#5DCAA5">Binary</div>
       <div class="result-field">
         <div class="result-value" style="font-size:22px;"><span class="num" data-res="bin">${ok ? groupNibbles(v.toString(2)) : "—"}</span></div>
       </div>
 
       ${formulaSection(
-        ["Decimal: each digit × 10ⁿ", "Hexadecimal: each digit × 16ⁿ (a-f = 10-15)", "Binary: each digit × 2ⁿ — one hex digit is exactly 4 binary digits"],
-        "Hex is really just binary written in groups of 4, which is why register and memory values are usually shown in hex rather than decimal."
+        ["Decimal: each digit × 10ⁿ", "Hexadecimal: each digit × 16ⁿ (a-f = 10-15)", "Octal: each digit × 8ⁿ (0-7)", "Binary: each digit × 2ⁿ — one hex digit is exactly 4 binary digits, one octal digit is exactly 3"],
+        "Hex groups bits by 4, which is why registers and memory are shown in hex, not decimal. Octal groups by 3 — mostly a Unix file-permissions thing (chmod 755), not electronics."
       )}
       ${calcFooter("")}
     `;
@@ -9627,6 +9633,14 @@ const UNIT_CONVERTER_CATEGORIES = {
     ["wh", 10],
     ["1 Wh = 3600 J", "1 kWh = 1000 Wh"],
     "Wh/kWh is how battery capacity is usually rated once you go past mAh — see Battery runtime for the mAh↔Wh conversion at a given voltage."
+  ),
+  data: linearCategory(
+    "Data", "Data",
+    [["kb", "kB"], ["kib", "KiB"], ["mb", "MB"], ["mib", "MiB"], ["gb", "GB"], ["gib", "GiB"]],
+    { bit: 1, byte: 8, kb: 8000, kib: 8192, mb: 8e6, mib: 8388608, gb: 8e9, gib: 8589934592 },
+    ["kib", 64],
+    ["1 byte = 8 bits", "1 kB = 1000 B, 1 KiB = 1024 B"],
+    "Decimal (kB/MB/GB, ×1000) is how storage is marketed; binary (KiB/MiB/GiB, ×1024) is how RAM and flash datasheets actually work — the gap between the two grows at each step up."
   ),
   time: linearCategory(
     "Time", "Time",

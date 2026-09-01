@@ -11,7 +11,7 @@ Resistor series/parallel · Voltage divider · Current divider · Wheatstone
 bridge · Capacitor series/parallel · Ohm's law · Kirchhoff's laws · Formula
 search · SI prefix converter · Scientific ↔ engineering notation ·
 Percent tolerance / error · Standard & Scientific Calculators ·
-Physical constants · SI-Units · DEC / HEX / BIN conversion ·
+Physical constants · SI-Units · DEC / HEX / OCT / BIN conversion ·
 ASCII table · Wire gauge (AWG/SWG) · Cable resistance / voltage drop ·
 Wire & cable colors (merged with the former "Wire color code by
 rating" — one screen covers AC mains (IEC, US, Canada), US three-phase
@@ -33,7 +33,8 @@ Battery types & sizes · Button cells · Capacitor charge/discharge (RC) ·
 Capacitor stored energy · RC filter · RL filter · PWM (duty cycle) ·
 Debounce / RC timing · Wavelength (RF) · Delta-Y transform ·
 NTC/PTC thermistor · **Unit converter** (Temperature, Length, Area,
-Volume, Mass, Speed, Force, Pressure, Energy, Time, Angle)
+Volume, Mass, Speed, Force, Pressure, Energy, Data, Time, Angle) ·
+**Octal added to DEC / HEX / BIN conversion**
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
