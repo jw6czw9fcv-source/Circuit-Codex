@@ -217,6 +217,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "delta-y") return renderDeltaY(domain, tool, favId);
   if (calcId === "thermistor") return renderThermistor(domain, tool, favId);
   if (calcId === "unit-converter") return renderUnitConverter(domain, tool, favId);
+  if (calcId === "ppm-converter") return renderPpmConverter(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -9722,6 +9723,69 @@ function renderUnitConverter(domain, tool, favId) {
       const field = document.getElementById(`uc-${unit}`);
       field.oninput = () => applyUnit(unit, parseFloat(field.value));
     });
+  }
+
+  paint();
+}
+
+function renderPpmConverter(domain, tool, favId) {
+  const state = { tolPpm: 20, base: 16000000 };
+
+  function compute() {
+    const deviation = state.base * (state.tolPpm / 1e6);
+    const pct = state.tolPpm / 10000;
+    return { deviation, pct, min: state.base - deviation, max: state.base + deviation };
+  }
+
+  // trim()'s 4 sig figs rounds min/max straight back to the base value at
+  // ppm scale (16000000 ± 320 both read "16000000") — the offset needs far
+  // more precision to survive display than the deviation figure itself does.
+  function precise(n) {
+    if (!isFinite(n)) return "—";
+    return Number(n.toPrecision(10)).toString();
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="dev"]').textContent = `± ${trim(r.deviation)}`;
+    app.querySelector('[data-res="range"]').textContent = `${precise(r.min)} – ${precise(r.max)}`;
+    app.querySelector('[data-res="pct"]').textContent = `= ${trim(r.pct)} %`;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "ppm tolerance applied to a value")}
+
+      <div class="section-label" style="color:#8FC1F5">Tolerance & base value</div>
+      <div class="field">
+        <label>Tolerance (ppm)</label>
+        <input id="ppm-tol" type="number" inputmode="decimal" step="any" value="${state.tolPpm}" />
+      </div>
+      <div class="field">
+        <label>Base value (any unit — Hz, V, Ω, ...)</label>
+        <input id="ppm-base" type="number" inputmode="decimal" step="any" value="${state.base}" />
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Deviation</div>
+      <div class="result-field">
+        <div class="result-head"><span class="label">± deviation from base</span></div>
+        <div class="result-value"><span class="num" data-res="dev">± ${trim(r.deviation)}</span></div>
+        <div class="result-sub" data-res="range">${precise(r.min)} – ${precise(r.max)}</div>
+        <div class="result-sub" data-res="pct" style="font-size:11px;color:var(--text-muted);">= ${trim(r.pct)} %</div>
+      </div>
+
+      ${formulaSection(
+        ["deviation = base × (ppm / 1,000,000)", "range = base ± deviation", "% = ppm / 10,000"],
+        "A 16 MHz crystal rated ±20 ppm can sit anywhere within ±320 Hz of nominal — same math as a component's percent tolerance, just at a finer scale ppm is built for. Works for any quantity: enter the base in Hz, V, Ω, whatever the datasheet's ppm spec is against."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    document.getElementById("ppm-tol").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.tolPpm = v; refresh(); } };
+    document.getElementById("ppm-base").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.base = v; refresh(); } };
   }
 
   paint();

@@ -196,7 +196,7 @@ const DOMAINS = [
           { name: "dB / dBm / dBu / dBV conversion", calc: "db-absolute" },
         ],
       },
-      { title: "Converters", tools: [{ name: "Unit converter", calc: "unit-converter" }, { name: "PPM converter" }] },
+      { title: "Converters", tools: [{ name: "Unit converter", calc: "unit-converter" }, { name: "PPM converter", calc: "ppm-converter" }] },
       { title: "Signal & test", tools: [{ name: "Signal generator" }, { name: "Two-tone generator" }, { name: "Oscilloscope" }, { name: "Frequency counter" }] },
       {
         title: "Reference",
