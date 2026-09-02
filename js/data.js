@@ -74,7 +74,7 @@ const DOMAINS = [
     icon: "transistor",
     sections: [
       { title: "Diodes", tools: [{ name: "Forward voltage / biasing", calc: "diode-biasing" }, { name: "Zener regulation" }, { name: "LED series resistor", calc: "led-series-resistor" }] },
-      { title: "Transistors (BJT)", tools: [{ name: "Biasing (voltage divider bias)", calc: "transistor-bias" }, { name: "NPN/PNP as a switch" }, { name: "Example calculation (hFE, IC)" }] },
+      { title: "Transistors (BJT)", tools: [{ name: "Biasing (voltage divider bias)", calc: "transistor-bias" }, { name: "NPN/PNP as a switch", calc: "transistor-switch" }, { name: "Example calculation (hFE, IC)" }] },
       { title: "FET / MOSFET / IGBT", tools: [{ name: "Biasing" }, { name: "Switching calculation" }] },
       { title: "Rectifiers", tools: [{ name: "Half-wave" }, { name: "Full-wave (bridge)" }, { name: "Full-wave with center tap" }, { name: "Half-wave with capacitor (ripple)" }] },
       { title: "Thyristors & TRIAC", tools: [{ name: "Firing angle basics" }] },

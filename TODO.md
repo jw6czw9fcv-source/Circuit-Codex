@@ -40,7 +40,10 @@ equivalent % as a small annotation) · **Transistor biasing
 (voltage divider bias)** (NPN/PNP self-bias Q-point: Ib, Ic, Ie,
 Vb, Ve, Vc, Vce, with active/saturation/cutoff detection —
 standard BJT symbol, symmetric R1/Rc and R2/Re layout, continuous
-traces with no gaps at any lead/zigzag junction)
+traces with no gaps at any lead/zigzag junction) ·
+**NPN/PNP as a switch** (low-side NPN vs high-side PNP — genuinely
+different topologies, not just relabeled; Ib, Ic, Ie, Vce, and a
+base-drive overdrive factor with a 5–10× design-target note)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -48,7 +51,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] NPN/PNP as a switch
 - [ ] Transistor example calculation (hFE, IC)
 - [ ] FET/MOSFET/IGBT biasing
 - [ ] FET/MOSFET/IGBT switching calculation

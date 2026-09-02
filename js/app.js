@@ -219,6 +219,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "unit-converter") return renderUnitConverter(domain, tool, favId);
   if (calcId === "ppm-converter") return renderPpmConverter(domain, tool, favId);
   if (calcId === "transistor-bias") return renderTransistorBias(domain, tool, favId);
+  if (calcId === "transistor-switch") return renderTransistorSwitch(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -10082,6 +10083,254 @@ function renderTransistorBias(domain, tool, favId) {
     document.getElementById("tb-hfe").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.hfe = v; refresh(); } };
 
     [["tb-vcc-unit", "vccUnit"], ["tb-vbe-unit", "vbeUnit"], ["tb-r1-unit", "r1Unit"], ["tb-r2-unit", "r2Unit"], ["tb-rc-unit", "rcUnit"], ["tb-re-unit", "reUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+// ---------- NPN/PNP as a switch ----------
+function renderTransistorSwitch(domain, tool, favId) {
+  const state = {
+    mode: "npn",
+    vcc: 12, vccUnit: "V",
+    vin: 3.3, vinUnit: "V",
+    vbe: 0.7, vbeUnit: "V",
+    hfe: 100,
+    rb: 2.2, rbUnit: "kΩ",
+    rload: 400, rloadUnit: "Ω",
+  };
+
+  const R_NAMES = ["rb", "rload"];
+
+  function si(name) {
+    const units = R_NAMES.includes(name) ? OHM_UNITS : VOLT_UNITS;
+    return state[name] * units[state[name + "Unit"]];
+  }
+
+  // Low-side (NPN) vs high-side (PNP) switch — genuinely different
+  // topologies, not just a relabeling: an NPN's emitter has to sit at the
+  // LOW end of the swing to turn on with a positive drive, so Rload sits
+  // between Vcc and the collector and the emitter goes straight to ground.
+  // A PNP needs its emitter at the HIGH end, so it's the mirror image —
+  // emitter straight to Vcc, Rload between the collector and ground. Only
+  // the load's position swaps; Ic(sat) and the rest of the math is the
+  // same either way once "the load" is just "the resistor between Vcc and
+  // ground, wherever it sits."
+  function compute() {
+    const vcc = si("vcc"), vin = si("vin"), vbe = si("vbe"), hfe = state.hfe;
+    const rb = si("rb"), rload = si("rload");
+    const isPnp = state.mode === "pnp";
+
+    if (!(vcc > 0) || !(rb > 0) || !(rload > 0) || !(hfe > 0)) {
+      return { problem: "Vcc, Rb, Rload, and hFE must be greater than zero." };
+    }
+
+    const vceSat = 0.2;
+    const driveV = isPnp ? vcc - vin - vbe : vin - vbe;
+    const ib = Math.max(0, driveV / rb);
+    const icActive = hfe * ib;
+    const icSat = (vcc - vceSat) / rload;
+
+    let region, ic;
+    if (ib <= 0) {
+      region = "cutoff";
+      ic = 0;
+    } else if (icActive >= icSat) {
+      region = "saturation";
+      ic = icSat;
+    } else {
+      region = "active";
+      ic = icActive;
+    }
+    const ie = ib + ic;
+    const vce = region === "cutoff" ? vcc : region === "saturation" ? vceSat : vcc - ic * rload;
+    const overdrive = ib > 0 && icSat > 0 ? icActive / icSat : 0;
+
+    return { problem: "", region, ib, ic, ie, vce, overdrive };
+  }
+
+  // Unlike the biasing calculator, cutoff and saturation are the two
+  // GOOD states here (that's the whole point of a switch) — "active" is
+  // the one to flag, since it means neither fully off nor fully on.
+  function regionInfo(region) {
+    if (region === "saturation") return { label: "ON — saturated", color: "var(--result-text)", bg: "var(--result-border)" };
+    if (region === "cutoff") return { label: "OFF — cutoff", color: "var(--text-secondary)", bg: "var(--card-border)" };
+    return { label: "Partial — not fully switched", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+  }
+
+  function diagram(isPnp) {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    function arrow(x1, y1, x2, y2, inward) {
+      const t = 0.56, size = 7.5;
+      let ux = x2 - x1, uy = y2 - y1;
+      const len = Math.hypot(ux, uy);
+      ux /= len; uy /= len;
+      if (inward) { ux = -ux; uy = -uy; }
+      const px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+      const tipX = px + ux * size * 0.6, tipY = py + uy * size * 0.6;
+      const perpX = -uy, perpY = ux;
+      const b1x = px - ux * size * 0.5 + perpX * size * 0.42, b1y = py - uy * size * 0.5 + perpY * size * 0.42;
+      const b2x = px - ux * size * 0.5 - perpX * size * 0.42, b2y = py - uy * size * 0.5 - perpY * size * 0.42;
+      return `${tipX.toFixed(1)},${tipY.toFixed(1)} ${b1x.toFixed(1)},${b1y.toFixed(1)} ${b2x.toFixed(1)},${b2y.toFixed(1)}`;
+    }
+    // The branch WITHOUT Rload (straight to Vcc for PNP's emitter, straight
+    // to ground for NPN's emitter) is a plain wire the same length as any
+    // other connector trace (20px) rather than padded out to match the
+    // resistor branch — so the transistor sits closer to whichever end is
+    // just a wire, and the two modes end up different heights internally
+    // even though the overall drawing stays the same size (68+20 either
+    // way, just which end carries which length swaps).
+    const RES_LEN = 68, WIRE_LEN = 20;
+    const topLen = isPnp ? WIRE_LEN : RES_LEN;
+    const botLen = isPnp ? RES_LEN : WIRE_LEN;
+    const barTop = 8 + topLen, barBot = barTop + 32, barMid = barTop + 16;
+    const upperTapY = barTop + 10, lowerTapY = barBot - 10;
+    const groundY = barBot + botLen;
+    const arrowPts = isPnp ? arrow(104, upperTapY, 114, barTop, true) : arrow(104, lowerTapY, 114, barBot, false);
+
+    const resistorBranch = (zigStart, label, labelY) => `
+      <path d="${zig(114, zigStart)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="130" y="${labelY}" fill="${comp}" font-size="12" font-weight="600">${label}</text>`;
+    const topBranch = isPnp
+      ? `<path d="M114 8 V${barTop}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`
+      : `<path d="M114 8 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         ${resistorBranch(20, "Rload", 40)}
+         <path d="M114 56 V${barTop}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const botBranch = isPnp
+      ? `<path d="M114 ${barBot} V${barBot + 12}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         ${resistorBranch(barBot + 12, "Rload", barBot + 32)}
+         <path d="M114 ${barBot + 48} V${groundY}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`
+      : `<path d="M114 ${barBot} V${groundY}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    return `<svg width="180" height="${groundY + 20}" viewBox="0 -10 180 ${groundY + 20}" fill="none">
+      <path d="M114 8 V2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="114" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vcc</text>
+
+      ${topBranch}
+
+      <path d="M104 ${barTop} V${barBot}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M104 ${upperTapY} L114 ${barTop}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M104 ${lowerTapY} L114 ${barBot}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <polygon points="${arrowPts}" fill="${comp}"/>
+      <text x="120" y="${barMid + 4}" fill="${comp}" font-size="12" font-weight="600">Q1</text>
+
+      ${botBranch}
+      <path d="M102 ${groundY} H126 M106 ${groundY + 4} H122 M110 ${groundY + 8} H118" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M104 ${barMid} H84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(barMid, 84)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="66" y="${barMid + 20}" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Rb</text>
+      <path d="M48 ${barMid} H28" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="20" y="${barMid + 4}" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const info = regionInfo(r.region);
+    return `
+      <div class="section-label" style="color:#5DCAA5">Switch state
+        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      </div>
+      <div class="eseries-grid">
+        ${cell("Ib", siFormat(r.ib, "A"))}
+        ${cell("Ic", siFormat(r.ic, "A"))}
+        ${cell("Ie", siFormat(r.ie, "A"))}
+        ${cell("Vce", siFormat(r.vce, "V"))}
+        ${cell("Overdrive", r.overdrive > 0 ? `${trim(r.overdrive)}×` : "—")}
+      </div>`;
+  }
+
+  function refresh() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
+  }
+
+  function paint() {
+    const r = compute();
+    const isPnp = state.mode === "pnp";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, isPnp ? "PNP high-side switch — Vin pulls the base low to turn on" : "NPN low-side switch — Vin pulls the base high to turn on")}
+
+      ${pillRow([["npn", "NPN"], ["pnp", "PNP"]], state.mode, domain.bg)}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram(isPnp)}</div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Vcc (load supply)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ts-vcc" value="${state.vcc}" />
+            <select id="ts-vcc-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vccUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Vin (control)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ts-vin" value="${state.vin}" />
+            <select id="ts-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Rb</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ts-rb" value="${state.rb}" />
+            <select id="ts-rb-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rbUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Rload</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ts-rload" value="${state.rload}" />
+            <select id="ts-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>hFE (β)</label>
+          <input type="number" inputmode="decimal" step="any" id="ts-hfe" value="${state.hfe}" />
+        </div>
+        <div class="field">
+          <label>Vbe</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ts-vbe" value="${state.vbe}" />
+            <select id="ts-vbe-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vbeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        isPnp
+          ? ["Ib = (Vcc − Vin − Vbe) / Rb", "Ic(sat) = (Vcc − Vce,sat) / Rload", "Overdrive = (hFE×Ib) / Ic(sat)"]
+          : ["Ib = (Vin − Vbe) / Rb", "Ic(sat) = (Vcc − Vce,sat) / Rload", "Overdrive = (hFE×Ib) / Ic(sat)"],
+        "Design target is usually 5–10× overdrive — enough spare base drive that the switch stays fully saturated even with a weaker part or a hot day, since hFE varies a lot part to part and with temperature."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+
+    [["ts-vcc", "vcc"], ["ts-vin", "vin"], ["ts-rb", "rb"], ["ts-rload", "rload"], ["ts-vbe", "vbe"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    document.getElementById("ts-hfe").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.hfe = v; refresh(); } };
+
+    [["ts-vcc-unit", "vccUnit"], ["ts-vin-unit", "vinUnit"], ["ts-rb-unit", "rbUnit"], ["ts-rload-unit", "rloadUnit"], ["ts-vbe-unit", "vbeUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
