@@ -218,6 +218,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "thermistor") return renderThermistor(domain, tool, favId);
   if (calcId === "unit-converter") return renderUnitConverter(domain, tool, favId);
   if (calcId === "ppm-converter") return renderPpmConverter(domain, tool, favId);
+  if (calcId === "transistor-bias") return renderTransistorBias(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -9786,6 +9787,303 @@ function renderPpmConverter(domain, tool, favId) {
 
     document.getElementById("ppm-tol").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.tolPpm = v; refresh(); } };
     document.getElementById("ppm-base").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.base = v; refresh(); } };
+  }
+
+  paint();
+}
+
+// ---------- Transistor biasing (voltage divider bias) ----------
+function renderTransistorBias(domain, tool, favId) {
+  const state = {
+    mode: "npn",
+    vcc: 12, vccUnit: "V",
+    vbe: 0.7, vbeUnit: "V",
+    hfe: 100,
+    r1: 47, r1Unit: "kΩ",
+    r2: 10, r2Unit: "kΩ",
+    rc: 2.2, rcUnit: "kΩ",
+    re: 1, reUnit: "kΩ",
+  };
+
+  const R_NAMES = ["r1", "r2", "rc", "re"];
+
+  function si(name) {
+    const units = R_NAMES.includes(name) ? OHM_UNITS : VOLT_UNITS;
+    return state[name] * units[state[name + "Unit"]];
+  }
+
+  // Standard self-biasing (Thevenin) analysis: R1/R2 form a voltage divider
+  // at the base, loaded by the base current — approximated with the
+  // Thevenin equivalent (Vth, Rth) rather than assuming R1/R2 carry a fixed
+  // "bleeder" current, since that assumption breaks down for low hFE.
+  //
+  // PNP is the mirror image of this same circuit: R1/R2 still set Vth off
+  // Vcc exactly the same way, but the emitter sits up near Vcc (through Re)
+  // and the collector sits down near ground (through Rc) — the opposite of
+  // NPN. Working through the loop equation for that mirrored topology lands
+  // on the exact same formula shape, just with Vth replaced by (Vcc − Vth)
+  // — so one code path covers both, rather than a separate PNP formula set.
+  function compute() {
+    const vcc = si("vcc"), vbe = si("vbe"), hfe = state.hfe;
+    const r1 = si("r1"), r2 = si("r2"), rc = si("rc"), re = si("re");
+    const isPnp = state.mode === "pnp";
+
+    if (!(vcc > 0) || !(r1 + r2 > 0) || !(hfe > 0) || rc < 0 || re < 0) {
+      return { problem: "Vcc, R1 + R2, and hFE must be greater than zero." };
+    }
+
+    const vth = vcc * r2 / (r1 + r2);
+    const rth = (r1 * r2) / (r1 + r2);
+    const vthEff = isPnp ? vcc - vth : vth;
+    const vceSat = 0.2; // typical silicon BJT saturation voltage
+
+    if (vthEff <= vbe) {
+      const ve = isPnp ? vcc : 0;
+      const vc = isPnp ? 0 : vcc;
+      return { problem: "", region: "cutoff", vth, rth, ib: 0, ic: 0, ie: 0, vb: vth, ve, vc, vce: vcc };
+    }
+
+    const ib = (vthEff - vbe) / (rth + (hfe + 1) * re);
+    const icActive = hfe * ib;
+    // Ic(sat) ignores Ib's small contribution to Ie — the standard
+    // simplification for finding whether the "active" answer above is even
+    // reachable, given Rc+Re can't support more current than this at Vcc.
+    const icSat = rc + re > 0 ? (vcc - vceSat) / (rc + re) : Infinity;
+
+    const region = icActive >= icSat ? "saturation" : "active";
+    const ic = region === "saturation" ? icSat : icActive;
+    const ie = region === "saturation" ? ic : ib + ic;
+    // Same expression computes |Vce| for NPN and |Vec| for PNP — it falls
+    // out of the mirrored loop equation the same way Ib's formula did.
+    const vce = region === "saturation" ? vceSat : vcc - ic * rc - ie * re;
+
+    let vb, ve, vc;
+    if (isPnp) {
+      ve = vcc - ie * re; // emitter near Vcc
+      vc = ic * rc;       // collector near ground
+      vb = ve - vbe;
+    } else {
+      ve = ie * re;        // emitter near ground
+      vc = vce + ve;       // = Vcc − Ic×Rc
+      vb = ve + vbe;
+    }
+
+    return { problem: "", region, vth, rth, ib, ic, ie, vb, ve, vc, vce };
+  }
+
+  function regionInfo(region, isPnp) {
+    if (region === "active") return { label: "Active region", color: "var(--result-text)", bg: "var(--result-border)" };
+    if (region === "saturation") return { label: "Saturated — not a usable linear bias point", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+    return { label: `Cutoff — Vth ${isPnp ? "≥ Vcc − Vbe" : "≤ Vbe"}, transistor is off`, color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+  }
+
+  // Same 6-peak ANSI/IEEE 315 zigzag body used everywhere else in the app —
+  // scoped locally here since every diagram draws its own copy rather than
+  // sharing one helper. Generously spaced on purpose: a real schematic gives
+  // each component its own clear run of wire rather than stacking parts
+  // edge to edge.
+  function diagram(isPnp) {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    // Arrow sits partway along the emitter lead. NPN current flows OUT of
+    // the emitter (arrow points away from the base); PNP flows IN (arrow
+    // points at the base) — the one visual difference between the two
+    // symbols, computed here rather than hand-picked per mode.
+    function arrow(x1, y1, x2, y2, inward) {
+      const t = 0.56, size = 7.5;
+      let ux = x2 - x1, uy = y2 - y1;
+      const len = Math.hypot(ux, uy);
+      ux /= len; uy /= len;
+      if (inward) { ux = -ux; uy = -uy; }
+      const px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+      const tipX = px + ux * size * 0.6, tipY = py + uy * size * 0.6;
+      const perpX = -uy, perpY = ux;
+      const b1x = px - ux * size * 0.5 + perpX * size * 0.42, b1y = py - uy * size * 0.5 + perpY * size * 0.42;
+      const b2x = px - ux * size * 0.5 - perpX * size * 0.42, b2y = py - uy * size * 0.5 - perpY * size * 0.42;
+      return `${tipX.toFixed(1)},${tipY.toFixed(1)} ${b1x.toFixed(1)},${b1y.toFixed(1)} ${b2x.toFixed(1)},${b2y.toFixed(1)}`;
+    }
+    // Top lead/zigzag is the collector for NPN (up to Rc→Vcc) but the
+    // emitter for PNP (up to Re→Vcc); bottom is the reverse. Everything
+    // else in the drawing — R1/R2, the rails, the ground symbols — is
+    // identical between the two.
+    const topLabel = isPnp ? "Re" : "Rc";
+    const botLabel = isPnp ? "Rc" : "Re";
+    const arrowPts = isPnp ? arrow(104, 86, 114, 76, true) : arrow(104, 98, 114, 108, false);
+    // Every resistor gets a visible grey lead-in and lead-out — the same
+    // kind of plain trace already used for the ground drops — on BOTH
+    // ends, connecting it to whatever's next (rail, node, ground, or a
+    // transistor lead). No zigzag ever touches another element directly;
+    // there's always a short grey run between them, same as a real
+    // component lead. The two colors never share one <path>. R1 and Rc
+    // are full mirrors — same top stub, same zigzag, same 20px bottom
+    // stub — so the node and the collector lead's tip land at the same
+    // height (76); the base bar's overhang is sized so its top edge sits
+    // at that same 76, letting the horizontal base wire reach it flat.
+    return `<svg width="210" height="196" viewBox="0 -10 210 196" fill="none">
+      <path d="M62 8 H114" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M88 8 V2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="88" cy="8" r="3" fill="none" stroke="${wire}" stroke-width="1.5"/>
+      <text x="88" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vcc</text>
+
+      <path d="M62 8 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(62, 20)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="42" y="40" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">R1</text>
+      <path d="M62 56 V92" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="62" cy="92" r="2.6" fill="${wire}"/>
+      <path d="M62 92 H104" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M62 92 V120" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(62, 120)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="42" y="140" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">R2</text>
+      <path d="M62 156 V176" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M50 176 H74 M54 180 H70 M58 184 H66" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M104 76 V108" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M104 86 L114 76" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M104 98 L114 108" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <polygon points="${arrowPts}" fill="${comp}"/>
+      <text x="120" y="94" fill="${comp}" font-size="12" font-weight="600">Q1</text>
+
+      <path d="M114 8 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(114, 20)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M114 56 V76" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="130" y="40" fill="${comp}" font-size="12" font-weight="600">${topLabel}</text>
+
+      <path d="M114 108 V120" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(114, 120)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="130" y="140" fill="${comp}" font-size="12" font-weight="600">${botLabel}</text>
+      <path d="M114 156 V176" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M102 176 H126 M106 180 H122 M110 184 H118" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r, isPnp) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const info = regionInfo(r.region, isPnp);
+    return `
+      <div class="section-label" style="color:#5DCAA5">Operating point (Q-point)
+        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      </div>
+      <div class="eseries-grid">
+        ${cell("Ib", siFormat(r.ib, "A"))}
+        ${cell("Ic", siFormat(r.ic, "A"))}
+        ${cell("Ie", siFormat(r.ie, "A"))}
+        ${cell("Vb", siFormat(r.vb, "V"))}
+        ${cell("Ve", siFormat(r.ve, "V"))}
+        ${cell("Vc", siFormat(r.vc, "V"))}
+        ${cell(isPnp ? "Vec" : "Vce", siFormat(r.vce, "V"))}
+      </div>`;
+  }
+
+  function refresh() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute(), state.mode === "pnp");
+  }
+
+  function paint() {
+    const r = compute();
+    const isPnp = state.mode === "pnp";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, isPnp ? "PNP voltage-divider (self) bias — DC operating point" : "NPN voltage-divider (self) bias — DC operating point")}
+
+      ${pillRow([["npn", "NPN"], ["pnp", "PNP"]], state.mode, domain.bg)}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram(isPnp)}</div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Vcc</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tb-vcc" value="${state.vcc}" />
+            <select id="tb-vcc-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vccUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Vbe</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tb-vbe" value="${state.vbe}" />
+            <select id="tb-vbe-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vbeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>hFE (β)</label>
+          <input type="number" inputmode="decimal" step="any" id="tb-hfe" value="${state.hfe}" />
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>R1 — top</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tb-r1" value="${state.r1}" />
+            <select id="tb-r1-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r1Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>R2 — bottom</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tb-r2" value="${state.r2}" />
+            <select id="tb-r2-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r2Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Rc</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tb-rc" value="${state.rc}" />
+            <select id="tb-rc-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rcUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Re</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tb-re" value="${state.re}" />
+            <select id="tb-re-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.reUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r, isPnp)}</div>
+
+      ${formulaSection(
+        isPnp
+          ? ["Vth = Vcc×R2/(R1+R2), Rth = R1∥R2", "Ib = (Vcc−Vth − Vbe) / (Rth + (hFE+1)×Re)", "Ic = hFE×Ib, Ie = Ic+Ib, Vec = Vcc−Ic×Rc−Ie×Re"]
+          : ["Vth = Vcc×R2/(R1+R2), Rth = R1∥R2", "Ib = (Vth − Vbe) / (Rth + (hFE+1)×Re)", "Ic = hFE×Ib, Ie = Ic+Ib, Vce = Vcc−Ic×Rc−Ie×Re"],
+        isPnp
+          ? "PNP mirror — emitter near Vcc, collector near ground."
+          : "Called 'universal' bias — barely depends on hFE."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => {
+      // A real PNP redesign swaps the divider ratio (R1/R2 trade places) so
+      // the base sits near Vcc instead of near ground — without that swap,
+      // reusing the NPN numbers as-is drives most PNP circuits straight
+      // into saturation, which is correct but a confusing first look.
+      if (m !== state.mode) {
+        [state.r1, state.r2] = [state.r2, state.r1];
+        [state.r1Unit, state.r2Unit] = [state.r2Unit, state.r1Unit];
+      }
+      state.mode = m;
+      paint();
+    });
+
+    [["tb-vcc", "vcc"], ["tb-vbe", "vbe"], ["tb-r1", "r1"], ["tb-r2", "r2"], ["tb-rc", "rc"], ["tb-re", "re"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    document.getElementById("tb-hfe").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.hfe = v; refresh(); } };
+
+    [["tb-vcc-unit", "vccUnit"], ["tb-vbe-unit", "vbeUnit"], ["tb-r1-unit", "r1Unit"], ["tb-r2-unit", "r2Unit"], ["tb-rc-unit", "rcUnit"], ["tb-re-unit", "reUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
   }
 
   paint();

@@ -34,9 +34,13 @@ Capacitor stored energy · RC filter · RL filter · PWM (duty cycle) ·
 Debounce / RC timing · Wavelength (RF) · Delta-Y transform ·
 NTC/PTC thermistor · Unit converter (Temperature, Length, Area,
 Volume, Mass, Speed, Force, Pressure, Energy, Data, Time, Angle) ·
-Octal added to DEC / HEX / BIN conversion · **PPM converter**
+Octal added to DEC / HEX / BIN conversion · PPM converter
 (ppm tolerance × a base value → deviation, range, and the
-equivalent % as a small annotation)
+equivalent % as a small annotation) · **Transistor biasing
+(voltage divider bias)** (NPN/PNP self-bias Q-point: Ib, Ic, Ie,
+Vb, Ve, Vc, Vce, with active/saturation/cutoff detection —
+standard BJT symbol, symmetric R1/Rc and R2/Re layout, continuous
+traces with no gaps at any lead/zigzag junction)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -44,7 +48,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Transistor biasing (voltage divider bias)
 - [ ] NPN/PNP as a switch
 - [ ] Transistor example calculation (hFE, IC)
 - [ ] FET/MOSFET/IGBT biasing
