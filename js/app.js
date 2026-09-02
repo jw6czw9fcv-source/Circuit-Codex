@@ -220,6 +220,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "ppm-converter") return renderPpmConverter(domain, tool, favId);
   if (calcId === "transistor-bias") return renderTransistorBias(domain, tool, favId);
   if (calcId === "transistor-switch") return renderTransistorSwitch(domain, tool, favId);
+  if (calcId === "transistor-example") return renderTransistorExample(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -10332,6 +10333,160 @@ function renderTransistorSwitch(domain, tool, favId) {
 
     [["ts-vcc-unit", "vccUnit"], ["ts-vin-unit", "vinUnit"], ["ts-rb-unit", "rbUnit"], ["ts-rload-unit", "rloadUnit"], ["ts-vbe-unit", "vbeUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+// ---------- Transistor example calculation (hFE, IC) ----------
+// The bare current-gain relationship, with no bias network around it —
+// a companion to the biasing and switch calculators above, for the basic
+// "given two of Ib/Ic/hFE, find the third" question those two skip past.
+function renderTransistorExample(domain, tool, favId) {
+  const state = { mode: "ic", hfe: 100, ib: 50, ibUnit: "µA", ic: 5, icUnit: "mA" };
+
+  function si(name) {
+    if (name === "hfe") return state.hfe;
+    return state[name] * AMP_UNITS[state[name + "Unit"]];
+  }
+
+  function inputsFor(mode) {
+    if (mode === "ic") return ["hfe", "ib"];
+    if (mode === "ib") return ["hfe", "ic"];
+    return ["ib", "ic"];
+  }
+
+  function compute() {
+    const hfeV = si("hfe"), ibV = si("ib"), icV = si("ic");
+    let hfe, ib, ic;
+    if (state.mode === "ic") { hfe = hfeV; ib = ibV; ic = hfe * ib; }
+    else if (state.mode === "ib") { hfe = hfeV; ic = icV; ib = hfe !== 0 ? ic / hfe : NaN; }
+    else { ib = ibV; ic = icV; hfe = ib !== 0 ? ic / ib : NaN; }
+    return { hfe, ib, ic, ie: ib + ic };
+  }
+
+  const FIELD = {
+    hfe: { label: "hFE (β)" },
+    ib: { label: "Ib" },
+    ic: { label: "Ic" },
+  };
+
+  function fieldHTML(name) {
+    if (name === "hfe") {
+      return `<div class="field"><label>${FIELD.hfe.label}</label><input type="number" inputmode="decimal" step="any" data-var="hfe" value="${state.hfe}" /></div>`;
+    }
+    return `<div class="field">
+      <label>${FIELD[name].label}</label>
+      <div class="field-row">
+        <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${state[name]}" />
+        <select data-unit="${name}">${Object.keys(AMP_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+      </div>
+    </div>`;
+  }
+
+  function solvedLabel() {
+    return { ic: "Ic", ib: "Ib", hfe: "hFE (β)" }[state.mode];
+  }
+
+  function solvedValueText(r) {
+    if (state.mode === "hfe") return isFinite(r.hfe) ? trim(r.hfe) : "—";
+    return siFormat(state.mode === "ic" ? r.ic : r.ib, "A");
+  }
+
+  // Simple illustrative symbol — no bias network, just the transistor and
+  // the three currents meeting Kirchhoff's current law at its terminals
+  // (Ib in + Ic in = Ie out). Reuses the same base-bar/45°-lead geometry
+  // as the biasing and switch tools' transistors.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    // Same computed arrowhead as the biasing/switch tools' transistors —
+    // not hand-placed this time either, after the emitter arrow's
+    // direction came out wrong from eyeballing it once already.
+    function arrow(x1, y1, x2, y2, inward) {
+      const t = 0.56, size = 7.5;
+      let ux = x2 - x1, uy = y2 - y1;
+      const len = Math.hypot(ux, uy);
+      ux /= len; uy /= len;
+      if (inward) { ux = -ux; uy = -uy; }
+      const px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+      const tipX = px + ux * size * 0.6, tipY = py + uy * size * 0.6;
+      const perpX = -uy, perpY = ux;
+      const b1x = px - ux * size * 0.5 + perpX * size * 0.42, b1y = py - uy * size * 0.5 + perpY * size * 0.42;
+      const b2x = px - ux * size * 0.5 - perpX * size * 0.42, b2y = py - uy * size * 0.5 - perpY * size * 0.42;
+      return `${tipX.toFixed(1)},${tipY.toFixed(1)} ${b1x.toFixed(1)},${b1y.toFixed(1)} ${b2x.toFixed(1)},${b2y.toFixed(1)}`;
+    }
+    // NPN: current flows OUT of the emitter, so the arrow points outward
+    // (away from the base bar, toward the tip) — never PNP's inward arrow.
+    const emitterArrow = arrow(70, 47, 80, 57, false);
+    return `<svg width="150" height="90" viewBox="0 0 150 90" fill="none">
+      <path d="M70 25 V57" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M70 35 L80 25" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M70 47 L80 57" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <polygon points="${emitterArrow}" fill="${comp}"/>
+      <text x="96" y="45" fill="${comp}" font-size="12" font-weight="600">Q1</text>
+
+      <path d="M80 6 V25" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <polygon points="80,25 74,15 86,15" fill="${wire}"/>
+      <text x="88" y="14" fill="${wire}" font-size="12" font-weight="600">Ic</text>
+
+      <path d="M28 41 H68" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <polygon points="70,41 60,35 60,47" fill="${wire}"/>
+      <text x="30" y="33" fill="${wire}" font-size="12" font-weight="600">Ib</text>
+
+      <path d="M80 57 V76" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <polygon points="80,78 74,68 86,68" fill="${wire}"/>
+      <text x="88" y="80" fill="${wire}" font-size="12" font-weight="600">Ie</text>
+    </svg>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="solved"]').textContent = solvedValueText(r);
+    app.querySelector('[data-res="ie"]').textContent = `Ie = ${siFormat(r.ie, "A")}`;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Ic = hFE × Ib, and Ie = Ib + Ic")}
+
+      ${pillRow([["ic", "Ic"], ["ib", "Ib"], ["hfe", "hFE"]], state.mode, domain.bg)}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${inputsFor(state.mode).map(fieldHTML).join("")}
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${solvedLabel()}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="solved">${solvedValueText(r)}</span></div>
+        <div class="result-sub" data-res="ie">Ie = ${siFormat(r.ie, "A")}</div>
+      </div>
+
+      ${formulaSection(
+        ["hFE = Ic / Ib", "Ic = hFE × Ib", "Ie = Ib + Ic"],
+        "hFE (also called β) varies a lot even within one part number — a 2N2222 datasheet spans roughly 100–300, a BC547 spans 110–800 across its gain grades. Use the datasheet's guaranteed minimum for design margin, not a typical figure."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+
+    app.querySelectorAll("input[data-var]").forEach((input) => {
+      input.oninput = () => {
+        const name = input.dataset.var;
+        const v = parseFloat(input.value);
+        if (isFinite(v)) { state[name] = v; refresh(); }
+      };
+    });
+    app.querySelectorAll("select[data-unit]").forEach((sel) => {
+      sel.onchange = () => { state[sel.dataset.unit + "Unit"] = sel.value; refresh(); };
     });
   }
 

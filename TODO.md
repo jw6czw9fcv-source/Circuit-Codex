@@ -43,7 +43,10 @@ standard BJT symbol, symmetric R1/Rc and R2/Re layout, continuous
 traces with no gaps at any lead/zigzag junction) ·
 **NPN/PNP as a switch** (low-side NPN vs high-side PNP — genuinely
 different topologies, not just relabeled; Ib, Ic, Ie, Vce, and a
-base-drive overdrive factor with a 5–10× design-target note)
+base-drive overdrive factor with a 5–10× design-target note) ·
+Transistor example calculation (hFE, IC) (bare current-gain
+relationship — solve for Ic, Ib, or hFE given the other two, no
+bias network; illustrative Q1 symbol with Ib/Ic/Ie KCL arrows)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -51,7 +54,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Transistor example calculation (hFE, IC)
 - [ ] FET/MOSFET/IGBT biasing
 - [ ] FET/MOSFET/IGBT switching calculation
 - [ ] Half-wave rectifier
