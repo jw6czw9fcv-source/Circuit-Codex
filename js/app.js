@@ -9926,7 +9926,7 @@ function renderTransistorBias(domain, tool, favId) {
     return `<svg width="210" height="196" viewBox="0 -10 210 196" fill="none">
       <path d="M62 8 H114" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M88 8 V2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="88" cy="8" r="3" fill="none" stroke="${wire}" stroke-width="1.5"/>
+      <circle cx="88" cy="8" r="2.6" fill="${wire}"/>
       <text x="88" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vcc</text>
 
       <path d="M62 8 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
