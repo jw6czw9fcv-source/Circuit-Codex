@@ -46,7 +46,12 @@ different topologies, not just relabeled; Ib, Ic, Ie, Vce, and a
 base-drive overdrive factor with a 5–10× design-target note) ·
 Transistor example calculation (hFE, IC) (bare current-gain
 relationship — solve for Ic, Ib, or hFE given the other two, no
-bias network; illustrative Q1 symbol with Ib/Ic/Ie KCL arrows)
+bias network; illustrative Q1 symbol with Ib/Ic/Ie KCL arrows) ·
+MOSFET biasing (N-channel enhancement, voltage-divider gate bias:
+Vg from an unloaded divider since the gate draws no current, Id/Vgs
+solved as a pair via the square-law device equation and a datasheet
+on-state reference point, active/cutoff/triode detection — NMOS-only
+for now, PMOS not yet added)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -54,8 +59,7 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] FET/MOSFET/IGBT biasing
-- [ ] FET/MOSFET/IGBT switching calculation
+- [ ] MOSFET/IGBT switching calculation
 - [ ] Half-wave rectifier
 - [ ] Full-wave rectifier (bridge)
 - [ ] Full-wave rectifier with center tap

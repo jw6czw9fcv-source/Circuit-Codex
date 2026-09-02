@@ -221,6 +221,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "transistor-bias") return renderTransistorBias(domain, tool, favId);
   if (calcId === "transistor-switch") return renderTransistorSwitch(domain, tool, favId);
   if (calcId === "transistor-example") return renderTransistorExample(domain, tool, favId);
+  if (calcId === "mosfet-bias") return renderMosfetBias(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -10487,6 +10488,274 @@ function renderTransistorExample(domain, tool, favId) {
     });
     app.querySelectorAll("select[data-unit]").forEach((sel) => {
       sel.onchange = () => { state[sel.dataset.unit + "Unit"] = sel.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+// ---------- MOSFET biasing (voltage-divider bias, N-channel enhancement) ----------
+function renderMosfetBias(domain, tool, favId) {
+  const state = {
+    vdd: 15, vddUnit: "V",
+    vth: 2, vthUnit: "V",
+    vgson: 4, vgsonUnit: "V",
+    idon: 10, idonUnit: "mA",
+    r1: 560, r1Unit: "kΩ",
+    r2: 200, r2Unit: "kΩ",
+    rd: 2, rdUnit: "kΩ",
+    rs: 1, rsUnit: "kΩ",
+  };
+
+  const R_NAMES = ["r1", "r2", "rd", "rs"];
+  const I_NAMES = ["idon"];
+
+  function si(name) {
+    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
+    if (I_NAMES.includes(name)) return state[name] * AMP_UNITS[state[name + "Unit"]];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  // The gate draws no current, so — unlike the BJT's Thevenin-loaded base —
+  // Vg is a plain, unloaded divider. What makes this circuit harder is the
+  // square-law device equation itself: Id = k(Vgs−Vth)² together with
+  // Vgs = Vg − Id×Rs (the source resistor's feedback) is quadratic in Id,
+  // not linear. k isn't usually on a datasheet directly — it's derived
+  // from one on-state reference point, k = Id,on / (Vgs,on − Vth)².
+  function compute() {
+    const vdd = si("vdd"), vth = si("vth"), vgson = si("vgson"), idon = si("idon");
+    const r1 = si("r1"), r2 = si("r2"), rd = si("rd"), rs = si("rs");
+    const overdrive = vgson - vth;
+
+    if (!(vdd > 0) || !(r1 + r2 > 0) || !(overdrive > 0) || !(idon > 0) || rd < 0 || rs < 0) {
+      return { problem: "Vdd, R1 + R2, Rd, Rs, and (Vgs,on − Vth) must be valid positive values." };
+    }
+
+    const vg = vdd * r2 / (r1 + r2);
+    const k = idon / (overdrive * overdrive);
+    const x = vg - vth;
+
+    if (x <= 0) {
+      return { problem: "", region: "cutoff", vg, k, id: 0, vgs: vg, vs: 0, vd: vdd, vds: vdd, vov: 0 };
+    }
+
+    let id;
+    if (rs === 0) {
+      id = k * x * x;
+    } else {
+      const A = k * rs * rs, B = -(2 * k * x * rs + 1), C = k * x * x;
+      const disc = B * B - 4 * A * C;
+      const sq = Math.sqrt(Math.max(0, disc));
+      const id1 = (-B + sq) / (2 * A), id2 = (-B - sq) / (2 * A);
+      // Only one root keeps Vgs above Vth (equivalently Id < x/Rs); that's
+      // the physically real operating point — the other root implies a
+      // negative overdrive voltage, which isn't a valid saturation solution.
+      const valid = [id1, id2].filter((v) => isFinite(v) && v >= 0 && v < x / rs);
+      id = valid.length ? Math.min(...valid) : Math.max(0, Math.min(id1, id2));
+    }
+
+    const vgs = vg - id * rs;
+    const vs = id * rs;
+    const vd = vdd - id * rd;
+    const vds = vd - vs;
+    const vov = vgs - vth;
+    const region = vds >= vov ? "active" : "triode";
+
+    return { problem: "", region, vg, k, id, vgs, vs, vd, vds, vov };
+  }
+
+  function regionInfo(region) {
+    if (region === "active") return { label: "Active (saturation) region", color: "var(--result-text)", bg: "var(--result-border)" };
+    if (region === "cutoff") return { label: "Cutoff — Vgs ≤ Vth, MOSFET is off", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+    return { label: "Triode — Vds < Vov, not saturated", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+  }
+
+  // NMos symbol proportions (dashed channel = enhancement mode, gate plate
+  // set off from the channel with its own lead, body arrow pointing into
+  // the channel for N-channel) traced from a schemdraw reference render
+  // before writing this, same workflow as the BJT tools — see
+  // circuit-codex-schemdraw-tool memory. Every resistor still gets a
+  // visible grey trace on both ends, same rule as the BJT diagrams.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    function arrow(x1, y1, x2, y2, inward) {
+      const t = 0.56, size = 7.5;
+      let ux = x2 - x1, uy = y2 - y1;
+      const len = Math.hypot(ux, uy);
+      ux /= len; uy /= len;
+      if (inward) { ux = -ux; uy = -uy; }
+      const px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+      const tipX = px + ux * size * 0.6, tipY = py + uy * size * 0.6;
+      const perpX = -uy, perpY = ux;
+      const b1x = px - ux * size * 0.5 + perpX * size * 0.42, b1y = py - uy * size * 0.5 + perpY * size * 0.42;
+      const b2x = px - ux * size * 0.5 - perpX * size * 0.42, b2y = py - uy * size * 0.5 - perpY * size * 0.42;
+      return `${tipX.toFixed(1)},${tipY.toFixed(1)} ${b1x.toFixed(1)},${b1y.toFixed(1)} ${b2x.toFixed(1)},${b2y.toFixed(1)}`;
+    }
+    // Body arrow points INTO the channel for N-channel (mirrors the BJT
+    // emitter arrow's outward-for-NPN / inward-for-PNP convention).
+    const bodyArrow = arrow(114, 89, 104, 89, false);
+    return `<svg width="200" height="200" viewBox="0 -14 200 200" fill="none">
+      <path d="M62 8 H114" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M88 8 V2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="88" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vdd</text>
+
+      <path d="M62 8 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(62, 20)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="42" y="40" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">R1</text>
+      <path d="M62 56 V89" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="62" cy="89" r="2.6" fill="${wire}"/>
+      <path d="M62 89 H94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M62 89 V122" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(62, 122)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="42" y="142" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">R2</text>
+      <path d="M62 158 V178" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M50 178 H74 M54 182 H70 M58 186 H66" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M94 74 V104" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="130" y="93" fill="${comp}" font-size="12" font-weight="600">Q1</text>
+
+      <path d="M104 76 V82" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M104 86 V92" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M104 96 V102" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M104 76 H114 V68" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M104 102 H114" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M114 102 V89" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M114 89 H104" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M114 102 V110" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="114" cy="102" r="2.6" fill="${comp}"/>
+      <polygon points="${bodyArrow}" fill="${comp}"/>
+
+      <path d="M114 8 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(114, 20)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M114 56 V68" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="130" y="40" fill="${comp}" font-size="12" font-weight="600">Rd</text>
+
+      <path d="M114 110 V122" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(114, 122)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="130" y="142" fill="${comp}" font-size="12" font-weight="600">Rs</text>
+      <path d="M114 158 V178" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M102 178 H126 M106 182 H122 M110 186 H118" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const info = regionInfo(r.region);
+    return `
+      <div class="section-label" style="color:#5DCAA5">Operating point (Q-point)
+        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      </div>
+      <div class="eseries-grid">
+        ${cell("Id", siFormat(r.id, "A"))}
+        ${cell("Vgs", siFormat(r.vgs, "V"))}
+        ${cell("Vs", siFormat(r.vs, "V"))}
+        ${cell("Vd", siFormat(r.vd, "V"))}
+        ${cell("Vds", siFormat(r.vds, "V"))}
+      </div>`;
+  }
+
+  function refresh() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "NMOS voltage-divider bias — DC operating point")}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Vdd</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="mb-vdd" value="${state.vdd}" />
+            <select id="mb-vdd-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vddUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Vth</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="mb-vth" value="${state.vth}" />
+            <select id="mb-vth-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vthUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>R1 — top</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="mb-r1" value="${state.r1}" />
+            <select id="mb-r1-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r1Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>R2 — bottom</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="mb-r2" value="${state.r2}" />
+            <select id="mb-r2-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r2Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Rd</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="mb-rd" value="${state.rd}" />
+            <select id="mb-rd-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rdUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Rs</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="mb-rs" value="${state.rs}" />
+            <select id="mb-rs-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rsUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Id,on (datasheet)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="mb-idon" value="${state.idon}" />
+            <select id="mb-idon-unit">${Object.keys(AMP_UNITS).map((u) => `<option ${state.idonUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>at Vgs,on</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="mb-vgson" value="${state.vgson}" />
+            <select id="mb-vgson-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vgsonUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Vg = Vdd×R2/(R1+R2)", "k = Id,on / (Vgs,on−Vth)²", "Id = k×(Vgs−Vth)², Vgs = Vg − Id×Rs"],
+        "No gate current, so Vg is a plain divider — no Thevenin correction like a BJT base needs. Id and Vgs still depend on each other through Rs, so the Q-point comes from solving both together."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["mb-vdd", "vdd"], ["mb-vth", "vth"], ["mb-r1", "r1"], ["mb-r2", "r2"], ["mb-rd", "rd"], ["mb-rs", "rs"], ["mb-idon", "idon"], ["mb-vgson", "vgson"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["mb-vdd-unit", "vddUnit"], ["mb-vth-unit", "vthUnit"], ["mb-r1-unit", "r1Unit"], ["mb-r2-unit", "r2Unit"], ["mb-rd-unit", "rdUnit"], ["mb-rs-unit", "rsUnit"], ["mb-idon-unit", "idonUnit"], ["mb-vgson-unit", "vgsonUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
 
