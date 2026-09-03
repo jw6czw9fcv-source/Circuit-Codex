@@ -222,6 +222,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "transistor-switch") return renderTransistorSwitch(domain, tool, favId);
   if (calcId === "transistor-example") return renderTransistorExample(domain, tool, favId);
   if (calcId === "mosfet-bias") return renderMosfetBias(domain, tool, favId);
+  if (calcId === "mosfet-switch") return renderMosfetSwitch(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -10575,7 +10576,11 @@ function renderMosfetBias(domain, tool, favId) {
   // the channel for N-channel) traced from a schemdraw reference render
   // before writing this, same workflow as the BJT tools — see
   // circuit-codex-schemdraw-tool memory. Every resistor still gets a
-  // visible grey trace on both ends, same rule as the BJT diagrams.
+  // visible grey trace on both ends, same rule as the BJT diagrams. The
+  // insulated-gate gap (vs. a JFET's touching gate — a real standard,
+  // confirmed via WebSearch) sits between the PLATE and the channel, not
+  // between the wire and the plate — the wire itself touches the plate
+  // directly, same as the schemdraw NMos reference actually draws it.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
@@ -10606,7 +10611,7 @@ function renderMosfetBias(domain, tool, favId) {
       <text x="42" y="40" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">R1</text>
       <path d="M62 56 V89" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="62" cy="89" r="2.6" fill="${wire}"/>
-      <path d="M62 89 H94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M62 89 H99" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       <path d="M62 89 V122" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${zig(62, 122)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
@@ -10614,7 +10619,7 @@ function renderMosfetBias(domain, tool, favId) {
       <path d="M62 158 V178" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M50 178 H74 M54 182 H70 M58 186 H66" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
-      <path d="M94 74 V104" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M99 74 V104" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
       <text x="130" y="93" fill="${comp}" font-size="12" font-weight="600">Q1</text>
 
       <path d="M104 76 V82" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
@@ -10756,6 +10761,305 @@ function renderMosfetBias(domain, tool, favId) {
     });
     [["mb-vdd-unit", "vddUnit"], ["mb-vth-unit", "vthUnit"], ["mb-r1-unit", "r1Unit"], ["mb-r2-unit", "r2Unit"], ["mb-rd-unit", "rdUnit"], ["mb-rs-unit", "rsUnit"], ["mb-idon-unit", "idonUnit"], ["mb-vgson-unit", "vgsonUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+// ---------- MOSFET/IGBT switching calculation ----------
+// Companion to MOSFET biasing the same way "NPN/PNP as a switch" companions
+// BJT biasing — a device used to snap a load fully on/off, not held at a
+// linear operating point. Low-side only (Vdd → Rload → device → ground),
+// matching the biasing tool's NMOS-only scope decision: the far more common
+// case, with a device-type toggle (MOSFET vs IGBT) taking the place of the
+// BJT switch tool's NPN/PNP polarity toggle. Both device types share the
+// same "gate/base draws no DC current, drive just needs to clear threshold"
+// story that made MOSFET biasing's Vg divider simpler than a BJT's — here
+// that means no Rb at all, just a plain wire to the gate.
+function renderMosfetSwitch(domain, tool, favId) {
+  const state = {
+    device: "mosfet",
+    vdd: 12, vddUnit: "V",
+    vdrive: 10, vdriveUnit: "V",
+    vth: 2, vthUnit: "V",
+    rload: 100, rloadUnit: "Ω",
+    rdson: 50, rdsonUnit: "mΩ",
+    vce0: 0.8, vce0Unit: "V",
+    rce: 150, rceUnit: "mΩ",
+  };
+
+  const R_NAMES = ["rload", "rdson", "rce"];
+
+  function si(name) {
+    const units = R_NAMES.includes(name) ? OHM_UNITS : VOLT_UNITS;
+    return state[name] * units[state[name + "Unit"]];
+  }
+
+  // MOSFET: Rds(on) is a plain resistance, so I = Vdd/(Rload+Rds,on) solves
+  // directly. IGBT: the datasheet Vce–Ic curve is linearized as a knee
+  // voltage plus a slope — Vce = V0 + Ic×Rce — the standard tangent-line
+  // model used in Infineon/ST application notes; that's still linear in Ic,
+  // so it also solves directly (no quadratic like biasing's square law).
+  function compute() {
+    const vdd = si("vdd"), rload = si("rload"), vdrive = si("vdrive"), vth = si("vth");
+    const isIgbt = state.device === "igbt";
+
+    if (!(vdd > 0) || !(rload > 0)) {
+      return { problem: "Vdd and Rload must be greater than zero." };
+    }
+
+    if (vdrive <= vth) {
+      return { problem: "", region: "off", i: 0, von: vdd, pDevice: 0, pLoad: 0, eff: 0, margin: vdrive - vth };
+    }
+
+    let i, von, pDevice;
+    if (isIgbt) {
+      const v0 = si("vce0"), rce = si("rce");
+      if (!(v0 >= 0) || !(rce >= 0)) return { problem: "V0 and Rce must be zero or greater." };
+      if (vdd <= v0) {
+        // Supply can't even clear the device's own knee voltage — no current
+        // path exists, so the full Vdd sits across the device, same as the
+        // gate-undriven "off" case above.
+        return { problem: "", region: "off", i: 0, von: vdd, pDevice: 0, pLoad: 0, eff: 0, margin: vdrive - vth };
+      }
+      i = (vdd - v0) / (rload + rce);
+      von = v0 + i * rce;
+      pDevice = von * i;
+    } else {
+      const rdson = si("rdson");
+      if (!(rdson >= 0)) return { problem: "Rds(on) must be zero or greater." };
+      i = vdd / (rload + rdson);
+      von = i * rdson;
+      pDevice = i * i * rdson;
+    }
+
+    const pLoad = i * i * rload;
+    const eff = pLoad + pDevice > 0 ? (pLoad / (pLoad + pDevice)) * 100 : 0;
+    const margin = vdrive - vth;
+    // Rule of thumb, not a computed physical limit (like the BJT switch
+    // tool's 5–10× overdrive note): datasheet Rds(on)/Vce(sat) numbers are
+    // measured at a stated drive voltage, several volts above threshold —
+    // too little headroom and the real on-state number runs higher than
+    // this figure assumes.
+    const region = i <= 0 ? "off" : margin < 2 ? "marginal" : "on";
+
+    return { problem: "", region, i, von, pDevice, pLoad, eff, margin };
+  }
+
+  function regionInfo(region) {
+    if (region === "on") return { label: "ON — fully enhanced", color: "var(--result-text)", bg: "var(--result-border)" };
+    if (region === "marginal") return { label: "ON — marginal gate drive", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+    return { label: "OFF", color: "var(--text-secondary)", bg: "var(--card-border)" };
+  }
+
+  // MOSFET core reuses the biasing tool's channel/body-arrow geometry
+  // exactly (drain/source offset from the channel, body arrow as a real
+  // T-junction off the source lead). IGBT core reuses the BJT switch tool's
+  // bar-and-diagonal-lead geometry (IgbtN's own collector/emitter
+  // structure, per schemdraw, IS a BJT NPN structure), PLUS its own gate
+  // plate — a real, separate second vertical line next to the bar, closer
+  // together than the MOSFET's channel/plate spacing (5px vs 10px), per
+  // schemdraw's IgbtN proportions. Both devices' gate wire touches its
+  // plate directly; the insulated-gate gap (vs. a JFET's touching gate —
+  // confirmed via WebSearch, a real standard) sits between the plate and
+  // the channel/bar behind it, not between the wire and the plate — see
+  // the circuit-codex-schematic-symbols memory note this produced.
+  function diagram(isIgbt) {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    function arrow(x1, y1, x2, y2, inward) {
+      const t = 0.56, size = 7.5;
+      let ux = x2 - x1, uy = y2 - y1;
+      const len = Math.hypot(ux, uy);
+      ux /= len; uy /= len;
+      if (inward) { ux = -ux; uy = -uy; }
+      const px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+      const tipX = px + ux * size * 0.6, tipY = py + uy * size * 0.6;
+      const perpX = -uy, perpY = ux;
+      const b1x = px - ux * size * 0.5 + perpX * size * 0.42, b1y = py - uy * size * 0.5 + perpY * size * 0.42;
+      const b2x = px - ux * size * 0.5 - perpX * size * 0.42, b2y = py - uy * size * 0.5 - perpY * size * 0.42;
+      return `${tipX.toFixed(1)},${tipY.toFixed(1)} ${b1x.toFixed(1)},${b1y.toFixed(1)} ${b2x.toFixed(1)},${b2y.toFixed(1)}`;
+    }
+
+    const coreTop = 76;
+    let core, gateY, groundY;
+
+    if (isIgbt) {
+      const barBot = coreTop + 32;
+      const upperTapY = coreTop + 10, lowerTapY = barBot - 10;
+      const arrowPts = arrow(104, lowerTapY, 114, barBot, false);
+      groundY = barBot + 20;
+      gateY = (coreTop + barBot) / 2;
+      core = `
+        <path d="M104 ${coreTop} V${barBot}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M104 ${upperTapY} L114 ${coreTop}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M104 ${lowerTapY} L114 ${barBot}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <polygon points="${arrowPts}" fill="${comp}"/>
+        <path d="M114 ${barBot} V${groundY}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M99 ${coreTop} V${barBot}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M84 ${gateY} H99" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        <text x="76" y="${gateY + 4}" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vge</text>
+        <text x="120" y="${gateY + 4}" fill="${comp}" font-size="12" font-weight="600">Q1</text>`;
+    } else {
+      const channelBot = coreTop + 26;
+      const channelCenter = coreTop + 13;
+      const bodyArrow = arrow(114, channelCenter, 104, channelCenter, false);
+      groundY = channelBot + 20;
+      gateY = channelCenter;
+      core = `
+        <path d="M104 ${coreTop} V${coreTop + 6}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M104 ${coreTop + 10} V${coreTop + 16}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M104 ${coreTop + 20} V${channelBot}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M104 ${coreTop} H114" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M104 ${channelBot} H114" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M114 ${channelBot} V${channelCenter}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M114 ${channelCenter} H104" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M114 ${channelBot} V${groundY}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="114" cy="${channelBot}" r="2.6" fill="${comp}"/>
+        <polygon points="${bodyArrow}" fill="${comp}"/>
+        <path d="M99 ${coreTop - 2} V${channelBot + 2}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M79 ${gateY} H99" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        <text x="71" y="${gateY + 4}" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vgs</text>
+        <text x="120" y="${gateY + 4}" fill="${comp}" font-size="12" font-weight="600">Q1</text>`;
+    }
+
+    const groundSym = `<path d="M102 ${groundY} H126 M106 ${groundY + 4} H122 M110 ${groundY + 8} H118" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+
+    return `<svg width="200" height="${groundY + 24}" viewBox="0 -14 200 ${groundY + 24}" fill="none">
+      <path d="M114 8 V2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="114" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vdd</text>
+      <path d="M114 8 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(114, 20)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="130" y="40" fill="${comp}" font-size="12" font-weight="600">Rload</text>
+      <path d="M114 56 V${coreTop}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${core}
+      ${groundSym}
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const info = regionInfo(r.region);
+    return `
+      <div class="section-label" style="color:#5DCAA5">Switch state
+        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      </div>
+      <div class="eseries-grid">
+        ${cell("I", siFormat(r.i, "A"))}
+        ${cell("Von", siFormat(r.von, "V"))}
+        ${cell("P (device)", siFormat(r.pDevice, "W"))}
+        ${cell("Efficiency", `${trim(r.eff)}%`)}
+      </div>`;
+  }
+
+  function refresh() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
+  }
+
+  function paint() {
+    const r = compute();
+    const isIgbt = state.device === "igbt";
+    const gateLabel = isIgbt ? "Vge (drive)" : "Vgs (drive)";
+    const thLabel = isIgbt ? "Vge(th)" : "Vgs(th)";
+
+    app.innerHTML = `
+      ${calcHeader(tool, favId, isIgbt ? "IGBT low-side switch — driving a resistive load" : "MOSFET low-side switch — driving a resistive load")}
+
+      ${pillRow([["mosfet", "MOSFET"], ["igbt", "IGBT"]], state.device, domain.bg)}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram(isIgbt)}</div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Vdd</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ms-vdd" value="${state.vdd}" />
+            <select id="ms-vdd-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vddUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Rload</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ms-rload" value="${state.rload}" />
+            <select id="ms-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>${gateLabel}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ms-vdrive" value="${state.vdrive}" />
+            <select id="ms-vdrive-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vdriveUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>${thLabel}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ms-vth" value="${state.vth}" />
+            <select id="ms-vth-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vthUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      ${isIgbt
+        ? `<div class="field-pair">
+            <div class="field">
+              <label>V0 (Vce0)</label>
+              <div class="field-row">
+                <input type="number" inputmode="decimal" step="any" id="ms-vce0" value="${state.vce0}" />
+                <select id="ms-vce0-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vce0Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Rce</label>
+              <div class="field-row">
+                <input type="number" inputmode="decimal" step="any" id="ms-rce" value="${state.rce}" />
+                <select id="ms-rce-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rceUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+              </div>
+            </div>
+          </div>`
+        : `<div class="field-pair">
+            <div class="field">
+              <label>Rds(on)</label>
+              <div class="field-row">
+                <input type="number" inputmode="decimal" step="any" id="ms-rdson" value="${state.rdson}" />
+                <select id="ms-rdson-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rdsonUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+              </div>
+            </div>
+          </div>`
+      }
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        isIgbt
+          ? ["I = (Vdd − V0) / (Rload + Rce)", "Von = V0 + I×Rce", "P = Von × I"]
+          : ["I = Vdd / (Rload + Rds,on)", "Von = I × Rds,on", "P = I² × Rds,on"],
+        isIgbt
+          ? "V0 and Rce come from linearizing the datasheet Vce–Ic curve — a good fit near rated current, less so well below it. Like a MOSFET, the gate draws no DC current; the drive voltage just needs to comfortably clear Vge(th)."
+          : "Gate draws no DC current, so unlike a BJT's base there's no series resistor setting the drive — but Rds(on) is only valid near the Vgs it was datasheet-tested at; too little overdrive above Vgs(th) and the real on-resistance runs higher than this number."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.device = m; paint(); });
+
+    [["ms-vdd", "vdd"], ["ms-rload", "rload"], ["ms-vdrive", "vdrive"], ["ms-vth", "vth"], ["ms-vce0", "vce0"], ["ms-rce", "rce"], ["ms-rdson", "rdson"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["ms-vdd-unit", "vddUnit"], ["ms-rload-unit", "rloadUnit"], ["ms-vdrive-unit", "vdriveUnit"], ["ms-vth-unit", "vthUnit"], ["ms-vce0-unit", "vce0Unit"], ["ms-rce-unit", "rceUnit"], ["ms-rdson-unit", "rdsonUnit"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
 
