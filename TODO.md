@@ -66,7 +66,14 @@ PIV per diode as the half-wave case despite the 2×Vf drop) ·
 Full-wave rectifier — center tap (two diodes, one center-tapped
 secondary; only one diode drop (Vf) but PIV = 2×Vp since the off
 diode swings from +Vp to −Vp across the full winding — same Vdc/
-ripple/efficiency shape as the bridge for a given per-half voltage)
+ripple/efficiency shape as the bridge for a given per-half voltage) ·
+Half-wave rectifier with capacitor/ripple (smoothing cap turns the
+pulses into a sawtooth; standard linear-discharge approximation —
+Vr(pp)=Vp,out/(fRC), Vdc=Vp,out−Vr(pp)/2 — PIV nearly doubles to
+2×Vp since the cap holds the output up while Vac swings negative;
+waveform panel step-simulates the real exponential-decay shape,
+zoomed to the ripple band since the ripple is invisible at full
+Vp scale)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -74,7 +81,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Half-wave rectifier with capacitor (ripple)
 - [ ] Thyristor/TRIAC firing angle basics
 - [ ] Op-amp: inverting amplifier
 - [ ] Op-amp: non-inverting amplifier
