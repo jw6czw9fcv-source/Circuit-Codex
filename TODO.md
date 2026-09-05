@@ -59,7 +59,10 @@ Vce–Ic curve as a knee voltage plus slope — On/Marginal/Off state,
 conduction loss and efficiency) · Half-wave rectifier (single diode,
 ideal constant-Vf drop; Vdc = Vp/π, PIV = Vp, ripple factor ≈1.21 and
 efficiency ≈40.6% fixed by the half-wave shape itself regardless of
-Vin/Vf/Rload)
+Vin/Vf/Rload) · Full-wave rectifier — bridge (four diodes in the
+standard diamond, current on both half-cycles through two diodes in
+series; Vdc = 2×Vp,out/π, ripple ≈0.482 and efficiency ≈81.2% — same
+PIV per diode as the half-wave case despite the 2×Vf drop)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -67,7 +70,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Full-wave rectifier (bridge)
 - [ ] Full-wave rectifier with center tap
 - [ ] Half-wave rectifier with capacitor (ripple)
 - [ ] Thyristor/TRIAC firing angle basics
