@@ -56,7 +56,10 @@ for now, PMOS not yet added) · MOSFET/IGBT switching calculation
 of a polarity toggle since both share the same low-side topology;
 MOSFET solves I = Vdd/(Rload+Rds,on) directly, IGBT linearizes the
 Vce–Ic curve as a knee voltage plus slope — On/Marginal/Off state,
-conduction loss and efficiency)
+conduction loss and efficiency) · Half-wave rectifier (single diode,
+ideal constant-Vf drop; Vdc = Vp/π, PIV = Vp, ripple factor ≈1.21 and
+efficiency ≈40.6% fixed by the half-wave shape itself regardless of
+Vin/Vf/Rload)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -64,7 +67,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Half-wave rectifier
 - [ ] Full-wave rectifier (bridge)
 - [ ] Full-wave rectifier with center tap
 - [ ] Half-wave rectifier with capacitor (ripple)

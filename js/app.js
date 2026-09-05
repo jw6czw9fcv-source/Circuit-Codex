@@ -223,6 +223,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "transistor-example") return renderTransistorExample(domain, tool, favId);
   if (calcId === "mosfet-bias") return renderMosfetBias(domain, tool, favId);
   if (calcId === "mosfet-switch") return renderMosfetSwitch(domain, tool, favId);
+  if (calcId === "rectifier-halfwave") return renderRectifierHalfwave(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -11060,6 +11061,212 @@ function renderMosfetSwitch(domain, tool, favId) {
     [["ms-vdd-unit", "vddUnit"], ["ms-rload-unit", "rloadUnit"], ["ms-vdrive-unit", "vdriveUnit"], ["ms-vth-unit", "vthUnit"], ["ms-vce0-unit", "vce0Unit"], ["ms-rce-unit", "rceUnit"], ["ms-rdson-unit", "rdsonUnit"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
       if (el) el.onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+// ---------- Half-wave rectifier ----------
+// A single diode passes only the half-cycle where it's forward biased —
+// the load sees a chain of one-sided humps, not a mirror-image negative
+// half like a full-wave circuit gives. Vdc/Vrms/ripple/efficiency here
+// are the standard textbook constants for that shape (verified via
+// WebSearch — Vdc=Vp/π, ripple≈1.21, efficiency≈40.6% — rather than
+// derived from memory), and the diode is modeled as an ideal constant-Vf
+// drop, same simplification the diode-biasing and LED tools already use.
+function renderRectifierHalfwave(domain, tool, favId) {
+  const state = {
+    vin: 12, vinUnit: "V",
+    vf: 0.7, vfUnit: "V",
+    rload: 100, rloadUnit: "Ω",
+  };
+
+  function si(name) {
+    if (name === "rload") return state.rload * OHM_UNITS[state.rloadUnit];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const vinRms = si("vin"), vf = si("vf"), rload = si("rload");
+
+    if (!(vinRms > 0) || !(rload > 0) || vf < 0) {
+      return { problem: "Vin and Rload must be greater than zero, and Vf must be zero or greater." };
+    }
+
+    const vp = vinRms * Math.SQRT2;
+    const vpOut = vp - vf;
+    if (vpOut <= 0) {
+      return { problem: `Peak input (${siFormat(vp, "V")}) never exceeds Vf (${siFormat(vf, "V")}) — the diode never conducts, output stays at 0.` };
+    }
+
+    const vdc = vpOut / Math.PI;
+    const vrms = vpOut / 2;
+    const idc = vdc / rload;
+    const irms = vrms / rload;
+    const piv = vp;
+    const ripple = Math.sqrt((vrms / vdc) * (vrms / vdc) - 1);
+    const pdc = idc * idc * rload;
+    const pac = irms * irms * rload;
+    const eff = pac > 0 ? (pdc / pac) * 100 : 0;
+
+    return { problem: "", vp, vdc, vrms, idc, irms, piv, ripple, eff, pdc };
+  }
+
+  // Loop drawn the same way the diode-biasing tool's battery loop is — a
+  // rectangular path broken into plain-wire segments plus the two
+  // components — with a circle+sine AC source symbol in place of that
+  // tool's battery. Diode points anode-to-source, cathode-to-load: current
+  // flows source(+) → diode → Rload → source(−) during the conducting
+  // half-cycle, same left-to-right orientation as the existing diode
+  // symbol in renderDiodeBiasing.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    return `<svg width="260" height="104" viewBox="-20 -10 260 104" fill="none">
+      <path d="M30 20 H100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M115 20 H190" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M100,12 L100,28 L115,20 Z M115,12 V28" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+      <text x="107" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vf</text>
+
+      <path d="M190 20 V35" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(190, 35)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M190 71 V90" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="205" y="56" fill="${comp}" font-size="12" font-weight="600">Rload</text>
+
+      <path d="M190 90 H30" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M30 20 V37" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M30 73 V90" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="30" cy="55" r="18" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      <path d="M21 55 Q25.5 45 30 55 Q34.5 65 39 55" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <text x="8" y="59" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vac</text>
+    </svg>`;
+  }
+
+  // Vout follows max(0, Vp·sin(θ) − Vf) rather than the idealized "half a
+  // sine, half zero" shape — that extra Vf term is what actually makes the
+  // output hump narrower than a true half-cycle and shorter than Vin's
+  // peak, the same real effect Vf has throughout this tool's numbers.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="74" viewBox="0 0 220 74" fill="none"></svg>`;
+    const vp = r.vp, vf = si("vf"), vdc = r.vdc;
+    const pxTop = 10, pxBottom = 60;
+    const toY = (v) => pxBottom - ((v + vp) / (2 * vp)) * (pxBottom - pxTop);
+    const width = 190, periods = 2, samples = 140;
+    const inPts = [], outPts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const theta = t * periods * 2 * Math.PI;
+      const x = 10 + t * width;
+      const vin = vp * Math.sin(theta);
+      inPts.push(`${x.toFixed(1)},${toY(vin).toFixed(1)}`);
+      outPts.push(`${x.toFixed(1)},${toY(Math.max(0, vin - vf)).toFixed(1)}`);
+    }
+    const zeroY = toY(0), dcY = toY(vdc);
+    return `<svg width="220" height="74" viewBox="0 0 220 74" fill="none">
+      <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="206" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
+      <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
+      <text x="81" y="70" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
+      <text x="10" y="${toY(vp - vf) - 4}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
+      <div class="eseries-grid">
+        ${cell("Vdc", siFormat(r.vdc, "V"))}
+        ${cell("Idc", siFormat(r.idc, "A"))}
+        ${cell("P", siFormat(r.pdc, "W"))}
+        ${cell("PIV", siFormat(r.piv, "V"))}
+        ${cell("Ripple", `${trim(r.ripple)}×`)}
+        ${cell("Efficiency", `${trim(r.eff)}%`)}
+      </div>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "One diode passes only half the AC cycle")}
+
+      <div class="diagram-box" style="padding:2px 6px; flex-direction:column; gap:0;">
+        ${diagram()}
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Vac (RMS)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="rh-vin" value="${state.vin}" />
+            <select id="rh-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Vf (diode)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="rh-vf" value="${state.vf}" />
+            <select id="rh-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Rload</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="rh-rload" value="${state.rload}" />
+            <select id="rh-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        [
+          "Vp = Vac × √2",
+          "Vp,out = Vp − Vf",
+          "Vdc = Vp,out / π",
+          "Vrms = Vp,out / 2",
+          "Idc = Vdc / Rload",
+          "P = Vdc × Idc",
+          "PIV (peak inverse voltage) = Vp",
+          "Ripple = √((Vrms/Vdc)² − 1)",
+          "Efficiency = (Idc/Irms)² × 100%",
+        ],
+        "PIV is the max reverse voltage the diode must block while off — no load current, no Rload drop, so the full input peak lands across the diode. Ripple/efficiency are fixed by the half-wave shape alone."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["rh-vin", "vin"], ["rh-vf", "vf"], ["rh-rload", "rload"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["rh-vin-unit", "vinUnit"], ["rh-vf-unit", "vfUnit"], ["rh-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
 
