@@ -225,6 +225,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "mosfet-switch") return renderMosfetSwitch(domain, tool, favId);
   if (calcId === "rectifier-halfwave") return renderRectifierHalfwave(domain, tool, favId);
   if (calcId === "rectifier-bridge") return renderRectifierBridge(domain, tool, favId);
+  if (calcId === "rectifier-centertap") return renderRectifierCenterTap(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -11495,6 +11496,222 @@ function renderRectifierBridge(domain, tool, favId) {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
     [["rb-vin-unit", "vinUnit"], ["rb-vf-unit", "vfUnit"], ["rb-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+// ---------- Full-wave rectifier (center tap) ----------
+// Two diodes instead of four, at the cost of needing a center-tapped
+// secondary — each half of the winding drives the load on its own
+// half-cycle through just one diode, so the drop is Vf (not 2×Vf like
+// the bridge), but each diode's own reverse-blocking swing spans the
+// FULL secondary (both halves), so PIV ends up 2×Vp — the one fact
+// everyone gets wrong about this topology, verified via WebSearch
+// (Instrumentation Tools' PIV note, AllAboutCircuits' Vdc derivation)
+// rather than assumed.
+function renderRectifierCenterTap(domain, tool, favId) {
+  const state = {
+    vin: 12, vinUnit: "V",
+    vf: 0.7, vfUnit: "V",
+    rload: 100, rloadUnit: "Ω",
+  };
+
+  function si(name) {
+    if (name === "rload") return state.rload * OHM_UNITS[state.rloadUnit];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const vinRms = si("vin"), vf = si("vf"), rload = si("rload");
+
+    if (!(vinRms > 0) || !(rload > 0) || vf < 0) {
+      return { problem: "Vac and Rload must be greater than zero, and Vf must be zero or greater." };
+    }
+
+    const vp = vinRms * Math.SQRT2;
+    const vpOut = vp - vf;
+    if (vpOut <= 0) {
+      return { problem: `Peak per-half voltage (${siFormat(vp, "V")}) never exceeds Vf (${siFormat(vf, "V")}) — nothing conducts, output stays at 0.` };
+    }
+
+    const vdc = (2 * vpOut) / Math.PI;
+    const vrms = vpOut / Math.SQRT2;
+    const idc = vdc / rload;
+    const irms = vrms / rload;
+    const piv = 2 * vp - vf;
+    const ripple = Math.sqrt((vrms / vdc) * (vrms / vdc) - 1);
+    const pdc = idc * idc * rload;
+    const pac = irms * irms * rload;
+    const eff = pac > 0 ? (pdc / pac) * 100 : 0;
+
+    return { problem: "", vp, vdc, vrms, idc, irms, piv, ripple, eff, pdc };
+  }
+
+  // A real transformer symbol — two coupled coils with a core — reads
+  // more correctly than two independent AC sources standing in for the
+  // secondary halves; the coil-bump shape is the exact one already used
+  // for inductors in the RL filter tool (vCoil, 4.5px-radius arcs every
+  // 9px), reused here rather than inventing a new coil style. Secondary
+  // is one coil split into two halves so the center tap is a genuine
+  // point on the winding, not a wire grafted between two separate parts.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const vCoil = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 1 ${x} ${t + 9 * (i + 1)}`; return d; };
+    const diode = (x, y) => `<polygon points="${x},${y - 8} ${x},${y + 8} ${x + 15},${y}" fill="${comp}"/><path d="M${x + 15} ${y - 8} V${y + 8}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>`;
+
+    return `<svg width="280" height="120" viewBox="0 -14 280 120" fill="none">
+      <circle cx="30" cy="50" r="14" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      <path d="M23 50 Q27 43 30 50 Q33 57 37 50" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <text x="30" y="24" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vac</text>
+      <path d="M30 36 V32 H70" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M30 64 V68 H70" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${vCoil(70, 32, 4)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <path d="M85 28 V72 M90 28 V72" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${vCoil(105, 32, 2)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <path d="${vCoil(105, 50, 2)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <circle cx="105" cy="50" r="2.6" fill="${wire}"/>
+      <text x="105" y="98" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">CT</text>
+
+      <path d="M105 32 V4 H165" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${diode(165, 4)}
+      <path d="M180 4 H240 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M105 50 H154" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(50, 190)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="172" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Rload</text>
+      <path d="M190 50 H240" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="240" cy="50" r="2.6" fill="${wire}"/>
+
+      <path d="M105 68 V96 H165" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${diode(165, 96)}
+      <path d="M180 96 H240 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`;
+  }
+
+  // Vout follows max(0, |Vp·sinθ| − Vf) — one diode drop, not two, since
+  // only one diode ever carries the current at a time.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="40" viewBox="0 0 220 40" fill="none"></svg>`;
+    const vp = r.vp, vf = si("vf"), vdc = r.vdc;
+    const pxTop = 6, pxBottom = 28;
+    const toY = (v) => pxBottom - ((v + vp) / (2 * vp)) * (pxBottom - pxTop);
+    const width = 190, periods = 2, samples = 140;
+    const inPts = [], outPts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const theta = t * periods * 2 * Math.PI;
+      const x = 10 + t * width;
+      const vin = vp * Math.sin(theta);
+      inPts.push(`${x.toFixed(1)},${toY(vin).toFixed(1)}`);
+      outPts.push(`${x.toFixed(1)},${toY(Math.max(0, Math.abs(vin) - vf)).toFixed(1)}`);
+    }
+    const zeroY = toY(0), dcY = toY(vdc);
+    return `<svg width="220" height="40" viewBox="0 0 220 40" fill="none">
+      <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="206" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
+      <text x="10" y="7" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
+      <text x="81" y="37" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
+      <text x="10" y="${toY(vp - vf) - 4}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
+      <div class="eseries-grid">
+        ${cell("Vdc", siFormat(r.vdc, "V"))}
+        ${cell("Idc", siFormat(r.idc, "A"))}
+        ${cell("P", siFormat(r.pdc, "W"))}
+        ${cell("PIV", siFormat(r.piv, "V"))}
+        ${cell("Ripple", `${trim(r.ripple)}×`)}
+        ${cell("Efficiency", `${trim(r.eff)}%`)}
+      </div>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Two diodes, one diode drop, twice the PIV")}
+
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        ${diagram()}
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Vac (per half, RMS)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="rc-vin" value="${state.vin}" />
+            <select id="rc-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Vf (diode)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="rc-vf" value="${state.vf}" />
+            <select id="rc-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Rload</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="rc-rload" value="${state.rload}" />
+            <select id="rc-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        [
+          "Vp = Vac(per half) × √2",
+          "Vp,out = Vp − Vf",
+          "Vdc = 2×Vp,out / π",
+          "Vrms = Vp,out / √2",
+          "Idc = Vdc / Rload",
+          "P = Vdc × Idc",
+          "PIV = 2×Vp − Vf",
+          "Ripple = √((Vrms/Vdc)² − 1)",
+          "Efficiency = (Idc/Irms)² × 100%",
+        ],
+        "Vac is ONE HALF of the center-tapped secondary — a \"24V CT\" transformer is two 12V halves, enter 12V here. Only one diode conducts (one Vf drop, not two like the bridge) — but the off diode swings from +Vp to −Vp, so PIV is 2×Vp."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["rc-vin", "vin"], ["rc-vf", "vf"], ["rc-rload", "rload"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["rc-vin-unit", "vinUnit"], ["rc-vf-unit", "vfUnit"], ["rc-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
