@@ -73,7 +73,14 @@ Vr(pp)=Vp,out/(fRC), Vdc=Vp,out−Vr(pp)/2 — PIV nearly doubles to
 2×Vp since the cap holds the output up while Vac swings negative;
 waveform panel step-simulates the real exponential-decay shape,
 zoomed to the ripple band since the ripple is invisible at full
-Vp scale)
+Vp scale) · Thyristor/TRIAC firing angle basics (device toggle
+instead of a rectifier's fixed conduction — a gate pulse delays
+turn-on by angle α (0-180°) from each half-cycle's zero crossing;
+SCR half-wave: Vdc=(Vp/2π)(1+cosα); TRIAC full-wave/symmetric:
+Vrms=Vac×√((π−α+sin2α/2)/π); both share the same normalized
+power-vs-α shape, non-linear not straight-line; ideal-switch
+model, no Vf term; waveform panel shows the classic notched-sine
+dimmer shape with an α delay bracket on the zero line)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -81,7 +88,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Thyristor/TRIAC firing angle basics
 - [ ] Op-amp: inverting amplifier
 - [ ] Op-amp: non-inverting amplifier
 - [ ] Op-amp: buffer (voltage follower)

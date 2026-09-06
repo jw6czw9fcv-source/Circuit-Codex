@@ -77,7 +77,7 @@ const DOMAINS = [
       { title: "Transistors (BJT)", tools: [{ name: "Biasing (voltage divider bias)", calc: "transistor-bias" }, { name: "NPN/PNP as a switch", calc: "transistor-switch" }, { name: "Example calculation (hFE, IC)", calc: "transistor-example" }] },
       { title: "MOSFET / IGBT", tools: [{ name: "Biasing", calc: "mosfet-bias" }, { name: "Switching calculation", calc: "mosfet-switch" }] },
       { title: "Rectifiers", tools: [{ name: "Half-wave", calc: "rectifier-halfwave" }, { name: "Full-wave (bridge)", calc: "rectifier-bridge" }, { name: "Full-wave with center tap", calc: "rectifier-centertap" }, { name: "Half-wave with capacitor (ripple)", calc: "rectifier-halfwave-cap" }] },
-      { title: "Thyristors & TRIAC", tools: [{ name: "Firing angle basics" }] },
+      { title: "Thyristors & TRIAC", tools: [{ name: "Firing angle basics", calc: "thyristor-firing" }] },
       {
         title: "Op-amps",
         tools: [

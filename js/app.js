@@ -227,6 +227,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rectifier-bridge") return renderRectifierBridge(domain, tool, favId);
   if (calcId === "rectifier-centertap") return renderRectifierCenterTap(domain, tool, favId);
   if (calcId === "rectifier-halfwave-cap") return renderRectifierHalfwaveCap(domain, tool, favId);
+  if (calcId === "thyristor-firing") return renderThyristorFiring(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -11973,6 +11974,292 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
     [["rhc-vin-unit", "vinUnit"], ["rhc-vf-unit", "vfUnit"], ["rhc-rload-unit", "rloadUnit"], ["rhc-cap-unit", "capUnit"], ["rhc-freq-unit", "freqUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
+  }
+
+  paint();
+}
+
+// ---------- Thyristor/TRIAC firing angle basics ----------
+// Phase control: instead of a diode's fixed "on the moment it's forward
+// biased," an SCR/TRIAC withholds conduction until a gate pulse fires it,
+// at a chosen delay angle α (0-180°) measured from each half-cycle's own
+// zero crossing. That single knob is how lamp dimmers and simple motor
+// speed controls throttle AC power without a transformer or switcher.
+// SCR: only the positive half-cycle can ever conduct (like the half-wave
+// diode rectifier, but with a controllable start point) — Vdc=(Vp/2π)(1+cos α).
+// TRIAC: both half-cycles are symmetric, gated separately each half-cycle,
+// so there's no net DC component, only an RMS value that shrinks with α —
+// Vrms=Vac×√((π−α+sin2α/2)/π). Both formulas (and the ideal-switch,
+// no-Vf simplification — real forward drop is ~1-2V, negligible next to
+// the RMS voltages this tool targets) verified via WebSearch against
+// standard power-electronics references, not guessed. Device symbols
+// (SCR: diode + gate lead off the cathode bar's center; TRIAC: two SCR
+// bodies stacked/mirrored with overlapping bars, gate off whichever bar's
+// triangle base sits on that side) ported from schemdraw's own SCR/Triac
+// elements the same way the bridge/center-tap rectifiers were.
+function renderThyristorFiring(domain, tool, favId) {
+  const state = {
+    device: "scr",
+    vac: 120, vacUnit: "V",
+    freq: 60, freqUnit: "Hz",
+    alpha: 90,
+    rload: 100, rloadUnit: "Ω",
+  };
+
+  const F_UNITS = { Hz: 1, kHz: 1e3 };
+
+  function si(name) {
+    if (name === "rload") return state.rload * OHM_UNITS[state.rloadUnit];
+    if (name === "freq") return state.freq * F_UNITS[state.freqUnit];
+    return state.vac * VOLT_UNITS[state.vacUnit];
+  }
+
+  // shape is the normalized Vrms²/Vp,ref² ratio both modes share (the
+  // integral of sin²θ over the conducting portion of a half-cycle) — it
+  // also equals delivered power as a fraction of full (α=0) power, since
+  // power on a resistive load scales with Vrms² regardless of mode.
+  function compute() {
+    const vac = si("vac"), freq = si("freq"), rload = si("rload");
+    const isTriac = state.device === "triac";
+    const alphaDeg = Math.max(0, Math.min(180, state.alpha));
+    const alpha = (alphaDeg * Math.PI) / 180;
+
+    if (!(vac > 0) || !(freq > 0) || !(rload > 0)) {
+      return { problem: "Vac, f, and Rload must be greater than zero." };
+    }
+
+    const vp = vac * Math.SQRT2;
+    // Clamped against floating-point noise at the exact endpoints (e.g.
+    // Math.sin(2π) isn't quite 0), which would otherwise surface as a
+    // stray -3.9e-15% on the Power readout or a NaN from sqrt(negative).
+    const shape = Math.max(0, Math.min(1, (Math.PI - alpha + Math.sin(2 * alpha) / 2) / Math.PI));
+    const piv = vp;
+    const tDelay = alphaDeg / (360 * freq);
+    const powerPct = shape * 100;
+
+    if (isTriac) {
+      const vrms = vac * Math.sqrt(shape);
+      const irms = vrms / rload;
+      const p = irms * irms * rload;
+      return { problem: "", isTriac, vp, alpha, alphaDeg, vrms, irms, p, piv, tDelay, powerPct };
+    }
+
+    const vdc = (vp / (2 * Math.PI)) * (1 + Math.cos(alpha));
+    const vrms = (vp / 2) * Math.sqrt(shape);
+    const idc = vdc / rload;
+    const irms = vrms / rload;
+    const p = irms * irms * rload;
+    return { problem: "", isTriac, vp, alpha, alphaDeg, vdc, vrms, idc, irms, p, piv, tDelay, powerPct };
+  }
+
+  // Same closed source—device—load loop as the diode rectifiers, so this
+  // reads as "the same family of circuit," just with a gated device. The
+  // gate lead is the one new element: a third terminal, diagonal-then-
+  // straight, ending below the main current path (never crossing it).
+  function diagram(isTriac) {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+
+    const device = isTriac
+      ? `<path d="M99 4 V36 M115 4 V36" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+         <path d="M99 4 L99 20 L115 12 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+         <path d="M115 20 L115 36 L99 28 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+         <path d="M115 28 L123 36 V44" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         <text x="128" y="47" fill="${wire}" font-size="10" font-weight="600">G</text>
+         <text x="107" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">TRIAC</text>`
+      : `<path d="M100 12 L100 28 L115 20 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+         <path d="M115 12 V28" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+         <path d="M115 20 L123 28 V38" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         <text x="128" y="41" fill="${wire}" font-size="10" font-weight="600">G</text>
+         <text x="107" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">SCR</text>`;
+
+    const leftStop = isTriac ? 99 : 100;
+
+    return `<svg width="260" height="104" viewBox="-20 -10 260 104" fill="none">
+      <path d="M30 20 H${leftStop}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M115 20 H190" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${device}
+
+      <path d="M190 20 V35" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(190, 35)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M190 71 V90" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="205" y="56" fill="${comp}" font-size="12" font-weight="600">Rload</text>
+
+      <path d="M190 90 H30" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M30 20 V37" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M30 73 V90" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="30" cy="55" r="18" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      <path d="M21 55 Q25.5 45 30 55 Q34.5 65 39 55" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <text x="8" y="59" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vac</text>
+    </svg>`;
+  }
+
+  // Vout rides Vin during the conducting window(s) and sits at 0 the rest
+  // of the time — SCR conducts once per full cycle (α to π), TRIAC twice
+  // (α to π, and π+α to 2π, mirrored). The bracket along the 0V line marks
+  // the delay from each half-cycle's own zero crossing to first firing.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="42" viewBox="0 0 220 42" fill="none"></svg>`;
+    const vp = r.vp, alpha = r.alpha, isTriac = r.isTriac;
+    const pxTop = 10, pxBottom = 34;
+    const toY = (v) => pxBottom - ((v + vp) / (2 * vp)) * (pxBottom - pxTop);
+    const width = 190, periods = 2, samples = 220;
+    const inPts = [], outPts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const theta = t * periods * 2 * Math.PI;
+      const x = 10 + t * width;
+      const vin = vp * Math.sin(theta);
+      const mod = theta % (2 * Math.PI);
+      const conducting = isTriac
+        ? (mod >= alpha && mod < Math.PI) || (mod >= Math.PI + alpha && mod < 2 * Math.PI)
+        : mod >= alpha && mod < Math.PI;
+      inPts.push(`${x.toFixed(1)},${toY(vin).toFixed(1)}`);
+      outPts.push(`${x.toFixed(1)},${toY(conducting ? vin : 0).toFixed(1)}`);
+    }
+    const zeroY = toY(0);
+    const markX = 10 + (alpha / (periods * 2 * Math.PI)) * width;
+    return `<svg width="220" height="42" viewBox="0 0 220 42" fill="none">
+      <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <path d="M10,${zeroY} H${markX.toFixed(1)}" stroke="#5DCAA5" stroke-width="1.4" stroke-dasharray="2 2"/>
+      <path d="M10,${(zeroY - 3).toFixed(1)} V${(zeroY + 3).toFixed(1)} M${markX.toFixed(1)},${(zeroY - 3).toFixed(1)} V${(zeroY + 3).toFixed(1)}" stroke="#5DCAA5" stroke-width="1"/>
+      <text x="${((10 + markX) / 2).toFixed(1)}" y="${(zeroY - 6).toFixed(1)}" fill="#5DCAA5" font-size="9" font-weight="600" text-anchor="middle">α</text>
+      <line x1="150" y1="8" x2="161" y2="8" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="164" y="11" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
+      <line x1="150" y1="17" x2="161" y2="17" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="164" y="20" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    if (r.isTriac) {
+      return `
+        <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
+        <div class="eseries-grid">
+          ${cell("Vrms", siFormat(r.vrms, "V"))}
+          ${cell("Irms", siFormat(r.irms, "A"))}
+          ${cell("P", siFormat(r.p, "W"))}
+          ${cell("PIV", siFormat(r.piv, "V"))}
+          ${cell("Power", `${trim(r.powerPct)}%`)}
+        </div>`;
+    }
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
+      <div class="eseries-grid">
+        ${cell("Vdc", siFormat(r.vdc, "V"))}
+        ${cell("Idc", siFormat(r.idc, "A"))}
+        ${cell("P", siFormat(r.p, "W"))}
+        ${cell("PIV", siFormat(r.piv, "V"))}
+        ${cell("Power", `${trim(r.powerPct)}%`)}
+      </div>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="circuit"]').innerHTML = diagram(state.device === "triac");
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
+  }
+
+  function paint() {
+    const r = compute();
+    const isTriac = state.device === "triac";
+
+    app.innerHTML = `
+      ${calcHeader(tool, favId, isTriac ? "TRIAC — full-wave phase control (dimmers, motors)" : "SCR — half-wave phase-controlled rectifier")}
+
+      ${pillRow([["scr", "SCR"], ["triac", "TRIAC"]], state.device, domain.bg)}
+
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div data-res="circuit">${diagram(isTriac)}</div>
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Vac (RMS)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tf-vac" value="${state.vac}" />
+            <select id="tf-vac-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vacUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Frequency</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tf-freq" value="${state.freq}" />
+            <select id="tf-freq-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Rload</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tf-rload" value="${state.rload}" />
+            <select id="tf-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div class="r-list">
+        <div class="r-item">
+          <div class="r-line">
+            <span class="r-index">α</span>
+            <input type="number" inputmode="decimal" step="any" id="tf-alpha-input" style="font-size:26px;font-weight:600;" value="${trim(state.alpha)}" />
+            <span class="r-hint" style="font-size:15px;">°</span>
+            <button type="button" class="r-reset" id="tf-alpha-reset" aria-label="Reset to 90°">${ICONS.reset}</button>
+          </div>
+          <div class="slider-row">
+            <button type="button" class="slider-step" id="tf-alpha-dec" aria-label="Decrease firing angle">−</button>
+            <input type="range" class="series-slider" id="tf-alpha-slider" min="0" max="180" step="1" value="${state.alpha}" aria-label="Drag to set firing angle" />
+            <button type="button" class="slider-step" id="tf-alpha-inc" aria-label="Increase firing angle">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        isTriac
+          ? ["Vp = Vac × √2", "Vrms = Vac × √((π − α + sin(2α)/2) / π)", "Irms = Vrms / Rload", "P = Irms² × Rload", "PIV = Vp", "Power = (Vrms/Vac)² × 100%"]
+          : ["Vp = Vac × √2", "Vdc = (Vp / 2π) × (1 + cos α)", "Vrms = (Vp / 2) × √((π − α + sin(2α)/2) / π)", "Idc = Vdc / Rload", "P = Irms² × Rload", "PIV = Vp"],
+        "Bigger α cuts power non-linearly (ideal switch, no Vf term). SCR fires one half-cycle only; TRIAC fires both, so it carries no DC component."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.device = m; paint(); });
+
+    [["tf-vac", "vac"], ["tf-freq", "freq"], ["tf-rload", "rload"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["tf-vac-unit", "vacUnit"], ["tf-freq-unit", "freqUnit"], ["tf-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+
+    const alphaInput = document.getElementById("tf-alpha-input");
+    const alphaSlider = document.getElementById("tf-alpha-slider");
+    const syncAlpha = () => { alphaInput.value = trim(state.alpha); alphaSlider.value = state.alpha; refresh(); };
+    alphaInput.oninput = () => {
+      const v = parseFloat(alphaInput.value);
+      if (isFinite(v)) { state.alpha = Math.max(0, Math.min(180, v)); alphaSlider.value = state.alpha; refresh(); }
+    };
+    alphaSlider.oninput = () => { state.alpha = parseFloat(alphaSlider.value); alphaInput.value = trim(state.alpha); refresh(); };
+    document.getElementById("tf-alpha-dec").onclick = () => { state.alpha = Math.max(0, state.alpha - 1); syncAlpha(); };
+    document.getElementById("tf-alpha-inc").onclick = () => { state.alpha = Math.min(180, state.alpha + 1); syncAlpha(); };
+    document.getElementById("tf-alpha-reset").onclick = () => { state.alpha = 90; syncAlpha(); };
   }
 
   paint();
