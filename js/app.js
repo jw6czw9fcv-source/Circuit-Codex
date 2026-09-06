@@ -11382,9 +11382,9 @@ function renderRectifierBridge(domain, tool, favId) {
   // the half-wave tool's waveform but full-wave and with 2×Vf instead of
   // Vf.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="40" viewBox="0 0 220 40" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none"></svg>`;
     const vp = r.vp, vf = si("vf"), vdc = r.vdc;
-    const pxTop = 6, pxBottom = 28;
+    const pxTop = 12, pxBottom = 56;
     const toY = (v) => pxBottom - ((v + vp) / (2 * vp)) * (pxBottom - pxTop);
     const width = 190, periods = 2, samples = 140;
     const inPts = [], outPts = [];
@@ -11397,15 +11397,15 @@ function renderRectifierBridge(domain, tool, favId) {
       outPts.push(`${x.toFixed(1)},${toY(Math.max(0, Math.abs(vin) - 2 * vf)).toFixed(1)}`);
     }
     const zeroY = toY(0), dcY = toY(vdc);
-    return `<svg width="220" height="40" viewBox="0 0 220 40" fill="none">
+    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
       <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="206" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
       <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
-      <text x="10" y="7" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
-      <text x="81" y="37" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
+      <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
+      <text x="81" y="74" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
       <text x="10" y="${toY(vp - 2 * vf) - 4}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
     </svg>`;
   }
@@ -11421,7 +11421,7 @@ function renderRectifierBridge(domain, tool, favId) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-      <div class="eseries-grid">
+      <div class="eseries-grid" style="grid-template-columns:repeat(6,1fr);">
         ${cell("Vdc", siFormat(r.vdc, "V"))}
         ${cell("Idc", siFormat(r.idc, "A"))}
         ${cell("P", siFormat(r.pdc, "W"))}
@@ -12101,9 +12101,9 @@ function renderThyristorFiring(domain, tool, favId) {
   // (α to π, and π+α to 2π, mirrored). The bracket along the 0V line marks
   // the delay from each half-cycle's own zero crossing to first firing.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="42" viewBox="0 0 220 42" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none"></svg>`;
     const vp = r.vp, alpha = r.alpha, isTriac = r.isTriac;
-    const pxTop = 10, pxBottom = 34;
+    const pxTop = 20, pxBottom = 68;
     const toY = (v) => pxBottom - ((v + vp) / (2 * vp)) * (pxBottom - pxTop);
     const width = 190, periods = 2, samples = 220;
     const inPts = [], outPts = [];
@@ -12121,17 +12121,17 @@ function renderThyristorFiring(domain, tool, favId) {
     }
     const zeroY = toY(0);
     const markX = 10 + (alpha / (periods * 2 * Math.PI)) * width;
-    return `<svg width="220" height="42" viewBox="0 0 220 42" fill="none">
+    return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none">
       <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <path d="M10,${zeroY} H${markX.toFixed(1)}" stroke="#5DCAA5" stroke-width="1.4" stroke-dasharray="2 2"/>
-      <path d="M10,${(zeroY - 3).toFixed(1)} V${(zeroY + 3).toFixed(1)} M${markX.toFixed(1)},${(zeroY - 3).toFixed(1)} V${(zeroY + 3).toFixed(1)}" stroke="#5DCAA5" stroke-width="1"/>
-      <text x="${((10 + markX) / 2).toFixed(1)}" y="${(zeroY - 6).toFixed(1)}" fill="#5DCAA5" font-size="9" font-weight="600" text-anchor="middle">α</text>
-      <line x1="150" y1="8" x2="161" y2="8" stroke="#5A6169" stroke-width="1.4"/>
-      <text x="164" y="11" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
-      <line x1="150" y1="17" x2="161" y2="17" stroke="#8FC1F5" stroke-width="2"/>
-      <text x="164" y="20" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
+      <path d="M10,${(zeroY - 6).toFixed(1)} V${(zeroY + 6).toFixed(1)} M${markX.toFixed(1)},${(zeroY - 6).toFixed(1)} V${(zeroY + 6).toFixed(1)}" stroke="#5DCAA5" stroke-width="1"/>
+      <text x="${((10 + markX) / 2).toFixed(1)}" y="${(zeroY - 10).toFixed(1)}" fill="#5DCAA5" font-size="9" font-weight="600" text-anchor="middle">α</text>
+      <line x1="150" y1="14" x2="161" y2="14" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="164" y="17" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
+      <line x1="150" y1="26" x2="161" y2="26" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="164" y="29" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -12233,9 +12233,9 @@ function renderThyristorFiring(domain, tool, favId) {
 
       ${formulaSection(
         isTriac
-          ? ["Vp = Vac × √2", "Vrms = Vac × √((π − α + sin(2α)/2) / π)", "Irms = Vrms / Rload", "P = Irms² × Rload", "PIV = Vp", "Power = (Vrms/Vac)² × 100%"]
-          : ["Vp = Vac × √2", "Vdc = (Vp / 2π) × (1 + cos α)", "Vrms = (Vp / 2) × √((π − α + sin(2α)/2) / π)", "Idc = Vdc / Rload", "P = Irms² × Rload", "PIV = Vp"],
-        "Bigger α cuts power non-linearly (ideal switch, no Vf term). SCR fires one half-cycle only; TRIAC fires both, so it carries no DC component."
+          ? ["Vp = Vac × √2, PIV = Vp", "Vrms = Vac × √((π − α + sin(2α)/2) / π)", "Irms = Vrms / Rload", "P = Irms² × Rload", "Power = (Vrms/Vac)² × 100%"]
+          : ["Vp = Vac × √2, PIV = Vp", "Vdc = (Vp / 2π) × (1 + cos α)", "Vrms = (Vp / 2) × √((π − α + sin(2α)/2) / π)", "Idc = Vdc / Rload", "P = Irms² × Rload"],
+        "Bigger α cuts power non-linearly (ideal switch, no Vf). SCR fires one half-cycle; TRIAC fires both, so it has no DC component."
       )}
       ${calcFooter()}
     `;
