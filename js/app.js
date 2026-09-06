@@ -11354,18 +11354,23 @@ function renderRectifierBridge(domain, tool, favId) {
     const T = [178, 32], R = [226, 80], B = [178, 128], L = [130, 80];
     const edge = (p1, p2) => `<path d="M${p1[0]} ${p1[1]} L${p2[0]} ${p2[1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>${diodeSymbol(...p1, ...p2)}`;
 
-    // Transformer feeding in from the left (per Pierre's reference photo)
-    // instead of a bare AC source floating above the diamond — same coil
-    // shape/proportions as the center-tap tool's transformer (vCoil, 4.5px
-    // arcs every 9px, secondary mirrored via the opposite sweep flag), just
-    // a single continuous secondary here since a bridge doesn't need a
-    // center tap. Its two leads split to opposite corners of the diamond
-    // (L direct, R routed over the top) — the same AC-in/DC-out corner
-    // pairing this diagram already used, just fed from the side now.
+    // Transformer feeding in from the left, traced node-by-node from
+    // Pierre's reference photo rather than approximated: the photo's AC
+    // pair is the diamond's TOP and BOTTOM vertices (not the side ones),
+    // routed there since the transformer sits at the diamond's mid-height
+    // and neither T nor B is at that height — the top lead runs up and
+    // over, the bottom lead down and under, both clearing the diode edges
+    // near L before turning in. That leaves L and R — the two vertices
+    // actually adjacent to the transformer's own height — as the DC pair,
+    // which is why R gets a short direct wire to Rload but L's has to
+    // detour up and over everything (mirroring the photo's own long
+    // under-route for its "−" wire) to reach the other side. Coil shape
+    // is the center-tap tool's (vCoil, 4.5px arcs every 9px, secondary
+    // mirrored via the opposite sweep flag), just untapped here.
     const vCoil = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 1 ${x} ${t + 9 * (i + 1)}`; return d; };
     const vCoilR = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 0 ${x} ${t + 9 * (i + 1)}`; return d; };
 
-    return `<svg width="338" height="150" viewBox="0 -22 338 150" fill="none">
+    return `<svg width="338" height="155" viewBox="0 -6 338 155" fill="none">
       <circle cx="30" cy="80" r="14" fill="none" stroke="${comp}" stroke-width="1.6"/>
       <path d="M23 80 Q27 73 30 80 Q33 87 37 80" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
       <text x="30" y="54" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vac</text>
@@ -11374,8 +11379,8 @@ function renderRectifierBridge(domain, tool, favId) {
       <path d="${vCoil(70, 62, 4)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
       <path d="M85 58 V102 M90 58 V102" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${vCoilR(105, 62, 4)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-      <path d="M105 62 V10 H226 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M105 98 H130 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M105 62 V10 H178 V32" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M105 98 V140 H178 V128" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       ${edge(L, T)}
       ${edge(R, T)}
@@ -11386,10 +11391,10 @@ function renderRectifierBridge(domain, tool, favId) {
       <circle cx="178" cy="32" r="2.6" fill="${wire}"/>
       <circle cx="178" cy="128" r="2.6" fill="${wire}"/>
 
-      <path d="M178 32 H288 V62" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M130 80 V2 H288 V62" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${zig(288, 62)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <text x="300" y="82" fill="${comp}" font-size="12" font-weight="600">Rload</text>
-      <path d="M288 98 V128 H178" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M226 80 H250 V98 H288" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
     </svg>`;
   }
 
