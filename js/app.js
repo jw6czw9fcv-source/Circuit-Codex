@@ -11361,16 +11361,17 @@ function renderRectifierBridge(domain, tool, favId) {
     // and neither T nor B is at that height — the top lead runs up and
     // over, the bottom lead down and under, both clearing the diode edges
     // near L before turning in. That leaves L and R — the two vertices
-    // actually adjacent to the transformer's own height — as the DC pair,
-    // which is why R gets a short direct wire to Rload but L's has to
-    // detour up and over everything (mirroring the photo's own long
-    // under-route for its "−" wire) to reach the other side. Coil shape
+    // actually adjacent to the transformer's own height — as the DC pair:
+    // R gets a short direct wire to Rload's near terminal, while L's own
+    // wire runs UNDER everything (below the transformer's own bottom
+    // lead, not crossing it) to reach Rload's far terminal — the same
+    // long under-route the photo draws for its "−" wire. Coil shape
     // is the center-tap tool's (vCoil, 4.5px arcs every 9px, secondary
     // mirrored via the opposite sweep flag), just untapped here.
     const vCoil = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 1 ${x} ${t + 9 * (i + 1)}`; return d; };
     const vCoilR = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 0 ${x} ${t + 9 * (i + 1)}`; return d; };
 
-    return `<svg width="338" height="155" viewBox="0 -6 338 155" fill="none">
+    return `<svg width="338" height="165" viewBox="0 0 338 165" fill="none">
       <circle cx="30" cy="80" r="14" fill="none" stroke="${comp}" stroke-width="1.6"/>
       <path d="M23 80 Q27 73 30 80 Q33 87 37 80" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
       <text x="30" y="54" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vac</text>
@@ -11391,10 +11392,10 @@ function renderRectifierBridge(domain, tool, favId) {
       <circle cx="178" cy="32" r="2.6" fill="${wire}"/>
       <circle cx="178" cy="128" r="2.6" fill="${wire}"/>
 
-      <path d="M130 80 V2 H288 V62" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M226 80 H250 V62 H288" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${zig(288, 62)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <text x="300" y="82" fill="${comp}" font-size="12" font-weight="600">Rload</text>
-      <path d="M226 80 H250 V98 H288" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M130 80 V160 H288 V98" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
     </svg>`;
   }
 
