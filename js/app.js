@@ -11383,8 +11383,8 @@ function renderRectifierBridge(domain, tool, favId) {
       <path d="M105 98 V140 H178 V128" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       ${edge(L, T)}
-      ${edge(R, T)}
-      ${edge(B, L)}
+      ${edge(T, R)}
+      ${edge(L, B)}
       ${edge(B, R)}
       <circle cx="130" cy="80" r="2.6" fill="${wire}"/>
       <circle cx="226" cy="80" r="2.6" fill="${wire}"/>
