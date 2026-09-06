@@ -11128,7 +11128,7 @@ function renderRectifierHalfwave(domain, tool, favId) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
-    return `<svg width="260" height="104" viewBox="-20 -10 260 104" fill="none">
+    return `<svg width="260" height="110" viewBox="-20 -16 260 110" fill="none">
       <path d="M30 20 H100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M115 20 H190" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M100,12 L100,28 L115,20 Z M115,12 V28" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
@@ -11193,7 +11193,7 @@ function renderRectifierHalfwave(domain, tool, favId) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-      <div class="eseries-grid">
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);">
         ${cell("Vdc", siFormat(r.vdc, "V"))}
         ${cell("Idc", siFormat(r.idc, "A"))}
         ${cell("P", siFormat(r.pdc, "W"))}
@@ -11354,7 +11354,7 @@ function renderRectifierBridge(domain, tool, favId) {
     const T = [140, 32], R = [188, 80], B = [140, 128], L = [92, 80];
     const edge = (p1, p2) => `<path d="M${p1[0]} ${p1[1]} L${p2[0]} ${p2[1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>${diodeSymbol(...p1, ...p2)}`;
 
-    return `<svg width="300" height="144" viewBox="0 -16 300 144" fill="none">
+    return `<svg width="300" height="150" viewBox="0 -22 300 150" fill="none">
       <path d="M127 8 H92 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M153 8 H188 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="140" cy="8" r="13" fill="none" stroke="${comp}" stroke-width="1.6"/>
@@ -11794,7 +11794,7 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
-    return `<svg width="260" height="104" viewBox="-20 -10 260 104" fill="none">
+    return `<svg width="260" height="110" viewBox="-20 -16 260 110" fill="none">
       <path d="M30 20 H100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M115 20 H160" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M100,12 L100,28 L115,20 Z M115,12 V28" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
@@ -12076,7 +12076,7 @@ function renderThyristorFiring(domain, tool, favId) {
 
     const leftStop = isTriac ? 99 : 100;
 
-    return `<svg width="260" height="104" viewBox="-20 -10 260 104" fill="none">
+    return `<svg width="260" height="110" viewBox="-20 -16 260 110" fill="none">
       <path d="M30 20 H${leftStop}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M115 20 H190" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${device}
