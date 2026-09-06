@@ -11174,11 +11174,11 @@ function renderRectifierHalfwave(domain, tool, favId) {
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="206" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
+      <text x="204" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
       <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
       <text x="81" y="70" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
-      <text x="10" y="${toY(vp - vf) - 4}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+      <text x="10" y="${Math.max(10, toY(vp - vf) - 4)}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -11351,29 +11351,45 @@ function renderRectifierBridge(domain, tool, favId) {
         <path d="M${barX1.toFixed(1)} ${barY1.toFixed(1)} L${barX2.toFixed(1)} ${barY2.toFixed(1)}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>`;
     }
 
-    const T = [140, 32], R = [188, 80], B = [140, 128], L = [92, 80];
+    const T = [178, 32], R = [226, 80], B = [178, 128], L = [130, 80];
     const edge = (p1, p2) => `<path d="M${p1[0]} ${p1[1]} L${p2[0]} ${p2[1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>${diodeSymbol(...p1, ...p2)}`;
 
-    return `<svg width="300" height="150" viewBox="0 -22 300 150" fill="none">
-      <path d="M127 8 H92 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M153 8 H188 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="140" cy="8" r="13" fill="none" stroke="${comp}" stroke-width="1.6"/>
-      <path d="M133 8 Q137 1 140 8 Q143 15 147 8" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-      <text x="140" y="-8" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vac</text>
+    // Transformer feeding in from the left (per Pierre's reference photo)
+    // instead of a bare AC source floating above the diamond — same coil
+    // shape/proportions as the center-tap tool's transformer (vCoil, 4.5px
+    // arcs every 9px, secondary mirrored via the opposite sweep flag), just
+    // a single continuous secondary here since a bridge doesn't need a
+    // center tap. Its two leads split to opposite corners of the diamond
+    // (L direct, R routed over the top) — the same AC-in/DC-out corner
+    // pairing this diagram already used, just fed from the side now.
+    const vCoil = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 1 ${x} ${t + 9 * (i + 1)}`; return d; };
+    const vCoilR = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 0 ${x} ${t + 9 * (i + 1)}`; return d; };
+
+    return `<svg width="338" height="150" viewBox="0 -22 338 150" fill="none">
+      <circle cx="30" cy="80" r="14" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      <path d="M23 80 Q27 73 30 80 Q33 87 37 80" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <text x="30" y="54" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vac</text>
+      <path d="M30 66 V62 H70" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M30 94 V98 H70" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${vCoil(70, 62, 4)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <path d="M85 58 V102 M90 58 V102" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${vCoilR(105, 62, 4)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <path d="M105 62 V10 H226 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M105 98 H130 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       ${edge(L, T)}
       ${edge(R, T)}
       ${edge(B, L)}
       ${edge(B, R)}
-      <circle cx="92" cy="80" r="2.6" fill="${wire}"/>
-      <circle cx="188" cy="80" r="2.6" fill="${wire}"/>
-      <circle cx="140" cy="32" r="2.6" fill="${wire}"/>
-      <circle cx="140" cy="128" r="2.6" fill="${wire}"/>
+      <circle cx="130" cy="80" r="2.6" fill="${wire}"/>
+      <circle cx="226" cy="80" r="2.6" fill="${wire}"/>
+      <circle cx="178" cy="32" r="2.6" fill="${wire}"/>
+      <circle cx="178" cy="128" r="2.6" fill="${wire}"/>
 
-      <path d="M140 32 H250 V62" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(250, 62)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="262" y="82" fill="${comp}" font-size="12" font-weight="600">Rload</text>
-      <path d="M250 98 V128 H140" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M178 32 H288 V62" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(288, 62)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="300" y="82" fill="${comp}" font-size="12" font-weight="600">Rload</text>
+      <path d="M288 98 V128 H178" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
     </svg>`;
   }
 
@@ -11402,8 +11418,8 @@ function renderRectifierBridge(domain, tool, favId) {
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="206" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
+      <text x="204" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
       <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
       <text x="81" y="74" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
       <text x="10" y="${toY(vp - 2 * vf) - 4}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
@@ -11623,11 +11639,11 @@ function renderRectifierCenterTap(domain, tool, favId) {
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="206" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
+      <text x="204" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
       <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
       <text x="81" y="74" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
-      <text x="10" y="${toY(vp - vf) - 4}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+      <text x="10" y="${Math.max(10, toY(vp - vf) - 4)}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -11863,7 +11879,7 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
     return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none">
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
+      <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
       <text x="10" y="${peakY - 2}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
       <text x="150" y="58" fill="#8A9099" font-size="9" font-weight="600" text-anchor="middle">Vr(pp)=${siFormat(vrpp, "V")}, zoomed in</text>
     </svg>`;

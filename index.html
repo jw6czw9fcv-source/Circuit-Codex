@@ -31,19 +31,30 @@
        a stale URL as far as that cache is concerned — this is what makes an
        update visible on reload instead of waiting out the cache or
        reinstalling the app. -->
-  <link rel="stylesheet" href="css/styles.css?v=317" />
+  <link rel="stylesheet" href="css/styles.css?v=321" />
 </head>
 <body>
   <div id="app"></div>
 
-  <script src="js/data.js?v=317"></script>
-  <script src="js/formulas.js?v=317"></script>
-  <script src="js/app.js?v=317"></script>
+  <script src="js/data.js?v=321"></script>
+  <script src="js/formulas.js?v=321"></script>
+  <script src="js/app.js?v=321"></script>
   <script>
-    if ("serviceWorker" in navigator) {
+    // Skip the service worker entirely on localhost/a dev server — it's what
+    // was making live edits look like no-ops during development (a new SW
+    // has to be fetched, installed, and take control before its fresh cache
+    // is what answers requests; a plain reload doesn't reliably force that
+    // sequence). Production (GitHub Pages) still registers it normally.
+    const isLocalDev = ["localhost", "127.0.0.1", "0.0.0.0", ""].includes(location.hostname);
+    if ("serviceWorker" in navigator && !isLocalDev) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("sw.js").catch(() => {});
       });
+    } else if ("serviceWorker" in navigator && isLocalDev) {
+      // Also unregister any SW a previous (pre-fix) local session already
+      // installed, so this takes effect immediately instead of only on the
+      // next fresh profile.
+      navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
     }
   </script>
 </body>
