@@ -11371,7 +11371,7 @@ function renderRectifierBridge(domain, tool, favId) {
     const vCoil = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 1 ${x} ${t + 9 * (i + 1)}`; return d; };
     const vCoilR = (x, t, bumps) => { let d = `M${x} ${t}`; for (let i = 0; i < bumps; i++) d += ` A4.5 4.5 0 0 0 ${x} ${t + 9 * (i + 1)}`; return d; };
 
-    return `<svg width="338" height="165" viewBox="0 0 338 165" fill="none">
+    return `<svg width="338" height="141" viewBox="0 25 338 141" fill="none">
       <circle cx="30" cy="80" r="14" fill="none" stroke="${comp}" stroke-width="1.6"/>
       <path d="M23 80 Q27 73 30 80 Q33 87 37 80" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
       <text x="30" y="54" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vac</text>
@@ -11380,8 +11380,8 @@ function renderRectifierBridge(domain, tool, favId) {
       <path d="${vCoil(70, 62, 4)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
       <path d="M85 58 V102 M90 58 V102" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${vCoilR(105, 62, 4)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-      <path d="M105 62 V10 H178 V32" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M105 98 V140 H178 V128" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M105 62 V32 H178" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M105 98 V128 H178" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       ${edge(L, T)}
       ${edge(T, R)}
