@@ -11421,7 +11421,7 @@ function renderRectifierBridge(domain, tool, favId) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-      <div class="eseries-grid" style="grid-template-columns:repeat(6,1fr);">
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);">
         ${cell("Vdc", siFormat(r.vdc, "V"))}
         ${cell("Idc", siFormat(r.idc, "A"))}
         ${cell("P", siFormat(r.pdc, "W"))}
@@ -11582,7 +11582,7 @@ function renderRectifierCenterTap(domain, tool, favId) {
       <path d="${vCoilR(105, 32, 2)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
       <path d="${vCoilR(105, 50, 2)}" stroke="${comp}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
       <circle cx="105" cy="50" r="2.6" fill="${wire}"/>
-      <text x="105" y="98" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">CT</text>
+      <text x="113" y="47" fill="${comp}" font-size="10" font-weight="600">CT</text>
 
       <path d="M105 32 V4 H165" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${diode(165, 4)}
@@ -11603,9 +11603,9 @@ function renderRectifierCenterTap(domain, tool, favId) {
   // Vout follows max(0, |Vp·sinθ| − Vf) — one diode drop, not two, since
   // only one diode ever carries the current at a time.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="40" viewBox="0 0 220 40" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none"></svg>`;
     const vp = r.vp, vf = si("vf"), vdc = r.vdc;
-    const pxTop = 6, pxBottom = 28;
+    const pxTop = 12, pxBottom = 56;
     const toY = (v) => pxBottom - ((v + vp) / (2 * vp)) * (pxBottom - pxTop);
     const width = 190, periods = 2, samples = 140;
     const inPts = [], outPts = [];
@@ -11618,15 +11618,15 @@ function renderRectifierCenterTap(domain, tool, favId) {
       outPts.push(`${x.toFixed(1)},${toY(Math.max(0, Math.abs(vin) - vf)).toFixed(1)}`);
     }
     const zeroY = toY(0), dcY = toY(vdc);
-    return `<svg width="220" height="40" viewBox="0 0 220 40" fill="none">
+    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
       <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="206" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
       <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
-      <text x="10" y="7" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
-      <text x="81" y="37" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
+      <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
+      <text x="81" y="74" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
       <text x="10" y="${toY(vp - vf) - 4}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
     </svg>`;
   }
@@ -11642,7 +11642,7 @@ function renderRectifierCenterTap(domain, tool, favId) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-      <div class="eseries-grid">
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);">
         ${cell("Vdc", siFormat(r.vdc, "V"))}
         ${cell("Idc", siFormat(r.idc, "A"))}
         ${cell("P", siFormat(r.pdc, "W"))}
@@ -11832,7 +11832,7 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
   // stay closed-form. Runs a few warm-up cycles first so the displayed
   // ones are steady-state, not the initial charge-up transient.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="34" viewBox="0 0 220 34" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none"></svg>`;
     const vp = r.vp, vf = si("vf"), rload = si("rload"), cap = si("cap"), freq = si("freq"), vdc = r.vdc, vrpp = r.vrpp;
     const rc = rload * cap;
     const T = 1 / freq;
@@ -11853,19 +11853,19 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
     // Y-axis is zoomed to the ripple band itself (not the full ±Vp swing
     // the other rectifier tools use) — a 2% ripple is invisible at full
     // scale, and that ripple shape is this tool's whole reason to exist.
-    const pxTop = 6, pxBottom = 24;
+    const pxTop = 12, pxBottom = 48;
     const bandTop = Math.max(...outRaw), bandBot = Math.min(...outRaw);
     const pad = Math.max(vrpp * 0.3, (bandTop - bandBot) * 0.15, 1e-6);
     const worldMax = bandTop + pad, worldMin = bandBot - pad;
     const toY = (v) => pxBottom - ((v - worldMin) / (worldMax - worldMin)) * (pxBottom - pxTop);
     const outPts = outRaw.map((v, idx) => `${(10 + (idx / shownSamples) * 190).toFixed(1)},${toY(v).toFixed(1)}`);
     const dcY = toY(vdc), peakY = toY(bandTop);
-    return `<svg width="220" height="34" viewBox="0 0 220 34" fill="none">
+    return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none">
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="206" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
       <text x="10" y="${peakY - 2}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
-      <text x="150" y="32" fill="#8A9099" font-size="9" font-weight="600" text-anchor="middle">Vr(pp)=${siFormat(vrpp, "V")}, zoomed in</text>
+      <text x="150" y="58" fill="#8A9099" font-size="9" font-weight="600" text-anchor="middle">Vr(pp)=${siFormat(vrpp, "V")}, zoomed in</text>
     </svg>`;
   }
 
@@ -11882,7 +11882,7 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)
         ${r.strained ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Approximation strained</span>` : ""}
       </div>
-      <div class="eseries-grid" style="clear:both">
+      <div class="eseries-grid eseries-grid--tight" style="clear:both; grid-template-columns:repeat(6,1fr);">
         ${cell("Vdc", siFormat(r.vdc, "V"))}
         ${cell("Vr(pp)", siFormat(r.vrpp, "V"))}
         ${cell("Idc", siFormat(r.idc, "A"))}

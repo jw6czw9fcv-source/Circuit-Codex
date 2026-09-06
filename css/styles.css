@@ -679,7 +679,22 @@ html, body {
   text-align: center;
   font-size: 13px;
   color: var(--text-secondary);
+  /* Grid items default to min-width:auto, which lets a long single-word
+     label (e.g. "Efficiency") force its own track wider than the other
+     equal columns instead of wrapping — on some engines this shows as the
+     label overflowing past its card into the neighbor's, reading as
+     clipped/cut rather than wrapped. min-width:0 lets the cell actually
+     shrink to its grid track; overflow-wrap makes a too-long word wrap. */
+  min-width: 0;
+  overflow-wrap: break-word;
 }
+/* Opt-in modifier for a grid explicitly forced to a fixed column count
+   (via an inline grid-template-columns) instead of the default auto-fill —
+   used where 6 results need to share one row and the auto-fill minimum
+   (72px) would otherwise wrap them 5+1. Smaller text gives a long
+   single-word label (e.g. "Efficiency") room to fit one line instead of
+   an ugly mid-word break. */
+.eseries-grid--tight .eseries-cell { font-size: 11px; padding: 7px 2px; }
 .eseries-cell.hit {
   background: var(--result-bg);
   border-color: var(--result-border);
