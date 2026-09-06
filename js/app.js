@@ -11392,10 +11392,10 @@ function renderRectifierBridge(domain, tool, favId) {
       <circle cx="178" cy="32" r="2.6" fill="${wire}"/>
       <circle cx="178" cy="128" r="2.6" fill="${wire}"/>
 
-      <path d="M226 80 H288" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(288, 80)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="300" y="102" fill="${comp}" font-size="12" font-weight="600">Rload</text>
-      <path d="M130 80 V160 H288 V116" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M226 80 H250 V102 H288" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(288, 102)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="300" y="124" fill="${comp}" font-size="12" font-weight="600">Rload</text>
+      <path d="M130 80 V160 H288 V138" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
     </svg>`;
   }
 
