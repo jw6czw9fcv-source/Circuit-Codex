@@ -12352,20 +12352,20 @@ function renderOpampInverting(domain, tool, favId) {
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
     return `<svg width="306" height="118" viewBox="-14 -18 306 118" fill="none">
-      <path d="M107 26 L107 74 L149 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
-      <text x="113" y="42" fill="${comp}" font-size="14" font-weight="700">−</text>
-      <text x="113" y="67" fill="${comp}" font-size="14" font-weight="700">+</text>
+      <path d="M107 36 L107 64 L149 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="118" y="46" fill="${comp}" font-size="10" font-weight="700">−</text>
+      <text x="118" y="60" fill="${comp}" font-size="10" font-weight="700">+</text>
       <path d="M149 50 H153" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
-      ${port(20, 38)}
-      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
-      <path d="M23 38 H45" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(38, 81)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="63" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
-      <path d="M81 38 H107" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="107" cy="38" r="2.6" fill="${wire}"/>
+      ${port(20, 43)}
+      <text x="8" y="47" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M23 43 H45" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(43, 81)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="63" y="29" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
+      <path d="M81 43 H107" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="107" cy="43" r="2.6" fill="${wire}"/>
 
-      <path d="M107 38 V10 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M107 43 V10 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${zigH(10, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <text x="135" y="-4" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
       <path d="M153 10 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
@@ -12374,8 +12374,8 @@ function renderOpampInverting(domain, tool, favId) {
       ${port(240, 50)}
       <text x="248" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
 
-      <path d="M107 62 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${ground(107, 88)}
+      <path d="M107 57 V82" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(107, 82)}
     </svg>`;
   }
 
