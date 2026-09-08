@@ -12351,30 +12351,30 @@ function renderOpampInverting(domain, tool, favId) {
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
-    return `<svg width="300" height="120" viewBox="-16 -22 300 120" fill="none">
-      <path d="M113 25 L113 75 L163 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
-      <text x="119" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
-      <text x="119" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
-      <path d="M101 38 H113" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M113 62 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M163 50 H167" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    return `<svg width="264" height="120" viewBox="-16 -22 264 120" fill="none">
+      <path d="M105 25 L105 75 L155 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="111" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
+      <text x="111" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
+      <path d="M93 38 H105" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M105 62 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M155 50 H167" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       ${port(20, 38)}
       <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
-      <path d="M23 38 H45" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(38, 81)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="63" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
-      <path d="M81 38 H101" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="101" cy="38" r="2.6" fill="${wire}"/>
+      <path d="M23 38 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(38, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
+      <path d="M76 38 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="38" r="2.6" fill="${wire}"/>
 
-      <path d="M101 38 V6 H131" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(6, 167)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="149" y="-8" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
-      <path d="M167 6 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M93 38 V6 H112" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(6, 148)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="130" y="-8" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M148 6 H167 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="167" cy="50" r="2.6" fill="${wire}"/>
-      <path d="M167 50 H237" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${port(240, 50)}
-      <text x="248" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+      <path d="M167 50 H200" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(203, 50)}
+      <text x="211" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
 
       <path d="M93 62 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${ground(93, 88)}
