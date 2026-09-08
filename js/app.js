@@ -12351,31 +12351,33 @@ function renderOpampInverting(domain, tool, favId) {
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
-    return `<svg width="306" height="118" viewBox="-14 -18 306 118" fill="none">
-      <path d="M107 36 L107 64 L149 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
-      <text x="118" y="46" fill="${comp}" font-size="10" font-weight="700">−</text>
-      <text x="118" y="60" fill="${comp}" font-size="10" font-weight="700">+</text>
-      <path d="M149 50 H153" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    return `<svg width="300" height="120" viewBox="-16 -22 300 120" fill="none">
+      <path d="M113 25 L113 75 L163 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="119" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
+      <text x="119" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
+      <path d="M101 38 H113" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M113 62 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M163 50 H167" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
-      ${port(20, 43)}
-      <text x="8" y="47" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
-      <path d="M23 43 H45" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(43, 81)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="63" y="29" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
-      <path d="M81 43 H107" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="107" cy="43" r="2.6" fill="${wire}"/>
+      ${port(20, 38)}
+      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M23 38 H45" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(38, 81)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="63" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
+      <path d="M81 38 H101" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="101" cy="38" r="2.6" fill="${wire}"/>
 
-      <path d="M107 43 V10 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(10, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="135" y="-4" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
-      <path d="M153 10 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="153" cy="50" r="2.6" fill="${wire}"/>
-      <path d="M153 50 H237" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M101 38 V6 H131" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(6, 167)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="149" y="-8" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M167 6 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="167" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M167 50 H237" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${port(240, 50)}
       <text x="248" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
 
-      <path d="M107 57 V82" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${ground(107, 82)}
+      <path d="M93 62 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(93, 88)}
     </svg>`;
   }
 
