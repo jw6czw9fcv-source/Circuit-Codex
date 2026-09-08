@@ -12348,13 +12348,14 @@ function renderOpampInverting(domain, tool, favId) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
-    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
     return `<svg width="300" height="134" viewBox="-8 -18 300 134" fill="none">
-      <path d="M140 26 L140 74 L196 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
-      <text x="149" y="42" fill="${comp}" font-size="14" font-weight="700">−</text>
-      <text x="149" y="67" fill="${comp}" font-size="14" font-weight="700">+</text>
+      <path d="M140 26 L140 74 L182 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="146" y="42" fill="${comp}" font-size="14" font-weight="700">−</text>
+      <text x="146" y="67" fill="${comp}" font-size="14" font-weight="700">+</text>
+      <path d="M182 50 H210" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       <text x="20" y="20" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vin</text>
       ${port(20, 38)}
