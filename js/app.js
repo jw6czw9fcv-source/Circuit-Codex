@@ -12348,7 +12348,7 @@ function renderOpampInverting(domain, tool, favId) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
-    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
     // Every horizontal connector between a component and a node is the
@@ -12358,7 +12358,7 @@ function renderOpampInverting(domain, tool, favId) {
     // 50 wide with 17px leads either side, the stubs are whatever spans
     // the remainder around a 36px resistor — 24px each, symmetric, which
     // also keeps Rf centered over the op-amp.
-    return `<svg width="258" height="120" viewBox="-16 -22 258 120" fill="none">
+    return `<svg width="258" height="124" viewBox="-16 -22 258 124" fill="none">
       <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
       <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
