@@ -12352,36 +12352,36 @@ function renderOpampInverting(domain, tool, favId) {
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
     return `<svg width="300" height="134" viewBox="-8 -18 300 134" fill="none">
-      <path d="M140 26 L140 74 L182 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
-      <text x="146" y="42" fill="${comp}" font-size="14" font-weight="700">−</text>
-      <text x="146" y="67" fill="${comp}" font-size="14" font-weight="700">+</text>
-      <path d="M182 50 H210" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M95 26 L95 74 L137 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="101" y="42" fill="${comp}" font-size="14" font-weight="700">−</text>
+      <text x="101" y="67" fill="${comp}" font-size="14" font-weight="700">+</text>
+      <path d="M137 50 H165" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       <text x="20" y="20" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vin</text>
       ${port(20, 38)}
-      <path d="M23 38 H60" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(38, 96)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="78" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
-      <path d="M96 38 H140" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="140" cy="38" r="2.6" fill="${wire}"/>
+      <path d="M23 38 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(38, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
+      <path d="M76 38 H95" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="95" cy="38" r="2.6" fill="${wire}"/>
       <path d="M20 41 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${port(20, 100)}
 
-      <path d="M140 38 V10 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(10, 186)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="168" y="-4" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
-      <path d="M186 10 H210 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="210" cy="50" r="2.6" fill="${wire}"/>
-      <path d="M210 50 H237" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M95 38 V10 H105" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(10, 141)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="123" y="-4" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M141 10 H165 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="165" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M165 50 H237" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${port(240, 50)}
       <text x="240" y="34" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vout</text>
       <path d="M240 53 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${port(240, 100)}
 
       <path d="M20 100 H240" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M140 62 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="140" cy="100" r="2.6" fill="${wire}"/>
-      ${ground(140, 100)}
+      <path d="M95 62 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="95" cy="100" r="2.6" fill="${wire}"/>
+      ${ground(95, 100)}
     </svg>`;
   }
 
