@@ -80,7 +80,14 @@ SCR half-wave: Vdc=(Vp/2π)(1+cosα); TRIAC full-wave/symmetric:
 Vrms=Vac×√((π−α+sin2α/2)/π); both share the same normalized
 power-vs-α shape, non-linear not straight-line; ideal-switch
 model, no Vf term; waveform panel shows the classic notched-sine
-dimmer shape with an α delay bracket on the zero line)
+dimmer shape with an α delay bracket on the zero line) ·
+Op-amp: inverting amplifier (ideal op-amp virtual-ground model —
+Gain=−Rf/Rin, independent of everything else in the circuit; Vout
+clips at the ±supply rails with a "Saturated" badge, and the note
+flags that a real non-rail-to-rail op-amp actually saturates 1–2V
+short of that; results include Gain in both ×and dB, Iin, and Zin=Rin
+as its own explicit result since that's the non-obvious teaching
+point of the virtual-ground argument)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -88,7 +95,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Op-amp: inverting amplifier
 - [ ] Op-amp: non-inverting amplifier
 - [ ] Op-amp: buffer (voltage follower)
 - [ ] Op-amp: comparator (± hysteresis / Schmitt trigger)

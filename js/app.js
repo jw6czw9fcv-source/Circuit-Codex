@@ -228,6 +228,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rectifier-centertap") return renderRectifierCenterTap(domain, tool, favId);
   if (calcId === "rectifier-halfwave-cap") return renderRectifierHalfwaveCap(domain, tool, favId);
   if (calcId === "thyristor-firing") return renderThyristorFiring(domain, tool, favId);
+  if (calcId === "opamp-inverting") return renderOpampInverting(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -12282,6 +12283,176 @@ function renderThyristorFiring(domain, tool, favId) {
     document.getElementById("tf-alpha-dec").onclick = () => { state.alpha = Math.max(0, state.alpha - 1); syncAlpha(); };
     document.getElementById("tf-alpha-inc").onclick = () => { state.alpha = Math.min(180, state.alpha + 1); syncAlpha(); };
     document.getElementById("tf-alpha-reset").onclick = () => { state.alpha = 90; syncAlpha(); };
+  }
+
+  paint();
+}
+
+// ---------- Op-amp: inverting amplifier ----------
+// Ideal-op-amp model — infinite open-loop gain and input impedance, zero
+// output impedance, no input bias current — is what makes the standard
+// two-fact argument work: the virtual short pins V− to V+ (grounded here,
+// so V−≈0V), and the virtual-ground current argument says every electron
+// through Rin has nowhere to go but through Rf (none into the op-amp's
+// own input), so Iin=If. Combine Vin=Iin×Rin and Vout=−Iin×Rf (the sign
+// flips because Rf's current flows FROM Vout INTO the 0V node) and Rin,
+// Rf cancel out of Iin, leaving Gain=Vout/Vin=−Rf/Rin — no other value in
+// the circuit matters to the ideal gain, which is the whole point of
+// using heavy negative feedback here. Op-amp triangle proportions (input
+// taps at half the tip-to-vertex distance from center) ported from
+// schemdraw's own Opamp element rather than eyeballed.
+function renderOpampInverting(domain, tool, favId) {
+  const state = {
+    rin: 10, rinUnit: "kΩ",
+    rf: 100, rfUnit: "kΩ",
+    vin: 0.5, vinUnit: "V",
+    vsupply: 12, vsupplyUnit: "V",
+  };
+
+  const R_NAMES = ["rin", "rf"];
+  function si(name) {
+    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const rin = si("rin"), rf = si("rf"), vin = si("vin"), vsupply = si("vsupply");
+    if (!(rin > 0) || !(rf >= 0) || !(vsupply > 0)) {
+      return { problem: "Rin and the supply must be greater than zero, and Rf must be zero or greater." };
+    }
+
+    const gain = -rf / rin;
+    const voutIdeal = gain * vin;
+    const saturated = Math.abs(voutIdeal) > vsupply;
+    const vout = saturated ? Math.sign(voutIdeal) * vsupply : voutIdeal;
+    const iin = vin / rin;
+    const gainDb = 20 * Math.log10(Math.max(Math.abs(gain), 1e-12));
+    const zin = rin;
+
+    return { problem: "", gain, vout, saturated, iin, gainDb, zin };
+  }
+
+  // Triangle proportions from schemdraw's Opamp element: input taps sit at
+  // half the center-to-vertex distance (so 12px off-center on a 24px
+  // half-height triangle) — "−" on top, "+" on bottom, per that same
+  // reference. Rf loops up and over the top (the standard way to draw
+  // shunt feedback without crossing the forward path); "+" ties straight
+  // to ground since this is the single-input inverting configuration.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+
+    return `<svg width="296" height="112" viewBox="-16 -16 296 112" fill="none">
+      <path d="M140 26 L140 74 L196 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="149" y="42" fill="${comp}" font-size="14" font-weight="700">−</text>
+      <text x="149" y="67" fill="${comp}" font-size="14" font-weight="700">+</text>
+
+      <path d="M20 38 H60" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="${zigH(38, 96)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="78" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
+      <path d="M96 38 H140" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="140" cy="38" r="2.6" fill="${wire}"/>
+
+      <path d="M140 38 V10 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(10, 186)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="168" y="-4" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M186 10 H210 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="210" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M210 50 H236" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="240" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+
+      <path d="M140 62 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(140, 80)}
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output
+        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated</span>` : ""}
+      </div>
+      <div class="eseries-grid" style="clear:both">
+        ${cell("Gain", `${trim(r.gain)}×`)}
+        ${cell("Gain (dB)", r.gain === 0 ? "−∞ dB" : `${trim(r.gainDb)} dB`)}
+        ${cell("Vout", siFormat(r.vout, "V"))}
+        ${cell("Iin", siFormat(r.iin, "A"))}
+        ${cell("Zin", siFormat(r.zin, "Ω"))}
+      </div>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Shunt feedback through Rf — output inverted, gain set by a resistor ratio")}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Rin</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oa-rin" value="${state.rin}" />
+            <select id="oa-rin-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Rf</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oa-rf" value="${state.rf}" />
+            <select id="oa-rf-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Vin</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oa-vin" value="${state.vin}" />
+            <select id="oa-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Supply (±V)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oa-vsupply" value="${state.vsupply}" />
+            <select id="oa-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Gain = −Rf / Rin", "Vout = Gain × Vin", "Iin = Vin / Rin", "Zin = Rin", "Gain (dB) = 20 × log₁₀(|Gain|)"],
+        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — that's what pins V− to 0V (virtual ground) and forces all of Iin through Rf. Vout clips at the supply rails here; a real (non rail-to-rail) op-amp actually saturates 1–2V short of that."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["oa-rin", "rin"], ["oa-rf", "rf"], ["oa-vin", "vin"], ["oa-vsupply", "vsupply"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["oa-rin-unit", "rinUnit"], ["oa-rf-unit", "rfUnit"], ["oa-vin-unit", "vinUnit"], ["oa-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
   }
 
   paint();
