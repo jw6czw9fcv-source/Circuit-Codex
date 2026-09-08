@@ -12332,40 +12332,55 @@ function renderOpampInverting(domain, tool, favId) {
     return { problem: "", gain, vout, saturated, iin, gainDb, zin };
   }
 
-  // Triangle proportions from schemdraw's Opamp element: input taps sit at
-  // half the center-to-vertex distance (so 12px off-center on a 24px
-  // half-height triangle) — "−" on top, "+" on bottom, per that same
-  // reference. Rf loops up and over the top (the standard way to draw
-  // shunt feedback without crossing the forward path); "+" ties straight
-  // to ground since this is the single-input inverting configuration.
+  // Rebuilt as a real closed circuit — verified against the standard
+  // textbook inverting-amp diagram (electronics-tutorials.ws and others),
+  // not just approximated: Vin and Vout are each a proper two-terminal
+  // port (a signal lead plus its own return lead), not a labeled wire
+  // dangling in space. Both return leads land on one common/ground rail
+  // that also carries the op-amp's grounded "+" input — that rail IS the
+  // reference every voltage here is measured against, which a floating
+  // labeled end can't actually show. Triangle proportions (input taps at
+  // half the center-to-vertex distance; "−" on top, "+" on bottom) still
+  // ported from schemdraw's Opamp element. Rf loops up and over the top,
+  // the standard way to draw shunt feedback without crossing the forward
+  // path.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
-    return `<svg width="296" height="112" viewBox="-16 -16 296 112" fill="none">
+    return `<svg width="300" height="134" viewBox="-8 -18 300 134" fill="none">
       <path d="M140 26 L140 74 L196 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="149" y="42" fill="${comp}" font-size="14" font-weight="700">−</text>
       <text x="149" y="67" fill="${comp}" font-size="14" font-weight="700">+</text>
 
-      <path d="M20 38 H60" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <text x="20" y="20" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vin</text>
+      ${port(20, 38)}
+      <path d="M23 38 H60" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${zigH(38, 96)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <text x="78" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
       <path d="M96 38 H140" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="140" cy="38" r="2.6" fill="${wire}"/>
+      <path d="M20 41 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(20, 100)}
 
       <path d="M140 38 V10 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${zigH(10, 186)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <text x="168" y="-4" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
       <path d="M186 10 H210 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="210" cy="50" r="2.6" fill="${wire}"/>
-      <path d="M210 50 H236" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <text x="240" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+      <path d="M210 50 H237" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(240, 50)}
+      <text x="240" y="34" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vout</text>
+      <path d="M240 53 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(240, 100)}
 
-      <path d="M140 62 V80" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${ground(140, 80)}
+      <path d="M20 100 H240" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M140 62 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="140" cy="100" r="2.6" fill="${wire}"/>
+      ${ground(140, 100)}
     </svg>`;
   }
 
