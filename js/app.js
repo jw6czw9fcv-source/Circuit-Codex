@@ -12464,7 +12464,7 @@ function renderOpampInverting(domain, tool, favId) {
 
       ${formulaSection(
         ["Gain = −Rf / Rin", "Vout = Gain × Vin", "Iin = Vin / Rin", "Zin = Rin", "Gain (dB) = 20 × log₁₀(|Gain|)"],
-        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — that's what pins V− to 0V (virtual ground) and forces all of Iin through Rf. The supply is split (+V / 0V / −V) with the + input at ground, so Vout swings either side of 0V — on a single supply you'd bias + at Vcc/2 instead. Vout clips at the rails here; a real (non rail-to-rail) op-amp saturates 1–2V short of them."
+        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — that's what pins V− to 0V (virtual ground) and forces all of Iin through Rf. Vout clips at the supply rails here; a real (non rail-to-rail) op-amp actually saturates 1–2V short of that."
       )}
       ${calcFooter()}
     `;
