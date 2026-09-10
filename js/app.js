@@ -12520,13 +12520,13 @@ function renderOpampNonInverting(domain, tool, favId) {
     return { problem: "", gain, vout, voutIdeal, saturated, vminus, ifb, gainDb };
   }
 
-  // Same skeleton as the inverting amp — 50×50 triangle, 17px leads, 24px Rf
-  // stubs — so the pair reads as one family, with the two changes the
-  // topology forces. The inputs are swapped (+ on top) because Vin has to
-  // reach the non-inverting input without crossing the feedback network, and
-  // Rf loops *under* the op-amp rather than over it, since the input wire now
-  // occupies the top. R1 hangs off the summing node down to ground on the
-  // left, clear of the Rf return path.
+  // Matches the reference sheet's non-inverting layout: the − input runs
+  // left and drops to a node that sits one lead-length (17px) clear of the
+  // triangle's lower edge, and BOTH feedback legs leave that node — Rf to
+  // the right, back under the op-amp to the output, and R1 straight down to
+  // ground, collinear with the drop that feeds it. Component sizes and lead
+  // lengths are the inverting amp's, so the pair still reads as one family;
+  // + is on top here because Vin has to reach it without crossing Rf.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
@@ -12535,7 +12535,7 @@ function renderOpampNonInverting(domain, tool, favId) {
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
-    return `<svg width="197" height="128" viewBox="41 18 197 128" fill="none">
+    return `<svg width="189" height="158" viewBox="49 18 189 158" fill="none">
       <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">+</text>
       <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">−</text>
@@ -12544,19 +12544,19 @@ function renderOpampNonInverting(domain, tool, favId) {
       <text x="78" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
       <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
-      <path d="M93 62 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="93" cy="62" r="2.6" fill="${wire}"/>
+      <path d="M110 62 H93 V92" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="92" r="2.6" fill="${wire}"/>
 
-      <path d="M93 62 H76 V79" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(76, 79)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="62" y="101" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">R1</text>
-      <path d="M76 115 V132" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${ground(76, 132)}
+      <path d="M93 92 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(92, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="135" y="114" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M153 92 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
-      <path d="M93 62 V100 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(100, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="135" y="122" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
-      <path d="M153 100 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M93 92 V109" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(93, 109)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="79" y="131" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">R1</text>
+      <path d="M93 145 V162" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(93, 162)}
 
       <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
