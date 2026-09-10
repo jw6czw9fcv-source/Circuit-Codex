@@ -495,6 +495,19 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* .field-pair select above is width:100% for a picker that IS the field (IP
+   Ratings' two digit lists). A unit picker sitting beside an input inside a
+   .field-row is a detail next to the field, not the field itself: stretched
+   to the half's full width it strands the unit at the left edge with the
+   native chevron parked far to its right. Natural width puts the two back
+   together, and the input absorbs the space instead. The gauge pickers keep
+   width:100% through their id rules, which outrank this. */
+.field-pair .field-row select {
+  width: auto;
+  flex: 0 0 auto;
+  max-width: 60%;
+}
+.field-pair .field-row input { min-width: 0; }
 .field input {
   background: none;
   border: none;
