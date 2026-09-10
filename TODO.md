@@ -87,7 +87,14 @@ clips at the ±supply rails with a "Saturated" badge, and the note
 flags that a real non-rail-to-rail op-amp actually saturates 1–2V
 short of that; results include Gain in both ×and dB, Iin, and Zin=Rin
 as its own explicit result since that's the non-obvious teaching
-point of the virtual-ground argument)
+point of the virtual-ground argument) ·
+Op-amp: non-inverting amplifier (Gain=1+Rf/R1 — never below 1 and
+never inverting, since the Rf/R1 divider can only divide; Rf=0 gives a
+unity-gain buffer; V− shown as its own result because the virtual
+short is what makes the whole derivation work; same rail clipping and
+red saturation warning as the inverting amp; the note names the real
+reason to choose this topology — Zin is the op-amp’s own input
+impedance, not R1)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -95,7 +102,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Op-amp: non-inverting amplifier
 - [ ] Op-amp: buffer (voltage follower)
 - [ ] Op-amp: comparator (± hysteresis / Schmitt trigger)
 - [ ] Op-amp: integrator

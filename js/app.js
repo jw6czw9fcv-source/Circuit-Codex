@@ -229,6 +229,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rectifier-halfwave-cap") return renderRectifierHalfwaveCap(domain, tool, favId);
   if (calcId === "thyristor-firing") return renderThyristorFiring(domain, tool, favId);
   if (calcId === "opamp-inverting") return renderOpampInverting(domain, tool, favId);
+  if (calcId === "opamp-noninverting") return renderOpampNonInverting(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -12475,6 +12476,181 @@ function renderOpampInverting(domain, tool, favId) {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
     [["oa-rin-unit", "rinUnit"], ["oa-rf-unit", "rfUnit"], ["oa-vin-unit", "vinUnit"], ["oa-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+function renderOpampNonInverting(domain, tool, favId) {
+  const state = {
+    r1: 10, r1Unit: "kΩ",
+    rf: 100, rfUnit: "kΩ",
+    vin: 0.5, vinUnit: "V",
+    vsupply: 12, vsupplyUnit: "V",
+  };
+
+  const R_NAMES = ["r1", "rf"];
+  function si(name) {
+    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const r1 = si("r1"), rf = si("rf"), vin = si("vin"), vsupply = si("vsupply");
+    if (!(r1 > 0) || !(rf >= 0) || !(vsupply > 0)) {
+      return { problem: "R1 and the supply must be greater than zero, and Rf must be zero or greater." };
+    }
+
+    // No inversion and no attenuation: Rf and R1 form a divider that feeds a
+    // fraction of Vout back to V−, and the op-amp drives Vout until that
+    // fraction equals Vin. The divider can only divide, so the gain it takes
+    // to undo it is always 1 or more — Rf = 0 gives exactly 1 (a follower).
+    const gain = 1 + rf / r1;
+    const voutIdeal = gain * vin;
+    const saturated = Math.abs(voutIdeal) > vsupply;
+    const vout = saturated ? Math.sign(voutIdeal) * vsupply : voutIdeal;
+    const vminus = vin;
+    // Follows the clipped output: once a rail holds Vout, it holds the
+    // divider current too.
+    const ifb = vout / (rf + r1);
+    const gainDb = 20 * Math.log10(gain);
+
+    return { problem: "", gain, vout, voutIdeal, saturated, vminus, ifb, gainDb };
+  }
+
+  // Same skeleton as the inverting amp — 50×50 triangle, 17px leads, 24px Rf
+  // stubs — so the pair reads as one family, with the two changes the
+  // topology forces. The inputs are swapped (+ on top) because Vin has to
+  // reach the non-inverting input without crossing the feedback network, and
+  // Rf loops *under* the op-amp rather than over it, since the input wire now
+  // occupies the top. R1 hangs off the summing node down to ground on the
+  // left, clear of the Rf return path.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+
+    return `<svg width="197" height="128" viewBox="41 18 197 128" fill="none">
+      <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">+</text>
+      <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">−</text>
+
+      ${port(90, 38)}
+      <text x="78" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M93 62 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="62" r="2.6" fill="${wire}"/>
+
+      <path d="M93 62 H76 V79" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(76, 79)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="62" y="101" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">R1</text>
+      <path d="M76 115 V132" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(76, 132)}
+
+      <path d="M93 62 V100 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(100, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="135" y="122" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M153 100 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M177 50 H194" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(197, 50)}
+      <text x="205" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output
+        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>` : ""}
+      </div>
+      <div class="eseries-grid" style="clear:both">
+        ${cell("Gain", `${trim(r.gain)}×`)}
+        ${cell("Gain (dB)", `${trim(r.gainDb)} dB`)}
+        ${cell("Vout", siFormat(r.vout, "V"))}
+        ${cell("V−", siFormat(r.vminus, "V"))}
+        ${cell("Ifb", siFormat(r.ifb, "A"))}
+      </div>
+      ${r.saturated ? `<div class="error-text">Clipping — the gain calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. The output stops there, so the peaks of the signal flatten off.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Series feedback through R1 — output in phase, gain never below 1")}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>R1</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="on-r1" value="${state.r1}" />
+            <select id="on-r1-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r1Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Rf</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="on-rf" value="${state.rf}" />
+            <select id="on-rf-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Vin</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="on-vin" value="${state.vin}" />
+            <select id="on-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Supply (±V)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="on-vsupply" value="${state.vsupply}" />
+            <select id="on-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Gain = 1 + Rf / R1", "Vout = Gain × Vin", "V− = V+ = Vin (virtual short)", "Ifb = Vout / (Rf + R1)", "Gain (dB) = 20 × log₁₀(Gain)"],
+        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — feedback drives V− to match V+, so all of Vin lands across R1 and the Rf/R1 divider sets the gain. Gain is never below 1 and never inverts; Rf = 0 makes it a unity-gain buffer. Zin is the op-amp's own input impedance, megohms and up — not R1 — which is the practical reason to pick this over the inverting amp. Vout clips at the supply rails here; a real (non rail-to-rail) op-amp actually saturates 1–2V short of that."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["on-r1", "r1"], ["on-rf", "rf"], ["on-vin", "vin"], ["on-vsupply", "vsupply"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["on-r1-unit", "r1Unit"], ["on-rf-unit", "rfUnit"], ["on-vin-unit", "vinUnit"], ["on-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
