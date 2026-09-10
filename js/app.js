@@ -12307,6 +12307,7 @@ function renderOpampInverting(domain, tool, favId) {
     rf: 100, rfUnit: "kΩ",
     vin: 0.5, vinUnit: "V",
     vsupply: 12, vsupplyUnit: "V",
+    supply: "split",
   };
 
   const R_NAMES = ["rin", "rf"];
@@ -12321,15 +12322,24 @@ function renderOpampInverting(domain, tool, favId) {
       return { problem: "Rin and the supply must be greater than zero, and Rf must be zero or greater." };
     }
 
+    // The two supply modes differ only in where the lower rail sits: a split
+    // supply gives -V, a single supply gives 0V. That one number is what makes
+    // an inverting amp with its + input grounded unusable on a single supply -
+    // every output it wants to produce for a positive Vin is below the rail.
+    const single = state.supply === "single";
+    const vhi = vsupply;
+    const vlo = single ? 0 : -vsupply;
+
     const gain = -rf / rin;
     const voutIdeal = gain * vin;
-    const saturated = Math.abs(voutIdeal) > vsupply;
-    const vout = saturated ? Math.sign(voutIdeal) * vsupply : voutIdeal;
+    const vout = Math.min(vhi, Math.max(vlo, voutIdeal));
+    const saturated = vout !== voutIdeal;
+    const clippedLow = voutIdeal < vlo;
     const iin = vin / rin;
     const gainDb = 20 * Math.log10(Math.max(Math.abs(gain), 1e-12));
     const zin = rin;
 
-    return { problem: "", gain, vout, voutIdeal, saturated, iin, gainDb, zin };
+    return { problem: "", single, gain, vout, voutIdeal, saturated, clippedLow, iin, gainDb, zin };
   }
 
   // Rebuilt as a real closed circuit — verified against the standard
@@ -12412,7 +12422,9 @@ function renderOpampInverting(domain, tool, favId) {
         ${cell("Iin", siFormat(r.iin, "A"))}
         ${cell("Zin", siFormat(r.zin, "Ω"))}
       </div>
-      ${r.saturated ? `<div class="error-text">Clipping — the gain calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. The output stops there, so the peaks of the signal flatten off.</div>` : ""}`;
+      ${r.saturated ? `<div class="error-text">Clipping — the gain calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. ${r.single && r.clippedLow
+        ? "A single supply has no negative rail, so with the + input grounded the output can only sit at 0V — this circuit can’t work as drawn. Bias the + input at Vcc/2 and AC-couple Vin to get a usable swing."
+        : "The output stops there, so the peaks of the signal flatten off."}</div>` : ""}`;
   }
 
   function refresh() {
@@ -12424,6 +12436,8 @@ function renderOpampInverting(domain, tool, favId) {
     const r = compute();
     app.innerHTML = `
       ${calcHeader(tool, favId, "Shunt feedback through Rf — output inverted, gain set by a resistor ratio")}
+
+      ${pillRow([["split", "Split ±V"], ["single", "Single 0…+V"]], state.supply, domain.bg)}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
@@ -12452,7 +12466,7 @@ function renderOpampInverting(domain, tool, favId) {
           </div>
         </div>
         <div class="field">
-          <label>Supply (±V)</label>
+          <label>${state.supply === "single" ? "Supply (Vcc)" : "Supply (±V)"}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="oa-vsupply" value="${state.vsupply}" />
             <select id="oa-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
@@ -12464,12 +12478,14 @@ function renderOpampInverting(domain, tool, favId) {
 
       ${formulaSection(
         ["Gain = −Rf / Rin", "Vout = Gain × Vin", "Iin = Vin / Rin", "Zin = Rin", "Gain (dB) = 20 × log₁₀(|Gain|)"],
-        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — that's what pins V− to 0V (virtual ground) and forces all of Iin through Rf. The supply is split (+V / 0V / −V) with the + input at ground, so Vout swings either side of 0V — on a single supply you'd bias + at Vcc/2 instead. Vout clips at the rails here; a real (non rail-to-rail) op-amp saturates 1–2V short of them."
+        `Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — that's what pins V− to 0V (virtual ground) and forces all of Iin through Rf. ${state.supply === "single"
+          ? "On a single supply (0V…+Vcc) with the + input grounded there is no negative rail, so a negative Vout simply can’t exist — the output sits at 0V. A working single-supply inverting amp biases the + input at Vcc/2 and AC-couples Vin, so the output swings around Vcc/2 instead of 0V."
+          : "The supply is split (+V / 0V / −V) with the + input at ground, so Vout swings either side of 0V."} Vout clips at the rails here; a real (non rail-to-rail) op-amp saturates 1–2V short of them.`
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint);
+    wireCalc(favId, paint, (m) => { state.supply = m; paint(); });
 
     [["oa-rin", "rin"], ["oa-rf", "rf"], ["oa-vin", "vin"], ["oa-vsupply", "vsupply"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
