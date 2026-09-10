@@ -230,6 +230,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "thyristor-firing") return renderThyristorFiring(domain, tool, favId);
   if (calcId === "opamp-inverting") return renderOpampInverting(domain, tool, favId);
   if (calcId === "opamp-noninverting") return renderOpampNonInverting(domain, tool, favId);
+  if (calcId === "opamp-buffer") return renderOpampBuffer(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -12651,6 +12652,161 @@ function renderOpampNonInverting(domain, tool, favId) {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
     [["on-r1-unit", "r1Unit"], ["on-rf-unit", "rfUnit"], ["on-vin-unit", "vinUnit"], ["on-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+function renderOpampBuffer(domain, tool, favId) {
+  const state = {
+    vin: 1, vinUnit: "V",
+    rs: 100, rsUnit: "kΩ",
+    rl: 10, rlUnit: "kΩ",
+    vsupply: 12, vsupplyUnit: "V",
+  };
+
+  const R_NAMES = ["rs", "rl"];
+  function si(name) {
+    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const vin = si("vin"), rs = si("rs"), rl = si("rl"), vsupply = si("vsupply");
+    if (!(rs >= 0) || !(rl > 0) || !(vsupply > 0)) {
+      return { problem: "RL and the supply must be greater than zero, and Rs must be zero or greater." };
+    }
+
+    // A follower has no gain to compute, so the number worth computing is what
+    // it saves you: tie the source straight to the load and Rs/RL is just a
+    // divider. The buffer draws essentially nothing from the source and drives
+    // RL from its own near-zero output impedance, so Vout stays at Vin.
+    const saturated = Math.abs(vin) > vsupply;
+    const vout = saturated ? Math.sign(vin) * vsupply : vin;
+    const vdirect = vin * (rl / (rs + rl));
+    const lossPct = (rs / (rs + rl)) * 100;
+    const iload = vout / rl;
+
+    return { problem: "", vout, voutIdeal: vin, saturated, vdirect, lossPct, iload };
+  }
+
+  // The reference sheet's buffer: + on top taking Vin, - on the bottom, and
+  // the output wrapping back around the outside of the body to reach it. The
+  // return run sits one lead-length (17px) below the triangle's lower edge,
+  // the same clearance the non-inverting amp's feedback node uses, and turns
+  // up on the output junction's own column so the loop closes on the node
+  // rather than on the wire.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+
+    return `<svg width="189" height="82" viewBox="49 17 189 82" fill="none">
+      <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">+</text>
+      <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">−</text>
+
+      ${port(90, 38)}
+      <text x="78" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M110 62 H93 V92 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M177 50 H194" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(197, 50)}
+      <text x="205" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output
+        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>` : ""}
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="clear:both">
+        ${cell("Gain", "1×")}
+        ${cell("Vout", siFormat(r.vout, "V"))}
+        ${cell("Iload", siFormat(r.iload, "A"))}
+        ${cell("Unbuffered", siFormat(r.vdirect, "V"))}
+        ${cell("Loading loss", `${trim(r.lossPct)}%`)}
+      </div>
+      ${r.saturated ? `<div class="error-text">Clipping — Vin is ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. A follower has no gain to blame; the input itself is outside what the supply can reproduce.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Unity gain, output tied straight back to V− — isolates a weak source from its load")}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Vin</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ob-vin" value="${state.vin}" />
+            <select id="ob-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Supply (±V)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ob-vsupply" value="${state.vsupply}" />
+            <select id="ob-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Source Rs</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ob-rs" value="${state.rs}" />
+            <select id="ob-rs-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rsUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Load RL</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ob-rl" value="${state.rl}" />
+            <select id="ob-rl-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rlUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Gain = 1, so Vout = Vin", "Iload = Vout / RL", "Unbuffered = Vin × RL / (Rs + RL)", "Loading loss = Rs / (Rs + RL) × 100%", "Zin ≈ op-amp input impedance, Zout ≈ 0"],
+        "A follower has no gain to set — feedback ties the output straight back to V−, so Vout simply tracks Vin. What it buys you is isolation, which is why Rs and RL are here rather than in the drawing: they are the source and the load around the buffer, not part of it. Wire that source to that load directly and Rs/RL is nothing but a voltage divider — the Unbuffered figure is what actually arrives. Through the buffer, the source sees the op-amp's input impedance (megohms and up) and gives up almost no current, while the op-amp drives RL from its own near-zero output impedance. Two real limits the ideal model hides: Vout still clips at the supply rails (a real non rail-to-rail op-amp saturates 1–2V short of them), and the op-amp has to source Iload — check it against the part's output current rating."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["ob-vin", "vin"], ["ob-vsupply", "vsupply"], ["ob-rs", "rs"], ["ob-rl", "rl"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["ob-vin-unit", "vinUnit"], ["ob-vsupply-unit", "vsupplyUnit"], ["ob-rs-unit", "rsUnit"], ["ob-rl-unit", "rlUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }

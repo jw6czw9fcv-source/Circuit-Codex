@@ -94,7 +94,14 @@ unity-gain buffer; V− shown as its own result because the virtual
 short is what makes the whole derivation work; same rail clipping and
 red saturation warning as the inverting amp; the note names the real
 reason to choose this topology — Zin is the op-amp’s own input
-impedance, not R1)
+impedance, not R1) ·
+Op-amp: buffer (voltage follower) (gain is fixed at 1, so the number
+worth computing is what the buffer saves you: Rs and RL are the source
+and load around it, and tying them together directly makes a divider —
+the Unbuffered result is what actually arrives, with the loading loss as
+a percentage beside it; Rs=0 correctly reports 0%% loss, i.e. a stiff
+source needs no buffer; the note flags the two limits the ideal model
+hides, rail clipping and the op-amp’s output current rating vs Iload)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -102,7 +109,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Op-amp: buffer (voltage follower)
 - [ ] Op-amp: comparator (± hysteresis / Schmitt trigger)
 - [ ] Op-amp: integrator
 - [ ] Op-amp: differentiator
