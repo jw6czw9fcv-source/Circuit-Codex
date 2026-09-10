@@ -99,9 +99,18 @@ Op-amp: buffer (voltage follower) (gain is fixed at 1, so the number
 worth computing is what the buffer saves you: Rs and RL are the source
 and load around it, and tying them together directly makes a divider —
 the Unbuffered result is what actually arrives, with the loading loss as
-a percentage beside it; Rs=0 correctly reports 0%% loss, i.e. a stiff
+a percentage beside it; Rs=0 correctly reports 0% loss, i.e. a stiff
 source needs no buffer; the note flags the two limits the ideal model
-hides, rail clipping and the op-amp’s output current rating vs Iload)
+hides, rail clipping and the op-amp’s output current rating vs Iload) ·
+Op-amp: comparator / Schmitt trigger (two modes sharing one divider,
+as the reference sheet draws them — R1 down from the +V port and R2 on
+to ground hold V+ at the reference, the signal drives V−, and the
+Schmitt mode adds Rf from the output back to that same node; with three
+sources reaching V+ at once the thresholds come from the conductance sum
+G = 1/R1 + 1/R2 + 1/Rf rather than a plain divider, giving VT+, VT−, the
+hysteresis band and its centre; between the thresholds the state is
+genuinely undetermined and the tool says so — “Holds last state” —
+instead of inventing one)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -109,7 +118,10 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Op-amp: comparator (± hysteresis / Schmitt trigger)
+- [ ] Op-amp: non-inverting Schmitt trigger (the reference sheet’s tenth
+      panel — Vin through Rin into the V+ node, Rf from the output to that
+      same node; confirm the panel’s exact wiring first, it was too small to
+      read reliably)
 - [ ] Op-amp: integrator
 - [ ] Op-amp: differentiator
 - [ ] Op-amp: summing amplifier
