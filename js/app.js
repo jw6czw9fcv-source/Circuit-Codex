@@ -12329,7 +12329,7 @@ function renderOpampInverting(domain, tool, favId) {
     const gainDb = 20 * Math.log10(Math.max(Math.abs(gain), 1e-12));
     const zin = rin;
 
-    return { problem: "", gain, vout, saturated, iin, gainDb, zin };
+    return { problem: "", gain, vout, voutIdeal, saturated, iin, gainDb, zin };
   }
 
   // Rebuilt as a real closed circuit — verified against the standard
@@ -12395,11 +12395,15 @@ function renderOpampInverting(domain, tool, favId) {
     </div>`;
   }
 
+  // Rails read as "+12 V" / "-12 V" - with saturation the point is *which*
+  // limit was hit, so the sign has to be explicit, not implied by its absence.
+  const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
+
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output
-        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated</span>` : ""}
+        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>` : ""}
       </div>
       <div class="eseries-grid" style="clear:both">
         ${cell("Gain", `${trim(r.gain)}×`)}
@@ -12407,7 +12411,8 @@ function renderOpampInverting(domain, tool, favId) {
         ${cell("Vout", siFormat(r.vout, "V"))}
         ${cell("Iin", siFormat(r.iin, "A"))}
         ${cell("Zin", siFormat(r.zin, "Ω"))}
-      </div>`;
+      </div>
+      ${r.saturated ? `<div class="formula-note">${ICONS.info}<span>The gain calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail — the output stops there, so the peaks of the signal flatten off.</span></div>` : ""}`;
   }
 
   function refresh() {
@@ -12459,7 +12464,7 @@ function renderOpampInverting(domain, tool, favId) {
 
       ${formulaSection(
         ["Gain = −Rf / Rin", "Vout = Gain × Vin", "Iin = Vin / Rin", "Zin = Rin", "Gain (dB) = 20 × log₁₀(|Gain|)"],
-        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — that's what pins V− to 0V (virtual ground) and forces all of Iin through Rf. Vout clips at the supply rails here; a real (non rail-to-rail) op-amp actually saturates 1–2V short of that."
+        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — that's what pins V− to 0V (virtual ground) and forces all of Iin through Rf. The supply is split (+V / 0V / −V) with the + input at ground, so Vout swings either side of 0V — on a single supply you'd bias + at Vcc/2 instead. Vout clips at the rails here; a real (non rail-to-rail) op-amp saturates 1–2V short of them."
       )}
       ${calcFooter()}
     `;
