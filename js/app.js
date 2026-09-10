@@ -12412,7 +12412,7 @@ function renderOpampInverting(domain, tool, favId) {
         ${cell("Iin", siFormat(r.iin, "A"))}
         ${cell("Zin", siFormat(r.zin, "Ω"))}
       </div>
-      ${r.saturated ? `<div class="formula-note">${ICONS.info}<span>The gain calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail — the output stops there, so the peaks of the signal flatten off.</span></div>` : ""}`;
+      ${r.saturated ? `<div class="error-text">Clipping — the gain calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. The output stops there, so the peaks of the signal flatten off.</div>` : ""}`;
   }
 
   function refresh() {
