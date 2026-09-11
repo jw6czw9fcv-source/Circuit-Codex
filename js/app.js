@@ -12333,7 +12333,7 @@ function renderOpampInverting(domain, tool, favId) {
     const gainDb = 20 * Math.log10(Math.max(Math.abs(gain), 1e-12));
     const zin = rin;
 
-    return { problem: "", gain, vout, voutIdeal, saturated, iin, gainDb, zin };
+    return { problem: "", gain, vout, voutIdeal, saturated, iin, gainDb, zin, vinPk: Math.abs(vin), vsupply };
   }
 
   // Rebuilt as a real closed circuit — verified against the standard
@@ -12392,6 +12392,41 @@ function renderOpampInverting(domain, tool, favId) {
     </svg>`;
   }
 
+
+  // Two cycles of the input against the output on one shared axis, scaled to
+  // whichever is larger — so the gain reads as the height difference and the
+  // phase relationship reads directly, instead of both being normalised away.
+  // Multiplying by the signed gain is what draws the flip: a negative gain
+  // puts the output trough under the input crest with no special case. The
+  // output is clamped at the rails, so a clipped stage visibly flattens.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
+    const vinPk = Math.abs(r.vinPk);
+    const voutPk = Math.min(Math.abs(r.gain) * vinPk, r.vsupply);
+    const scale = Math.max(vinPk, voutPk, 1e-12);
+    const pxTop = 8, pxBottom = 58;
+    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
+    const toY = (v) => mid - (v / scale) * half;
+    const x0 = 10, width = 184, samples = 170;
+    const inPts = [], outPts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const x = (x0 + t * width).toFixed(1);
+      const vi = vinPk * Math.sin(t * 4 * Math.PI);
+      inPts.push(`${x},${toY(vi).toFixed(1)}`);
+      outPts.push(`${x},${toY(Math.max(-r.vsupply, Math.min(r.vsupply, r.gain * vi))).toFixed(1)}`);
+    }
+    const zeroY = toY(0);
+    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
+      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin</text>
+      <text x="30" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (inverted)</text>
+    </svg>`;
+  }
+
   function cell(label, value) {
     return `<div class="eseries-cell">
       <div style="font-weight:600;color:${domain.color};">${label}</div>
@@ -12422,6 +12457,7 @@ function renderOpampInverting(domain, tool, favId) {
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
   }
 
   function paint() {
@@ -12429,7 +12465,10 @@ function renderOpampInverting(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "Shunt feedback through Rf — output inverted, gain set by a resistor ratio")}
 
-      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div>${diagram()}</div>
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
 
       <div class="field-pair">
         <div class="field">
@@ -12449,7 +12488,7 @@ function renderOpampInverting(domain, tool, favId) {
       </div>
       <div class="field-pair">
         <div class="field">
-          <label>Vin</label>
+          <label>Vin (pk)</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="oa-vin" value="${state.vin}" />
             <select id="oa-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
@@ -12520,7 +12559,7 @@ function renderOpampNonInverting(domain, tool, favId) {
     const ifb = vout / (rf + r1);
     const gainDb = 20 * Math.log10(gain);
 
-    return { problem: "", gain, vout, voutIdeal, saturated, vminus, ifb, gainDb };
+    return { problem: "", gain, vout, voutIdeal, saturated, vminus, ifb, gainDb, vinPk: Math.abs(vin), vsupply };
   }
 
   // Matches the reference sheet's non-inverting layout: the − input runs
@@ -12569,6 +12608,41 @@ function renderOpampNonInverting(domain, tool, favId) {
     </svg>`;
   }
 
+
+  // Two cycles of the input against the output on one shared axis, scaled to
+  // whichever is larger — so the gain reads as the height difference and the
+  // phase relationship reads directly, instead of both being normalised away.
+  // Multiplying by the signed gain is what draws the flip: a negative gain
+  // puts the output trough under the input crest with no special case. The
+  // output is clamped at the rails, so a clipped stage visibly flattens.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
+    const vinPk = Math.abs(r.vinPk);
+    const voutPk = Math.min(Math.abs(r.gain) * vinPk, r.vsupply);
+    const scale = Math.max(vinPk, voutPk, 1e-12);
+    const pxTop = 8, pxBottom = 58;
+    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
+    const toY = (v) => mid - (v / scale) * half;
+    const x0 = 10, width = 184, samples = 170;
+    const inPts = [], outPts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const x = (x0 + t * width).toFixed(1);
+      const vi = vinPk * Math.sin(t * 4 * Math.PI);
+      inPts.push(`${x},${toY(vi).toFixed(1)}`);
+      outPts.push(`${x},${toY(Math.max(-r.vsupply, Math.min(r.vsupply, r.gain * vi))).toFixed(1)}`);
+    }
+    const zeroY = toY(0);
+    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
+      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin</text>
+      <text x="30" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (in phase)</text>
+    </svg>`;
+  }
+
   function cell(label, value) {
     return `<div class="eseries-cell">
       <div style="font-weight:600;color:${domain.color};">${label}</div>
@@ -12597,14 +12671,18 @@ function renderOpampNonInverting(domain, tool, favId) {
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
   }
 
   function paint() {
     const r = compute();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Series feedback through R1 — output in phase, gain never below 1")}
+      ${calcHeader(tool, favId, "Series feedback — in phase, gain never below 1")}
 
-      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div>${diagram()}</div>
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
 
       <div class="field-pair">
         <div class="field">
@@ -12624,7 +12702,7 @@ function renderOpampNonInverting(domain, tool, favId) {
       </div>
       <div class="field-pair">
         <div class="field">
-          <label>Vin</label>
+          <label>Vin (pk)</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="on-vin" value="${state.vin}" />
             <select id="on-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
@@ -12643,7 +12721,7 @@ function renderOpampNonInverting(domain, tool, favId) {
 
       ${formulaSection(
         ["Gain = 1 + Rf / R1", "Vout = Gain × Vin", "V− = V+ = Vin (virtual short)", "Ifb = Vout / (Rf + R1)", "Gain (dB) = 20 × log₁₀(Gain)"],
-        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — feedback drives V− to match V+, so all of Vin lands across R1 and the Rf/R1 divider sets the gain. Gain is never below 1 and never inverts; Rf = 0 makes it a unity-gain buffer. Zin is the op-amp's own input impedance, megohms and up — not R1 — which is the practical reason to pick this over the inverting amp. Vout clips at the supply rails here; a real (non rail-to-rail) op-amp actually saturates 1–2V short of that."
+        "Ideal op-amp — infinite gain and input impedance, no bias current — so feedback drives V− to match V+: all of Vin lands across R1 and the Rf/R1 divider sets the gain. Gain never goes below 1 and never inverts; Rf = 0 gives a unity-gain buffer. Zin is the op-amp's own input impedance, megohms and up, not R1 — the practical reason to pick this over the inverting amp. Vout clips at the rails, a real one 1–2V short."
       )}
       ${calcFooter()}
     `;
