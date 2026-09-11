@@ -13965,39 +13965,42 @@ function renderOpampDifferential(domain, tool, favId) {
   }
 
 
-  // The one picture this circuit is about. Interference is what a pair of
-  // sensor leads actually share, so the common-mode part is drawn swinging
-  // while the difference — the thing being measured — sits still underneath
-  // it. Matched arms give a dead flat output under a metre of input swing;
-  // unmatched arms put a ripple on it, and that ripple IS the leak the CMRR
-  // figure names. Only computed quantities are used: the swing is Vcm, the
-  // flat level is Ad·Vd, the ripple is Acm·Vcm.
+  // Two bands, because 100mV in against 1V out will not share a vertical
+  // scale. The top band is the differential input itself, drawn as a sine —
+  // that is the signal being measured. The bottom band is what comes out:
+  // Ad times that sine, plus Acm times a slower common-mode interference the
+  // two leads pick up together. Matched arms give a clean copy of the input;
+  // a mismatch drags a slow wobble across it, and that wobble is the leak the
+  // CMRR figure names. Every amplitude comes from the computed results — only
+  // the two rates are chosen, so the signal and the interference can be told
+  // apart.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="52" viewBox="0 0 220 52" fill="none"></svg>`;
-    const cmPk = Math.abs(r.vcm);
-    const outDc = r.ad * r.vd;
-    const outAc = r.acm * cmPk;
-    const scale = Math.max(cmPk, Math.abs(outDc) + Math.abs(outAc), 1e-12);
-    const pxTop = 6, pxBottom = 38;
-    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
-    const toY = (v) => mid - (v / scale) * half;
-    const x0 = 10, width = 184, samples = 170;
-    const inPts = [], outPts = [];
+    if (r.problem) return `<svg width="220" height="70" viewBox="0 0 220 70" fill="none"></svg>`;
+    const x0 = 10, width = 178, samples = 180;
+    const inMid = 18, outMid = 51, half = 13;
+
+    const vdPk = Math.abs(r.vd), vcmPk = Math.abs(r.vcm);
+    const outs = [], ins = [];
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
-      const sn = Math.sin(t * 4 * Math.PI);
-      const x = (x0 + t * width).toFixed(1);
-      inPts.push(`${x},${toY(cmPk * sn).toFixed(1)}`);
-      outPts.push(`${x},${toY(Math.max(-r.vsupply, Math.min(r.vsupply, outDc + outAc * sn))).toFixed(1)}`);
+      ins.push(vdPk * Math.sin(t * 6 * Math.PI));
+      outs.push(Math.max(-r.vsupply, Math.min(r.vsupply,
+        r.ad * r.vd * Math.sin(t * 6 * Math.PI) + r.acm * vcmPk * Math.sin(t * 2 * Math.PI))));
     }
-    const zeroY = toY(0);
-    return `<svg width="220" height="52" viewBox="0 0 220 52" fill="none">
-      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
-      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
-      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="10" y="49" fill="#5A6169" font-size="9" font-weight="600">Vcm swing (both inputs)</text>
-      <text x="120" y="49" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+    const inScale = Math.max(vdPk, 1e-12);
+    const outScale = Math.max(...outs.map(Math.abs), 1e-12);
+    const yIn = (v) => inMid - (v / inScale) * half;
+    const yOut = (v) => outMid - (v / outScale) * half;
+
+    const pts = (arr, f) => arr.map((v, i) => `${(x0 + (i / samples) * width).toFixed(1)},${f(v).toFixed(1)}`).join(" ");
+
+    return `<svg width="220" height="70" viewBox="0 0 220 70" fill="none">
+      <path d="M8,${inMid} H190" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
+      <path d="M8,${outMid} H190" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
+      <polyline points="${pts(ins, yIn)}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${pts(outs, yOut)}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="193" y="${inMid + 3}" fill="#5A6169" font-size="8" font-weight="600">Vd in</text>
+      <text x="193" y="${outMid + 3}" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -14078,7 +14081,7 @@ function renderOpampDifferential(domain, tool, favId) {
 
       ${formulaSection(
         ["V+ = V2 × R3 / (R2 + R3)", "Vout = V+ × (1 + Rf/R1) − V1 × Rf/R1", "Matched R2/R3 = R1/Rf → Vout = (Rf/R1)(V2 − V1)"],
-        "The arms cancel the shared part only if R2/R3 equals R1/Rf. Then Acm is zero and the output stays flat under any common-mode swing; otherwise a ripple of Acm×Vcm rides on it — and Vcm usually dwarfs the difference you measure. Hence instrumentation amps."
+        "The arms cancel the shared part only if R2/R3 equals R1/Rf. Then the output is a clean copy of the differential input; otherwise a slow wobble of Acm×Vcm from the shared interference rides across it. Hence instrumentation amps."
       )}
       ${calcFooter()}
     `;

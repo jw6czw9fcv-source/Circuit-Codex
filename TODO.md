@@ -153,7 +153,11 @@ costs 11% of the answer, which the red warning quantifies; the waveform
 panel is the family’s most useful — the common-mode part drawn swinging
 while the difference sits still, so matched arms give a dead flat output
 under a full input swing and a mismatch puts a visible ripple on it,
-which is the leak the CMRR figure names)
+which is the leak the CMRR figure names; two bands, since 100mV in and 1V
+out will not share a vertical scale — the top band is the differential
+input drawn as a sine, the bottom is Ad×that sine plus Acm×a slower
+common-mode interference, so matched arms give peaks that do not vary at
+all and a mismatch modulates them)
 when it does, with the family’s badge and red warning; Gain = 1/(2πfRC)
 falls 6dB/octave and passes unity at f₀)
 
