@@ -13964,6 +13964,43 @@ function renderOpampDifferential(domain, tool, favId) {
     </svg>`;
   }
 
+
+  // The one picture this circuit is about. Interference is what a pair of
+  // sensor leads actually share, so the common-mode part is drawn swinging
+  // while the difference — the thing being measured — sits still underneath
+  // it. Matched arms give a dead flat output under a metre of input swing;
+  // unmatched arms put a ripple on it, and that ripple IS the leak the CMRR
+  // figure names. Only computed quantities are used: the swing is Vcm, the
+  // flat level is Ad·Vd, the ripple is Acm·Vcm.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="52" viewBox="0 0 220 52" fill="none"></svg>`;
+    const cmPk = Math.abs(r.vcm);
+    const outDc = r.ad * r.vd;
+    const outAc = r.acm * cmPk;
+    const scale = Math.max(cmPk, Math.abs(outDc) + Math.abs(outAc), 1e-12);
+    const pxTop = 6, pxBottom = 38;
+    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
+    const toY = (v) => mid - (v / scale) * half;
+    const x0 = 10, width = 184, samples = 170;
+    const inPts = [], outPts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const sn = Math.sin(t * 4 * Math.PI);
+      const x = (x0 + t * width).toFixed(1);
+      inPts.push(`${x},${toY(cmPk * sn).toFixed(1)}`);
+      outPts.push(`${x},${toY(Math.max(-r.vsupply, Math.min(r.vsupply, outDc + outAc * sn))).toFixed(1)}`);
+    }
+    const zeroY = toY(0);
+    return `<svg width="220" height="52" viewBox="0 0 220 52" fill="none">
+      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="10" y="49" fill="#5A6169" font-size="9" font-weight="600">Vcm swing (both inputs)</text>
+      <text x="120" y="49" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+    </svg>`;
+  }
+
   function cell(label, value) {
     return `<div class="eseries-cell">
       <div style="font-weight:600;color:${domain.color};">${label}</div>
@@ -13993,12 +14030,13 @@ function renderOpampDifferential(domain, tool, favId) {
         ${cell("Vcm", siFormat(r.vcm, "V"))}
       </div>
       ${r.saturated ? `<div class="error-text">Clipping — the output calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail.</div>` : ""}
-      ${!matched && !r.saturated ? `<div class="error-text">The arms don't match, so ${trim(Math.abs(r.acm * r.vcm / (r.voutIdeal || 1)) * 100)}% of Vout is leaked common mode, not signal. Set R2/R3 = R1/Rf to null it.</div>` : ""}`;
+      ${!matched && !r.saturated ? `<div class="error-text">${trim(Math.abs(r.acm * r.vcm / (r.voutIdeal || 1)) * 100)}% of Vout is leaked common mode — set R2/R3 = R1/Rf.</div>` : ""}`;
   }
 
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
   }
 
   function numField(id, name, label, units, unitName) {
@@ -14017,7 +14055,10 @@ function renderOpampDifferential(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "Amplifies the difference, rejects what both inputs share")}
 
-      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div>${diagram()}</div>
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
 
       <div class="field-pair">
         ${numField("ox-r1", "r1", "R1", OHM_UNITS, "r1Unit")}
@@ -14036,8 +14077,8 @@ function renderOpampDifferential(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["V+ = V2 × R3 / (R2 + R3)", "Vout = V+ × (1 + Rf/R1) − V1 × Rf/R1", "Matched R2/R3 = R1/Rf → Vout = (Rf/R1)(V2 − V1)", "CMRR = 20 × log₁₀(|Ad / Acm|)"],
-        "The two arms cancel the shared part only if their ratios match: R2/R3 must equal R1/Rf. Then Acm is exactly zero and Vout follows the difference alone. Otherwise common mode leaks through — and since Vcm usually dwarfs the difference you are measuring, a small mismatch is a large error. That is why instrumentation amplifiers exist."
+        ["V+ = V2 × R3 / (R2 + R3)", "Vout = V+ × (1 + Rf/R1) − V1 × Rf/R1", "Matched R2/R3 = R1/Rf → Vout = (Rf/R1)(V2 − V1)"],
+        "The arms cancel the shared part only if R2/R3 equals R1/Rf. Then Acm is zero and the output stays flat under any common-mode swing; otherwise a ripple of Acm×Vcm rides on it — and Vcm usually dwarfs the difference you measure. Hence instrumentation amps."
       )}
       ${calcFooter()}
     `;

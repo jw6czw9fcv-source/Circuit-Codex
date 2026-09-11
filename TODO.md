@@ -149,7 +149,11 @@ Vout=(Rf/R1)(V2−V1) — inputs are split into Vd and Vcm and the results
 carry Ad, Acm and CMRR, with a matched/unmatched badge; a float-noise
 guard clamps Acm to exactly zero when the arms balance, otherwise a
 perfectly matched bridge reports a finite ~300dB CMRR; a 10% error on R3
-costs 11% of the answer, which the red warning quantifies)
+costs 11% of the answer, which the red warning quantifies; the waveform
+panel is the family’s most useful — the common-mode part drawn swinging
+while the difference sits still, so matched arms give a dead flat output
+under a full input swing and a mismatch puts a visible ripple on it,
+which is the leak the CMRR figure names)
 when it does, with the family’s badge and red warning; Gain = 1/(2πfRC)
 falls 6dB/octave and passes unity at f₀)
 
