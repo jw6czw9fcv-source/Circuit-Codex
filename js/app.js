@@ -232,6 +232,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "opamp-noninverting") return renderOpampNonInverting(domain, tool, favId);
   if (calcId === "opamp-buffer") return renderOpampBuffer(domain, tool, favId);
   if (calcId === "opamp-comparator") return renderOpampComparator(domain, tool, favId);
+  if (calcId === "opamp-integrator") return renderOpampIntegrator(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -13045,6 +13046,170 @@ function renderOpampComparator(domain, tool, favId) {
     [["oc-r1-unit", "r1Unit"], ["oc-r2-unit", "r2Unit"], ["oc-rf-unit", "rfUnit"], ["oc-vin-unit", "vinUnit"], ["oc-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
       if (el) el.onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+function renderOpampIntegrator(domain, tool, favId) {
+  const state = {
+    r: 10, rUnit: "kΩ",
+    c: 100, cUnit: "nF",
+    vin: 1, vinUnit: "V",
+    vsupply: 12, vsupplyUnit: "V",
+  };
+
+  function si(name) {
+    if (name === "r") return state.r * OHM_UNITS[state.rUnit];
+    if (name === "c") return state.c * CAP_UNITS[state.cUnit];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const r = si("r"), c = si("c"), vin = si("vin"), vsupply = si("vsupply");
+    if (!(r > 0) || !(c > 0) || !(vsupply > 0)) {
+      return { problem: "R, C and the supply must all be greater than zero." };
+    }
+
+    // The virtual ground pins the left plate of C at 0V, so Vin/R is a fixed
+    // current — and a fixed current into a capacitor is a straight ramp. That
+    // is the whole circuit: everything below is that one fact in other units.
+    const tau = r * c;
+    const iin = vin / r;
+    const ramp = -vin / tau;
+    const tRail = vin === 0 ? Infinity : (vsupply * tau) / Math.abs(vin);
+    const f0 = 1 / (2 * Math.PI * tau);
+
+    return { problem: "", tau, iin, ramp, tRail, f0 };
+  }
+
+  // The inverting amplifier's schematic with C in place of Rf, exactly as the
+  // reference sheet draws it — same 50x50 triangle, same 17px leads, same
+  // node-to-node span over the top, so the two read as variations on one
+  // circuit. The plates are centred on the triangle at x=135 with equal 38px
+  // runs either side; they stand a little taller than a resistor body, which
+  // is why this viewBox has 4px more headroom than the inverting amp's.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+    const cap = (x, y) => `M${x - 4} ${y - 9} V${y + 9} M${x + 4} ${y - 9} V${y + 9}`;
+
+    return `<svg width="258" height="128" viewBox="-16 -26 258 128" fill="none">
+      <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
+      <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
+      <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M110 62 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      ${port(20, 38)}
+      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M23 38 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(38, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R</text>
+      <path d="M76 38 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="38" r="2.6" fill="${wire}"/>
+
+      <path d="M93 38 V6 H131" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${cap(135, 6)}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <text x="135" y="-8" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">C</text>
+      <path d="M139 6 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M177 50 H194" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(197, 50)}
+      <text x="205" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+
+      <path d="M93 62 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(93, 88)}
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("τ = RC", siFormat(r.tau, "s"))}
+        ${cell("Iin", siFormat(r.iin, "A"))}
+        ${cell("Ramp", siFormat(r.ramp, "V/s"))}
+        ${cell("t to rail", isFinite(r.tRail) ? siFormat(r.tRail, "s") : "—")}
+        ${cell("f₀", siFormat(r.f0, "Hz"))}
+      </div>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Constant current into C — a steady input ramps the output")}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>R</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oi-r" value="${state.r}" />
+            <select id="oi-r-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>C</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oi-c" value="${state.c}" />
+            <select id="oi-c-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.cUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Vin</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oi-vin" value="${state.vin}" />
+            <select id="oi-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Supply (±V)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oi-vsupply" value="${state.vsupply}" />
+            <select id="oi-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Vout(t) = −(1/RC) ∫ Vin dt", "τ = R × C,  Iin = Vin / R", "dVout/dt = −Vin / τ", "t to rail = Vsupply × τ / |Vin|", "f₀ = 1 / (2π R C)"],
+        "Feedback holds V− at 0V, so Vin/R is a fixed current into C — and a fixed current into a capacitor is a straight ramp, which is what makes this integrate rather than merely filter. A steady input therefore has only one destination, the rail, and t to rail says when. It is also why a real integrator needs a large resistor across C: without one the op-amp's own offset and bias current ramp the output into a rail with no input at all. Above f₀ the circuit attenuates 6dB per octave; below f₀ it has gain."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["oi-r", "r"], ["oi-c", "c"], ["oi-vin", "vin"], ["oi-vsupply", "vsupply"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["oi-r-unit", "rUnit"], ["oi-c-unit", "cUnit"], ["oi-vin-unit", "vinUnit"], ["oi-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
 

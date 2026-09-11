@@ -110,7 +110,15 @@ sources reaching V+ at once the thresholds come from the conductance sum
 G = 1/R1 + 1/R2 + 1/Rf rather than a plain divider, giving VT+, VT−, the
 hysteresis band and its centre; between the thresholds the state is
 genuinely undetermined and the tool says so — “Holds last state” —
-instead of inventing one)
+instead of inventing one) ·
+Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
+as the reference sheet draws it; the virtual ground makes Vin/R a fixed
+current into C and a fixed current into a capacitor is a straight ramp,
+so the results are that one fact in different units — τ, Iin, the ramp
+rate in V/s, and t to rail, which is the visceral one: a steady input
+has only one destination; Vin=0 shows “—” for t to rail and the note
+explains why a real integrator still drifts there without a resistor
+across C; f₀ = 1/(2πRC) marks where gain passes unity)
 
 ## Tier 1 — Basic (single formula or reference table, no prerequisites)
 
@@ -122,7 +130,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
       panel — Vin through Rin into the V+ node, Rf from the output to that
       same node; confirm the panel’s exact wiring first, it was too small to
       read reliably)
-- [ ] Op-amp: integrator
 - [ ] Op-amp: differentiator
 - [ ] Op-amp: summing amplifier
 - [ ] Op-amp: differential amplifier
