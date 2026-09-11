@@ -12769,7 +12769,7 @@ function renderOpampBuffer(domain, tool, favId) {
     const lossPct = (rs / (rs + rl)) * 100;
     const iload = vout / rl;
 
-    return { problem: "", vout, voutIdeal: vin, saturated, vdirect, lossPct, iload };
+    return { problem: "", vout, voutIdeal: vin, saturated, vdirect, lossPct, iload, vinPk: Math.abs(vin), vsupply, ratio: rl / (rs + rl) };
   }
 
   // The reference sheet's buffer: + on top taking Vin, - on the bottom, and
@@ -12802,6 +12802,40 @@ function renderOpampBuffer(domain, tool, favId) {
     </svg>`;
   }
 
+
+  // Not input against output — a follower's output IS its input, and two
+  // identical traces say nothing. The comparison worth drawing is the one the
+  // tool computes: the same signal arriving through the buffer against what
+  // Rs/RL would have left of it on their own. At the defaults that is a full
+  // sine against a nearly flat line, which is the whole argument for the part.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
+    const pk = Math.min(r.vinPk, r.vsupply);
+    const un = r.vinPk * r.ratio;
+    const scale = Math.max(pk, un, 1e-12);
+    const pxTop = 8, pxBottom = 58;
+    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
+    const toY = (v) => mid - (v / scale) * half;
+    const x0 = 10, width = 184, samples = 170;
+    const bufPts = [], rawPts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const x = (x0 + t * width).toFixed(1);
+      const sn = Math.sin(t * 4 * Math.PI);
+      bufPts.push(`${x},${toY(Math.max(-r.vsupply, Math.min(r.vsupply, r.vinPk * sn))).toFixed(1)}`);
+      rawPts.push(`${x},${toY(un * sn).toFixed(1)}`);
+    }
+    const zeroY = toY(0);
+    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
+      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <polyline points="${rawPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${bufPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="10" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout = Vin</text>
+      <text x="64" y="72" fill="#5A6169" font-size="9" font-weight="600">without the buffer</text>
+    </svg>`;
+  }
+
   function cell(label, value) {
     return `<div class="eseries-cell">
       <div style="font-weight:600;color:${domain.color};">${label}</div>
@@ -12830,18 +12864,22 @@ function renderOpampBuffer(domain, tool, favId) {
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
   }
 
   function paint() {
     const r = compute();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Unity gain, output tied straight back to V− — isolates a weak source from its load")}
+      ${calcHeader(tool, favId, "Unity gain — isolates a weak source from its load")}
 
-      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div>${diagram()}</div>
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
 
       <div class="field-pair">
         <div class="field">
-          <label>Vin</label>
+          <label>Vin (pk)</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="ob-vin" value="${state.vin}" />
             <select id="ob-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
@@ -12876,7 +12914,7 @@ function renderOpampBuffer(domain, tool, favId) {
 
       ${formulaSection(
         ["Gain = 1, so Vout = Vin", "Iload = Vout / RL", "Unbuffered = Vin × RL / (Rs + RL)", "Loading loss = Rs / (Rs + RL) × 100%", "Zin ≈ op-amp input impedance, Zout ≈ 0"],
-        "A follower has no gain to set — feedback ties the output straight back to V−, so Vout simply tracks Vin. What it buys you is isolation, which is why Rs and RL are here rather than in the drawing: they are the source and the load around the buffer, not part of it. Wire that source to that load directly and Rs/RL is nothing but a voltage divider — the Unbuffered figure is what actually arrives. Through the buffer, the source sees the op-amp's input impedance (megohms and up) and gives up almost no current, while the op-amp drives RL from its own near-zero output impedance. Two real limits the ideal model hides: Vout still clips at the supply rails (a real non rail-to-rail op-amp saturates 1–2V short of them), and the op-amp has to source Iload — check it against the part's output current rating."
+        "A follower has no gain to set — feedback ties the output back to V−, so Vout tracks Vin. What it buys is isolation, which is why Rs and RL are here rather than in the drawing: they are the source and load around the buffer, not part of it. Wire them together directly and Rs/RL is just a divider — the grey trace is what arrives. Through the buffer the source gives up almost no current, and the op-amp drives RL from its own near-zero output impedance. Two limits the ideal model hides: Vout still clips at the rails, and the op-amp has to source Iload, so check the part's output current rating."
       )}
       ${calcFooter()}
     `;
@@ -12929,7 +12967,7 @@ function renderOpampComparator(domain, tool, favId) {
       const idiv = vsupply / (r1 + r2);
       // Vin drives V−, so the output is inverted: above the reference is low.
       const high = vin < vref;
-      return { problem: "", schmitt, vref, idiv, high, vout: high ? vsat : -vsat, margin: vin - vref };
+      return { problem: "", schmitt, vref, idiv, high, vout: high ? vsat : -vsat, margin: vin - vref, vsat };
     }
 
     // Three sources reach V+ at once — the rail through R1, ground through R2
@@ -12943,7 +12981,7 @@ function renderOpampComparator(domain, tool, favId) {
     // Between the thresholds the output keeps whatever it already was, so a
     // static input genuinely cannot name it — that IS the hysteresis.
     const settled = vin > vtHigh ? "low" : vin < vtLow ? "high" : "hold";
-    return { problem: "", schmitt, vtHigh, vtLow, hyst, center, settled, vout: settled === "high" ? vsat : -vsat };
+    return { problem: "", schmitt, vtHigh, vtLow, hyst, center, settled, vout: settled === "high" ? vsat : -vsat, vsat };
   }
 
   // The reference sheet's comparator pair: a divider off the positive rail
@@ -12999,6 +13037,58 @@ function renderOpampComparator(domain, tool, favId) {
     </svg>`;
   }
 
+
+  // Two bands, not one shared axis: the input lives within a volt or so of the
+  // thresholds while the output slams between the rails, so a single scale
+  // would render one of them invisible. The top band zooms on the threshold
+  // region and dashes the trip points in; the bottom band is just high/low.
+  // The output is produced by actually running the hysteresis state through
+  // the sweep rather than by formula — that is what puts the rising edge and
+  // the falling edge at visibly different places, which is the whole point.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
+    const centre = r.schmitt ? r.center : r.vref;
+    const hyst = r.schmitt ? r.hyst : 0;
+    const range = Math.max(hyst * 1.6, 0.15 * (r.vsat || 12));
+    const inMid = 23, inHalf = 17;
+    const yIn = (v) => inMid - ((v - centre) / range) * inHalf;
+    const yHi = 48, yLo = 68;
+    const x0 = 10, width = 182, samples = 180, amp = range * 0.85;
+
+    const inPts = [], outPts = [];
+    let st = 1;
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const x = (x0 + t * width).toFixed(1);
+      const vi = centre + amp * Math.sin(t * 4 * Math.PI);
+      inPts.push(`${x},${yIn(vi).toFixed(1)}`);
+      const prev = st;
+      if (r.schmitt) {
+        if (st > 0 && vi > r.vtHigh) st = -1;
+        else if (st < 0 && vi < r.vtLow) st = 1;
+      } else {
+        st = vi > centre ? -1 : 1;
+      }
+      // A transition gets both levels at the same x so the edge is vertical.
+      if (st !== prev && outPts.length) outPts.push(`${x},${prev > 0 ? yHi : yLo}`);
+      outPts.push(`${x},${st > 0 ? yHi : yLo}`);
+    }
+
+    const marks = r.schmitt
+      ? `<path d="M8,${yIn(r.vtHigh).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>
+         <path d="M8,${yIn(r.vtLow).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>`
+      : `<path d="M8,${yIn(centre).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>`;
+
+    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
+      ${marks}
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="196" y="14" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
+      <text x="196" y="${(yIn(r.schmitt ? r.vtHigh : centre) + 3).toFixed(1)}" fill="#E08585" font-size="8" font-weight="600">${r.schmitt ? "VT" : "Vref"}</text>
+      <text x="196" y="54" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
+    </svg>`;
+  }
+
   function cell(label, value) {
     return `<div class="eseries-cell">
       <div style="font-weight:600;color:${domain.color};">${label}</div>
@@ -13046,6 +13136,7 @@ function renderOpampComparator(domain, tool, favId) {
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
   }
 
   function paint() {
@@ -13059,7 +13150,10 @@ function renderOpampComparator(domain, tool, favId) {
 
       ${pillRow([["comp", "Comparator"], ["schmitt", "Schmitt trigger"]], state.mode, domain.bg)}
 
-      <div class="diagram-box" style="padding:2px 6px;">${diagram(schmitt)}</div>
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div>${diagram(schmitt)}</div>
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
 
       <div class="field-pair">
         <div class="field">
@@ -13106,11 +13200,11 @@ function renderOpampComparator(domain, tool, favId) {
 
       ${formulaSection(
         schmitt
-          ? ["G = 1/R1 + 1/R2 + 1/Rf", "VT+ = (V / R1 + Vsat / Rf) / G", "VT− = (V / R1 − Vsat / Rf) / G", "Hysteresis = VT+ − VT− = 2 × Vsat / (Rf × G)", "Centre = (V / R1) / G"]
-          : ["Vref = V × R2 / (R1 + R2)", "Vout = −Vsat if Vin > Vref, else +Vsat", "Margin = Vin − Vref", "Idiv = V / (R1 + R2)"],
+          ? ["G = 1/R1 + 1/R2 + 1/Rf", "VT± = (V / R1 ± Vsat / Rf) / G", "Hysteresis = 2 × Vsat / (Rf × G)"]
+          : ["Vref = V × R2 / (R1 + R2)", "Vout = −Vsat if Vin > Vref, else +Vsat", "Idiv = V / (R1 + R2),  Margin = Vin − Vref"],
         schmitt
-          ? "Rf feeds part of the output back to V+ — positive feedback, so crossing a threshold pushes it further from the input and the output snaps instead of chattering. Three sources reach V+ at once (rail through R1, ground through R2, output through Rf), so the thresholds come from the conductance sum G, not a plain divider. Between VT− and VT+ the output holds whatever it already was."
-          : "No feedback, so nothing holds the output between the rails — the smallest input difference drives it hard to one. Vin drives V−, so it inverts: above Vref the output goes low. R1 and R2 set Vref off the +V rail and burn Idiv continuously. A noisy or slow input chatters at every crossing, which the Schmitt mode fixes. A real op-amp also saturates 1–2V short of the rails and is far slower than a dedicated comparator."
+          ? "Rf feeds part of the output back to V+ — positive feedback, so a crossing pushes the threshold away from the input and the output snaps instead of chattering. Three sources reach V+ at once, so the thresholds come from the conductance sum G, not a plain divider."
+          : "No feedback, so nothing holds the output between the rails: the smallest input difference drives it hard to one. Vin drives V−, so it inverts — above Vref the output goes low. R1/R2 set Vref off the +V rail and burn Idiv continuously."
       )}
       ${calcFooter()}
     `;
