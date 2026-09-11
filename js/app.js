@@ -13974,9 +13974,9 @@ function renderOpampDifferential(domain, tool, favId) {
   // a slow wobble across it, and that wobble is the leak CMRR names. Only the
   // two rates are chosen — every amplitude comes from the computed results.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="70" viewBox="0 0 220 70" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="68" viewBox="0 0 220 68" fill="none"></svg>`;
     const x0 = 10, width = 184, samples = 180;
-    const pxTop = 6, pxBottom = 52;
+    const pxTop = 6, pxBottom = 50;
     const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
 
     const vdPk = Math.abs(r.vd), vcmPk = Math.abs(r.vcm);
@@ -13991,13 +13991,13 @@ function renderOpampDifferential(domain, tool, favId) {
     const toY = (v) => mid - (v / scale) * half;
     const pts = (arr) => arr.map((v, i) => `${(x0 + (i / samples) * width).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
 
-    return `<svg width="220" height="70" viewBox="0 0 220 70" fill="none">
+    return `<svg width="220" height="68" viewBox="0 0 220 68" fill="none">
       <path d="M8,${mid} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <polyline points="${pts(ins)}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${pts(outs)}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="199" y="${mid + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="10" y="66" fill="#5A6169" font-size="9" font-weight="600">Vd in</text>
-      <text x="40" y="66" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+      <text x="10" y="64" fill="#5A6169" font-size="9" font-weight="600">Vd in</text>
+      <text x="40" y="64" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -14077,8 +14077,8 @@ function renderOpampDifferential(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["V+ = V2 × R3 / (R2 + R3)", "Vout = V+ × (1 + Rf/R1) − V1 × Rf/R1", "Matched R2/R3 = R1/Rf → Vout = (Rf/R1)(V2 − V1)"],
-        "The arms cancel the shared part only if R2/R3 equals R1/Rf. Then the output is a clean copy of the differential input; otherwise a slow wobble of Acm×Vcm from the shared interference rides across it. Hence instrumentation amps."
+        ["Vd = V2 − V1,  Vcm = (V1 + V2) / 2", "Vout = Ad × Vd + Acm × Vcm", "Matched R2/R3 = R1/Rf → Acm = 0, Ad = Rf/R1", "CMRR = 20 × log₁₀(|Ad / Acm|)"],
+        "The arms cancel the shared part only if R2/R3 equals R1/Rf. Otherwise a slow wobble of Acm×Vcm rides across the output — hence instrumentation amps."
       )}
       ${calcFooter()}
     `;
