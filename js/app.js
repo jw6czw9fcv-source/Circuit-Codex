@@ -13795,8 +13795,8 @@ function renderOpampSumming(domain, tool, favId) {
       </div>
       <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);clear:both">
         ${cell("Vout", siFormat(r.vout, "V"))}
-        ${cell("A1", `${trim(r.a1)}×`)}
-        ${cell("A2", `${trim(r.a2)}×`)}
+        ${cell("Gain 1", `${trim(r.a1)}×`)}
+        ${cell("Gain 2", `${trim(r.a2)}×`)}
         ${cell("I1", siFormat(r.i1, "A"))}
         ${cell("I2", siFormat(r.i2, "A"))}
         ${cell("Isum", siFormat(r.isum, "A"))}
@@ -13841,7 +13841,7 @@ function renderOpampSumming(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vout = −Rf × (V1/R1 + V2/R2)", "A1 = −Rf / R1,  A2 = −Rf / R2", "I1 = V1 / R1,  I2 = V2 / R2", "Isum = I1 + I2, all of it through Rf"],
+        ["Vout = −Rf × (V1/R1 + V2/R2)", "Gain 1 = −Rf / R1,  Gain 2 = −Rf / R2", "I1 = V1 / R1,  I2 = V2 / R2", "Isum = I1 + I2, all of it through Rf"],
         "The virtual ground is what does the adding: V− sits at 0V whatever happens, so each input sees only its own resistor and pushes V/R into the node without knowing the others are there. The node stores nothing, so the currents add and the whole sum leaves through Rf. Equal resistors give a plain inverted sum; unequal ones weight each channel separately, which is how a mixer sets levels. Vout clips at the rails; a real op-amp saturates 1–2V short."
       )}
       ${calcFooter()}
@@ -14023,8 +14023,8 @@ function renderOpampDifferential(domain, tool, favId) {
       </div>
       <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);clear:both">
         ${cell("Vout", siFormat(r.vout, "V"))}
-        ${cell("Adiff", `${trim(r.ad)}×`)}
-        ${cell("Acm", `${trim(r.acm)}×`)}
+        ${cell("Gain diff", `${trim(r.ad)}×`)}
+        ${cell("Gain cm", `${trim(r.acm)}×`)}
         ${cell("CMRR", isFinite(r.cmrrDb) ? `${trim(r.cmrrDb)} dB` : "∞")}
         ${cell("Vdiff", siFormat(r.vd, "V"))}
         ${cell("Vcm", siFormat(r.vcm, "V"))}
@@ -14077,8 +14077,8 @@ function renderOpampDifferential(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vdiff = V2 − V1,  Vcm = (V1 + V2) / 2", "Vout = Adiff × Vdiff + Acm × Vcm", "Matched R2/R3 = R1/Rf → Adiff = Rf/R1, Acm = 0", "CMRR = 20 × log₁₀(|Adiff / Acm|)"],
-        "The arms cancel the shared part only if R2/R3 equals R1/Rf. Otherwise a slow wobble of Acm×Vcm rides across the output — hence instrumentation amps."
+        ["Vdiff = V2 − V1,  Vcm = (V1 + V2) / 2", "Vout = Gain diff × Vdiff + Gain cm × Vcm", "R2/R3 = R1/Rf → Gain cm = 0, Gain diff = Rf/R1", "CMRR = 20 × log₁₀(|Gain diff / Gain cm|)"],
+        "The arms cancel the shared part only if R2/R3 equals R1/Rf. Otherwise a slow wobble of Gain cm × Vcm rides across the output — hence instrumentation amps."
       )}
       ${calcFooter()}
     `;
