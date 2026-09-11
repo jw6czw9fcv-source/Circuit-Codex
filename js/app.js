@@ -12769,7 +12769,7 @@ function renderOpampBuffer(domain, tool, favId) {
     const lossPct = (rs / (rs + rl)) * 100;
     const iload = vout / rl;
 
-    return { problem: "", vout, voutIdeal: vin, saturated, vdirect, lossPct, iload, vinPk: Math.abs(vin), vsupply, ratio: rl / (rs + rl) };
+    return { problem: "", vout, voutIdeal: vin, saturated, vdirect, lossPct, iload };
   }
 
   // The reference sheet's buffer: + on top taking Vin, - on the bottom, and
@@ -12803,39 +12803,6 @@ function renderOpampBuffer(domain, tool, favId) {
   }
 
 
-  // Not input against output — a follower's output IS its input, and two
-  // identical traces say nothing. The comparison worth drawing is the one the
-  // tool computes: the same signal arriving through the buffer against what
-  // Rs/RL would have left of it on their own. At the defaults that is a full
-  // sine against a nearly flat line, which is the whole argument for the part.
-  function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
-    const pk = Math.min(r.vinPk, r.vsupply);
-    const un = r.vinPk * r.ratio;
-    const scale = Math.max(pk, un, 1e-12);
-    const pxTop = 8, pxBottom = 58;
-    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
-    const toY = (v) => mid - (v / scale) * half;
-    const x0 = 10, width = 184, samples = 170;
-    const bufPts = [], rawPts = [];
-    for (let i = 0; i <= samples; i++) {
-      const t = i / samples;
-      const x = (x0 + t * width).toFixed(1);
-      const sn = Math.sin(t * 4 * Math.PI);
-      bufPts.push(`${x},${toY(Math.max(-r.vsupply, Math.min(r.vsupply, r.vinPk * sn))).toFixed(1)}`);
-      rawPts.push(`${x},${toY(un * sn).toFixed(1)}`);
-    }
-    const zeroY = toY(0);
-    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
-      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
-      <polyline points="${rawPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
-      <polyline points="${bufPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="10" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout = Vin</text>
-      <text x="64" y="72" fill="#5A6169" font-size="9" font-weight="600">without the buffer</text>
-    </svg>`;
-  }
-
   function cell(label, value) {
     return `<div class="eseries-cell">
       <div style="font-weight:600;color:${domain.color};">${label}</div>
@@ -12864,7 +12831,6 @@ function renderOpampBuffer(domain, tool, favId) {
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
-    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
   }
 
   function paint() {
@@ -12872,14 +12838,11 @@ function renderOpampBuffer(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "Unity gain — isolates a weak source from its load")}
 
-      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
-        <div>${diagram()}</div>
-        <div data-res="wave">${waveDiagram(r)}</div>
-      </div>
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
       <div class="field-pair">
         <div class="field">
-          <label>Vin (pk)</label>
+          <label>Vin</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="ob-vin" value="${state.vin}" />
             <select id="ob-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
@@ -12914,7 +12877,7 @@ function renderOpampBuffer(domain, tool, favId) {
 
       ${formulaSection(
         ["Gain = 1, so Vout = Vin", "Iload = Vout / RL", "Unbuffered = Vin × RL / (Rs + RL)", "Loading loss = Rs / (Rs + RL) × 100%", "Zin ≈ op-amp input impedance, Zout ≈ 0"],
-        "A follower has no gain to set — feedback ties the output back to V−, so Vout tracks Vin. What it buys is isolation, which is why Rs and RL are here rather than in the drawing: they are the source and load around the buffer, not part of it. Wire them together directly and Rs/RL is just a divider — the grey trace is what arrives. Through the buffer the source gives up almost no current, and the op-amp drives RL from its own near-zero output impedance. Two limits the ideal model hides: Vout still clips at the rails, and the op-amp has to source Iload, so check the part's output current rating."
+        "A follower has no gain to set — feedback ties the output back to V−, so Vout tracks Vin. What it buys is isolation, which is why Rs and RL are here rather than in the drawing: they are the source and load around the buffer, not part of it. Wire them together directly and Rs/RL is just a divider — the Unbuffered figure is what arrives. Through the buffer the source gives up almost no current, and the op-amp drives RL from its own near-zero output impedance. Two limits the ideal model hides: Vout still clips at the rails, and the op-amp has to source Iload, so check the part's output current rating."
       )}
       ${calcFooter()}
     `;
