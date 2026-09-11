@@ -234,6 +234,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "opamp-comparator") return renderOpampComparator(domain, tool, favId);
   if (calcId === "opamp-integrator") return renderOpampIntegrator(domain, tool, favId);
   if (calcId === "opamp-differentiator") return renderOpampDifferentiator(domain, tool, favId);
+  if (calcId === "opamp-summing") return renderOpampSumming(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -13680,6 +13681,178 @@ function renderOpampDifferentiator(domain, tool, favId) {
     });
     [["od-r-unit", "rUnit"], ["od-c-unit", "cUnit"], ["od-vin-unit", "vinUnit"], ["od-freq-unit", "freqUnit"], ["od-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+function renderOpampSumming(domain, tool, favId) {
+  const state = {
+    r1: 10, r1Unit: "kΩ",
+    r2: 10, r2Unit: "kΩ",
+    rf: 10, rfUnit: "kΩ",
+    v1: 1, v1Unit: "V",
+    v2: 2, v2Unit: "V",
+    vsupply: 12, vsupplyUnit: "V",
+  };
+
+  const R_NAMES = ["r1", "r2", "rf"];
+  function si(name) {
+    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const r1 = si("r1"), r2 = si("r2"), rf = si("rf"), v1 = si("v1"), v2 = si("v2"), vsupply = si("vsupply");
+    if (!(r1 > 0) || !(r2 > 0) || !(rf >= 0) || !(vsupply > 0)) {
+      return { problem: "R1, R2 and the supply must be greater than zero, and Rf must be zero or greater." };
+    }
+
+    // The virtual ground is the whole trick: V− sits at 0V whatever happens, so
+    // each input pushes V/R into the node without knowing the others exist. The
+    // node stores nothing, so the currents simply add and all of the sum leaves
+    // through Rf — which is why the channels never interact.
+    const a1 = -rf / r1, a2 = -rf / r2;
+    const i1 = v1 / r1, i2 = v2 / r2;
+    const isum = i1 + i2;
+    const voutIdeal = -rf * isum;
+    const saturated = Math.abs(voutIdeal) > vsupply;
+    const vout = saturated ? Math.sign(voutIdeal) * vsupply : voutIdeal;
+
+    return { problem: "", a1, a2, i1, i2, isum, vout, voutIdeal, saturated, vsupply };
+  }
+
+  // The reference sheet's summing amp: two input arms landing on one node, Rf
+  // looping over the top, + to ground — the inverting amplifier with a second
+  // input arm bolted on, which is exactly what it is electrically. The two arms
+  // straddle the − input so the node column reads as one net, and the junction
+  // dots mark only the two genuine three-way points; the corners where an arm
+  // simply turns are left plain. The + input's ground drop sits 16px below the
+  // node column's lower end so the two nets stay visibly separate.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+
+    return `<svg width="258" height="134" viewBox="-16 -32 258 134" fill="none">
+      <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
+      <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
+
+      ${port(20, 22)}
+      <text x="8" y="26" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">V1</text>
+      <path d="M23 22 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(22, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="10" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R1</text>
+      <path d="M76 22 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      ${port(20, 46)}
+      <text x="8" y="50" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">V2</text>
+      <path d="M23 46 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(46, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="68" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R2</text>
+      <path d="M76 46 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M93 22 V46" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="22" r="2.6" fill="${wire}"/>
+      <circle cx="93" cy="38" r="2.6" fill="${wire}"/>
+      <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M93 22 V-2 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(-2, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="135" y="-14" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M153 -2 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M177 50 H194" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(197, 50)}
+      <text x="205" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+
+      <path d="M110 62 H93 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(93, 88)}
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output
+        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>` : ""}
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);clear:both">
+        ${cell("Vout", siFormat(r.vout, "V"))}
+        ${cell("A1", `${trim(r.a1)}×`)}
+        ${cell("A2", `${trim(r.a2)}×`)}
+        ${cell("I1", siFormat(r.i1, "A"))}
+        ${cell("I2", siFormat(r.i2, "A"))}
+        ${cell("Isum", siFormat(r.isum, "A"))}
+      </div>
+      ${r.saturated ? `<div class="error-text">Clipping — the sum calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. The output stops there, so the peaks of the signal flatten off.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function numField(id, name, label, units, unitName) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[unitName] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Virtual ground adds the input currents — one weight per channel")}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="field-pair">
+        ${numField("os-r1", "r1", "R1", OHM_UNITS, "r1Unit")}
+        ${numField("os-r2", "r2", "R2", OHM_UNITS, "r2Unit")}
+        ${numField("os-rf", "rf", "Rf", OHM_UNITS, "rfUnit")}
+      </div>
+      <div class="field-pair">
+        ${numField("os-v1", "v1", "V1", VOLT_UNITS, "v1Unit")}
+        ${numField("os-v2", "v2", "V2", VOLT_UNITS, "v2Unit")}
+        ${numField("os-vsupply", "vsupply", "Supply (±V)", VOLT_UNITS, "vsupplyUnit")}
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Vout = −Rf × (V1/R1 + V2/R2)", "A1 = −Rf / R1,  A2 = −Rf / R2", "I1 = V1 / R1,  I2 = V2 / R2", "Isum = I1 + I2, all of it through Rf"],
+        "The virtual ground is what does the adding: V− sits at 0V whatever happens, so each input sees only its own resistor and pushes V/R into the node without knowing the others are there. The node stores nothing, so the currents add and the whole sum leaves through Rf. Equal resistors give a plain inverted sum; unequal ones weight each channel separately, which is how a mixer sets levels. Vout clips at the rails; a real op-amp saturates 1–2V short."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["os-r1", "r1"], ["os-r2", "r2"], ["os-rf", "rf"], ["os-v1", "v1"], ["os-v2", "v2"], ["os-vsupply", "vsupply"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["os-r1", "r1Unit"], ["os-r2", "r2Unit"], ["os-rf", "rfUnit"], ["os-v1", "v1Unit"], ["os-v2", "v2Unit"], ["os-vsupply", "vsupplyUnit"]].forEach(([id, name]) => {
+      document.getElementById(id + "-unit").onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
 
