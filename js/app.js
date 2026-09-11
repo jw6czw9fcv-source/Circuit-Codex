@@ -13057,31 +13057,39 @@ function renderOpampIntegrator(domain, tool, favId) {
     r: 10, rUnit: "kΩ",
     c: 100, cUnit: "nF",
     vin: 1, vinUnit: "V",
+    freq: 100, freqUnit: "Hz",
     vsupply: 12, vsupplyUnit: "V",
   };
+
+  const F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
 
   function si(name) {
     if (name === "r") return state.r * OHM_UNITS[state.rUnit];
     if (name === "c") return state.c * CAP_UNITS[state.cUnit];
+    if (name === "freq") return state.freq * F_UNITS[state.freqUnit];
     return state[name] * VOLT_UNITS[state[name + "Unit"]];
   }
 
   function compute() {
-    const r = si("r"), c = si("c"), vin = si("vin"), vsupply = si("vsupply");
-    if (!(r > 0) || !(c > 0) || !(vsupply > 0)) {
-      return { problem: "R, C and the supply must all be greater than zero." };
+    const r = si("r"), c = si("c"), vin = si("vin"), vsupply = si("vsupply"), freq = si("freq");
+    if (!(r > 0) || !(c > 0) || !(vsupply > 0) || !(freq > 0)) {
+      return { problem: "R, C, the frequency and the supply must all be greater than zero." };
     }
 
-    // The virtual ground pins the left plate of C at 0V, so Vin/R is a fixed
-    // current — and a fixed current into a capacitor is a straight ramp. That
-    // is the whole circuit: everything below is that one fact in other units.
+    // The virtual ground pins the left plate of C at 0V, so Vin/R is the
+    // current into C and the output is its integral. Integrating sin gives
+    // −cos/ω, and the inverting sign flips that back to +cos: same shape,
+    // shifted a quarter cycle, scaled by 1/ωRC.
     const tau = r * c;
-    const iin = vin / r;
-    const ramp = -vin / tau;
-    const tRail = vin === 0 ? Infinity : (vsupply * tau) / Math.abs(vin);
     const f0 = 1 / (2 * Math.PI * tau);
+    const gain = 1 / (2 * Math.PI * freq * tau);
+    const vinPk = Math.abs(vin);
+    const voutPkIdeal = vinPk * gain;
+    const clipped = voutPkIdeal > vsupply;
+    const voutPk = clipped ? vsupply : voutPkIdeal;
+    const iinPk = vinPk / r;
 
-    return { problem: "", tau, iin, ramp, tRail, f0 };
+    return { problem: "", tau, f0, gain, vinPk, voutPkIdeal, voutPk, clipped, vsupply, iinPk };
   }
 
   // The inverting amplifier's schematic with C in place of Rf, exactly as the
@@ -13129,6 +13137,38 @@ function renderOpampIntegrator(domain, tool, favId) {
     </svg>`;
   }
 
+  // Two cycles of the input beside its integral, on one shared axis scaled to
+  // whichever is larger — so the quarter-cycle shift reads at a glance and the
+  // gain reads as the height difference rather than being normalised away.
+  // The output is clamped at the rails, which is what a clipped integrator
+  // actually does.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
+    const scale = Math.max(r.vinPk, r.voutPk, 1e-12);
+    const pxTop = 8, pxBottom = 58;
+    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
+    const toY = (v) => mid - (v / scale) * half;
+    const x0 = 10, width = 184, samples = 170;
+    const inPts = [], outPts = [];
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const th = t * 2 * 2 * Math.PI;
+      const x = x0 + t * width;
+      inPts.push(`${x.toFixed(1)},${toY(r.vinPk * Math.sin(th)).toFixed(1)}`);
+      const vo = Math.max(-r.vsupply, Math.min(r.vsupply, r.voutPkIdeal * Math.cos(th)));
+      outPts.push(`${x.toFixed(1)},${toY(vo).toFixed(1)}`);
+    }
+    const zeroY = toY(0);
+    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
+      <path d="M8,${zeroY} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin (sine)</text>
+      <text x="62" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (cosine)</text>
+    </svg>`;
+  }
+
   function cell(label, value) {
     return `<div class="eseries-cell">
       <div style="font-weight:600;color:${domain.color};">${label}</div>
@@ -13139,27 +13179,34 @@ function renderOpampIntegrator(domain, tool, favId) {
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
-      <div class="section-label" style="color:#5DCAA5">Output</div>
-      <div class="eseries-grid eseries-grid--tight">
+      <div class="section-label" style="color:#5DCAA5">Output
+        ${r.clipped ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Clipped at ±${siFormat(r.vsupply, "V")}</span>` : ""}
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="clear:both">
         ${cell("τ = RC", siFormat(r.tau, "s"))}
-        ${cell("Iin", siFormat(r.iin, "A"))}
-        ${cell("Ramp", siFormat(r.ramp, "V/s"))}
-        ${cell("t to rail", isFinite(r.tRail) ? siFormat(r.tRail, "s") : "—")}
+        ${cell("Gain", `${trim(r.gain)}×`)}
+        ${cell("Vout pk", siFormat(r.voutPk, "V"))}
+        ${cell("Phase", "+90°")}
         ${cell("f₀", siFormat(r.f0, "Hz"))}
-      </div>`;
+      </div>
+      ${r.clipped ? `<div class="error-text">Clipping — the integral calls for ${siFormat(r.voutPkIdeal, "V")} peak, past the ±${siFormat(r.vsupply, "V")} rails, so the cosine flattens off at the top and bottom. Raise f, raise RC, or lower Vin.</div>` : ""}`;
   }
 
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
   }
 
   function paint() {
     const r = compute();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Constant current into C — a steady input ramps the output")}
+      ${calcHeader(tool, favId, "Integrating a sine gives a cosine — a quarter-cycle shift")}
 
-      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div>${diagram()}</div>
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
 
       <div class="field-pair">
         <div class="field">
@@ -13179,10 +13226,17 @@ function renderOpampIntegrator(domain, tool, favId) {
       </div>
       <div class="field-pair">
         <div class="field">
-          <label>Vin</label>
+          <label>Vin (pk)</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="oi-vin" value="${state.vin}" />
             <select id="oi-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Frequency</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oi-freq" value="${state.freq}" />
+            <select id="oi-freq-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
         <div class="field">
@@ -13197,18 +13251,18 @@ function renderOpampIntegrator(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vout(t) = −(1/RC) ∫ Vin dt", "τ = R × C,  Iin = Vin / R", "dVout/dt = −Vin / τ", "t to rail = Vsupply × τ / |Vin|", "f₀ = 1 / (2π R C)"],
-        "Feedback holds V− at 0V, so Vin/R is a fixed current into C — and a fixed current into a capacitor is a straight ramp, which is what makes this integrate rather than merely filter. A steady input therefore has only one destination, the rail, and t to rail says when. It is also why a real integrator needs a large resistor across C: without one the op-amp's own offset and bias current ramp the output into a rail with no input at all. Above f₀ the circuit attenuates 6dB per octave; below f₀ it has gain."
+        ["Vout(t) = −(1/RC) ∫ Vin dt", "Gain = 1 / (2π f R C)", "Vout pk = Vin pk × Gain", "f₀ = 1 / (2π R C)"],
+        "Feedback holds V− at 0V, so Vin/R is the current into C — and integrating that current is what the output does. Integrating a sine gives a cosine: same shape, shifted a quarter cycle, scaled by 1/(2πfRC). So gain falls 6dB per octave as frequency rises, passing unity at f₀. A real integrator needs a large resistor across C, or the op-amp's own offset and bias current ramp the output into a rail with no input at all."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint);
 
-    [["oi-r", "r"], ["oi-c", "c"], ["oi-vin", "vin"], ["oi-vsupply", "vsupply"]].forEach(([id, name]) => {
+    [["oi-r", "r"], ["oi-c", "c"], ["oi-vin", "vin"], ["oi-freq", "freq"], ["oi-vsupply", "vsupply"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    [["oi-r-unit", "rUnit"], ["oi-c-unit", "cUnit"], ["oi-vin-unit", "vinUnit"], ["oi-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
+    [["oi-r-unit", "rUnit"], ["oi-c-unit", "cUnit"], ["oi-vin-unit", "vinUnit"], ["oi-freq-unit", "freqUnit"], ["oi-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
