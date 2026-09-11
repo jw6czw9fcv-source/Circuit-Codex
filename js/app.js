@@ -235,6 +235,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "opamp-integrator") return renderOpampIntegrator(domain, tool, favId);
   if (calcId === "opamp-differentiator") return renderOpampDifferentiator(domain, tool, favId);
   if (calcId === "opamp-summing") return renderOpampSumming(domain, tool, favId);
+  if (calcId === "opamp-differential") return renderOpampDifferential(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -13852,6 +13853,201 @@ function renderOpampSumming(domain, tool, favId) {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
     [["os-r1", "r1Unit"], ["os-r2", "r2Unit"], ["os-rf", "rfUnit"], ["os-v1", "v1Unit"], ["os-v2", "v2Unit"], ["os-vsupply", "vsupplyUnit"]].forEach(([id, name]) => {
+      document.getElementById(id + "-unit").onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+function renderOpampDifferential(domain, tool, favId) {
+  const state = {
+    r1: 10, r1Unit: "kΩ",
+    rf: 100, rfUnit: "kΩ",
+    r2: 10, r2Unit: "kΩ",
+    r3: 100, r3Unit: "kΩ",
+    v1: 1, v1Unit: "V",
+    v2: 1.1, v2Unit: "V",
+    vsupply: 12, vsupplyUnit: "V",
+  };
+
+  const R_NAMES = ["r1", "rf", "r2", "r3"];
+  function si(name) {
+    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const r1 = si("r1"), rf = si("rf"), r2 = si("r2"), r3 = si("r3");
+    const v1 = si("v1"), v2 = si("v2"), vsupply = si("vsupply");
+    if (!(r1 > 0) || !(r2 > 0) || !(r3 > 0) || !(rf >= 0) || !(vsupply > 0)) {
+      return { problem: "R1, R2, R3 and the supply must be greater than zero, and Rf must be zero or greater." };
+    }
+
+    // Split the inputs into what they share and what they don't, because that
+    // is the only split this circuit cares about. With k = Rf/R1 and
+    // β = R3/(R2+R3), superposition gives Vout = Vcm·[β(1+k) − k] + Vd·[β(1+k) + k]/2,
+    // so the bracket on Vcm IS the common-mode gain — zero exactly when the two
+    // arms' ratios match, and nothing else makes it zero.
+    const k = rf / r1;
+    const beta = r3 / (r2 + r3);
+    const ad = (beta * (1 + k) + k) / 2;
+    const acmRaw = beta * (1 + k) - k;
+    // β(1+k) and k are equal in exact arithmetic when matched but differ in the
+    // last bits in floating point, which would otherwise report a finite CMRR
+    // around 300dB for a perfectly balanced bridge.
+    const acm = Math.abs(acmRaw) < 1e-9 * Math.max(1, Math.abs(ad)) ? 0 : acmRaw;
+
+    const vd = v2 - v1;
+    const vcm = (v1 + v2) / 2;
+    const voutIdeal = vcm * acm + vd * ad;
+    const saturated = Math.abs(voutIdeal) > vsupply;
+    const vout = saturated ? Math.sign(voutIdeal) * vsupply : voutIdeal;
+    const cmrrDb = acm === 0 ? Infinity : 20 * Math.log10(Math.abs(ad / acm));
+
+    return { problem: "", k, ad, acm, cmrrDb, vd, vcm, vout, voutIdeal, saturated, vsupply };
+  }
+
+  // The reference sheet's difference amplifier: an input arm into each side,
+  // Rf looping over the top from the − node, and R3 hanging from the + node to
+  // ground. The two input arms sit either side of the triangle's inputs at the
+  // same 17px leads as the rest of the family; R1's label goes above its
+  // zigzag and R2's below, because a label between two stacked resistors
+  // collides with the one above it.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+
+    return `<svg width="258" height="170" viewBox="-16 -24 258 170" fill="none">
+      <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
+      <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
+
+      ${port(20, 38)}
+      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">V1</text>
+      <path d="M23 38 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(38, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="26" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R1</text>
+      <path d="M76 38 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="38" r="2.6" fill="${wire}"/>
+      <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      ${port(20, 62)}
+      <text x="8" y="66" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">V2</text>
+      <path d="M23 62 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(62, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="84" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R2</text>
+      <path d="M76 62 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="62" r="2.6" fill="${wire}"/>
+      <path d="M93 62 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M93 62 V79" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(93, 79)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="79" y="101" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">R3</text>
+      <path d="M93 115 V132" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(93, 132)}
+
+      <path d="M93 38 V6 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(6, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="135" y="-6" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M153 6 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M177 50 H194" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(197, 50)}
+      <text x="205" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const matched = r.acm === 0;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output
+        ${r.saturated
+          ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>`
+          : matched
+            ? `<span class="badge-calc" style="background:var(--result-border);color:var(--result-text);float:right;">Arms matched</span>`
+            : `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Arms unmatched</span>`}
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);clear:both">
+        ${cell("Vout", siFormat(r.vout, "V"))}
+        ${cell("Ad", `${trim(r.ad)}×`)}
+        ${cell("Acm", `${trim(r.acm)}×`)}
+        ${cell("CMRR", isFinite(r.cmrrDb) ? `${trim(r.cmrrDb)} dB` : "∞")}
+        ${cell("Vd", siFormat(r.vd, "V"))}
+        ${cell("Vcm", siFormat(r.vcm, "V"))}
+      </div>
+      ${r.saturated ? `<div class="error-text">Clipping — the output calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail.</div>` : ""}
+      ${!matched && !r.saturated ? `<div class="error-text">The arms don't match, so ${trim(Math.abs(r.acm * r.vcm / (r.voutIdeal || 1)) * 100)}% of Vout is leaked common mode, not signal. Set R2/R3 = R1/Rf to null it.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function numField(id, name, label, units, unitName) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[unitName] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Amplifies the difference, rejects what both inputs share")}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="field-pair">
+        ${numField("ox-r1", "r1", "R1", OHM_UNITS, "r1Unit")}
+        ${numField("ox-rf", "rf", "Rf", OHM_UNITS, "rfUnit")}
+      </div>
+      <div class="field-pair">
+        ${numField("ox-r2", "r2", "R2", OHM_UNITS, "r2Unit")}
+        ${numField("ox-r3", "r3", "R3", OHM_UNITS, "r3Unit")}
+      </div>
+      <div class="field-pair">
+        ${numField("ox-v1", "v1", "V1", VOLT_UNITS, "v1Unit")}
+        ${numField("ox-v2", "v2", "V2", VOLT_UNITS, "v2Unit")}
+        ${numField("ox-vsupply", "vsupply", "Supply (±V)", VOLT_UNITS, "vsupplyUnit")}
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["V+ = V2 × R3 / (R2 + R3)", "Vout = V+ × (1 + Rf/R1) − V1 × Rf/R1", "Matched R2/R3 = R1/Rf → Vout = (Rf/R1)(V2 − V1)", "CMRR = 20 × log₁₀(|Ad / Acm|)"],
+        "The two arms cancel the shared part only if their ratios match: R2/R3 must equal R1/Rf. Then Acm is exactly zero and Vout follows the difference alone. Otherwise common mode leaks through — and since Vcm usually dwarfs the difference you are measuring, a small mismatch is a large error. That is why instrumentation amplifiers exist."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["ox-r1", "r1"], ["ox-rf", "rf"], ["ox-r2", "r2"], ["ox-r3", "r3"], ["ox-v1", "v1"], ["ox-v2", "v2"], ["ox-vsupply", "vsupply"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["ox-r1", "r1Unit"], ["ox-rf", "rfUnit"], ["ox-r2", "r2Unit"], ["ox-r3", "r3Unit"], ["ox-v1", "v1Unit"], ["ox-v2", "v2Unit"], ["ox-vsupply", "vsupplyUnit"]].forEach(([id, name]) => {
       document.getElementById(id + "-unit").onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }

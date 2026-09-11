@@ -141,7 +141,15 @@ input sees only its own resistor and the currents sum through Rf; six
 results in a 6-column grid — Vout, both channel gains, both input
 currents and their sum — so the addition is visible as arithmetic;
 defaults 1V+2V at unity gain give exactly −3V; unequal resistors weight
-each channel, which is how a mixer sets levels)
+each channel, which is how a mixer sets levels) ·
+Op-amp: differential amplifier (an input arm into each side, Rf over the
+top from the − node, R3 from the + node to ground, as the reference sheet
+draws it; built around common-mode rejection rather than the trivial
+Vout=(Rf/R1)(V2−V1) — inputs are split into Vd and Vcm and the results
+carry Ad, Acm and CMRR, with a matched/unmatched badge; a float-noise
+guard clamps Acm to exactly zero when the arms balance, otherwise a
+perfectly matched bridge reports a finite ~300dB CMRR; a 10% error on R3
+costs 11% of the answer, which the red warning quantifies)
 when it does, with the family’s badge and red warning; Gain = 1/(2πfRC)
 falls 6dB/octave and passes unity at f₀)
 
@@ -155,7 +163,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
       panel — Vin through Rin into the V+ node, Rf from the output to that
       same node; confirm the panel’s exact wiring first, it was too small to
       read reliably)
-- [ ] Op-amp: differential amplifier
 - [ ] Photocell / LDR
 - [ ] Optocoupler
 - [ ] LED forward voltage/current

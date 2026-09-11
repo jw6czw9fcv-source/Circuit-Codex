@@ -83,7 +83,7 @@ const DOMAINS = [
         tools: [
           { name: "Inverting amplifier", calc: "opamp-inverting" }, { name: "Non-inverting amplifier", calc: "opamp-noninverting" }, { name: "Buffer (voltage follower)", calc: "opamp-buffer" },
           { name: "Comparator (± hysteresis / Schmitt trigger)", calc: "opamp-comparator" }, { name: "Integrator", calc: "opamp-integrator" }, { name: "Differentiator", calc: "opamp-differentiator" },
-          { name: "Summing amplifier", calc: "opamp-summing" }, { name: "Differential amplifier" }, { name: "Sallen-Key filter" },
+          { name: "Summing amplifier", calc: "opamp-summing" }, { name: "Differential amplifier", calc: "opamp-differential" }, { name: "Sallen-Key filter" },
         ],
       },
       { title: "Optoelectronics", tools: [{ name: "Photocell / LDR" }, { name: "Optocoupler" }, { name: "LED forward voltage/current" }, { name: "Wavelength ↔ color/spectrum chart" }] },
