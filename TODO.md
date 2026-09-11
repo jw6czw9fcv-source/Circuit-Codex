@@ -124,7 +124,16 @@ drawn rather than sampled so its edges stay vertical; output clamps at
 the rails and visibly flattens; each mode’s note carries a “Used for”
 sentence in the domain accent — function generators, PWM ramps and
 dual-slope ADCs for the square, PID integral term, charge amplifiers and
-rate-recovery for the sine
+rate-recovery for the sine ·
+Op-amp: differentiator (the integrator mirrored — C moved into the input
+arm, R into the feedback, as the reference sheet draws it; C passes only
+change so the summing-node current is C·dVin/dt and the output is the
+input’s slope scaled by −RC; Triangle/Sine selector like the integrator’s,
+triangle first because a fixed slope each half cycle is what gives square
+out; gain = 2πfRC climbs 6dB/octave, the integrator’s response upside
+down — the two gains multiply to 1 at any frequency, checked across the
+two tools; the note carries the caveat that a bare differentiator
+amplifies noise without limit)
 when it does, with the family’s badge and red warning; Gain = 1/(2πfRC)
 falls 6dB/octave and passes unity at f₀)
 
@@ -138,7 +147,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
       panel — Vin through Rin into the V+ node, Rf from the output to that
       same node; confirm the panel’s exact wiring first, it was too small to
       read reliably)
-- [ ] Op-amp: differentiator
 - [ ] Op-amp: summing amplifier
 - [ ] Op-amp: differential amplifier
 - [ ] Photocell / LDR

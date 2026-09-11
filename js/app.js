@@ -233,6 +233,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "opamp-buffer") return renderOpampBuffer(domain, tool, favId);
   if (calcId === "opamp-comparator") return renderOpampComparator(domain, tool, favId);
   if (calcId === "opamp-integrator") return renderOpampIntegrator(domain, tool, favId);
+  if (calcId === "opamp-differentiator") return renderOpampDifferentiator(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -13434,6 +13435,250 @@ function renderOpampIntegrator(domain, tool, favId) {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
     [["oi-r-unit", "rUnit"], ["oi-c-unit", "cUnit"], ["oi-vin-unit", "vinUnit"], ["oi-freq-unit", "freqUnit"], ["oi-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+function renderOpampDifferentiator(domain, tool, favId) {
+  const state = {
+    wave: "triangle",
+    r: 10, rUnit: "kΩ",
+    c: 100, cUnit: "nF",
+    vin: 1, vinUnit: "V",
+    freq: 100, freqUnit: "Hz",
+    vsupply: 12, vsupplyUnit: "V",
+  };
+
+  const F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+
+  function si(name) {
+    if (name === "r") return state.r * OHM_UNITS[state.rUnit];
+    if (name === "c") return state.c * CAP_UNITS[state.cUnit];
+    if (name === "freq") return state.freq * F_UNITS[state.freqUnit];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const r = si("r"), c = si("c"), vin = si("vin"), vsupply = si("vsupply"), freq = si("freq");
+    if (!(r > 0) || !(c > 0) || !(vsupply > 0) || !(freq > 0)) {
+      return { problem: "R, C, the frequency and the supply must all be greater than zero." };
+    }
+
+    // C passes only change, so the current reaching the summing node is
+    // C·dVin/dt and the output is the input's slope scaled by −RC. Everything
+    // below is that one fact: a triangle has a fixed slope each half cycle, a
+    // sine differentiates to a cosine scaled by ωRC.
+    const tri = state.wave === "triangle";
+    const tau = r * c;
+    const f0 = 1 / (2 * Math.PI * tau);
+    const gain = 2 * Math.PI * freq * tau;
+    const vinPk = Math.abs(vin);
+    // A triangle covering 2·Vpk in half a period rises at 4·Vpk·f.
+    const slope = 4 * vinPk * freq;
+    const voutPkIdeal = tri ? tau * slope : vinPk * gain;
+    const clipped = voutPkIdeal > vsupply;
+    const voutPk = clipped ? vsupply : voutPkIdeal;
+
+    return { problem: "", tri, tau, f0, gain, slope, vinPk, voutPkIdeal, voutPk, clipped, vsupply };
+  }
+
+  // The inverting amplifier's schematic with C moved into the input arm, the
+  // exact mirror of the integrator and what the reference sheet draws: same
+  // 50x50 triangle, same Rf loop over the top, same node-to-node spans. The
+  // plates sit at the centre the input resistor used, so the runs either side
+  // are longer than a resistor's leads — a capacitor is narrower than a
+  // zigzag and keeping the span fixed is what keeps the family aligned.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+    const cap = (x, y) => `M${x - 4} ${y - 9} V${y + 9} M${x + 4} ${y - 9} V${y + 9}`;
+
+    return `<svg width="258" height="128" viewBox="-16 -26 258 128" fill="none">
+      <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
+      <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
+      <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M110 62 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      ${port(20, 38)}
+      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M23 38 H54" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${cap(58, 38)}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <text x="58" y="22" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">C</text>
+      <path d="M62 38 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="38" r="2.6" fill="${wire}"/>
+
+      <path d="M93 38 V6 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(6, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="135" y="-8" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R</text>
+      <path d="M153 6 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M177 50 H194" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(197, 50)}
+      <text x="205" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+
+      <path d="M93 62 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(93, 88)}
+    </svg>`;
+  }
+
+  // Two cycles on one shared axis scaled to whichever signal is larger, same
+  // as the integrator so the mirror is visible when you switch between them.
+  // Both shapes in triangle mode are piecewise constant or linear, so they are
+  // drawn as explicit paths rather than sampled — sampling rounds a corner and
+  // slopes a vertical edge, which reads as the wrong waveform.
+  function waveDiagram(r) {
+    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
+    const scale = Math.max(r.vinPk, r.voutPk, 1e-12);
+    const pxTop = 8, pxBottom = 58;
+    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
+    const toY = (v) => mid - (v / scale) * half;
+    const x0 = 10, width = 184, samples = 170;
+    const clamp = (v) => Math.max(-r.vsupply, Math.min(r.vsupply, v));
+
+    let inPts = [], outPts = [];
+    if (r.tri) {
+      const q = width / 4;
+      const lo = toY(-r.vinPk).toFixed(1), hi = toY(r.vinPk).toFixed(1);
+      // Rising then falling, twice: slope is what the output follows.
+      [0, 1, 2, 3, 4].forEach((k) => inPts.push(`${(x0 + k * q).toFixed(1)},${k % 2 === 0 ? lo : hi}`));
+      const neg = toY(clamp(-r.voutPkIdeal)).toFixed(1), pos = toY(clamp(r.voutPkIdeal)).toFixed(1);
+      [0, 1, 2, 3].forEach((k) => {
+        const a = (x0 + k * q).toFixed(1), b = (x0 + (k + 1) * q).toFixed(1);
+        const y = k % 2 === 0 ? neg : pos;
+        outPts.push(`${a},${y}`, `${b},${y}`);
+      });
+    } else {
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        const th = t * 4 * Math.PI;
+        const x = (x0 + t * width).toFixed(1);
+        inPts.push(`${x},${toY(r.vinPk * Math.sin(th)).toFixed(1)}`);
+        outPts.push(`${x},${toY(clamp(-r.voutPkIdeal * Math.cos(th))).toFixed(1)}`);
+      }
+    }
+    const zeroY = toY(0);
+    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
+      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin (${r.tri ? "triangle" : "sine"})</text>
+      <text x="${r.tri ? 70 : 62}" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (${r.tri ? "square" : "cosine"})</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output
+        ${r.clipped ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Clipped at ±${siFormat(r.vsupply, "V")}</span>` : ""}
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="clear:both">
+        ${cell("τ = RC", siFormat(r.tau, "s"))}
+        ${r.tri ? cell("Vin slope", siFormat(r.slope, "V/s")) : cell("Gain", `${trim(r.gain)}×`)}
+        ${cell("Vout pk", siFormat(r.voutPk, "V"))}
+        ${r.tri ? cell("Vout pp", siFormat(r.clipped ? 2 * r.vsupply : 2 * r.voutPkIdeal, "V")) : cell("Phase", "−90°")}
+        ${cell("f₀", siFormat(r.f0, "Hz"))}
+      </div>
+      ${r.clipped ? `<div class="error-text">Clipping — the derivative calls for ${siFormat(r.voutPkIdeal, "V")} peak, past the ±${siFormat(r.vsupply, "V")} rails. Lower f, lower RC, or lower Vin.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
+  }
+
+  function paint() {
+    const r = compute();
+    const tri = state.wave === "triangle";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, tri
+        ? "Triangle in, square out — constant slope, constant output"
+        : "Differentiating a sine gives a cosine — a quarter cycle early")}
+
+      ${pillRow([["triangle", "Triangle in"], ["sine", "Sine in"]], state.wave, domain.bg)}
+
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div>${diagram()}</div>
+        <div data-res="wave">${waveDiagram(r)}</div>
+      </div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>R</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="od-r" value="${state.r}" />
+            <select id="od-r-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>C</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="od-c" value="${state.c}" />
+            <select id="od-c-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.cUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Vin (pk)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="od-vin" value="${state.vin}" />
+            <select id="od-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Frequency</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="od-freq" value="${state.freq}" />
+            <select id="od-freq-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Supply (±V)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="od-vsupply" value="${state.vsupply}" />
+            <select id="od-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        tri
+          ? ["Vout = −RC × dVin/dt", "Slope = 4 × Vin pk × f", "Vout pk = RC × Slope", "f₀ = 1 / (2π R C)"]
+          : ["Vout = −RC × dVin/dt", "Gain = 2π f R C", "Vout pk = Vin pk × Gain", "f₀ = 1 / (2π R C)"],
+        tri
+          ? `A triangle climbs at one fixed rate and falls at another, and the output is that slope scaled by −RC — so triangle in gives square out, the exact mirror of the integrator. <b style="color:${domain.color}">Used for:</b> turning an edge into a pulse, rate-of-change alarms on dV/dt or di/dt, and the D term of a PID. A bare differentiator amplifies noise without limit; real ones add a small resistor in series with C to stop the gain climbing.`
+          : `A sine differentiates to a cosine — a quarter cycle early, scaled by 2πfRC — so gain climbs 6dB per octave, passing unity at f₀. That is the integrator's response upside down; the two gains multiply to 1 at any frequency. <b style="color:${domain.color}">Used for:</b> high-pass shaping and rate detection. A bare differentiator amplifies noise without limit; real ones add a small resistor in series with C to stop the gain climbing.`
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.wave = m; paint(); });
+
+    [["od-r", "r"], ["od-c", "c"], ["od-vin", "vin"], ["od-freq", "freq"], ["od-vsupply", "vsupply"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["od-r-unit", "rUnit"], ["od-c-unit", "cUnit"], ["od-vin-unit", "vinUnit"], ["od-freq-unit", "freqUnit"], ["od-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
