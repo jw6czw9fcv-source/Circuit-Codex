@@ -116,7 +116,12 @@ as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
 axis scaled to whichever is larger so the quarter-cycle shift reads at a
 glance and the gain reads as the height difference rather than being
-normalised away; the output clamps at the rails and visibly flattens
+normalised away; a Square/Sine selector picks the input, square first
+because that is the real use (constant current → straight ramp → triangle
+out, the function-generator pairing with the Schmitt trigger) while sine
+is the shape to reason about frequency response with; the square input is
+drawn rather than sampled so its edges stay vertical; output clamps at
+the rails and visibly flattens
 when it does, with the family’s badge and red warning; Gain = 1/(2πfRC)
 falls 6dB/octave and passes unity at f₀)
 

@@ -13054,6 +13054,7 @@ function renderOpampComparator(domain, tool, favId) {
 
 function renderOpampIntegrator(domain, tool, favId) {
   const state = {
+    wave: "square",
     r: 10, rUnit: "kΩ",
     c: 100, cUnit: "nF",
     vin: 1, vinUnit: "V",
@@ -13080,16 +13081,22 @@ function renderOpampIntegrator(domain, tool, favId) {
     // current into C and the output is its integral. Integrating sin gives
     // −cos/ω, and the inverting sign flips that back to +cos: same shape,
     // shifted a quarter cycle, scaled by 1/ωRC.
+    const square = state.wave === "square";
     const tau = r * c;
     const f0 = 1 / (2 * Math.PI * tau);
     const gain = 1 / (2 * Math.PI * freq * tau);
     const vinPk = Math.abs(vin);
-    const voutPkIdeal = vinPk * gain;
+    // A square holds Vin/R constant for half a cycle, so the output is a
+    // straight ramp of Vin/tau V/s lasting 1/(2f) seconds — that swing is the
+    // triangle's peak-to-peak, and half of it is the peak. A sine instead
+    // integrates to a cosine scaled by 1/ωRC.
+    const ramp = vinPk / tau;
+    const voutPp = vinPk / (2 * freq * tau);
+    const voutPkIdeal = square ? voutPp / 2 : vinPk * gain;
     const clipped = voutPkIdeal > vsupply;
     const voutPk = clipped ? vsupply : voutPkIdeal;
-    const iinPk = vinPk / r;
 
-    return { problem: "", tau, f0, gain, vinPk, voutPkIdeal, voutPk, clipped, vsupply, iinPk };
+    return { problem: "", square, tau, f0, gain, ramp, voutPp, vinPk, voutPkIdeal, voutPk, clipped, vsupply };
   }
 
   // The inverting amplifier's schematic with C in place of Rf, exactly as the
@@ -13149,14 +13156,34 @@ function renderOpampIntegrator(domain, tool, favId) {
     const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
     const toY = (v) => mid - (v / scale) * half;
     const x0 = 10, width = 184, samples = 170;
-    const inPts = [], outPts = [];
+    const outPts = [];
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
-      const th = t * 2 * 2 * Math.PI;
+      const ph = (t * 2 * 2 * Math.PI) % (2 * Math.PI);
       const x = x0 + t * width;
-      inPts.push(`${x.toFixed(1)},${toY(r.vinPk * Math.sin(th)).toFixed(1)}`);
-      const vo = Math.max(-r.vsupply, Math.min(r.vsupply, r.voutPkIdeal * Math.cos(th)));
+      // Starting at the positive peak in both modes, so the two shapes line up
+      // against the same input phase and can be compared directly.
+      const shape = r.square
+        ? (ph < Math.PI ? 1 - 2 * (ph / Math.PI) : -1 + 2 * ((ph - Math.PI) / Math.PI))
+        : Math.cos(ph);
+      const vo = Math.max(-r.vsupply, Math.min(r.vsupply, r.voutPkIdeal * shape));
       outPts.push(`${x.toFixed(1)},${toY(vo).toFixed(1)}`);
+    }
+    // The input is drawn rather than sampled in square mode: sampling would
+    // slope the edges by a pixel or two, which reads as a trapezoid.
+    const inPts = [];
+    if (r.square) {
+      const hi = toY(r.vinPk).toFixed(1), lo = toY(-r.vinPk).toFixed(1), q = width / 4;
+      [0, 1, 2, 3].forEach((k) => {
+        const a = (x0 + k * q).toFixed(1), b = (x0 + (k + 1) * q).toFixed(1);
+        const y = k % 2 === 0 ? hi : lo;
+        inPts.push(`${a},${y}`, `${b},${y}`);
+      });
+    } else {
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        inPts.push(`${(x0 + t * width).toFixed(1)},${toY(r.vinPk * Math.sin(t * 4 * Math.PI)).toFixed(1)}`);
+      }
     }
     const zeroY = toY(0);
     return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
@@ -13164,8 +13191,8 @@ function renderOpampIntegrator(domain, tool, favId) {
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin (sine)</text>
-      <text x="62" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (cosine)</text>
+      <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin (${r.square ? "square" : "sine"})</text>
+      <text x="${r.square ? 66 : 62}" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (${r.square ? "triangle" : "cosine"})</text>
     </svg>`;
   }
 
@@ -13184,12 +13211,12 @@ function renderOpampIntegrator(domain, tool, favId) {
       </div>
       <div class="eseries-grid eseries-grid--tight" style="clear:both">
         ${cell("τ = RC", siFormat(r.tau, "s"))}
-        ${cell("Gain", `${trim(r.gain)}×`)}
+        ${r.square ? cell("Ramp", siFormat(r.ramp, "V/s")) : cell("Gain", `${trim(r.gain)}×`)}
         ${cell("Vout pk", siFormat(r.voutPk, "V"))}
-        ${cell("Phase", "+90°")}
+        ${r.square ? cell("Vout pp", siFormat(r.clipped ? 2 * r.vsupply : r.voutPp, "V")) : cell("Phase", "+90°")}
         ${cell("f₀", siFormat(r.f0, "Hz"))}
       </div>
-      ${r.clipped ? `<div class="error-text">Clipping — the integral calls for ${siFormat(r.voutPkIdeal, "V")} peak, past the ±${siFormat(r.vsupply, "V")} rails, so the cosine flattens off at the top and bottom. Raise f, raise RC, or lower Vin.</div>` : ""}`;
+      ${r.clipped ? `<div class="error-text">Clipping — the integral calls for ${siFormat(r.voutPkIdeal, "V")} peak, past the ±${siFormat(r.vsupply, "V")} rails, so the ${r.square ? "triangle" : "cosine"} flattens off at the top and bottom. Raise f, raise RC, or lower Vin.</div>` : ""}`;
   }
 
   function refresh() {
@@ -13200,8 +13227,13 @@ function renderOpampIntegrator(domain, tool, favId) {
 
   function paint() {
     const r = compute();
+    const square = state.wave === "square";
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Integrating a sine gives a cosine — a quarter-cycle shift")}
+      ${calcHeader(tool, favId, square
+        ? "A square holds the current steady, so the output ramps — triangle out"
+        : "Integrating a sine gives a cosine — a quarter-cycle shift")}
+
+      ${pillRow([["square", "Square in"], ["sine", "Sine in"]], state.wave, domain.bg)}
 
       <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
         <div>${diagram()}</div>
@@ -13251,13 +13283,17 @@ function renderOpampIntegrator(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vout(t) = −(1/RC) ∫ Vin dt", "Gain = 1 / (2π f R C)", "Vout pk = Vin pk × Gain", "f₀ = 1 / (2π R C)"],
-        "Feedback holds V− at 0V, so Vin/R is the current into C — and integrating that current is what the output does. Integrating a sine gives a cosine: same shape, shifted a quarter cycle, scaled by 1/(2πfRC). So gain falls 6dB per octave as frequency rises, passing unity at f₀. A real integrator needs a large resistor across C, or the op-amp's own offset and bias current ramp the output into a rail with no input at all."
+        square
+          ? ["Vout(t) = −(1/RC) ∫ Vin dt", "Ramp = Vin / RC", "Vout pp = Vin / (2 f R C)", "f₀ = 1 / (2π R C)"]
+          : ["Vout(t) = −(1/RC) ∫ Vin dt", "Gain = 1 / (2π f R C)", "Vout pk = Vin pk × Gain", "f₀ = 1 / (2π R C)"],
+        square
+          ? "A square holds Vin/R constant for half a cycle, and a constant current into C is a straight ramp — which is why square in gives triangle out. Pair it with the Schmitt trigger and the two sustain each other: that is a function generator. A real integrator needs a large resistor across C, or the op-amp's own offset ramps it into a rail with no input at all."
+          : "A sine integrates to a cosine — same shape, a quarter cycle later, scaled by 1/(2πfRC) — so gain falls 6dB per octave and passes unity at f₀. This is the shape to reason about frequency response with; the square is the one you actually feed it. A real integrator needs a large resistor across C, or its own offset ramps it into a rail with no input at all."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint);
+    wireCalc(favId, paint, (m) => { state.wave = m; paint(); });
 
     [["oi-r", "r"], ["oi-c", "c"], ["oi-vin", "vin"], ["oi-freq", "freq"], ["oi-vsupply", "vsupply"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
