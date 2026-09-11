@@ -13230,7 +13230,7 @@ function renderOpampIntegrator(domain, tool, favId) {
     const square = state.wave === "square";
     app.innerHTML = `
       ${calcHeader(tool, favId, square
-        ? "A square holds the current steady, so the output ramps — triangle out"
+        ? "Square in, triangle out — constant current, straight ramp"
         : "Integrating a sine gives a cosine — a quarter-cycle shift")}
 
       ${pillRow([["square", "Square in"], ["sine", "Sine in"]], state.wave, domain.bg)}
@@ -13287,8 +13287,8 @@ function renderOpampIntegrator(domain, tool, favId) {
           ? ["Vout(t) = −(1/RC) ∫ Vin dt", "Ramp = Vin / RC", "Vout pp = Vin / (2 f R C)", "f₀ = 1 / (2π R C)"]
           : ["Vout(t) = −(1/RC) ∫ Vin dt", "Gain = 1 / (2π f R C)", "Vout pk = Vin pk × Gain", "f₀ = 1 / (2π R C)"],
         square
-          ? "A square holds Vin/R constant for half a cycle, and a constant current into C is a straight ramp — which is why square in gives triangle out. Pair it with the Schmitt trigger and the two sustain each other: that is a function generator. A real integrator needs a large resistor across C, or the op-amp's own offset ramps it into a rail with no input at all."
-          : "A sine integrates to a cosine — same shape, a quarter cycle later, scaled by 1/(2πfRC) — so gain falls 6dB per octave and passes unity at f₀. This is the shape to reason about frequency response with; the square is the one you actually feed it. A real integrator needs a large resistor across C, or its own offset ramps it into a rail with no input at all."
+          ? `A square holds Vin/R constant for half a cycle, and a constant current into C is a straight ramp — so square in gives triangle out. <b style="color:${domain.color}">Used for:</b> function generators (a Schmitt trigger's square drives this, its triangle drives the Schmitt back, and the pair self-sustains), the ramp a PWM comparator needs, and dual-slope ADCs in bench multimeters. Add a large resistor across C, or the op-amp's own offset ramps it into a rail.`
+          : `A sine integrates to a cosine — a quarter cycle later, scaled by 1/(2πfRC) — so gain falls 6dB per octave, passing unity at f₀. <b style="color:${domain.color}">Used for:</b> the I term of an analog PID, charge amplifiers turning a piezo's or photodiode's charge into a voltage, and recovering a quantity from its rate — a Rogowski coil measures dI/dt. Add a large resistor across C, or its own offset ramps it into a rail.`
       )}
       ${calcFooter()}
     `;

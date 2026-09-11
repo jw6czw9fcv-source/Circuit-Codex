@@ -121,7 +121,10 @@ because that is the real use (constant current → straight ramp → triangle
 out, the function-generator pairing with the Schmitt trigger) while sine
 is the shape to reason about frequency response with; the square input is
 drawn rather than sampled so its edges stay vertical; output clamps at
-the rails and visibly flattens
+the rails and visibly flattens; each mode’s note carries a “Used for”
+sentence in the domain accent — function generators, PWM ramps and
+dual-slope ADCs for the square, PID integral term, charge amplifiers and
+rate-recovery for the sine
 when it does, with the family’s badge and red warning; Gain = 1/(2πfRC)
 falls 6dB/octave and passes unity at f₀)
 
