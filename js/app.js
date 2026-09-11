@@ -13965,42 +13965,39 @@ function renderOpampDifferential(domain, tool, favId) {
   }
 
 
-  // Two bands, because 100mV in against 1V out will not share a vertical
-  // scale. The top band is the differential input itself, drawn as a sine —
-  // that is the signal being measured. The bottom band is what comes out:
-  // Ad times that sine, plus Acm times a slower common-mode interference the
-  // two leads pick up together. Matched arms give a clean copy of the input;
-  // a mismatch drags a slow wobble across it, and that wobble is the leak the
-  // CMRR figure names. Every amplitude comes from the computed results — only
-  // the two rates are chosen, so the signal and the interference can be told
-  // apart.
+  // Same single shared axis the amplifiers use, scaled to whichever signal is
+  // larger, so the gain reads as the height difference rather than being
+  // normalised away. Grey is the differential input — the thing being
+  // measured — as a sine; blue is what comes out, which is that same sine
+  // times Ad, plus Acm times a slower common-mode interference the two leads
+  // pick up together. Matched arms give a clean scaled copy; a mismatch drags
+  // a slow wobble across it, and that wobble is the leak CMRR names. Only the
+  // two rates are chosen — every amplitude comes from the computed results.
   function waveDiagram(r) {
     if (r.problem) return `<svg width="220" height="70" viewBox="0 0 220 70" fill="none"></svg>`;
-    const x0 = 10, width = 178, samples = 180;
-    const inMid = 18, outMid = 51, half = 13;
+    const x0 = 10, width = 184, samples = 180;
+    const pxTop = 6, pxBottom = 52;
+    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
 
     const vdPk = Math.abs(r.vd), vcmPk = Math.abs(r.vcm);
-    const outs = [], ins = [];
+    const ins = [], outs = [];
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
-      ins.push(vdPk * Math.sin(t * 6 * Math.PI));
+      ins.push(vdPk * Math.sin(t * 4 * Math.PI));
       outs.push(Math.max(-r.vsupply, Math.min(r.vsupply,
-        r.ad * r.vd * Math.sin(t * 6 * Math.PI) + r.acm * vcmPk * Math.sin(t * 2 * Math.PI))));
+        r.ad * r.vd * Math.sin(t * 4 * Math.PI) + r.acm * vcmPk * Math.sin(t * 2 * Math.PI))));
     }
-    const inScale = Math.max(vdPk, 1e-12);
-    const outScale = Math.max(...outs.map(Math.abs), 1e-12);
-    const yIn = (v) => inMid - (v / inScale) * half;
-    const yOut = (v) => outMid - (v / outScale) * half;
-
-    const pts = (arr, f) => arr.map((v, i) => `${(x0 + (i / samples) * width).toFixed(1)},${f(v).toFixed(1)}`).join(" ");
+    const scale = Math.max(vdPk, Math.max(...outs.map(Math.abs)), 1e-12);
+    const toY = (v) => mid - (v / scale) * half;
+    const pts = (arr) => arr.map((v, i) => `${(x0 + (i / samples) * width).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
 
     return `<svg width="220" height="70" viewBox="0 0 220 70" fill="none">
-      <path d="M8,${inMid} H190" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
-      <path d="M8,${outMid} H190" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
-      <polyline points="${pts(ins, yIn)}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
-      <polyline points="${pts(outs, yOut)}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="193" y="${inMid + 3}" fill="#5A6169" font-size="8" font-weight="600">Vd in</text>
-      <text x="193" y="${outMid + 3}" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
+      <path d="M8,${mid} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <polyline points="${pts(ins)}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <polyline points="${pts(outs)}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="199" y="${mid + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
+      <text x="10" y="66" fill="#5A6169" font-size="9" font-weight="600">Vd in</text>
+      <text x="40" y="66" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
     </svg>`;
   }
 
