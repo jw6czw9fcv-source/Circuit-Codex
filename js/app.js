@@ -13996,7 +13996,7 @@ function renderOpampDifferential(domain, tool, favId) {
       <polyline points="${pts(ins)}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${pts(outs)}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="199" y="${mid + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="10" y="64" fill="#5A6169" font-size="9" font-weight="600">Vd in</text>
+      <text x="10" y="64" fill="#5A6169" font-size="9" font-weight="600">Vdiff</text>
       <text x="40" y="64" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
     </svg>`;
   }
@@ -14023,10 +14023,10 @@ function renderOpampDifferential(domain, tool, favId) {
       </div>
       <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);clear:both">
         ${cell("Vout", siFormat(r.vout, "V"))}
-        ${cell("Ad", `${trim(r.ad)}×`)}
+        ${cell("Adiff", `${trim(r.ad)}×`)}
         ${cell("Acm", `${trim(r.acm)}×`)}
         ${cell("CMRR", isFinite(r.cmrrDb) ? `${trim(r.cmrrDb)} dB` : "∞")}
-        ${cell("Vd", siFormat(r.vd, "V"))}
+        ${cell("Vdiff", siFormat(r.vd, "V"))}
         ${cell("Vcm", siFormat(r.vcm, "V"))}
       </div>
       ${r.saturated ? `<div class="error-text">Clipping — the output calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail.</div>` : ""}
@@ -14077,7 +14077,7 @@ function renderOpampDifferential(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vd = V2 − V1,  Vcm = (V1 + V2) / 2", "Vout = Ad × Vd + Acm × Vcm", "Matched R2/R3 = R1/Rf → Acm = 0, Ad = Rf/R1", "CMRR = 20 × log₁₀(|Ad / Acm|)"],
+        ["Vdiff = V2 − V1,  Vcm = (V1 + V2) / 2", "Vout = Adiff × Vdiff + Acm × Vcm", "Matched R2/R3 = R1/Rf → Adiff = Rf/R1, Acm = 0", "CMRR = 20 × log₁₀(|Adiff / Acm|)"],
         "The arms cancel the shared part only if R2/R3 equals R1/Rf. Otherwise a slow wobble of Acm×Vcm rides across the output — hence instrumentation amps."
       )}
       ${calcFooter()}
