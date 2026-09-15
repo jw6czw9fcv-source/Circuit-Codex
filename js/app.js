@@ -14414,51 +14414,70 @@ function renderOptocoupler(domain, tool, favId) {
   // LED on the left, phototransistor on the right, and a dashed line between
   // them because that gap is the entire reason the part exists — light gets
   // across it, current does not. The transistor is the app's NPN symbol with
-  // its base lead removed, since the base is driven by light; the two arrows
-  // spanning the barrier are what replaces it.
+  // its base lead removed, since the base is driven by light.
+  //
+  // The beams are zigzags, not straight arrows: IEC 60617-2 (05-06-08) draws
+  // optical coupling that way, and it also reads as light rather than as a
+  // wire. They sit either side of y=93, which is the optical centre of BOTH
+  // devices — the LED body is 14px tall and the transistor 32px, so getting
+  // their midpoints to line up costs a 26px run on the LED side instead of
+  // the usual 17px lead. That run is what buys the alignment, and the two
+  // ground symbols land on a common level for the same reason.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
-    const beam = (y) => `<path d="M84 ${y} H126 M120 ${y - 4} L126 ${y} L120 ${y + 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    // Zigzag beam: six 6px steps of ±3px, then a head. Reads as radiation.
+    const beam = (y) => `<path d="M88 ${y} L96 ${y - 4} L104 ${y + 4} L112 ${y} L118 ${y} M113 ${y - 4} L118 ${y} L113 ${y + 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    // Emitter arrow, same construction the NPN switch uses.
+    const emitterArrow = (x1, y1, x2, y2) => {
+      const t = 0.56, size = 7.5;
+      let ux = x2 - x1, uy = y2 - y1;
+      const len = Math.hypot(ux, uy); ux /= len; uy /= len;
+      const px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+      const tip = [px + ux * size * 0.6, py + uy * size * 0.6];
+      const b1 = [px - ux * size * 0.5 - uy * size * 0.42, py - uy * size * 0.5 + ux * size * 0.42];
+      const b2 = [px - ux * size * 0.5 + uy * size * 0.42, py - uy * size * 0.5 - ux * size * 0.42];
+      return [tip, b1, b2].map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
+    };
 
-    return `<svg width="188" height="151" viewBox="27 -12 188 151" fill="none">
-      ${port(70, 4)}
-      <text x="58" y="8" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
-      <path d="M70 7 V21" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(70, 21)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="56" y="42" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">Rin</text>
-      <path d="M70 57 V74" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    return `<svg width="164" height="154" viewBox="35 -12 164 154" fill="none">
+      ${port(76, 4)}
+      <text x="64" y="8" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M76 7 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(76, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="62" y="45" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">Rin</text>
+      <path d="M76 60 V86" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
-      <path d="M63 74 L77 74 L70 88 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
-      <path d="M62 88 H78" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M70 88 V105" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${ground(70, 105)}
+      <path d="M69 86 L83 86 L76 100 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M68 100 H84" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M76 100 V126" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(76, 126)}
 
-      ${beam(76)}
-      ${beam(88)}
-      <path d="M105 58 V120" stroke="${wire}" stroke-width="1.2" stroke-dasharray="4 4"/>
+      ${beam(85)}
+      ${beam(101)}
+      <path d="M104 62 V124" stroke="${wire}" stroke-width="1.2" stroke-dasharray="4 4"/>
 
-      <path d="M140 74 V106" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M140 84 L150 74" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M140 96 L150 106" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <polygon points="146.8,102.8 141.9,100.6 144.1,95.7" fill="${comp}"/>
+      <path d="M124 77 V109" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M124 87 L134 77" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M124 99 L134 109" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <polygon points="${emitterArrow(124, 99, 134, 109)}" fill="${comp}"/>
 
-      ${port(150, 4)}
-      <text x="162" y="8" fill="${comp}" font-size="12" font-weight="600">Vcc</text>
-      <path d="M150 7 V21" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(150, 21)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="164" y="42" fill="${comp}" font-size="11" font-weight="600">RL</text>
-      <path d="M150 57 V74" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="150" cy="74" r="2.6" fill="${wire}"/>
-      <path d="M150 74 H167" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${port(170, 74)}
-      <text x="178" y="78" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+      ${port(134, 4)}
+      <text x="146" y="8" fill="${comp}" font-size="12" font-weight="600">Vcc</text>
+      <path d="M134 7 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(134, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="148" y="45" fill="${comp}" font-size="11" font-weight="600">RL</text>
+      <path d="M134 60 V77" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="134" cy="77" r="2.6" fill="${wire}"/>
+      <path d="M134 77 H151" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(154, 77)}
+      <text x="162" y="81" fill="${comp}" font-size="12" font-weight="600">Vout</text>
 
-      <path d="M150 106 V123" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${ground(150, 123)}
+      <path d="M134 109 V126" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(134, 126)}
     </svg>`;
   }
 
