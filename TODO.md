@@ -132,13 +132,14 @@ target If; drawing is the LED and a base-less NPN either side of a dashed
 barrier with two beams crossing it, since that gap is the whole point of
 the part; note warns CTR is binned 50-600% on a PC817 and degrades with
 age and low If, so design on the worst-case minimum) ·
-LED forward voltage/current (the series-resistor sum, but built around the
-thing that actually bites: headroom. Vf follows the bandgap which follows
-the colour, so a chip row sets typical Vf per colour and ΔIf/0.1V says how
-hard a normal Vf spread swings the current — 3.3% on a red LED at 5V, 100%
-on a white one at 3.3V, which trips a red warning; snaps to the nearest
-E24 value and reports the current that actually results; rejects a string
-that needs more than the supply, naming the arithmetic)
+LED forward voltage/current (NOT a new tool — the existing “LED series
+resistor” in Diodes already did this calculation, colour presets and
+E-series snapping included. A duplicate was built by mistake and removed;
+the Optoelectronics entry now points at the same calc, and the one idea
+the duplicate had that the original lacked — ΔI per 0.1V of Vf, the
+headroom sensitivity, red when it exceeds 20% — was folded in. Its five
+stacked full-width fields were also paired up; that screen had been
+scrolling at ~985px and now fits 932 in every state)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
