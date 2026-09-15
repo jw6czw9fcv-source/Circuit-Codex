@@ -123,7 +123,15 @@ point, so you can see whether you are on the steep part or out on a flat
 end; sensitivity per decade is written as ln10·γ·Vout·(Vcc−Vout)/Vcc, which
 makes it obvious the peak is at Vout = Vcc/2 — i.e. Rfixed = Rldr, the
 design rule, and a badge confirms when you are there; photoresistor drawn
-ANSI-style, zigzag with two arrows pointing in)
+ANSI-style, zigzag with two arrows pointing in) ·
+Optocoupler (built around CTR and the question that actually matters —
+does the output pull low? — by computing both the collector current the
+part can deliver and the one RL demands to reach Vce sat, and badging
+which wins with the margin; drives the input side too, sizing Rin from a
+target If; drawing is the LED and a base-less NPN either side of a dashed
+barrier with two beams crossing it, since that gap is the whole point of
+the part; note warns CTR is binned 50-600% on a PC817 and degrades with
+age and low If, so design on the worst-case minimum)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -180,7 +188,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Optocoupler
 - [ ] LED forward voltage/current
 - [ ] Wavelength ↔ color/spectrum chart
 - [ ] Flip-flops (SR, D, JK, T)

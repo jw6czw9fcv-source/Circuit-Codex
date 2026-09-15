@@ -237,6 +237,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "opamp-summing") return renderOpampSumming(domain, tool, favId);
   if (calcId === "opamp-differential") return renderOpampDifferential(domain, tool, favId);
   if (calcId === "photocell-ldr") return renderPhotocellLDR(domain, tool, favId);
+  if (calcId === "optocoupler") return renderOptocoupler(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -14360,6 +14361,189 @@ function renderPhotocellLDR(domain, tool, favId) {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
     [["ld-r10-unit", "r10Unit"], ["ld-rfixed-unit", "rfixedUnit"], ["ld-vcc-unit", "vccUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+function renderOptocoupler(domain, tool, favId) {
+  const state = {
+    vin: 5, vinUnit: "V",
+    vf: 1.2, vfUnit: "V",
+    ifwd: 10, ifwdUnit: "mA",
+    ctr: 50,
+    vcc: 5, vccUnit: "V",
+    rl: 10, rlUnit: "kΩ",
+  };
+
+  // A phototransistor bottoms out around here; it is a constant rather than a
+  // field because six inputs is already a full screen, and the note says so.
+  const VCE_SAT = 0.3;
+
+  function si(name) {
+    if (name === "ifwd") return state.ifwd * AMP_UNITS[state.ifwdUnit];
+    if (name === "rl") return state.rl * OHM_UNITS[state.rlUnit];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const vin = si("vin"), vf = si("vf"), ifwd = si("ifwd"), vcc = si("vcc"), rl = si("rl");
+    const ctr = state.ctr;
+    if (!(ifwd > 0) || !(rl > 0) || !(vcc > 0)) {
+      return { problem: "The LED current, RL and Vcc must all be greater than zero." };
+    }
+    if (!(ctr > 0)) return { problem: "CTR must be greater than zero — it is the percentage of LED current the transistor can pass." };
+    if (!(vin > vf)) return { problem: "Vin has to exceed the LED's forward voltage, or the LED never conducts." };
+
+    const rin = (vin - vf) / ifwd;
+    const pin = (vin - vf) * ifwd;
+    // CTR is the whole point of the part: the collector current it can deliver
+    // for a given LED current. Whether that is enough is a separate question —
+    // the load decides how much is needed to bottom the transistor out.
+    const icAvail = ifwd * (ctr / 100);
+    const icNeeded = (vcc - VCE_SAT) / rl;
+    const saturated = icAvail >= icNeeded;
+    const vout = saturated ? VCE_SAT : vcc - icAvail * rl;
+    const margin = icAvail / icNeeded;
+
+    return { problem: "", rin, pin, icAvail, icNeeded, saturated, vout, margin, vceSat: VCE_SAT };
+  }
+
+  // LED on the left, phototransistor on the right, and a dashed line between
+  // them because that gap is the entire reason the part exists — light gets
+  // across it, current does not. The transistor is the app's NPN symbol with
+  // its base lead removed, since the base is driven by light; the two arrows
+  // spanning the barrier are what replaces it.
+  function diagram() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+    const beam = (y) => `<path d="M84 ${y} H126 M120 ${y - 4} L126 ${y} L120 ${y + 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+
+    return `<svg width="188" height="151" viewBox="27 -12 188 151" fill="none">
+      ${port(70, 4)}
+      <text x="58" y="8" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M70 7 V21" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(70, 21)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="56" y="42" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">Rin</text>
+      <path d="M70 57 V74" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M63 74 L77 74 L70 88 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M62 88 H78" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M70 88 V105" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(70, 105)}
+
+      ${beam(76)}
+      ${beam(88)}
+      <path d="M105 58 V120" stroke="${wire}" stroke-width="1.2" stroke-dasharray="4 4"/>
+
+      <path d="M140 74 V106" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M140 84 L150 74" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M140 96 L150 106" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <polygon points="146.8,102.8 141.9,100.6 144.1,95.7" fill="${comp}"/>
+
+      ${port(150, 4)}
+      <text x="162" y="8" fill="${comp}" font-size="12" font-weight="600">Vcc</text>
+      <path d="M150 7 V21" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(150, 21)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="164" y="42" fill="${comp}" font-size="11" font-weight="600">RL</text>
+      <path d="M150 57 V74" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="150" cy="74" r="2.6" fill="${wire}"/>
+      <path d="M150 74 H167" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(170, 74)}
+      <text x="178" y="78" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+
+      <path d="M150 106 V123" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(150, 123)}
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const info = r.saturated
+      ? { label: `Pulls low — ${trim(r.margin)}× over`, color: "var(--result-text)", bg: "var(--result-border)" }
+      : { label: "Won't pull low", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output
+        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="clear:both">
+        ${cell("Rin", siFormat(r.rin, "Ω"))}
+        ${cell("P in Rin", siFormat(r.pin, "W"))}
+        ${cell("Ic available", siFormat(r.icAvail, "A"))}
+        ${cell("Ic needed", siFormat(r.icNeeded, "A"))}
+        ${cell("Vout", siFormat(r.vout, "V"))}
+      </div>
+      ${!r.saturated ? `<div class="error-text">Only ${siFormat(r.icAvail, "A")} available but RL needs ${siFormat(r.icNeeded, "A")} to reach ${siFormat(r.vceSat, "V")}, so the output stalls at ${siFormat(r.vout, "V")} — an undefined logic level. Raise If or RL.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function field(id, name, label, units) {
+    if (!units) {
+      return `
+        <div class="field">
+          <label>${label}</label>
+          <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+        </div>`;
+    }
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "CTR sets how much collector current an LED current buys you")}
+
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
+
+      <div class="field-pair">
+        ${field("op-vin", "vin", "Vin", VOLT_UNITS)}
+        ${field("op-vf", "vf", "LED Vf", VOLT_UNITS)}
+        ${field("op-ifwd", "ifwd", "If", AMP_UNITS)}
+      </div>
+      <div class="field-pair">
+        ${field("op-ctr", "ctr", "CTR %", null)}
+        ${field("op-vcc", "vcc", "Vcc", VOLT_UNITS)}
+        ${field("op-rl", "rl", "RL", OHM_UNITS)}
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Rin = (Vin − Vf) / If", "P in Rin = (Vin − Vf) × If", "Ic available = If × CTR / 100", "Ic needed = (Vcc − Vce sat) / RL", "Vout = Vcc − Ic × RL, floored at Vce sat"],
+        `CTR is the part's whole specification: the collector current one milliamp of LED current buys. It is binned wide — a PC817 ships anywhere from 50% to 600% — and falls as the LED ages and at low If, so design on the worst-case minimum, not the typical. Vce sat is taken as ${VCE_SAT}V here. The barrier in the drawing is the point of the part: light crosses it, current cannot. A phototransistor opto is slow — microseconds — and a large RL makes it slower still, so trade margin against speed rather than maximising it.`
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    [["op-vin", "vin"], ["op-vf", "vf"], ["op-ifwd", "ifwd"], ["op-ctr", "ctr"], ["op-vcc", "vcc"], ["op-rl", "rl"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["op-vin-unit", "vinUnit"], ["op-vf-unit", "vfUnit"], ["op-ifwd-unit", "ifwdUnit"], ["op-vcc-unit", "vccUnit"], ["op-rl-unit", "rlUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }
