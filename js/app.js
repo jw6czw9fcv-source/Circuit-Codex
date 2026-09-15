@@ -238,6 +238,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "opamp-differential") return renderOpampDifferential(domain, tool, favId);
   if (calcId === "photocell-ldr") return renderPhotocellLDR(domain, tool, favId);
   if (calcId === "optocoupler") return renderOptocoupler(domain, tool, favId);
+  if (calcId === "spectrum-chart") return renderSpectrumChart(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -14580,6 +14581,171 @@ function renderOptocoupler(domain, tool, favId) {
     [["op-vin-unit", "vinUnit"], ["op-vf-unit", "vfUnit"], ["op-ifwd-unit", "ifwdUnit"], ["op-vcc-unit", "vccUnit"], ["op-rl-unit", "rlUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
+  }
+
+  paint();
+}
+
+// Boundaries are a convention, not a measurement — the spectrum is continuous
+// and references disagree by a few nm. These are the commonly published set
+// (Britannica among others), which is what a datasheet's "green 525nm" is
+// implicitly quoting against.
+const SPECTRUM_BANDS = [
+  ["Ultraviolet", 0, 380],
+  ["Violet", 380, 450],
+  ["Blue", 450, 495],
+  ["Green", 495, 570],
+  ["Yellow", 570, 590],
+  ["Orange", 590, 620],
+  ["Red", 620, 750],
+  ["Infrared", 750, Infinity],
+];
+
+// hc expressed in eV·nm, so photon energy in eV is just this over λ in nm.
+const HC_EV_NM = 1239.84198;
+const C_M_S = 299792458;
+
+// Dan Bruton's approximation: the standard way to put a visible wavelength on
+// screen. It is a perceptual approximation, not colorimetry — good enough to
+// show where a wavelength sits, not to match a colour target.
+function wavelengthToRgb(w) {
+  let r = 0, g = 0, b = 0;
+  if (w >= 380 && w < 440) { r = -(w - 440) / 60; b = 1; }
+  else if (w < 490) { g = (w - 440) / 50; b = 1; }
+  else if (w < 510) { g = 1; b = -(w - 510) / 20; }
+  else if (w < 580) { r = (w - 510) / 70; g = 1; }
+  else if (w < 645) { r = 1; g = -(w - 645) / 65; }
+  else if (w <= 780) { r = 1; }
+  else return null;
+
+  let f = 1;
+  if (w < 420) f = 0.3 + 0.7 * (w - 380) / 40;
+  else if (w > 700) f = 0.3 + 0.7 * (780 - w) / 80;
+  const ch = (v) => Math.round(255 * Math.pow(Math.max(0, v) * f, 0.8));
+  return `rgb(${ch(r)},${ch(g)},${ch(b)})`;
+}
+
+function renderSpectrumChart(domain, tool, favId) {
+  const state = { nm: 525 };
+  const MIN_NM = 200, MAX_NM = 1100;
+
+  function bandOf(nm) {
+    return SPECTRUM_BANDS.find(([, lo, hi]) => nm >= lo && nm < hi) || SPECTRUM_BANDS[SPECTRUM_BANDS.length - 1];
+  }
+
+  function compute() {
+    const nm = state.nm;
+    if (!(nm > 0)) return { problem: "Wavelength must be greater than zero." };
+    const [name, lo, hi] = bandOf(nm);
+    return {
+      problem: "", nm, name,
+      range: lo === 0 ? `under ${hi} nm` : isFinite(hi) ? `${lo}–${hi} nm` : `over ${lo} nm`,
+      eV: HC_EV_NM / nm,
+      thz: C_M_S / (nm * 1e-9) / 1e12,
+      rgb: wavelengthToRgb(nm),
+    };
+  }
+
+  // The spectrum itself, drawn as 5nm slices rather than a gradient so the
+  // invisible shoulders can be plainly grey instead of fading to black on a
+  // dark page. The axis runs 200-1100nm because that is the span LEDs,
+  // photodiodes and IR remotes actually live in, not just what the eye sees.
+  function strip(r) {
+    const x0 = 24, x1 = 292, yTop = 8, h = 26;
+    const at = (nm) => x0 + ((nm - MIN_NM) / (MAX_NM - MIN_NM)) * (x1 - x0);
+    const slices = [];
+    for (let nm = MIN_NM; nm < MAX_NM; nm += 5) {
+      const fill = wavelengthToRgb(nm) || "#262b33";
+      slices.push(`<rect x="${at(nm).toFixed(2)}" y="${yTop}" width="${(at(nm + 5) - at(nm) + 0.6).toFixed(2)}" height="${h}" fill="${fill}"/>`);
+    }
+    const ticks = [200, 400, 600, 800, 1000].map((nm) =>
+      `<path d="M${at(nm).toFixed(1)} ${yTop + h} V${yTop + h + 4}" stroke="#5A6169" stroke-width="1"/>
+       <text x="${at(nm).toFixed(1)}" y="${yTop + h + 14}" fill="#8A9099" font-size="9" font-weight="600" text-anchor="middle">${nm}</text>`).join("");
+    const mx = at(Math.max(MIN_NM, Math.min(MAX_NM, r.problem ? MIN_NM : r.nm)));
+    return `<svg width="308" height="56" viewBox="0 0 308 56" fill="none">
+      ${slices.join("")}
+      ${ticks}
+      <path d="M${mx.toFixed(1)} ${yTop - 5} V${yTop + h + 1}" stroke="#E8EAED" stroke-width="1.6"/>
+      <path d="M${(mx - 4).toFixed(1)} ${yTop - 5} L${(mx + 4).toFixed(1)} ${yTop - 5} L${mx.toFixed(1)} ${yTop + 1} Z" fill="#E8EAED"/>
+      <text x="300" y="${yTop + h + 14}" fill="#8A9099" font-size="9" font-weight="600" text-anchor="end">nm</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const swatch = r.rgb
+      ? `<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${r.rgb};margin-right:5px;vertical-align:-1px;"></span>`
+      : "";
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Colour", `${swatch}${r.name}`)}
+        ${cell("Band", r.range)}
+        ${cell("Energy", `${trim(r.eV)} eV`)}
+        ${cell("Frequency", `${trim(r.thz)} THz`)}
+      </div>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="strip"]').innerHTML = strip(r);
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Where a wavelength sits, what it costs in electron-volts")}
+
+      <div class="diagram-box" style="padding:2px 6px;"><div data-res="strip">${strip(r)}</div></div>
+
+      <div class="r-list">
+        <div class="r-item">
+          <div class="r-line">
+            <span class="r-index">λ</span>
+            <input type="number" inputmode="numeric" step="1" id="sp-nm" style="font-size:26px;font-weight:600;" value="${state.nm}" />
+            <span class="r-hint" style="font-size:15px;">nm</span>
+            <button type="button" class="r-reset" id="sp-reset" aria-label="Reset to 525 nm">${ICONS.reset}</button>
+          </div>
+          <div class="slider-row">
+            <button type="button" class="slider-step" id="sp-dec" aria-label="Shorter wavelength">−</button>
+            <input type="range" class="series-slider" id="sp-slider" min="${MIN_NM}" max="${MAX_NM}" step="1" value="${state.nm}" aria-label="Drag to set wavelength" />
+            <button type="button" class="slider-step" id="sp-inc" aria-label="Longer wavelength">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Frequency f = c / λ", "Photon energy = hc / λ = 1239.8 / λ(nm) eV"],
+        "Colour names and band boundaries are a convention, not a measurement — the spectrum is continuous and references disagree by a few nanometres; these are the commonly published set, violet from 380nm then blue 450, green 495, yellow 570, orange 590, red 620, infrared past 750. Photon energy is the useful half — E in electron-volts is what a photon of that wavelength carries, and it is the floor an LED's forward voltage sits on. A 460nm blue photon costs 2.70eV, which is why a blue LED needs over 3V while a red one manages on 2V. The same arithmetic holds either side of the visible band, which is why the axis runs out to the near-infrared where remotes and optocouplers work."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    const field = document.getElementById("sp-nm");
+    const slider = document.getElementById("sp-slider");
+    const setNm = (v, syncField) => {
+      state.nm = Math.max(1, Math.round(v));
+      slider.value = Math.max(MIN_NM, Math.min(MAX_NM, state.nm));
+      if (syncField) field.value = state.nm;
+      refresh();
+    };
+    field.oninput = () => { const v = parseFloat(field.value); if (isFinite(v)) setNm(v, false); };
+    slider.oninput = () => setNm(parseFloat(slider.value), true);
+    document.getElementById("sp-dec").onclick = () => setNm(state.nm - 5, true);
+    document.getElementById("sp-inc").onclick = () => setNm(state.nm + 5, true);
+    document.getElementById("sp-reset").onclick = () => setNm(525, true);
   }
 
   paint();

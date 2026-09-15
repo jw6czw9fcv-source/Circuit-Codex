@@ -86,7 +86,7 @@ const DOMAINS = [
           { name: "Summing amplifier", calc: "opamp-summing" }, { name: "Differential amplifier", calc: "opamp-differential" }, { name: "Sallen-Key filter" },
         ],
       },
-      { title: "Optoelectronics", tools: [{ name: "Photocell / LDR", calc: "photocell-ldr" }, { name: "Optocoupler", calc: "optocoupler" }, { name: "Wavelength ↔ color/spectrum chart" }] },
+      { title: "Optoelectronics", tools: [{ name: "Photocell / LDR", calc: "photocell-ldr" }, { name: "Optocoupler", calc: "optocoupler" }, { name: "Wavelength ↔ color/spectrum chart", calc: "spectrum-chart" }] },
     ],
   },
   {

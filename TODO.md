@@ -140,7 +140,15 @@ the tool lives only in Diodes; the one idea
 the duplicate had that the original lacked — ΔI per 0.1V of Vf, the
 headroom sensitivity, red when it exceeds 20% — was folded in. Its five
 stacked full-width fields were also paired up; that screen had been
-scrolling at ~985px and now fits 932 in every state)
+scrolling at ~985px and now fits 932 in every state) ·
+Wavelength ↔ colour/spectrum chart (a real spectrum strip, 180 five-nm
+slices rather than a gradient so the invisible shoulders read as plain
+grey instead of fading to black on a dark page; axis runs 200–1100nm
+because that is where LEDs, photodiodes and IR remotes live, not just
+what the eye sees; colour from Dan Bruton’s approximation, a swatch in
+the result cell; λ on a slider with ±5nm steps and a reset; gives the
+band, photon energy in eV and frequency — the eV figure being the floor
+an LED’s Vf sits on, which ties this to the LED tool)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -197,7 +205,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Wavelength ↔ color/spectrum chart
 - [ ] Flip-flops (SR, D, JK, T)
 - [ ] Multivibrators (astable/monostable)
 - [ ] 555 Timer (astable/monostable)
