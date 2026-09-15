@@ -12901,6 +12901,7 @@ function renderOpampBuffer(domain, tool, favId) {
 function renderOpampComparator(domain, tool, favId) {
   const state = {
     mode: "comp",
+    rin: 4.7, rinUnit: "kΩ",
     r1: 10, r1Unit: "kΩ",
     r2: 10, r2Unit: "kΩ",
     rf: 100, rfUnit: "kΩ",
@@ -12908,25 +12909,46 @@ function renderOpampComparator(domain, tool, favId) {
     vsupply: 12, vsupplyUnit: "V",
   };
 
-  const R_NAMES = ["r1", "r2", "rf"];
+  const R_NAMES = ["rin", "r1", "r2", "rf"];
   function si(name) {
     if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
     return state[name] * VOLT_UNITS[state[name + "Unit"]];
   }
 
   function compute() {
-    const r1 = si("r1"), r2 = si("r2"), rf = si("rf"), vin = si("vin"), vsupply = si("vsupply");
+    const rin = si("rin"), r1 = si("r1"), r2 = si("r2"), rf = si("rf"), vin = si("vin"), vsupply = si("vsupply");
     const schmitt = state.mode === "schmitt";
-    if (!(r1 > 0) || !(r2 > 0) || !(vsupply > 0)) {
-      return { problem: "R1, R2 and the supply must all be greater than zero." };
-    }
-    if (schmitt && !(rf > 0)) {
-      return { problem: "Rf must be greater than zero — without it there is no feedback and no hysteresis." };
+    const ni = state.mode === "schmittni";
+    if (!(vsupply > 0)) return { problem: "The supply must be greater than zero." };
+    if (ni) {
+      if (!(rin > 0) || !(rf > 0)) {
+        return { problem: "Rin and Rf must both be greater than zero — without them there is no feedback and no hysteresis." };
+      }
+    } else {
+      if (!(r1 > 0) || !(r2 > 0)) {
+        return { problem: "R1 and R2 must both be greater than zero." };
+      }
+      if (schmitt && !(rf > 0)) {
+        return { problem: "Rf must be greater than zero — without it there is no feedback and no hysteresis." };
+      }
     }
 
     // Open loop, so the output only ever sits at a rail. Ideal saturation is
     // the rail itself; the note carries the 1-2V a real part falls short by.
     const vsat = vsupply;
+
+    if (ni) {
+      // Signal and feedback arrive at the SAME node here, so the trip point is
+      // wherever they cancel against the grounded V−: Vin/Rin = −Vout/Rf. The
+      // band therefore sits on zero rather than on a divider reference, and the
+      // output follows the input instead of inverting it.
+      const k = rin / rf;
+      const vtHigh = vsat * k;
+      const vtLow = -vsat * k;
+      const settled = vin > vtHigh ? "high" : vin < vtLow ? "low" : "hold";
+      return { problem: "", schmitt, ni, vtHigh, vtLow, hyst: vtHigh - vtLow, center: 0, settled,
+               vout: settled === "low" ? -vsat : vsat, vsat };
+    }
 
     if (!schmitt) {
       const vref = vsupply * (r2 / (r1 + r2));
@@ -12957,6 +12979,47 @@ function renderOpampComparator(domain, tool, favId) {
   // column on purpose — a port further left would put its lead straight
   // through R2. Rf reuses the inverting amp's loop geometry exactly: 24px
   // stubs around the 36px body, centred on the triangle at x=135.
+  // The non-inverting variant is the inverting amplifier's schematic with the
+  // two inputs swapped: the signal arrives at V+ through Rin, Rf returns to
+  // that same node over the top, and V− goes to ground. No divider, because a
+  // divider column feeding V− would have to cross the Rin arm on its way.
+  function diagramNi() {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+
+    return `<svg width="258" height="128" viewBox="-16 -26 258 128" fill="none">
+      <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">+</text>
+      <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">−</text>
+      <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      ${port(20, 38)}
+      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M23 38 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(38, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rin</text>
+      <path d="M76 38 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="93" cy="38" r="2.6" fill="${wire}"/>
+
+      <path d="M93 38 V6 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(6, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="135" y="-8" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M153 6 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
+      <path d="M177 50 H194" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(197, 50)}
+      <text x="205" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+
+      <path d="M110 62 H93 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(93, 88)}
+    </svg>`;
+  }
+
   function diagram(schmitt) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
@@ -13013,8 +13076,9 @@ function renderOpampComparator(domain, tool, favId) {
   // the falling edge at visibly different places, which is the whole point.
   function waveDiagram(r) {
     if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
-    const centre = r.schmitt ? r.center : r.vref;
-    const hyst = r.schmitt ? r.hyst : 0;
+    const banded = r.schmitt || r.ni;
+    const centre = banded ? r.center : r.vref;
+    const hyst = banded ? r.hyst : 0;
     const range = Math.max(hyst * 1.6, 0.15 * (r.vsat || 12));
     const inMid = 23, inHalf = 17;
     const yIn = (v) => inMid - ((v - centre) / range) * inHalf;
@@ -13029,7 +13093,10 @@ function renderOpampComparator(domain, tool, favId) {
       const vi = centre + amp * Math.sin(t * 4 * Math.PI);
       inPts.push(`${x},${yIn(vi).toFixed(1)}`);
       const prev = st;
-      if (r.schmitt) {
+      if (r.ni) {
+        if (st < 0 && vi > r.vtHigh) st = 1;
+        else if (st > 0 && vi < r.vtLow) st = -1;
+      } else if (r.schmitt) {
         if (st > 0 && vi > r.vtHigh) st = -1;
         else if (st < 0 && vi < r.vtLow) st = 1;
       } else {
@@ -13040,7 +13107,7 @@ function renderOpampComparator(domain, tool, favId) {
       outPts.push(`${x},${st > 0 ? yHi : yLo}`);
     }
 
-    const marks = r.schmitt
+    const marks = banded
       ? `<path d="M8,${yIn(r.vtHigh).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>
          <path d="M8,${yIn(r.vtLow).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>`
       : `<path d="M8,${yIn(centre).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>`;
@@ -13050,7 +13117,7 @@ function renderOpampComparator(domain, tool, favId) {
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="196" y="14" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
-      <text x="196" y="${(yIn(r.schmitt ? r.vtHigh : centre) + 3).toFixed(1)}" fill="#E08585" font-size="8" font-weight="600">${r.schmitt ? "VT" : "Vref"}</text>
+      <text x="196" y="${(yIn(banded ? r.vtHigh : centre) + 3).toFixed(1)}" fill="#E08585" font-size="8" font-weight="600">${banded ? "VT" : "Vref"}</text>
       <text x="196" y="54" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
     </svg>`;
   }
@@ -13067,10 +13134,10 @@ function renderOpampComparator(domain, tool, favId) {
   // Same vocabulary the NPN/PNP switch uses: green for a settled rail, neutral
   // for the one case that isn't a fault but isn't determined either.
   function stateInfo(r) {
-    if (r.schmitt && r.settled === "hold") {
+    if (r.settled === "hold") {
       return { label: "Holds last state", color: "var(--text-secondary)", bg: "var(--card-border)" };
     }
-    const high = r.schmitt ? r.settled === "high" : r.high;
+    const high = r.settled ? r.settled === "high" : r.high;
     return high
       ? { label: `HIGH — ${signed(r.vout)}`, color: "var(--result-text)", bg: "var(--result-border)" }
       : { label: `LOW — ${signed(r.vout)}`, color: "var(--text-secondary)", bg: "var(--card-border)" };
@@ -13084,7 +13151,7 @@ function renderOpampComparator(domain, tool, favId) {
         <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
       </div>
       <div class="eseries-grid" style="clear:both">
-        ${r.schmitt ? `
+        ${r.schmitt || r.ni ? `
           ${cell("VT+", siFormat(r.vtHigh, "V"))}
           ${cell("VT−", siFormat(r.vtLow, "V"))}
           ${cell("Hysteresis", siFormat(r.hyst, "V"))}
@@ -13095,8 +13162,7 @@ function renderOpampComparator(domain, tool, favId) {
           ${cell("Margin", signed(r.margin))}
           ${cell("Idiv", siFormat(r.idiv, "A"))}
         `}
-      </div>
-      ${r.schmitt && r.settled === "hold" ? `<div class="formula-note">${ICONS.info}<span>Vin sits between VT− and VT+, so the output keeps whatever state it already had — no static input can name it in there.</span></div>` : ""}`;
+      </div>`;
   }
 
   function refresh() {
@@ -13108,44 +13174,37 @@ function renderOpampComparator(domain, tool, favId) {
   function paint() {
     const r = compute();
     const schmitt = state.mode === "schmitt";
+    const ni = state.mode === "schmittni";
+    const ohmField = (id, name, label) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <select id="${id}-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`;
 
     app.innerHTML = `
-      ${calcHeader(tool, favId, schmitt
-        ? "Positive feedback through Rf opens a threshold band"
-        : "Open loop — the output slams to one rail or the other")}
+      ${calcHeader(tool, favId, ni
+        ? "Signal and feedback share the + node — the output follows the input"
+        : schmitt
+          ? "Positive feedback through Rf opens a threshold band"
+          : "Open loop — the output slams to one rail or the other")}
 
-      ${pillRow([["comp", "Comparator"], ["schmitt", "Schmitt trigger"]], state.mode, domain.bg)}
+      ${pillRow([["comp", "Comparator"], ["schmitt", "Schmitt inv"], ["schmittni", "Schmitt non-inv"]], state.mode, domain.bg)}
 
       <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
-        <div>${diagram(schmitt)}</div>
+        <div>${ni ? diagramNi() : diagram(schmitt)}</div>
         <div data-res="wave">${waveDiagram(r)}</div>
       </div>
 
       <div class="field-pair">
-        <div class="field">
-          <label>R1</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oc-r1" value="${state.r1}" />
-            <select id="oc-r1-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r1Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>R2</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oc-r2" value="${state.r2}" />
-            <select id="oc-r2-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r2Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${ni
+          ? ohmField("oc-rin", "rin", "Rin") + ohmField("oc-rf", "rf", "Rf")
+          : ohmField("oc-r1", "r1", "R1") + ohmField("oc-r2", "r2", "R2")}
       </div>
       <div class="field-pair">
-        ${schmitt ? `
-        <div class="field">
-          <label>Rf</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oc-rf" value="${state.rf}" />
-            <select id="oc-rf-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>` : ""}
+        ${schmitt ? ohmField("oc-rf", "rf", "Rf") : ""}
         <div class="field">
           <label>Vin</label>
           <div class="field-row">
@@ -13165,23 +13224,27 @@ function renderOpampComparator(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        schmitt
-          ? ["G = 1/R1 + 1/R2 + 1/Rf", "VT± = (V / R1 ± Vsat / Rf) / G", "Hysteresis = 2 × Vsat / (Rf × G)"]
-          : ["Vref = V × R2 / (R1 + R2)", "Vout = −Vsat if Vin > Vref, else +Vsat", "Idiv = V / (R1 + R2),  Margin = Vin − Vref"],
-        schmitt
-          ? "Rf feeds part of the output back to V+ — positive feedback, so a crossing pushes the threshold away from the input and the output snaps instead of chattering. Three sources reach V+ at once, so the thresholds come from the conductance sum G, not a plain divider."
-          : "No feedback, so nothing holds the output between the rails: the smallest input difference drives it hard to one. Vin drives V−, so it inverts — above Vref the output goes low. R1/R2 set Vref off the +V rail and burn Idiv continuously."
+        ni
+          ? ["V+ = (Vin/Rin + Vout/Rf) / (1/Rin + 1/Rf)", "Trips where V+ = 0 → Vin = −Vout × Rin/Rf", "VT± = ± Vsat × Rin / Rf,  Centre = 0", "Hysteresis = 2 × Vsat × Rin / Rf"]
+          : schmitt
+            ? ["G = 1/R1 + 1/R2 + 1/Rf", "VT± = (V / R1 ± Vsat / Rf) / G", "Hysteresis = 2 × Vsat / (Rf × G)"]
+            : ["Vref = V × R2 / (R1 + R2)", "Vout = −Vsat if Vin > Vref, else +Vsat", "Idiv = V / (R1 + R2),  Margin = Vin − Vref"],
+        ni
+          ? "The signal arrives at V+ through Rin, where the feedback already is, so the two fight over one node and the output flips where they cancel against the grounded V−. That makes it non-inverting — Vin above VT+ drives the output high."
+          : schmitt
+            ? "Rf feeds part of the output back to V+ — positive feedback, so a crossing pushes the threshold away from the input and the output snaps instead of chattering. Three sources reach V+ at once, so the thresholds come from the conductance sum G, not a plain divider."
+            : "No feedback, so nothing holds the output between the rails: the smallest input difference drives it hard to one. Vin drives V−, so it inverts — above Vref the output goes low. R1/R2 set Vref off the +V rail and burn Idiv continuously."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
 
-    [["oc-r1", "r1"], ["oc-r2", "r2"], ["oc-rf", "rf"], ["oc-vin", "vin"], ["oc-vsupply", "vsupply"]].forEach(([id, name]) => {
+    [["oc-rin", "rin"], ["oc-r1", "r1"], ["oc-r2", "r2"], ["oc-rf", "rf"], ["oc-vin", "vin"], ["oc-vsupply", "vsupply"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
       if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    [["oc-r1-unit", "r1Unit"], ["oc-r2-unit", "r2Unit"], ["oc-rf-unit", "rfUnit"], ["oc-vin-unit", "vinUnit"], ["oc-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
+    [["oc-rin-unit", "rinUnit"], ["oc-r1-unit", "r1Unit"], ["oc-r2-unit", "r2Unit"], ["oc-rf-unit", "rfUnit"], ["oc-vin-unit", "vinUnit"], ["oc-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
       if (el) el.onchange = (e) => { state[name] = e.target.value; refresh(); };
     });

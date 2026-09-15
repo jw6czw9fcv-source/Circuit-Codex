@@ -110,7 +110,12 @@ sources reaching V+ at once the thresholds come from the conductance sum
 G = 1/R1 + 1/R2 + 1/Rf rather than a plain divider, giving VT+, VT−, the
 hysteresis band and its centre; between the thresholds the state is
 genuinely undetermined and the tool says so — “Holds last state” —
-instead of inventing one) ·
+instead of inventing one; a third mode adds the non-inverting Schmitt —
+signal and feedback both land on V+ through Rin and Rf, so the trip point
+is where they cancel against a grounded V−, giving VT± = ±Vsat·Rin/Rf on a
+band centred on zero and an output that follows the input instead of
+inverting it; V− is grounded rather than fed by the divider because a
+divider column would have to cross the Rin arm on the schematic) ·
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -167,10 +172,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Op-amp: non-inverting Schmitt trigger (the reference sheet’s tenth
-      panel — Vin through Rin into the V+ node, Rf from the output to that
-      same node; confirm the panel’s exact wiring first, it was too small to
-      read reliably)
 - [ ] Photocell / LDR
 - [ ] Optocoupler
 - [ ] LED forward voltage/current
