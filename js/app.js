@@ -14432,7 +14432,7 @@ function renderOptocoupler(domain, tool, favId) {
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
     // Zigzag beam: six 6px steps of ±3px, then a head. Reads as radiation.
-    const beam = (y) => `<path d="M88 ${y} H118 M113 ${y - 4} L118 ${y} L113 ${y + 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    const beam = (y) => `<path d="M94 ${y} H124 M119 ${y - 4} L124 ${y} L119 ${y + 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     // Emitter arrow, same construction the NPN switch uses.
     const emitterArrow = (x1, y1, x2, y2) => {
       const t = 0.56, size = 7.5;
@@ -14445,7 +14445,7 @@ function renderOptocoupler(domain, tool, favId) {
       return [tip, b1, b2].map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
     };
 
-    return `<svg width="164" height="154" viewBox="35 -12 164 154" fill="none">
+    return `<svg width="170" height="154" viewBox="35 -12 170 154" fill="none">
       ${port(76, 4)}
       <text x="64" y="8" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
       <path d="M76 7 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
@@ -14460,26 +14460,26 @@ function renderOptocoupler(domain, tool, favId) {
 
       ${beam(87)}
       ${beam(99)}
-      <path d="M104 62 V124" stroke="${wire}" stroke-width="1.2" stroke-dasharray="4 4"/>
+      <path d="M107 62 V124" stroke="${wire}" stroke-width="1.2" stroke-dasharray="4 4"/>
 
-      <path d="M124 77 V109" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M124 87 L134 77" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M124 99 L134 109" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <polygon points="${emitterArrow(124, 99, 134, 109)}" fill="${comp}"/>
+      <path d="M130 77 V109" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M130 87 L140 77" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M130 99 L140 109" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <polygon points="${emitterArrow(130, 99, 140, 109)}" fill="${comp}"/>
 
-      ${port(134, 4)}
-      <text x="146" y="8" fill="${comp}" font-size="12" font-weight="600">Vcc</text>
-      <path d="M134 7 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(134, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="148" y="45" fill="${comp}" font-size="11" font-weight="600">RL</text>
-      <path d="M134 60 V77" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="134" cy="77" r="2.6" fill="${wire}"/>
-      <path d="M134 77 H151" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${port(154, 77)}
-      <text x="162" y="81" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+      ${port(140, 4)}
+      <text x="152" y="8" fill="${comp}" font-size="12" font-weight="600">Vcc</text>
+      <path d="M140 7 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(140, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="154" y="45" fill="${comp}" font-size="11" font-weight="600">RL</text>
+      <path d="M140 60 V77" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="140" cy="77" r="2.6" fill="${wire}"/>
+      <path d="M140 77 H157" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(160, 77)}
+      <text x="168" y="81" fill="${comp}" font-size="12" font-weight="600">Vout</text>
 
-      <path d="M134 109 V126" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${ground(134, 126)}
+      <path d="M140 109 V126" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(140, 126)}
     </svg>`;
   }
 
