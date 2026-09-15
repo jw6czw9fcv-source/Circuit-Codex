@@ -14458,8 +14458,8 @@ function renderOptocoupler(domain, tool, favId) {
       <path d="M76 100 V126" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${ground(76, 126)}
 
-      ${beam(85)}
-      ${beam(101)}
+      ${beam(87)}
+      ${beam(99)}
       <path d="M104 62 V124" stroke="${wire}" stroke-width="1.2" stroke-dasharray="4 4"/>
 
       <path d="M124 77 V109" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
