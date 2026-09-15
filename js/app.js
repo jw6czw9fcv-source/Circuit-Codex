@@ -14416,9 +14416,11 @@ function renderOptocoupler(domain, tool, favId) {
   // across it, current does not. The transistor is the app's NPN symbol with
   // its base lead removed, since the base is driven by light.
   //
-  // The beams are zigzags, not straight arrows: IEC 60617-2 (05-06-08) draws
-  // optical coupling that way, and it also reads as light rather than as a
-  // wire. They sit either side of y=93, which is the optical centre of BOTH
+  // The beams are straight arrows. IEC 60617-2 (05-06-08) draws optical
+  // coupling as zigzags and that was tried first, but at this size the
+  // zigzag read as a spring rather than as light, so Pierre called it back.
+  // Straight arrows are what most optocoupler datasheets use anyway. They
+  // sit either side of y=93, which is the optical centre of BOTH
   // devices — the LED body is 14px tall and the transistor 32px, so getting
   // their midpoints to line up costs a 26px run on the LED side instead of
   // the usual 17px lead. That run is what buys the alignment, and the two
@@ -14430,7 +14432,7 @@ function renderOptocoupler(domain, tool, favId) {
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
     // Zigzag beam: six 6px steps of ±3px, then a head. Reads as radiation.
-    const beam = (y) => `<path d="M88 ${y} L96 ${y - 4} L104 ${y + 4} L112 ${y} L118 ${y} M113 ${y - 4} L118 ${y} L113 ${y + 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    const beam = (y) => `<path d="M88 ${y} H118 M113 ${y - 4} L118 ${y} L113 ${y + 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     // Emitter arrow, same construction the NPN switch uses.
     const emitterArrow = (x1, y1, x2, y2) => {
       const t = 0.56, size = 7.5;
