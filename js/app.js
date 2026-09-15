@@ -14609,14 +14609,19 @@ const C_M_S = 299792458;
 // screen. It is a perceptual approximation, not colorimetry — good enough to
 // show where a wavelength sits, not to match a colour target.
 function wavelengthToRgb(w) {
+  // Guard the low end explicitly. Without it the else-if chain below swallows
+  // everything under 380nm into the violet-to-blue branch, where the intensity
+  // falloff goes negative and the whole thing comes out as "rgb(0,0,NaN)" — a
+  // truthy string, so callers' fallbacks never fire and UV renders as a broken
+  // colour instead of nothing.
+  if (!(w >= 380) || w > 780) return null;
   let r = 0, g = 0, b = 0;
-  if (w >= 380 && w < 440) { r = -(w - 440) / 60; b = 1; }
+  if (w < 440) { r = -(w - 440) / 60; b = 1; }
   else if (w < 490) { g = (w - 440) / 50; b = 1; }
   else if (w < 510) { g = 1; b = -(w - 510) / 20; }
   else if (w < 580) { r = (w - 510) / 70; g = 1; }
   else if (w < 645) { r = 1; g = -(w - 645) / 65; }
-  else if (w <= 780) { r = 1; }
-  else return null;
+  else { r = 1; }
 
   let f = 1;
   if (w < 420) f = 0.3 + 0.7 * (w - 380) / 40;
@@ -14681,7 +14686,7 @@ function renderSpectrumChart(domain, tool, favId) {
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     const swatch = r.rgb
-      ? `<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${r.rgb};margin-right:5px;vertical-align:-1px;"></span>`
+      ? `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;background:${r.rgb};margin-right:6px;vertical-align:-4px;"></span>`
       : "";
     return `
       <div class="section-label" style="color:#5DCAA5">Output</div>
