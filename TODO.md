@@ -135,7 +135,8 @@ age and low If, so design on the worst-case minimum) ·
 LED forward voltage/current (NOT a new tool — the existing “LED series
 resistor” in Diodes already did this calculation, colour presets and
 E-series snapping included. A duplicate was built by mistake and removed;
-the Optoelectronics entry now points at the same calc, and the one idea
+the Optoelectronics entry was then dropped entirely on Pierre’s call, so
+the tool lives only in Diodes; the one idea
 the duplicate had that the original lacked — ΔI per 0.1V of Vf, the
 headroom sensitivity, red when it exceeds 20% — was folded in. Its five
 stacked full-width fields were also paired up; that screen had been
