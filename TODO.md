@@ -116,6 +116,14 @@ is where they cancel against a grounded V−, giving VT± = ±Vsat·Rin/Rf on a
 band centred on zero and an output that follows the input instead of
 inverting it; V− is grounded rather than fed by the divider because a
 divider column would have to cross the Rin arm on the schematic) ·
+Photocell / LDR (the power law R = R₁₀·(E/10)^−γ that datasheets quote,
+plus the divider that is the only way to read the cell; a log-x plot of
+Vout against illuminance spans four decades centred on the operating
+point, so you can see whether you are on the steep part or out on a flat
+end; sensitivity per decade is written as ln10·γ·Vout·(Vcc−Vout)/Vcc, which
+makes it obvious the peak is at Vout = Vcc/2 — i.e. Rfixed = Rldr, the
+design rule, and a badge confirms when you are there; photoresistor drawn
+ANSI-style, zigzag with two arrows pointing in)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -172,7 +180,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Photocell / LDR
 - [ ] Optocoupler
 - [ ] LED forward voltage/current
 - [ ] Wavelength ↔ color/spectrum chart
