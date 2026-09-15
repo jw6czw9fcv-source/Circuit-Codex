@@ -238,6 +238,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "opamp-differential") return renderOpampDifferential(domain, tool, favId);
   if (calcId === "photocell-ldr") return renderPhotocellLDR(domain, tool, favId);
   if (calcId === "optocoupler") return renderOptocoupler(domain, tool, favId);
+  if (calcId === "led-forward") return renderLedForward(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -14565,6 +14566,190 @@ function renderOptocoupler(domain, tool, favId) {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
     [["op-vin-unit", "vinUnit"], ["op-vf-unit", "vfUnit"], ["op-ifwd-unit", "ifwdUnit"], ["op-vcc-unit", "vccUnit"], ["op-rl-unit", "rlUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+// Typical Vf at 20mA. The spread between them is not arbitrary: Vf is set by
+// the bandgap and the bandgap is what sets the colour, so the ordering here is
+// the visible spectrum with IR at the bottom.
+const LED_COLOURS = [
+  ["ir", "IR", 1.4],
+  ["red", "Red", 2.0],
+  ["yellow", "Yellow", 2.1],
+  ["green", "Green", 2.2],
+  ["blue", "Blue", 3.2],
+  ["white", "White", 3.2],
+];
+
+function renderLedForward(domain, tool, favId) {
+  const state = {
+    colour: "red",
+    vs: 5, vsUnit: "V",
+    vf: 2, vfUnit: "V",
+    ifwd: 20, ifwdUnit: "mA",
+    n: 1,
+  };
+
+  function si(name) {
+    if (name === "ifwd") return state.ifwd * AMP_UNITS[state.ifwdUnit];
+    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    const vs = si("vs"), vf = si("vf"), ifwd = si("ifwd");
+    const n = Math.round(state.n);
+    if (!(ifwd > 0) || !(vf > 0) || !(n >= 1)) {
+      return { problem: "Vf and the LED current must be greater than zero, and there must be at least one LED." };
+    }
+    const headroom = vs - n * vf;
+    if (!(headroom > 0)) {
+      return { problem: `${n} LED${n > 1 ? "s" : ""} at ${trim(vf)}V need ${trim(n * vf)}V, which is more than the ${trim(vs)}V supply. Use fewer in series or a higher supply.` };
+    }
+
+    const r = headroom / ifwd;
+    const rE = nearestESeries(r, "E24").value;
+    const ifActual = headroom / rE;
+    const pR = headroom * ifActual;
+    const pLed = n * vf * ifActual;
+    // Headroom is what actually fixes the current, so the same Vf spread hurts
+    // far more when there is little of it left. This is that, as a percentage.
+    const shiftPct = (n * 0.1 / headroom) * 100;
+
+    return { problem: "", n, headroom, r, rE, ifActual, pR, pLed, shiftPct, tight: shiftPct > 20 };
+  }
+
+  // Series loop, drawn the way it is built: supply at the top, resistor, the
+  // LED, ground. The two arrows leaving the LED are the standard emission
+  // pair; a count rides on the label rather than repeating the symbol, since
+  // stacking N triangles would say nothing the number does not.
+  function diagram(n) {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+    const ray = (x, y) => `<path d="M${x} ${y} L${x + 13} ${y - 9} M${x + 8} ${y - 9} L${x + 13} ${y - 9} L${x + 13} ${y - 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+
+    return `<svg width="67" height="134" viewBox="41 -12 67 134" fill="none">
+      ${port(76, 4)}
+      <text x="64" y="8" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vs</text>
+      <path d="M76 7 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(76, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="62" y="45" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">R</text>
+      <path d="M76 60 V77" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M69 77 L83 77 L76 91 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M68 91 H84" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      ${ray(88, 86)}
+      ${ray(88, 95)}
+      <text x="76" y="104" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">${n > 1 ? `${n}× LED` : "LED"}</text>
+      <path d="M76 91 V108" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(76, 108)}
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output
+        <span class="badge-calc" style="background:${r.tight ? "rgba(224,133,133,0.15)" : "var(--result-border)"};color:${r.tight ? "var(--danger)" : "var(--result-text)"};float:right;">${siFormat(r.headroom, "V")} headroom</span>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);clear:both">
+        ${cell("R exact", siFormat(r.r, "Ω"))}
+        ${cell("R (E24)", siFormat(r.rE, "Ω"))}
+        ${cell("If actual", siFormat(r.ifActual, "A"))}
+        ${cell("P in R", siFormat(r.pR, "W"))}
+        ${cell("P in LED", siFormat(r.pLed, "W"))}
+        ${cell("ΔIf/0.1V", `${trim(r.shiftPct)}%`)}
+      </div>
+      ${r.tight ? `<div class="error-text">Only ${siFormat(r.headroom, "V")} across R, so a ±0.1V Vf spread moves the current ${trim(r.shiftPct)}%. Raise Vs or shorten the string.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="circuit"]').innerHTML = diagram(Math.round(state.n));
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Vf follows the colour; the resistor lives on what the supply has left")}
+
+      <div class="filter-row" id="lf-chips">
+        ${LED_COLOURS.map(([value, label]) => `
+          <button class="filter-btn ${state.colour === value ? "active" : ""}" data-colour="${value}"
+                  style="${state.colour === value ? `background:${domain.bg};color:#8FC1F5;` : ""}">${label}</button>`).join("")}
+      </div>
+
+      <div class="diagram-box" style="padding:2px 6px;"><div data-res="circuit">${diagram(Math.round(state.n))}</div></div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Supply</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="lf-vs" value="${state.vs}" />
+            <select id="lf-vs-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Vf (each)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="lf-vf" value="${state.vf}" />
+            <select id="lf-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>If target</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="lf-if" value="${state.ifwd}" />
+            <select id="lf-if-unit">${Object.keys(AMP_UNITS).map((u) => `<option ${state.ifwdUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>LEDs in series</label>
+          <input type="number" inputmode="numeric" step="1" min="1" id="lf-n" value="${state.n}" />
+        </div>
+      </div>
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["R exact = (Vs − N × Vf) / If → R (E24) nearest", "If actual = (Vs − N × Vf) / R (E24)", "P in R = (Vs − N × Vf) × If actual", "P in LED = N × Vf × If actual", "ΔIf/0.1V = N × 0.1 / (Vs − N × Vf)"],
+        "Vf is set by the LED's bandgap, and the bandgap sets its colour — which is why red sits near 2V and blue or white near 3.2V; roughly, Vf ≈ 1240/λ in nm. The resistor gets only what the supply has left, and that headroom is what fixes the current: leave little and an ordinary Vf spread swings it hard, which is what ΔIf/0.1V measures. Never parallel LEDs across one resistor — the lowest Vf hogs the current and gets hotter still."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint);
+
+    document.getElementById("lf-chips").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      const hit = LED_COLOURS.find(([v]) => v === btn.dataset.colour);
+      state.colour = hit[0];
+      state.vf = hit[2];
+      state.vfUnit = "V";
+      paint();
+    });
+
+    [["lf-vs", "vs"], ["lf-vf", "vf"], ["lf-if", "ifwd"], ["lf-n", "n"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    [["lf-vs-unit", "vsUnit"], ["lf-vf-unit", "vfUnit"], ["lf-if-unit", "ifwdUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
     });
   }

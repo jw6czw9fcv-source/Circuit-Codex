@@ -131,7 +131,14 @@ which wins with the margin; drives the input side too, sizing Rin from a
 target If; drawing is the LED and a base-less NPN either side of a dashed
 barrier with two beams crossing it, since that gap is the whole point of
 the part; note warns CTR is binned 50-600% on a PC817 and degrades with
-age and low If, so design on the worst-case minimum)
+age and low If, so design on the worst-case minimum) ·
+LED forward voltage/current (the series-resistor sum, but built around the
+thing that actually bites: headroom. Vf follows the bandgap which follows
+the colour, so a chip row sets typical Vf per colour and ΔIf/0.1V says how
+hard a normal Vf spread swings the current — 3.3% on a red LED at 5V, 100%
+on a white one at 3.3V, which trips a red warning; snaps to the nearest
+E24 value and reports the current that actually results; rejects a string
+that needs more than the supply, naming the arithmetic)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -188,7 +195,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] LED forward voltage/current
 - [ ] Wavelength ↔ color/spectrum chart
 - [ ] Flip-flops (SR, D, JK, T)
 - [ ] Multivibrators (astable/monostable)
