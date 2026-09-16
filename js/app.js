@@ -15007,11 +15007,12 @@ function renderMultivibrator(domain, tool, favId) {
     };
     // dir = -1 puts the collector and emitter on the left, so the base is fed
     // from the right and the outer collector wire never crosses the device.
-    const npn = (barX, dir) => {
-      const leadX = barX + dir * 10;
-      return `${part(`M${barX} 96 V128`)}${part(`M${barX} 106 L${leadX} 96`)}${part(`M${barX} 118 L${leadX} 128`)}
-        <polygon points="${arrow(barX, 118, leadX, 128)}" fill="${comp}"/>
-        ${w(`M${leadX} 128 V144`)}${ground(leadX, 144)}`;
+    const npn = (barX, dir, pinX) => {
+      const colX = barX + dir * 10;
+      return `${part(`M${barX} 96 V128`)}${part(`M${barX} 106 L${colX} 96`)}${part(`M${barX} 118 L${colX} 128`)}
+        <polygon points="${arrow(barX, 118, colX, 128)}" fill="${comp}"/>
+        ${w(`M${colX} 96 V72`)}${w(`M${colX} 128 V144`)}${ground(colX, 144)}
+        ${w(`M${barX} 112 H${pinX}`)}`;
     };
 
     const body = `
@@ -15029,27 +15030,23 @@ function renderMultivibrator(domain, tool, favId) {
         : `${w("M130 72 H136")}${part(zigH(72, 172))}${w("M172 72 H178")}${lbl(154, 60, "Rb", "middle")}`}
 
       ${dot(34, 72)}${dot(82, 72)}${dot(178, 72)}${astable ? dot(130, 72) : ""}
-      ${w("M34 72 L54 96")}${w("M178 72 L158 96")}
-      ${w("M82 72 L148 112")}${w("M130 72 L64 112")}
+      ${w("M82 72 L136 112")}${w("M130 72 L76 112")}
 
-      ${npn(64, -1)}${lbl(74, 124, "Q1")}
-      ${npn(148, 1)}${lbl(138, 124, "Q2", "end")}`;
+      ${npn(44, -1, 76)}${lbl(20, 116, "Q1", "end")}
+      ${npn(168, 1, 136)}${lbl(192, 116, "Q2")}`;
 
-    if (astable) return `<svg width="192" height="161" viewBox="25 -8 192 161" fill="none">${body}</svg>`;
+    if (astable) return `<svg width="208" height="163" viewBox="5 -9 208 163" fill="none">${body}</svg>`;
 
     // The trigger threads in at y=112, exactly between where the collector and
     // emitter leads leave the bar, so it lands on the base without crossing
     // either of them. Positive-going pulse, so the diode's anode faces the
     // input and Rd holds the base down between triggers.
     const trig = `
-      ${dot(64, 112)}${w("M40 112 H64")}
-      ${part("M40 104 V120")}${part("M28 104 L40 112 L28 120 Z")}
-      ${lbl(34, 100, "D", "middle")}
-      ${w("M22 112 H28")}${dot(22, 112)}
-      ${w("M-11 112 H-2")}${part("M-2 104 V120")}${part("M4 104 V120")}${w("M4 112 H22")}
-      ${port(-14, 112)}${lbl(-14, 130, "Trig", "middle")}${lbl(1, 100, "Cd", "middle")}
-      ${w("M22 112 V120")}${part(zig(22, 120))}${w("M22 156 V162")}${ground(22, 162)}${lbl(6, 142, "Rd", "end")}`;
-    return `<svg width="244" height="182" viewBox="-30 -8 244 182" fill="none">${body}${trig}</svg>`;
+      ${dot(76, 112)}${w("M76 112 V160")}${w("M76 160 H88")}
+      ${part("M88 152 V168")}${part("M100 152 L88 160 L100 168 Z")}${lbl(94, 146, "D", "middle")}
+      ${w("M100 160 H114")}${part("M114 152 V168")}${part("M120 152 V168")}${lbl(117, 146, "Cd", "middle")}
+      ${w("M120 160 H141")}${port(144, 160)}${lbl(152, 164, "Trig")}`;
+    return `<svg width="208" height="180" viewBox="5 -9 208 180" fill="none">${body}${trig}</svg>`;
   }
 
   // Two collector waveforms for the astable, trigger and output for the
