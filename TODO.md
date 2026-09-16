@@ -155,7 +155,16 @@ timing trace whose input sequence is chosen to walk every row of that
 table; Q is computed by running the sequence rather than drawn, so the
 trace cannot disagree with the table above it; SR’s S=R=1 corner returns
 null rather than a made-up answer, and the notes carry the thread that
-JK exists to fill that corner while D and T are JK with inputs tied)
+JK exists to fill that corner while D and T are JK with inputs tied) ·
+Multivibrators astable/monostable (discrete two-transistor family — the
+555 keeps its own item for the IC. One topology serves both modes, which
+is the truth: the monostable is the astable with one cross-coupling made
+DC, so the left arm switches from a capacitor to a resistor between
+pills. Each half-cycle is ln2·RC; the timing trace is drawn from the
+computed times so an asymmetric duty looks asymmetric. Monostable adds
+the number people miss — recovery through the collector resistor, which
+sets the real max trigger rate. Bistable deliberately absent: that is
+the SR latch in the flip-flop tool, and the note says so)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -212,7 +221,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Multivibrators (astable/monostable)
 - [ ] 555 Timer (astable/monostable)
 - [ ] Karnaugh map simplification
 - [ ] I2C pull-up resistor

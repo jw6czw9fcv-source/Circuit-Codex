@@ -240,6 +240,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "optocoupler") return renderOptocoupler(domain, tool, favId);
   if (calcId === "spectrum-chart") return renderSpectrumChart(domain, tool, favId);
   if (calcId === "flip-flops") return renderFlipFlops(domain, tool, favId);
+  if (calcId === "multivibrator") return renderMultivibrator(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -14918,6 +14919,277 @@ function renderFlipFlops(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint, (m) => { state.type = m; paint(); });
+  }
+
+  paint();
+}
+
+function renderMultivibrator(domain, tool, favId) {
+  const state = {
+    mode: "astable",
+    r1: 47, r1Unit: "kΩ", c1: 10, c1Unit: "µF",
+    r2: 47, r2Unit: "kΩ", c2: 10, c2Unit: "µF",
+    r: 100, rUnit: "kΩ", c: 10, cUnit: "µF",
+    rc: 1, rcUnit: "kΩ",
+  };
+
+  // Each half-cycle is a capacitor climbing from −Vcc toward +Vcc and the base
+  // turning on as it passes zero, which is one time constant times ln2 — the
+  // 0.693 every reference quotes. Vbe and Vce(sat) are ignored, the same
+  // approximation those references make.
+  const LN2 = Math.LN2;
+
+  function si(name) {
+    const R = ["r1", "r2", "r", "rc"];
+    if (R.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
+    return state[name] * CAP_UNITS[state[name + "Unit"]];
+  }
+
+  function compute() {
+    if (state.mode === "astable") {
+      const r1 = si("r1"), c1 = si("c1"), r2 = si("r2"), c2 = si("c2");
+      if (!(r1 > 0) || !(c1 > 0) || !(r2 > 0) || !(c2 > 0)) {
+        return { problem: "Both timing resistors and both capacitors must be greater than zero." };
+      }
+      const t1 = LN2 * r1 * c1, t2 = LN2 * r2 * c2;
+      const period = t1 + t2;
+      return { problem: "", astable: true, t1, t2, period, freq: 1 / period, duty: (t1 / period) * 100 };
+    }
+    const r = si("r"), c = si("c"), rc = si("rc");
+    if (!(r > 0) || !(c > 0) || !(rc > 0)) {
+      return { problem: "R, C and the collector resistor must all be greater than zero." };
+    }
+    const t = LN2 * r * c;
+    // The timing cap has to recharge through the collector resistor before the
+    // next trigger means anything; five time constants is the usual rule.
+    const recovery = 5 * rc * c;
+    return { problem: "", astable: false, t, recovery, minPeriod: t + recovery, maxRate: 1 / (t + recovery) };
+  }
+
+  // One topology for both modes, because that is the truth: the monostable is
+  // the astable with one cross-coupling made DC. In astable mode both arms are
+  // capacitors and it free-runs; in monostable mode the left arm becomes a
+  // resistor, the circuit sits in one state, and a trigger kicks it out for
+  // one timing period.
+  function diagram(astable) {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+
+    // Geometry shared by anything lying along a diagonal.
+    const along = (x1, y1, x2, y2) => {
+      const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+      return { ux: dx / L, uy: dy / L, px: -dy / L, py: dx / L, mx: (x1 + x2) / 2, my: (y1 + y2) / 2, L };
+    };
+    const capArm = (x1, y1, x2, y2, pos = 0.7) => {
+      const a = along(x1, y1, x2, y2), g = 3, h = 8;
+      a.mx = x1 + (x2 - x1) * pos; a.my = y1 + (y2 - y1) * pos;
+      const plate = (sd) => `M${(a.mx + a.ux * sd - a.px * h).toFixed(1)} ${(a.my + a.uy * sd - a.py * h).toFixed(1)} L${(a.mx + a.ux * sd + a.px * h).toFixed(1)} ${(a.my + a.uy * sd + a.py * h).toFixed(1)}`;
+      return `<path d="M${x1} ${y1} L${(a.mx - a.ux * g).toFixed(1)} ${(a.my - a.uy * g).toFixed(1)} M${(a.mx + a.ux * g).toFixed(1)} ${(a.my + a.uy * g).toFixed(1)} L${x2} ${y2}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="${plate(-g)} ${plate(g)}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>`;
+    };
+    const zigArm = (x1, y1, x2, y2, pos = 0.7) => {
+      const a = along(x1, y1, x2, y2), half = 18, amp = 6;
+      a.mx = x1 + (x2 - x1) * pos; a.my = y1 + (y2 - y1) * pos;
+      const pt = (sd, am) => `${(a.mx + a.ux * sd + a.px * am).toFixed(1)} ${(a.my + a.uy * sd + a.py * am).toFixed(1)}`;
+      const body = `M${pt(-half, 0)} L${pt(-15, -amp)} L${pt(-9, amp)} L${pt(-3, -amp)} L${pt(3, amp)} L${pt(9, -amp)} L${pt(15, amp)} L${pt(half, 0)}`;
+      return `<path d="M${x1} ${y1} L${pt(-half, 0)} M${pt(half, 0)} L${x2} ${y2}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="${body}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
+    };
+    const npn = (barX, leadX, label) => {
+      const dir = leadX > barX ? 1 : -1;
+      return `<path d="M${barX} 84 V116" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M${barX} 94 L${leadX} 84" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M${barX} 106 L${leadX} 116" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <polygon points="${(barX + dir * 6.6).toFixed(1)},112.8 ${(barX + dir * 1.7).toFixed(1)},110.6 ${(barX + dir * 4.1).toFixed(1)},105.7" fill="${comp}"/>
+        <path d="M${leadX} 116 V130" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        ${ground(leadX, 130)}
+        <text x="${barX + dir * 4}" y="126" fill="${comp}" font-size="11" font-weight="600" text-anchor="${dir > 0 ? "start" : "end"}">${label}</text>`;
+    };
+
+    return `<svg width="204" height="160" viewBox="4 -16 204 160" fill="none">
+      <path d="M40 10 H170" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M105 10 V-2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(105, -5)}
+      <text x="114" y="2" fill="${comp}" font-size="12" font-weight="600">Vcc</text>
+
+      <path d="M40 10 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(40, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="26" y="45" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">${astable ? "R1" : "R"}</text>
+      <path d="M40 60 V100 H60" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      <path d="M70 10 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(70, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M70 60 V84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${npn(60, 70, "Q1")}
+
+      <path d="M140 10 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(140, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M140 60 V84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${npn(150, 140, "Q2")}
+
+      <path d="M170 10 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zig(170, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="184" y="45" fill="${comp}" font-size="11" font-weight="600">${astable ? "R2" : "Rb"}</text>
+      <path d="M170 60 V100 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+
+      ${capArm(70, 84, 150, 100)}
+      <text x="126" y="80" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">${astable ? "C1" : "C"}</text>
+      ${astable ? capArm(140, 84, 60, 100) : zigArm(140, 84, 60, 100)}
+      <text x="84" y="114" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">${astable ? "C2" : "Rx"}</text>
+    </svg>`;
+  }
+
+  // Two collector waveforms for the astable, trigger and output for the
+  // monostable. Both are drawn to the computed times, so a lopsided duty shows
+  // up as a lopsided trace rather than a caption claiming one.
+  function timing(r) {
+    if (r.problem) return `<svg width="308" height="62" viewBox="0 0 308 62" fill="none"></svg>`;
+    const wire = "#5A6169", comp = "#8FC1F5";
+    const x0 = 30, x1 = 298, W = x1 - x0;
+    const level = (w1, w2, hi, lo, start) => {
+      let v = start, d = `M${x0} ${v ? hi : lo}`, x = x0, i = 0;
+      while (x < x1) {
+        const w = i % 2 === 0 ? w1 : w2;
+        if (x + w >= x1) { d += ` H${x1}`; break; }
+        x += w;
+        d += ` H${x.toFixed(1)} V${v ? lo : hi}`;
+        v = 1 - v;
+        i++;
+      }
+      return d;
+    };
+    if (r.astable) {
+      const per = W / 2.5, w1 = per * (r.t1 / r.period), w2 = per - w1;
+      return `<svg width="308" height="62" viewBox="0 0 308 62" fill="none">
+        <path d="${level(w1, w2, 8, 22, 1)}" stroke="${wire}" stroke-width="1.6" fill="none"/>
+        <text x="26" y="18" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">Vc1</text>
+        <path d="${level(w1, w2, 36, 50, 0)}" stroke="${comp}" stroke-width="2.2" fill="none"/>
+        <text x="26" y="46" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Vc2</text>
+      </svg>`;
+    }
+    const span = r.minPeriod * 2.2;
+    const tw = (r.t / span) * W, rw = (r.recovery / span) * W, lead = W * 0.08;
+    return `<svg width="308" height="62" viewBox="0 0 308 62" fill="none">
+      <path d="M${x0} 22 H${(x0 + lead).toFixed(1)} V8 H${(x0 + lead + 6).toFixed(1)} V22 H${x1}" stroke="${wire}" stroke-width="1.6" fill="none"/>
+      <text x="26" y="18" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">Trig</text>
+      <path d="M${x0} 50 H${(x0 + lead).toFixed(1)} V36 H${(x0 + lead + tw).toFixed(1)} V50 H${x1}" stroke="${comp}" stroke-width="2.2" fill="none"/>
+      <text x="26" y="46" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Out</text>
+      <path d="M${(x0 + lead + tw).toFixed(1)} 54 H${(x0 + lead + tw + rw).toFixed(1)}" stroke="#E08585" stroke-width="1.6" stroke-dasharray="3 2"/>
+      <text x="${(x0 + lead + tw + rw + 4).toFixed(1)}" y="58" fill="#E08585" font-size="9" font-weight="600">recovery</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    if (r.astable) {
+      return `
+        <div class="section-label" style="color:#5DCAA5">Output</div>
+        <div class="eseries-grid eseries-grid--tight">
+          ${cell("T1", siFormat(r.t1, "s"))}
+          ${cell("T2", siFormat(r.t2, "s"))}
+          ${cell("Period", siFormat(r.period, "s"))}
+          ${cell("Frequency", siFormat(r.freq, "Hz"))}
+          ${cell("Duty", `${trim(r.duty)}%`)}
+        </div>`;
+    }
+    return `
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Pulse T", siFormat(r.t, "s"))}
+        ${cell("Recovery", siFormat(r.recovery, "s"))}
+        ${cell("Min period", siFormat(r.minPeriod, "s"))}
+        ${cell("Max rate", siFormat(r.maxRate, "Hz"))}
+      </div>`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = timing(r);
+  }
+
+  function ohm(id, name, label) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <select id="${id}-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`;
+  }
+  function cap(id, name, label) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <select id="${id}-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    const astable = state.mode === "astable";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, astable
+        ? "Free-running: each half-cycle is one RC climb"
+        : "One shot: a trigger flips it out, RC flips it back")}
+
+      ${pillRow([["astable", "Astable"], ["mono", "Monostable"]], state.mode, domain.bg)}
+
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div>${diagram(astable)}</div>
+        <div data-res="wave">${timing(r)}</div>
+      </div>
+
+      ${astable ? `
+      <div class="field-pair">
+        ${ohm("mv-r1", "r1", "R1")}
+        ${cap("mv-c1", "c1", "C1")}
+      </div>
+      <div class="field-pair">
+        ${ohm("mv-r2", "r2", "R2")}
+        ${cap("mv-c2", "c2", "C2")}
+      </div>` : `
+      <div class="field-pair">
+        ${ohm("mv-r", "r", "R")}
+        ${cap("mv-c", "c", "C")}
+        ${ohm("mv-rc", "rc", "Collector R")}
+      </div>`}
+
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        astable
+          ? ["T1 = ln2 × R1 × C1,  T2 = ln2 × R2 × C2", "Period = T1 + T2,  Frequency = 1 / Period", "Duty = T1 / Period"]
+          : ["Pulse T = ln2 × R × C", "Recovery ≈ 5 × Collector R × C", "Min period = T + Recovery,  Max rate = 1 / it"],
+        astable
+          ? "Each half-cycle is one coupling capacitor climbing from −Vcc toward +Vcc until the base it feeds turns on, which lands at ln2 × RC — Vbe and Vce(sat) ignored, as references do. The trace is drawn from the computed times, so a lopsided duty looks lopsided. The bistable, the third member of the family, is the SR latch in the flip-flop tool."
+          : "The monostable is this same circuit with one cross-coupling made DC: one arm is a resistor instead of a capacitor, so the circuit has a state it rests in and a trigger kicks it out for exactly one timing period. Pulse width is the same ln2 × R × C. What catches people is the second number: the timing capacitor has to recharge through the collector resistor before the next trigger means anything, so triggering faster than the min period gives a short or missing pulse rather than a fast one."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+
+    [["mv-r1", "r1"], ["mv-c1", "c1"], ["mv-r2", "r2"], ["mv-c2", "c2"], ["mv-r", "r"], ["mv-c", "c"], ["mv-rc", "rc"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+      const u = document.getElementById(id + "-unit");
+      if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; refresh(); };
+    });
   }
 
   paint();
