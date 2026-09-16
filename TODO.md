@@ -148,7 +148,14 @@ because that is where LEDs, photodiodes and IR remotes live, not just
 what the eye sees; colour from Dan Bruton’s approximation, a swatch in
 the result cell; λ on a slider with ±5nm steps and a reset; gives the
 band, photon energy in eV and frequency — the eV figure being the floor
-an LED’s Vf sits on, which ties this to the LED tool)
+an LED’s Vf sits on, which ties this to the LED tool) ·
+Flip-flops SR/D/JK/T (four pills, each with its logic symbol, its truth
+table and — the part that actually explains a flip-flop — an eight-cycle
+timing trace whose input sequence is chosen to walk every row of that
+table; Q is computed by running the sequence rather than drawn, so the
+trace cannot disagree with the table above it; SR’s S=R=1 corner returns
+null rather than a made-up answer, and the notes carry the thread that
+JK exists to fill that corner while D and T are JK with inputs tied)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -205,7 +212,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Flip-flops (SR, D, JK, T)
 - [ ] Multivibrators (astable/monostable)
 - [ ] 555 Timer (astable/monostable)
 - [ ] Karnaugh map simplification

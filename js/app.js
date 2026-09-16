@@ -239,6 +239,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "photocell-ldr") return renderPhotocellLDR(domain, tool, favId);
   if (calcId === "optocoupler") return renderOptocoupler(domain, tool, favId);
   if (calcId === "spectrum-chart") return renderSpectrumChart(domain, tool, favId);
+  if (calcId === "flip-flops") return renderFlipFlops(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -14751,6 +14752,172 @@ function renderSpectrumChart(domain, tool, favId) {
     document.getElementById("sp-dec").onclick = () => setNm(state.nm - 5, true);
     document.getElementById("sp-inc").onclick = () => setNm(state.nm + 5, true);
     document.getElementById("sp-reset").onclick = () => setNm(525, true);
+  }
+
+  paint();
+}
+
+// Each type carries its own truth table, its characteristic equation, and an
+// input sequence chosen to walk every row of that table in eight clock cycles
+// — the timing trace is the part that actually explains a flip-flop, so the
+// sequences are picked to demonstrate rather than to be random.
+const FLIPFLOPS = {
+  sr: {
+    label: "SR", ins: ["S", "R"],
+    heads: ["S", "R", "Q⁺", ""],
+    rows: [["0", "0", "Q", "hold"], ["0", "1", "0", "reset"], ["1", "0", "1", "set"], ["1", "1", "—", "invalid"]],
+    seq: [[0, 0], [1, 0], [0, 0], [0, 1], [0, 0], [1, 0], [0, 1], [0, 0]],
+    eq: ["Q⁺ = S + R̄ · Q", "S · R = 0 required — S = R = 1 is undefined"],
+    note: "The oldest of the four and the one with a hole in it: S = R = 1 drives both outputs the same way, and which state it lands in when they release depends on which gate is faster. Every other type here exists to avoid that. Built from two cross-coupled NOR or NAND gates; the clocked version just gates S and R with the clock.",
+  },
+  d: {
+    label: "D", ins: ["D"],
+    heads: ["D", "Q⁺", ""],
+    rows: [["0", "0", "reset"], ["1", "1", "set"]],
+    seq: [[0], [1], [1], [0], [1], [0], [0], [1]],
+    eq: ["Q⁺ = D", "One input, no invalid state"],
+    note: "A JK with its inputs tied opposite (J = D, K = D̄), which removes the forbidden state by construction. Q simply takes whatever D held at the clock edge, so it is the one used to build registers and pipeline stages — a row of D flip-flops on a common clock is a register.",
+  },
+  jk: {
+    label: "JK", ins: ["J", "K"],
+    heads: ["J", "K", "Q⁺", ""],
+    rows: [["0", "0", "Q", "hold"], ["0", "1", "0", "reset"], ["1", "0", "1", "set"], ["1", "1", "Q̄", "toggle"]],
+    seq: [[0, 0], [1, 0], [0, 0], [0, 1], [1, 1], [1, 1], [1, 0], [0, 1]],
+    eq: ["Q⁺ = J · Q̄ + K̄ · Q", "J = K = 1 toggles — the case SR forbids"],
+    note: "SR with the forbidden corner given a job: J = K = 1 toggles instead of being undefined, which makes it the general-purpose type — D and T are both JK with inputs tied. The toggle case is why it counts: chained JK stages with J = K = 1 divide the clock by two each.",
+  },
+  t: {
+    label: "T", ins: ["T"],
+    heads: ["T", "Q⁺", ""],
+    rows: [["0", "Q", "hold"], ["1", "Q̄", "toggle"]],
+    seq: [[0], [1], [1], [0], [1], [1], [1], [0]],
+    eq: ["Q⁺ = T ⊕ Q", "T = 1 toggles, so one stage divides by 2"],
+    note: "A JK with J and K tied together. Hold T high and Q changes on every clock edge, which halves the frequency — n stages in a chain divide by 2ⁿ, and that is what a ripple counter is. The output duty cycle is 50% whatever the input's was, which is the other reason it gets used as a divider.",
+  },
+};
+
+function renderFlipFlops(domain, tool, favId) {
+  const state = { type: "d" };
+
+  // Next state from the current inputs. Returns null for SR's undefined
+  // corner rather than inventing an answer for it.
+  function nextQ(type, ins, q) {
+    if (type === "sr") { const [S, R] = ins; if (S && R) return null; return S ? 1 : R ? 0 : q; }
+    if (type === "d") return ins[0];
+    if (type === "jk") { const [J, K] = ins; return J && K ? 1 - q : J ? 1 : K ? 0 : q; }
+    return ins[0] ? 1 - q : q;
+  }
+
+  // Q is computed by running the sequence, not drawn by hand, so the trace
+  // cannot disagree with the truth table above it.
+  function qTrace(type, seq) {
+    const out = [];
+    let q = 0;
+    for (const ins of seq) {
+      out.push(q);
+      const n = nextQ(type, ins, q);
+      q = n === null ? q : n;
+    }
+    return out;
+  }
+
+  function symbol(ff) {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const two = ff.ins.length === 2;
+    const inY = two ? [30, 66] : [32];
+    const clkY = two ? 48 : 60;
+    const pins = ff.ins.map((name, i) => `
+      <path d="M46 ${inY[i]} H70" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="76" y="${inY[i] + 4}" fill="${comp}" font-size="12" font-weight="600">${name}</text>`).join("");
+    return `<svg width="150" height="82" viewBox="14 8 150 82" fill="none">
+      <rect x="70" y="18" width="60" height="60" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      ${pins}
+      <path d="M46 ${clkY} H70" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M70 ${clkY - 5} L78 ${clkY} L70 ${clkY + 5}" fill="none" stroke="${comp}" stroke-width="1.6" stroke-linejoin="round"/>
+      <text x="42" y="${clkY + 4}" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">CLK</text>
+      <path d="M130 30 H154" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="124" y="34" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Q</text>
+      <path d="M130 66 H154" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="124" y="70" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Q̄</text>
+    </svg>`;
+  }
+
+  // Eight cycles. Inputs hold across a whole cycle and Q updates on the rising
+  // edge that ends it, so every step in Q lines up with an edge you can see.
+  function timing(ff) {
+    const wire = "#5A6169";
+    const comp = "#8FC1F5";
+    const n = ff.seq.length, x0 = 30, x1 = 298, w = (x1 - x0) / n;
+    const rows = 2 + ff.ins.length;
+    const top = (i) => 8 + i * 22;
+
+    const level = (vals, i) => {
+      const hi = top(i), lo = hi + 12;
+      let d = `M${x0} ${vals[0] ? hi : lo}`;
+      for (let k = 0; k < vals.length; k++) {
+        d += ` H${(x0 + (k + 1) * w).toFixed(1)}`;
+        if (k + 1 < vals.length && vals[k + 1] !== vals[k]) d += ` V${vals[k + 1] ? hi : lo}`;
+      }
+      return d;
+    };
+
+    const hiC = top(0), loC = hiC + 12;
+    let clk = `M${x0} ${hiC}`;
+    for (let k = 0; k < n; k++) {
+      clk += ` H${(x0 + (k + 0.5) * w).toFixed(1)} V${loC} H${(x0 + (k + 1) * w).toFixed(1)}`;
+      if (k + 1 < n) clk += ` V${hiC}`;
+    }
+
+    const edges = [];
+    for (let k = 1; k < n; k++) {
+      const x = (x0 + k * w).toFixed(1);
+      edges.push(`<path d="M${x} 6 V${top(rows - 1) + 14}" stroke="#3A4048" stroke-width="1" stroke-dasharray="2 3"/>`);
+    }
+
+    const q = qTrace(state.type, ff.seq);
+    const inputRows = ff.ins.map((name, i) => `
+      <path d="${level(ff.seq.map((v) => v[i]), i + 1)}" stroke="${wire}" stroke-width="1.5" fill="none"/>
+      <text x="26" y="${top(i + 1) + 10}" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">${name}</text>`).join("");
+
+    return `<svg width="308" height="${top(rows - 1) + 18}" viewBox="0 0 308 ${top(rows - 1) + 18}" fill="none">
+      ${edges.join("")}
+      <path d="${clk}" stroke="${wire}" stroke-width="1.5" fill="none"/>
+      <text x="26" y="${top(0) + 10}" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">CLK</text>
+      ${inputRows}
+      <path d="${level(q, rows - 1)}" stroke="${comp}" stroke-width="2.2" fill="none"/>
+      <text x="26" y="${top(rows - 1) + 10}" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Q</text>
+    </svg>`;
+  }
+
+  function tableHTML(ff) {
+    const outCol = ff.ins.length;
+    return `
+      <div class="truth-table" style="--tt-cols:${ff.heads.length}">
+        <div class="tt-row tt-head">${ff.heads.map((h) => `<span>${h}</span>`).join("")}</div>
+        ${ff.rows.map((r) => `<div class="tt-row">${r.map((v, i) => `<span${i === outCol ? ' class="tt-out"' : ""}>${v}</span>`).join("")}</div>`).join("")}
+      </div>`;
+  }
+
+  function paint() {
+    const ff = FLIPFLOPS[state.type];
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "What the next clock edge does with the state you are in")}
+
+      ${pillRow(Object.keys(FLIPFLOPS).map((k) => [k, FLIPFLOPS[k].label]), state.type, domain.bg)}
+
+      <div class="diagram-box" style="padding:2px 6px; flex-direction:column; gap:0;">
+        <div>${symbol(ff)}</div>
+        <div>${timing(ff)}</div>
+      </div>
+
+      ${tableHTML(ff)}
+
+      ${formulaSection(ff.eq, ff.note + " Q⁺ is the state after the next active clock edge; the input has to be steady across it, which is what a datasheet's setup and hold times are telling you.")}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.type = m; paint(); });
   }
 
   paint();
