@@ -14966,80 +14966,90 @@ function renderMultivibrator(domain, tool, favId) {
     return { problem: "", astable: false, t, recovery, minPeriod: t + recovery, maxRate: 1 / (t + recovery) };
   }
 
-  // One topology for both modes, because that is the truth: the monostable is
-  // the astable with one cross-coupling made DC. In astable mode both arms are
-  // capacitors and it free-runs; in monostable mode the left arm becomes a
-  // resistor, the circuit sits in one state, and a trigger kicks it out for
-  // one timing period.
+  // Drawn to the layout every reference uses, Pierre's two included: the
+  // coupling arms run HORIZONTALLY between the feet of the bias resistors, and
+  // only the base connections are diagonal. That is what makes the
+  // cross-coupling actually read as a cross. The transistors are mirrored so
+  // their collectors and emitters face outward, leaving the middle clear for
+  // the two diagonals to cross in.
+  //
+  // Both modes still share one topology, because the monostable is the astable
+  // with one cross-coupling made DC: the right-hand capacitor becomes Rb, the
+  // fourth bias resistor goes away, and a trigger network hangs off Q1's base.
   function diagram(astable) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+    const dot = (x, y) => `<circle cx="${x}" cy="${y}" r="2.6" fill="${wire}"/>`;
+    const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+    const part = (d) => `<path d="${d}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
+    const lbl = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="${comp}" font-size="11" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
 
-    // Geometry shared by anything lying along a diagonal.
-    const along = (x1, y1, x2, y2) => {
-      const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
-      return { ux: dx / L, uy: dy / L, px: -dy / L, py: dx / L, mx: (x1 + x2) / 2, my: (y1 + y2) / 2, L };
+    // A bias resistor hanging off the rail, landing on the node row at y=72.
+    const column = (x) => `${w(`M${x} 12 V22`)}${part(zig(x, 22))}${w(`M${x} 58 V72`)}`;
+    // A coupling capacitor lying along that same node row.
+    const capH = (cx) => `${w(`M${cx - 24} 72 H${cx - 3}`)}${part(`M${cx - 3} 64 V80`)}${part(`M${cx + 3} 64 V80`)}${w(`M${cx + 3} 72 H${cx + 24}`)}`;
+
+    // Emitter arrowhead, placed along the lead rather than hand-plotted, so it
+    // survives the transistor being mirrored.
+    const arrow = (x1, y1, x2, y2) => {
+      const size = 7.5;
+      let ux = x2 - x1, uy = y2 - y1;
+      const L = Math.hypot(ux, uy); ux /= L; uy /= L;
+      const px = x1 + (x2 - x1) * 0.56, py = y1 + (y2 - y1) * 0.56;
+      const pts = [[px + ux * size * 0.6, py + uy * size * 0.6],
+                   [px - ux * size * 0.5 - uy * size * 0.42, py - uy * size * 0.5 + ux * size * 0.42],
+                   [px - ux * size * 0.5 + uy * size * 0.42, py - uy * size * 0.5 - ux * size * 0.42]];
+      return pts.map((c) => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ");
     };
-    const capArm = (x1, y1, x2, y2, pos = 0.7) => {
-      const a = along(x1, y1, x2, y2), g = 3, h = 8;
-      a.mx = x1 + (x2 - x1) * pos; a.my = y1 + (y2 - y1) * pos;
-      const plate = (sd) => `M${(a.mx + a.ux * sd - a.px * h).toFixed(1)} ${(a.my + a.uy * sd - a.py * h).toFixed(1)} L${(a.mx + a.ux * sd + a.px * h).toFixed(1)} ${(a.my + a.uy * sd + a.py * h).toFixed(1)}`;
-      return `<path d="M${x1} ${y1} L${(a.mx - a.ux * g).toFixed(1)} ${(a.my - a.uy * g).toFixed(1)} M${(a.mx + a.ux * g).toFixed(1)} ${(a.my + a.uy * g).toFixed(1)} L${x2} ${y2}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-        <path d="${plate(-g)} ${plate(g)}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>`;
-    };
-    const zigArm = (x1, y1, x2, y2, pos = 0.7) => {
-      const a = along(x1, y1, x2, y2), half = 18, amp = 6;
-      a.mx = x1 + (x2 - x1) * pos; a.my = y1 + (y2 - y1) * pos;
-      const pt = (sd, am) => `${(a.mx + a.ux * sd + a.px * am).toFixed(1)} ${(a.my + a.uy * sd + a.py * am).toFixed(1)}`;
-      const body = `M${pt(-half, 0)} L${pt(-15, -amp)} L${pt(-9, amp)} L${pt(-3, -amp)} L${pt(3, amp)} L${pt(9, -amp)} L${pt(15, amp)} L${pt(half, 0)}`;
-      return `<path d="M${x1} ${y1} L${pt(-half, 0)} M${pt(half, 0)} L${x2} ${y2}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-        <path d="${body}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
-    };
-    const npn = (barX, leadX, label) => {
-      const dir = leadX > barX ? 1 : -1;
-      return `<path d="M${barX} 84 V116" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-        <path d="M${barX} 94 L${leadX} 84" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-        <path d="M${barX} 106 L${leadX} 116" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-        <polygon points="${(barX + dir * 6.6).toFixed(1)},112.8 ${(barX + dir * 1.7).toFixed(1)},110.6 ${(barX + dir * 4.1).toFixed(1)},105.7" fill="${comp}"/>
-        <path d="M${leadX} 116 V130" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-        ${ground(leadX, 130)}
-        <text x="${barX + dir * 4}" y="126" fill="${comp}" font-size="11" font-weight="600" text-anchor="${dir > 0 ? "start" : "end"}">${label}</text>`;
+    // dir = -1 puts the collector and emitter on the left, so the base is fed
+    // from the right and the outer collector wire never crosses the device.
+    const npn = (barX, dir) => {
+      const leadX = barX + dir * 10;
+      return `${part(`M${barX} 96 V128`)}${part(`M${barX} 106 L${leadX} 96`)}${part(`M${barX} 118 L${leadX} 128`)}
+        <polygon points="${arrow(barX, 118, leadX, 128)}" fill="${comp}"/>
+        ${w(`M${leadX} 128 V144`)}${ground(leadX, 144)}`;
     };
 
-    return `<svg width="204" height="160" viewBox="4 -16 204 160" fill="none">
-      <path d="M40 10 H170" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M105 10 V-2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${port(105, -5)}
-      <text x="114" y="2" fill="${comp}" font-size="12" font-weight="600">Vcc</text>
+    const body = `
+      ${w("M34 12 H178")}${w("M106 12 V4")}${port(106, 1)}
+      <text x="115" y="5" fill="${comp}" font-size="12" font-weight="600">Vcc</text>
 
-      <path d="M40 10 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(40, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="26" y="45" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">${astable ? "R1" : "R"}</text>
-      <path d="M40 60 V100 H60" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${column(34)}${lbl(48, 36, astable ? "Rc1" : "Rc")}
+      ${column(82)}${lbl(96, 36, astable ? "R1" : "R")}
+      ${astable ? `${column(130)}${lbl(144, 36, "R2")}` : ""}
+      ${column(178)}${lbl(192, 36, "Rc2")}
 
-      <path d="M70 10 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(70, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="M70 60 V84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${npn(60, 70, "Q1")}
+      ${capH(58)}${lbl(58, 60, astable ? "C1" : "C", "middle")}
+      ${astable
+        ? `${capH(154)}${lbl(154, 60, "C2", "middle")}`
+        : `${w("M130 72 H136")}${part(zigH(72, 172))}${w("M172 72 H178")}${lbl(154, 60, "Rb", "middle")}`}
 
-      <path d="M140 10 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(140, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="M140 60 V84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${npn(150, 140, "Q2")}
+      ${dot(34, 72)}${dot(82, 72)}${dot(178, 72)}${astable ? dot(130, 72) : ""}
+      ${w("M34 72 L54 96")}${w("M178 72 L158 96")}
+      ${w("M82 72 L148 112")}${w("M130 72 L64 112")}
 
-      <path d="M170 10 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(170, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="184" y="45" fill="${comp}" font-size="11" font-weight="600">${astable ? "R2" : "Rb"}</text>
-      <path d="M170 60 V100 H150" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${npn(64, -1)}${lbl(74, 124, "Q1")}
+      ${npn(148, 1)}${lbl(138, 124, "Q2", "end")}`;
 
-      ${capArm(70, 84, 150, 100)}
-      <text x="126" y="80" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">${astable ? "C1" : "C"}</text>
-      ${astable ? capArm(140, 84, 60, 100) : zigArm(140, 84, 60, 100)}
-      <text x="84" y="114" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">${astable ? "C2" : "Rx"}</text>
-    </svg>`;
+    if (astable) return `<svg width="192" height="161" viewBox="25 -8 192 161" fill="none">${body}</svg>`;
+
+    // The trigger threads in at y=112, exactly between where the collector and
+    // emitter leads leave the bar, so it lands on the base without crossing
+    // either of them. Positive-going pulse, so the diode's anode faces the
+    // input and Rd holds the base down between triggers.
+    const trig = `
+      ${dot(64, 112)}${w("M40 112 H64")}
+      ${part("M40 104 V120")}${part("M28 104 L40 112 L28 120 Z")}
+      ${lbl(34, 100, "D", "middle")}
+      ${w("M22 112 H28")}${dot(22, 112)}
+      ${w("M-11 112 H-2")}${part("M-2 104 V120")}${part("M4 104 V120")}${w("M4 112 H22")}
+      ${port(-14, 112)}${lbl(-14, 130, "Trig", "middle")}${lbl(1, 100, "Cd", "middle")}
+      ${w("M22 112 V120")}${part(zig(22, 120))}${w("M22 156 V162")}${ground(22, 162)}${lbl(6, 142, "Rd", "end")}`;
+    return `<svg width="244" height="182" viewBox="-30 -8 244 182" fill="none">${body}${trig}</svg>`;
   }
 
   // Two collector waveforms for the astable, trigger and output for the
