@@ -14925,21 +14925,30 @@ function renderFlipFlops(domain, tool, favId) {
 }
 
 function renderMultivibrator(domain, tool, favId) {
-  // solve: "rc" enters the parts and reports the timing; "spec" enters the
-  // timing you want and reports the parts. The second is the direction anyone
-  // actually designs in, so it is a real mode rather than a line in the note.
-  // Each topology is specified the way it is normally specified — an astable
-  // by its frequency and duty, a monostable by its pulse width.
+  // The spec and the parts are both on screen and both editable, and every
+  // edit is pushed back into the others rather than one direction being a
+  // separate mode. The parts are the store of record — fd, duty and tdp are
+  // derived from them on every paint — so the two can never drift apart.
   const state = {
-    mode: "astable", solve: "rc",
+    mode: "astable",
     r1: 47, r1Unit: "kΩ", c1: 10, c1Unit: "µF",
     r2: 47, r2Unit: "kΩ", c2: 10, c2Unit: "µF",
     r: 100, rUnit: "kΩ", c: 10, cUnit: "µF",
     rc: 1, rcUnit: "kΩ",
-    fd: 1, fdUnit: "Hz", duty: 50,
-    tdp: 700, tdpUnit: "ms", cd: 10, cdUnit: "µF",
+    fd: 1.535, fdUnit: "Hz", duty: 50,
+    tdp: 693.1, tdpUnit: "ms",
   };
   const F_UNITS = { Hz: 1, kHz: 1e3 };
+
+  // Writing a computed number back into a field means choosing its unit too,
+  // or a 72135 Ω answer lands in a box labelled kΩ. Four significant figures
+  // is what the result cells already show, so the field agrees with them.
+  function setScaled(name, value, units) {
+    const keys = Object.keys(units).sort((a, b) => units[b] - units[a]);
+    const k = keys.find((u) => Math.abs(value) >= units[u]) || keys[keys.length - 1];
+    state[name] = +(value / units[k]).toPrecision(4);
+    state[name + "Unit"] = k;
+  }
 
   // Each half-cycle is a capacitor climbing from −Vcc toward +Vcc and the base
   // turning on as it passes zero, which is one time constant times ln2 — the
@@ -14954,9 +14963,7 @@ function renderMultivibrator(domain, tool, favId) {
     return state[name] * CAP_UNITS[state[name + "Unit"]];
   }
 
-  // Design direction. One capacitor serves both arms of the astable, which is
-  // where everyone starts, so the two resistors carry the whole duty ratio.
-  const e24 = (ohms) => nearestESeries(ohms, "E24").value;
+  const e24 = (ohms) => (ohms > 0 && isFinite(ohms) ? nearestESeries(ohms, "E24").value : NaN);
 
   // The collector resistor is squeezed from both sides: the transistor only
   // saturates while Rc >= R / beta, and the collector only rises sharply while
@@ -14965,28 +14972,39 @@ function renderMultivibrator(domain, tool, favId) {
   // current and a faster edge until saturation runs out.
   const suggestRc = (ohms) => e24(ohms / 10);
 
+  // Derive the spec from the parts. Runs on every paint, so the spec fields
+  // start out agreeing with the parts whatever the parts happen to be.
+  function specFromParts() {
+    if (state.mode === "astable") {
+      const t1 = LN2 * si("r1") * si("c1"), t2 = LN2 * si("r2") * si("c2");
+      const period = t1 + t2;
+      if (!(period > 0)) return;
+      setScaled("fd", 1 / period, F_UNITS);
+      state.duty = +((t1 / period) * 100).toPrecision(4);
+    } else {
+      const t = LN2 * si("r") * si("c");
+      if (t > 0) setScaled("tdp", t, RC_TIME_UNITS);
+    }
+  }
+
+  // ...and the other way. Editing the frequency scales both resistors so the
+  // duty and the capacitors survive; editing the duty redistributes them so
+  // the period survives. Either way the capacitors are never touched, because
+  // they are the part you actually have in a drawer.
+  function partsFromSpec() {
+    const period = 1 / si("fd"), duty = state.duty;
+    if (!(period > 0) || !(duty > 0) || !(duty < 100)) return;
+    const c1 = si("c1"), c2 = si("c2");
+    if (c1 > 0) setScaled("r1", (period * duty) / 100 / LN2 / c1, OHM_UNITS);
+    if (c2 > 0) setScaled("r2", (period * (100 - duty)) / 100 / LN2 / c2, OHM_UNITS);
+  }
+
+  function resistorFromPulse() {
+    const t = si("tdp"), c = si("c");
+    if (t > 0 && c > 0) setScaled("r", t / LN2 / c, OHM_UNITS);
+  }
+
   function compute() {
-    const design = state.solve === "spec";
-    if (design && state.mode === "astable") {
-      const f = si("fd"), c = si("cd"), duty = state.duty;
-      if (!(f > 0) || !(c > 0)) return { problem: "Frequency and capacitor must both be greater than zero." };
-      if (!(duty > 0) || !(duty < 100)) return { problem: "Duty has to sit between 0 and 100%." };
-      const want = 1 / f;
-      const r1e = e24((want * duty) / 100 / LN2 / c), r2e = e24((want * (100 - duty)) / 100 / LN2 / c);
-      const t1 = LN2 * r1e * c, t2 = LN2 * r2e * c, period = t1 + t2;
-      // t1 and t2 go back too: the waveform panel draws from them, and in this
-      // direction they are the times the E24 pair really gives, not the ones asked for.
-      return { problem: "", astable: true, design: true, r1e, r2e, rce: suggestRc(Math.min(r1e, r2e)),
-               t1, t2, period, freq: 1 / period, duty: (t1 / period) * 100 };
-    }
-    if (design) {
-      const tdp = si("tdp"), c = si("cd");
-      if (!(tdp > 0) || !(c > 0)) return { problem: "The pulse width and the capacitor must both be greater than zero." };
-      const re = e24(tdp / LN2 / c), rce = suggestRc(re);
-      const t = LN2 * re * c, recovery = 5 * rce * c;
-      return { problem: "", astable: false, design: true, re, rce, t, recovery,
-               minPeriod: t + recovery, maxRate: 1 / (t + recovery) };
-    }
     if (state.mode === "astable") {
       const r1 = si("r1"), c1 = si("c1"), r2 = si("r2"), c2 = si("c2");
       if (!(r1 > 0) || !(c1 > 0) || !(r2 > 0) || !(c2 > 0)) {
@@ -14994,17 +15012,19 @@ function renderMultivibrator(domain, tool, favId) {
       }
       const t1 = LN2 * r1 * c1, t2 = LN2 * r2 * c2;
       const period = t1 + t2;
-      return { problem: "", astable: true, t1, t2, period, freq: 1 / period, duty: (t1 / period) * 100 };
+      return { problem: "", astable: true, t1, t2, period, freq: 1 / period, duty: (t1 / period) * 100,
+               r1e: e24(r1), r2e: e24(r2), rce: suggestRc(Math.min(r1, r2)) };
     }
     const r = si("r"), c = si("c"), rc = si("rc");
     if (!(r > 0) || !(c > 0) || !(rc > 0)) {
-      return { problem: "R, C and the collector resistor must all be greater than zero." };
+      return { problem: "R, C and Rc must all be greater than zero." };
     }
     const t = LN2 * r * c;
     // The timing cap has to recharge through the collector resistor before the
     // next trigger means anything; five time constants is the usual rule.
     const recovery = 5 * rc * c;
-    return { problem: "", astable: false, t, recovery, minPeriod: t + recovery, maxRate: 1 / (t + recovery) };
+    return { problem: "", astable: false, t, recovery, minPeriod: t + recovery,
+             maxRate: 1 / (t + recovery), re: e24(r) };
   }
 
   // Drawn to the layout every reference uses, Pierre's two included: the
@@ -15140,32 +15160,19 @@ function renderMultivibrator(domain, tool, favId) {
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     const grid = (cells) => `<div class="eseries-grid eseries-grid--tight">${cells}</div>`;
-    if (r.design && r.astable) {
-      return grid(`
-          ${cell("R1 (E24)", siFormat(r.r1e, "Ω"))}
-          ${cell("R2 (E24)", siFormat(r.r2e, "Ω"))}
-          ${cell("Rc (E24)", siFormat(r.rce, "Ω"))}
-          ${cell("Frequency", siFormat(r.freq, "Hz"))}
-          ${cell("Duty", `${trim(r.duty)}%`)}`);
-    }
-    if (r.design) {
-      return grid(`
-          ${cell("R (E24)", siFormat(r.re, "Ω"))}
-          ${cell("Rc (E24)", siFormat(r.rce, "Ω"))}
-          ${cell("Pulse T", siFormat(r.t, "s"))}
-          ${cell("Recovery", siFormat(r.recovery, "s"))}
-          ${cell("Min period", siFormat(r.minPeriod, "s"))}`);
-    }
+    // Frequency, duty and pulse width are fields now, so they are not repeated
+    // here. What the fields cannot show is the buildable version of the same
+    // circuit, which is what these cells are for.
     if (r.astable) {
       return grid(`
           ${cell("T1", siFormat(r.t1, "s"))}
           ${cell("T2", siFormat(r.t2, "s"))}
-          ${cell("Period", siFormat(r.period, "s"))}
-          ${cell("Frequency", siFormat(r.freq, "Hz"))}
-          ${cell("Duty", `${trim(r.duty)}%`)}`);
+          ${cell("R1 (E24)", siFormat(r.r1e, "Ω"))}
+          ${cell("R2 (E24)", siFormat(r.r2e, "Ω"))}
+          ${cell("Rc (E24)", siFormat(r.rce, "Ω"))}`);
     }
     return grid(`
-        ${cell("Pulse T", siFormat(r.t, "s"))}
+        ${cell("R (E24)", siFormat(r.re, "Ω"))}
         ${cell("Recovery", siFormat(r.recovery, "s"))}
         ${cell("Min period", siFormat(r.minPeriod, "s"))}
         ${cell("Max rate", siFormat(r.maxRate, "Hz"))}`);
@@ -15217,10 +15224,44 @@ function renderMultivibrator(domain, tool, favId) {
         </div>`;
   }
 
+  // Push a recomputed value back into a field, unless that field is the one
+  // being typed in — rewriting it under the caret is how these two-way forms
+  // usually go wrong.
+  function syncField(id, name) {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = state[name];
+    const u = document.getElementById(id + "-unit");
+    if (u && state[name + "Unit"]) u.value = state[name + "Unit"];
+  }
+
+  const PARTS = { astable: ["r1", "c1", "r2", "c2"], mono: ["r", "c"] };
+
+  function afterEdit(name) {
+    const astable = state.mode === "astable";
+    if (astable && PARTS.astable.includes(name)) {
+      specFromParts();
+      syncField("mv-fd", "fd");
+      syncField("mv-duty", "duty");
+    } else if (astable && (name === "fd" || name === "duty")) {
+      partsFromSpec();
+      syncField("mv-r1", "r1");
+      syncField("mv-r2", "r2");
+    } else if (!astable && PARTS.mono.includes(name)) {
+      specFromParts();
+      syncField("mv-tdp", "tdp");
+    } else if (!astable && name === "tdp") {
+      resistorFromPulse();
+      syncField("mv-r", "r");
+    }
+    refresh();
+  }
+
   function paint() {
+    // The spec fields are derived, so they are re-derived before every render
+    // and cannot be left showing a frequency the resistors no longer give.
+    specFromParts();
     const r = compute();
     const astable = state.mode === "astable";
-    const design = state.solve === "spec";
     app.innerHTML = `
       ${calcHeader(tool, favId, astable
         ? "Free-running: each half-cycle is one RC climb"
@@ -15233,71 +15274,51 @@ function renderMultivibrator(domain, tool, favId) {
         <div data-res="wave">${timing(r)}</div>
       </div>
 
-      ${design
-        ? (astable
-          ? `<div class="field-pair">
+      ${astable ? `
+      <div class="field-pair">
         ${picker("mv-fd", "fd", "Frequency", F_UNITS)}
         ${plain("mv-duty", "duty", "Duty %")}
-        ${cap("mv-cd", "cd", "C")}
-      </div>`
-          : `<div class="field-pair">
-        ${picker("mv-tdp", "tdp", "Pulse width", RC_TIME_UNITS)}
-        ${cap("mv-cd", "cd", "C")}
-      </div>`)
-        : (astable
-          ? `<div class="field-pair">
+      </div>
+      <div class="field-pair">
         ${ohm("mv-r1", "r1", "R1")}
         ${cap("mv-c1", "c1", "C1")}
       </div>
       <div class="field-pair">
         ${ohm("mv-r2", "r2", "R2")}
         ${cap("mv-c2", "c2", "C2")}
-      </div>`
-          : `<div class="field-pair">
+      </div>` : `
+      <div class="field-pair">
+        ${picker("mv-tdp", "tdp", "Pulse width", RC_TIME_UNITS)}
+      </div>
+      <div class="field-pair">
         ${ohm("mv-r", "r", "R")}
         ${cap("mv-c", "c", "C")}
         ${ohm("mv-rc", "rc", "Rc")}
-      </div>`)}
+      </div>`}
 
-      <div class="section-label split" style="color:#5DCAA5">
-        <span>Output</span>
-        <span></span>
-        <button class="label-btn" id="mv-dir">${design ? "Enter R and C" : `Design from ${astable ? "frequency" : "pulse width"}`}</button>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        design
-          ? (astable
-            ? ["Period = 1 / Frequency", "T1 = Duty × Period,  T2 = Period − T1", "R1 = T1 / (ln2 × C),  R2 = T2 / (ln2 × C)", "Rc = R / 10,  and Rc ≥ R / β to saturate"]
-            : ["R = Pulse T / (ln2 × C)", "Rc = R / 10,  and Rc ≥ R / β to saturate", "Recovery ≈ 5 × Rc × C", "Min period = Pulse T + Recovery"])
-          : (astable
-            ? ["T1 = ln2 × R1 × C1,  T2 = ln2 × R2 × C2", "Period = T1 + T2,  Frequency = 1 / Period", "Duty = T1 / Period"]
-            : ["Pulse T = ln2 × R × C", "Recovery ≈ 5 × Rc × C", "Min period = T + Recovery,  Max rate = 1 / it"]),
-        design
-          ? (astable
-            ? "One capacitor serves both arms, so R1 and R2 carry the whole duty ratio; they are snapped to E24 and the frequency and duty shown are what those snapped values actually give, not what you asked for. Rc is squeezed from both sides: the transistor only saturates while Rc ≥ R / β, and the collector edge only stays sharp while Rc is well under R. R / 10 is the top of that window and the value shown — go lower for more collector current and a faster edge, until saturation runs out."
-            : "R is snapped to E24 and the pulse width shown is what that snapped value gives. Rc has the same window as in the astable: at least R / β or Q1 stops saturating, at most about R / 10 or the collector edge softens. Rb is not derived here because nothing derives it — it only has to hold Q1's base down at Q2's saturation voltage and sets no timing, so anything from a few kΩ to ten times Rc does the job.")
-          : (astable
-            ? "Each half-cycle is one coupling capacitor climbing from −Vcc toward +Vcc until the base it feeds turns on, at ln2 × RC. Vcc cancels out of that, so the frequency is supply-independent — but every flip pulls the off base to about −Vcc, and a small-signal Vebo is only 5–6 V, so past that it breaks down and the circuit runs fast."
-            : "The monostable is this circuit with one cross-coupling made DC: one arm is a resistor, so it has a state it rests in and a trigger kicks it out for one timing period. What catches people is the second number — the capacitor has to recharge through Rc before the next trigger means anything, so triggering faster than the min period gives a short pulse rather than a fast one. Rb sets no timing; it only holds Q1 off.")
+        astable
+          ? ["T1 = ln2 × R1 × C1,  T2 = ln2 × R2 × C2", "Frequency = 1 / (T1 + T2)", "Duty = T1 / (T1 + T2)", "Rc ≈ R / 10,  and Rc ≥ R / β to saturate"]
+          : ["Pulse width = ln2 × R × C", "Recovery ≈ 5 × Rc × C", "Min period = Pulse width + Recovery", "Max rate = 1 / Min period", "Rc ≈ R / 10,  and Rc ≥ R / β to saturate"],
+        astable
+          ? "Every box is live in both directions: type a frequency and both resistors scale, type a duty and they redistribute, type a resistor or a capacitor and the frequency follows. The capacitors are never rewritten for you, because they are the part you actually have in a drawer. The E24 cells are the same circuit in values you can buy. Each half-cycle is one coupling capacitor climbing from −Vcc toward +Vcc until the base it feeds turns on, at ln2 × RC. Vcc cancels out of that, so the frequency is supply-independent — but every flip pulls the off base to about −Vcc, and a small-signal Vebo is only 5–6 V, so past that it breaks down and the circuit runs fast. Rc is squeezed from both sides: at least R / β or the transistor stops saturating, at most about R / 10 or the collector edge softens."
+          : "The pulse width and R are live in both directions — type the width you want and R follows, type R or C and the width follows. C is never rewritten for you, and the E24 cell is the same circuit in a value you can buy. The monostable is the astable with one cross-coupling made DC: one arm is a resistor, so it has a state it rests in and a trigger kicks it out for one timing period. What catches people is the second number — the capacitor has to recharge through Rc before the next trigger means anything, so triggering faster than the min period gives a short pulse rather than a fast one. Rc has the same window as in the astable, at least R / β and at most about R / 10. Rb is not derived because nothing derives it: it only holds Q1's base down at Q2's saturation voltage and sets no timing."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
 
-    document.getElementById("mv-dir").onclick = () => {
-      state.solve = state.solve === "spec" ? "rc" : "spec";
-      paint();
-    };
-
-    [["mv-r1", "r1"], ["mv-c1", "c1"], ["mv-r2", "r2"], ["mv-c2", "c2"], ["mv-r", "r"], ["mv-c", "c"], ["mv-rc", "rc"],
-     ["mv-fd", "fd"], ["mv-duty", "duty"], ["mv-cd", "cd"], ["mv-tdp", "tdp"]].forEach(([id, name]) => {
+    [["mv-r1", "r1"], ["mv-c1", "c1"], ["mv-r2", "r2"], ["mv-c2", "c2"],
+     ["mv-r", "r"], ["mv-c", "c"], ["mv-rc", "rc"],
+     ["mv-fd", "fd"], ["mv-duty", "duty"], ["mv-tdp", "tdp"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
-      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
       const u = document.getElementById(id + "-unit");
-      if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; refresh(); };
+      if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; afterEdit(name); };
     });
   }
 
