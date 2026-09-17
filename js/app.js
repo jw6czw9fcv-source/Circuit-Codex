@@ -14937,16 +14937,22 @@ function renderMultivibrator(domain, tool, favId) {
     rc: 1, rcUnit: "kΩ",
     fd: 1.535, fdUnit: "Hz", duty: 50,
     tdp: 693.1, tdpUnit: "ms",
+    tol: 5,
   };
   const F_UNITS = { Hz: 1, kHz: 1e3 };
 
   // Writing a computed number back into a field means choosing its unit too,
-  // or a 72135 Ω answer lands in a box labelled kΩ. Four significant figures
-  // is what the result cells already show, so the field agrees with them.
-  function setScaled(name, value, units) {
+  // or a 72135 Ω answer lands in a box labelled kΩ.
+  //
+  // The two ends carry different precision on purpose. Parts get five figures
+  // and the spec four, so a value survives the round trip: type 3 Hz, get
+  // 24.045 kΩ, and the frequency still reads 3 afterwards. Give the spec five
+  // figures too and it comes back 3.0001, because it is being rebuilt from two
+  // separately rounded resistors and the last digit is their rounding noise.
+  function setScaled(name, value, units, digits) {
     const keys = Object.keys(units).sort((a, b) => units[b] - units[a]);
     const k = keys.find((u) => Math.abs(value) >= units[u]) || keys[keys.length - 1];
-    state[name] = +(value / units[k]).toPrecision(4);
+    state[name] = +(value / units[k]).toPrecision(digits || 5);
     state[name + "Unit"] = k;
   }
 
@@ -14963,14 +14969,15 @@ function renderMultivibrator(domain, tool, favId) {
     return state[name] * CAP_UNITS[state[name + "Unit"]];
   }
 
-  const e24 = (ohms) => (ohms > 0 && isFinite(ohms) ? nearestESeries(ohms, "E24").value : NaN);
+  const seriesName = () => eSeriesForTolerance(state.tol);
+  const snap = (ohms) => (ohms > 0 && isFinite(ohms) ? nearestESeries(ohms, seriesName()).value : NaN);
 
   // The collector resistor is squeezed from both sides: the transistor only
   // saturates while Rc >= R / beta, and the collector only rises sharply while
   // Rc is well under R, the usual rule being R / 10. R / 10 is therefore the
   // largest sensible value, and it is the one suggested; going lower buys
   // current and a faster edge until saturation runs out.
-  const suggestRc = (ohms) => e24(ohms / 10);
+  const suggestRc = (ohms) => snap(ohms / 10);
 
   // Derive the spec from the parts. Runs on every paint, so the spec fields
   // start out agreeing with the parts whatever the parts happen to be.
@@ -14979,11 +14986,14 @@ function renderMultivibrator(domain, tool, favId) {
       const t1 = LN2 * si("r1") * si("c1"), t2 = LN2 * si("r2") * si("c2");
       const period = t1 + t2;
       if (!(period > 0)) return;
-      setScaled("fd", 1 / period, F_UNITS);
+      setScaled("fd", 1 / period, F_UNITS, 4);
+      // Four here, not five: the duty is a ratio of two separately rounded
+      // resistors, so the fifth digit is rounding noise and a typed 33 would
+      // come back as 33.001.
       state.duty = +((t1 / period) * 100).toPrecision(4);
     } else {
       const t = LN2 * si("r") * si("c");
-      if (t > 0) setScaled("tdp", t, RC_TIME_UNITS);
+      if (t > 0) setScaled("tdp", t, RC_TIME_UNITS, 4);
     }
   }
 
@@ -15013,7 +15023,7 @@ function renderMultivibrator(domain, tool, favId) {
       const t1 = LN2 * r1 * c1, t2 = LN2 * r2 * c2;
       const period = t1 + t2;
       return { problem: "", astable: true, t1, t2, period, freq: 1 / period, duty: (t1 / period) * 100,
-               r1e: e24(r1), r2e: e24(r2), rce: suggestRc(Math.min(r1, r2)) };
+               r1e: snap(r1), r2e: snap(r2), rce: suggestRc(Math.min(r1, r2)) };
     }
     const r = si("r"), c = si("c"), rc = si("rc");
     if (!(r > 0) || !(c > 0) || !(rc > 0)) {
@@ -15024,7 +15034,7 @@ function renderMultivibrator(domain, tool, favId) {
     // next trigger means anything; five time constants is the usual rule.
     const recovery = 5 * rc * c;
     return { problem: "", astable: false, t, recovery, minPeriod: t + recovery,
-             maxRate: 1 / (t + recovery), re: e24(r) };
+             maxRate: 1 / (t + recovery), re: snap(r) };
   }
 
   // Drawn to the layout every reference uses, Pierre's two included: the
@@ -15163,16 +15173,17 @@ function renderMultivibrator(domain, tool, favId) {
     // Frequency, duty and pulse width are fields now, so they are not repeated
     // here. What the fields cannot show is the buildable version of the same
     // circuit, which is what these cells are for.
+    const e = seriesName();
     if (r.astable) {
       return grid(`
           ${cell("T1", siFormat(r.t1, "s"))}
           ${cell("T2", siFormat(r.t2, "s"))}
-          ${cell("R1 (E24)", siFormat(r.r1e, "Ω"))}
-          ${cell("R2 (E24)", siFormat(r.r2e, "Ω"))}
-          ${cell("Rc (E24)", siFormat(r.rce, "Ω"))}`);
+          ${cell(`R1 (${e})`, siFormat(r.r1e, "Ω"))}
+          ${cell(`R2 (${e})`, siFormat(r.r2e, "Ω"))}
+          ${cell(`Rc (${e})`, siFormat(r.rce, "Ω"))}`);
     }
     return grid(`
-        ${cell("R (E24)", siFormat(r.re, "Ω"))}
+        ${cell(`R (${e})`, siFormat(r.re, "Ω"))}
         ${cell("Recovery", siFormat(r.recovery, "s"))}
         ${cell("Min period", siFormat(r.minPeriod, "s"))}
         ${cell("Max rate", siFormat(r.maxRate, "Hz"))}`);
@@ -15296,7 +15307,13 @@ function renderMultivibrator(domain, tool, favId) {
         ${ohm("mv-rc", "rc", "Rc")}
       </div>`}
 
-      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="section-label split" style="color:#5DCAA5">
+        <span>Output</span>
+        <span></span>
+        <select id="mv-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
@@ -15304,13 +15321,16 @@ function renderMultivibrator(domain, tool, favId) {
           ? ["T1 = ln2 × R1 × C1,  T2 = ln2 × R2 × C2", "Frequency = 1 / (T1 + T2)", "Duty = T1 / (T1 + T2)", "Rc ≈ R / 10,  and Rc ≥ R / β to saturate"]
           : ["Pulse width = ln2 × R × C", "Recovery ≈ 5 × Rc × C", "Min period = Pulse width + Recovery", "Max rate = 1 / Min period", "Rc ≈ R / 10,  and Rc ≥ R / β to saturate"],
         astable
-          ? "Every box is live in both directions: type a frequency and both resistors scale, type a duty and they redistribute, type a resistor or a capacitor and the frequency follows. The capacitors are never rewritten for you, because they are the part you actually have in a drawer. The E24 cells are the same circuit in values you can buy. Each half-cycle is one coupling capacitor climbing from −Vcc toward +Vcc until the base it feeds turns on, at ln2 × RC. Vcc cancels out of that, so the frequency is supply-independent — but every flip pulls the off base to about −Vcc, and a small-signal Vebo is only 5–6 V, so past that it breaks down and the circuit runs fast. Rc is squeezed from both sides: at least R / β or the transistor stops saturating, at most about R / 10 or the collector edge softens."
-          : "The pulse width and R are live in both directions — type the width you want and R follows, type R or C and the width follows. C is never rewritten for you, and the E24 cell is the same circuit in a value you can buy. The monostable is the astable with one cross-coupling made DC: one arm is a resistor, so it has a state it rests in and a trigger kicks it out for one timing period. What catches people is the second number — the capacitor has to recharge through Rc before the next trigger means anything, so triggering faster than the min period gives a short pulse rather than a fast one. Rc has the same window as in the astable, at least R / β and at most about R / 10. Rb is not derived because nothing derives it: it only holds Q1's base down at Q2's saturation voltage and sets no timing."
+          ? "Every box is live in both directions: type a frequency and both resistors scale, type a duty and they redistribute, type a resistor or a capacitor and the frequency follows. The capacitors are never rewritten for you, because they are the part you actually have in a drawer. The E-series cells are the same circuit in values you can buy, on whichever grid you pick beside Output. Each half-cycle is one coupling capacitor climbing from −Vcc toward +Vcc until the base it feeds turns on, at ln2 × RC. Vcc cancels out of that, so the frequency is supply-independent — but every flip pulls the off base to about −Vcc, and a small-signal Vebo is only 5–6 V, so past that it breaks down and the circuit runs fast. Rc is squeezed from both sides: at least R / β or the transistor stops saturating, at most about R / 10 or the collector edge softens."
+          : "The pulse width and R are live in both directions — type the width you want and R follows, type R or C and the width follows. C is never rewritten for you, and the E-series cell is the same circuit in a value you can buy, on whichever grid you pick beside Output. The monostable is the astable with one cross-coupling made DC: one arm is a resistor, so it has a state it rests in and a trigger kicks it out for one timing period. What catches people is the second number — the capacitor has to recharge through Rc before the next trigger means anything, so triggering faster than the min period gives a short pulse rather than a fast one. Rc has the same window as in the astable, at least R / β and at most about R / 10. Rb is not derived because nothing derives it: it only holds Q1's base down at Q2's saturation voltage and sets no timing."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+
+    // A full paint, not a refresh: the cell labels carry the series name.
+    document.getElementById("mv-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); paint(); };
 
     [["mv-r1", "r1"], ["mv-c1", "c1"], ["mv-r2", "r2"], ["mv-c2", "c2"],
      ["mv-r", "r"], ["mv-c", "c"], ["mv-rc", "rc"],
