@@ -15101,10 +15101,10 @@ function renderMultivibrator(domain, tool, favId) {
         : `${w("M130 72 H136")}${part(zigH(72, 172))}${w("M172 72 H178")}${lbl(154, 60, "Rb", "middle")}`}
 
       ${dot(34, 72)}${dot(82, 72)}${dot(178, 72)}${astable ? dot(130, 72) : ""}
-      ${w("M82 72 L136 112")}${w("M130 72 L76 112")}
+      ${w("M82 72 L130 112")}${w("M130 72 L82 112")}
 
-      ${npn(44, -1, 76)}${lbl(20, 116, "Q1", "end")}
-      ${npn(168, 1, 136)}${lbl(192, 116, "Q2")}`;
+      ${npn(44, -1, 82)}${lbl(20, 116, "Q1", "end")}
+      ${npn(168, 1, 130)}${lbl(192, 116, "Q2")}`;
 
     if (astable) return `<svg width="208" height="163" viewBox="5 -9 208 163" fill="none">${body}</svg>`;
 
@@ -15113,7 +15113,7 @@ function renderMultivibrator(domain, tool, favId) {
     // either of them. Positive-going pulse, so the diode's anode faces the
     // input and Rd holds the base down between triggers.
     const trig = `
-      ${dot(76, 112)}${w("M76 112 V160")}${w("M76 160 H88")}
+      ${dot(64, 112)}${w("M64 112 V160")}${w("M64 160 H88")}
       ${part("M88 152 V168")}${part("M100 152 L88 160 L100 168 Z")}${lbl(94, 146, "D", "middle")}
       ${w("M100 160 H114")}${part("M114 152 V168")}${part("M120 152 V168")}${lbl(117, 146, "Cd", "middle")}
       ${w("M120 160 H141")}${port(144, 160)}${lbl(152, 164, "Trig")}`;
