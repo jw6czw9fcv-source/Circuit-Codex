@@ -241,6 +241,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "spectrum-chart") return renderSpectrumChart(domain, tool, favId);
   if (calcId === "flip-flops") return renderFlipFlops(domain, tool, favId);
   if (calcId === "multivibrator") return renderMultivibrator(domain, tool, favId);
+  if (calcId === "555-timer") return render555(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -15335,6 +15336,373 @@ function renderMultivibrator(domain, tool, favId) {
     [["mv-r1", "r1"], ["mv-c1", "c1"], ["mv-r2", "r2"], ["mv-c2", "c2"],
      ["mv-r", "r"], ["mv-c", "c"], ["mv-rc", "rc"],
      ["mv-fd", "fd"], ["mv-duty", "duty"], ["mv-tdp", "tdp"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
+      const u = document.getElementById(id + "-unit");
+      if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; afterEdit(name); };
+    });
+  }
+
+  paint();
+}
+
+// The 555's timing is ratiometric: the comparators sit on a divider of three
+// equal resistors, so they trip at 1/3 and 2/3 of whatever Vcc happens to be,
+// and the supply cancels out of every time constant. Vcc is still an input
+// here because those two fractions are the voltages you actually probe.
+function render555(domain, tool, favId) {
+  const LN2 = Math.LN2;
+  const LN3 = Math.log(3);
+
+  // diode: the classic astable charges through R1 + R2 and discharges through
+  // R2 alone, so its duty is (R1+R2)/(R1+2R2) and can never reach 50%. Asking
+  // for 50% or less switches in the diode across R2, which takes R2 out of the
+  // charge path. It is driven by the duty rather than by a pill, so the
+  // limitation shows up exactly when it is the thing blocking you.
+  const state = {
+    mode: "astable", diode: false, tol: 5,
+    fd: 1, fdUnit: "kHz", duty: 60,
+    r1: 4.7, r1Unit: "kΩ", r2: 4.7, r2Unit: "kΩ", c: 100, cUnit: "nF",
+    tdp: 1.1, tdpUnit: "ms", rm: 10, rmUnit: "kΩ", cm: 100, cmUnit: "nF",
+    vcc: 5, vccUnit: "V",
+  };
+  const F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+
+  const UNITS = {
+    r1: OHM_UNITS, r2: OHM_UNITS, rm: OHM_UNITS,
+    c: CAP_UNITS, cm: CAP_UNITS,
+    fd: F_UNITS, tdp: RC_TIME_UNITS, vcc: VOLT_UNITS,
+  };
+  const si = (name) => state[name] * UNITS[name][state[name + "Unit"]];
+
+  const seriesName = () => eSeriesForTolerance(state.tol);
+  const snap = (ohms) => (ohms > 0 && isFinite(ohms) ? nearestESeries(ohms, seriesName()).value : NaN);
+
+  // Parts at five significant figures and the spec at four, so a typed value
+  // survives the round trip instead of drifting in its last digit.
+  function setScaled(name, value, digits) {
+    const units = UNITS[name];
+    const keys = Object.keys(units).sort((a, b) => units[b] - units[a]);
+    const k = keys.find((u) => Math.abs(value) >= units[u]) || keys[keys.length - 1];
+    state[name] = +(value / units[k]).toPrecision(digits || 5);
+    state[name + "Unit"] = k;
+  }
+
+  function times() {
+    const r1 = si("r1"), r2 = si("r2"), c = si("c");
+    const tHigh = LN2 * (state.diode ? r1 : r1 + r2) * c;
+    const tLow = LN2 * r2 * c;
+    return { tHigh, tLow, period: tHigh + tLow };
+  }
+
+  function specFromParts() {
+    if (state.mode === "astable") {
+      const t = times();
+      if (!(t.period > 0)) return;
+      setScaled("fd", 1 / t.period, 4);
+      state.duty = +((t.tHigh / t.period) * 100).toPrecision(4);
+    } else {
+      const w = LN3 * si("rm") * si("cm");
+      if (w > 0) setScaled("tdp", w, 4);
+    }
+  }
+
+  // Frequency scales the resistors and duty redistributes them, the capacitor
+  // being left alone either way. Crossing 50% is what puts the diode in or
+  // takes it out, because below 50% the plain topology has no solution.
+  function partsFromSpec() {
+    const period = 1 / si("fd"), duty = state.duty, c = si("c");
+    if (!(period > 0) || !(duty > 0) || !(duty < 100) || !(c > 0)) return;
+    state.diode = duty <= 50;
+    const tHigh = (period * duty) / 100, tLow = period - tHigh;
+    const r2 = tLow / LN2 / c;
+    setScaled("r2", r2);
+    setScaled("r1", state.diode ? tHigh / LN2 / c : tHigh / LN2 / c - r2);
+  }
+
+  function resistorFromPulse() {
+    const w = si("tdp"), c = si("cm");
+    if (w > 0 && c > 0) setScaled("rm", w / LN3 / c);
+  }
+
+  function compute() {
+    const vcc = si("vcc");
+    const thr = (2 / 3) * vcc, trig = vcc / 3;
+    if (state.mode === "astable") {
+      const r1 = si("r1"), r2 = si("r2"), c = si("c");
+      if (!(r1 > 0) || !(r2 > 0) || !(c > 0)) {
+        return { problem: "R1, R2 and C must all be greater than zero." };
+      }
+      const t = times();
+      return { problem: "", astable: true, ...t, freq: 1 / t.period,
+               duty: (t.tHigh / t.period) * 100, r1e: snap(r1), r2e: snap(r2), thr, trig };
+    }
+    const r = si("rm"), c = si("cm");
+    if (!(r > 0) || !(c > 0)) return { problem: "R and C must both be greater than zero." };
+    return { problem: "", astable: false, width: LN3 * r * c, re: snap(r), thr, trig };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`;
+  const part = (d) => `<path d="${d}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
+  const dot = (x, y) => `<circle cx="${x}" cy="${y}" r="2.6" fill="${wire}"/>`;
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+  const ground = (x, y) => `<path d="M${x - 11} ${y} H${x + 11} M${x - 7} ${y + 4} H${x + 7} M${x - 3} ${y + 8} H${x + 3}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+  const zigV = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+  const capV = (x, y) => `${part(`M${x - 9} ${y} H${x + 9}`)}${part(`M${x - 9} ${y + 6} H${x + 9}`)}`;
+  const lbl = (x, y, t, anchor, size) => `<text x="${x}" y="${y}" fill="${comp}" font-size="${size || 11}" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
+  const pin = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="${wire}" font-size="9" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
+
+  // The chip is drawn by function rather than by DIP pin order, which is how
+  // every datasheet draws the two application circuits, with the pin number
+  // beside each lead so it can still be wired from the picture.
+  function chip(astable) {
+    return `
+      <rect x="82" y="40" width="84" height="82" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      ${lbl(124, 56, "555", "middle", 13)}
+      ${pin(86, 64, "DIS")}${pin(86, 100, "THR")}${pin(86, 114, "TRG")}
+      ${pin(162, 64, "OUT", "end")}${pin(162, 100, "CTL", "end")}
+      ${pin(124, 113, "GND", "middle")}
+
+      ${w("M100 40 V10")}${pin(104, 30, "8")}
+      ${w("M148 40 V10")}${pin(152, 30, "4")}
+      ${w("M124 122 V134")}${ground(124, 134)}${pin(140, 138, "1")}
+      ${w("M166 60 H186")}${port(189, 60)}${pin(176, 56, "3", "middle")}
+      ${lbl(189, 48, "Out", "middle")}
+      ${w("M166 100 H176")}${w("M176 100 V106")}${capV(176, 106)}${w("M176 112 V126")}${ground(176, 126)}
+      ${pin(180, 96, "5")}${lbl(192, 112, "10n", "start", 9)}
+
+      ${w("M26 10 H148")}${w("M96 10 V2")}${port(96, -1)}
+      ${lbl(105, 3, "Vcc")}`;
+  }
+
+  function diagram(astable) {
+    if (astable) {
+      return `<svg width="221" height="172" viewBox="-4 -10 221 172" fill="none">
+        ${chip(true)}
+        ${w("M82 60 H26")}${pin(62, 56, "7", "middle")}
+        ${w("M82 110 H70")}${w("M70 110 V96")}${w("M70 96 H82")}${dot(70, 110)}
+        ${pin(75, 94, "6")}${pin(75, 108, "2")}
+        ${w("M70 110 H26")}
+        ${w("M26 10 V18")}${part(zigV(26, 18))}${w("M26 54 V60")}${lbl(14, 42, "R1", "end")}
+        ${dot(26, 60)}
+        ${w("M26 60 V70")}${part(zigV(26, 70))}${w("M26 106 V110")}${lbl(14, 94, "R2", "end")}
+        ${dot(26, 110)}
+        ${w("M26 110 V126")}${capV(26, 126)}${w("M26 132 V144")}${ground(26, 144)}${lbl(14, 140, "C", "end")}
+        ${state.diode ? `
+          ${dot(48, 60)}${w("M48 60 V78")}
+          ${part("M40 78 L56 78 L48 90 Z")}${part("M40 90 H56")}
+          ${w("M48 90 V110")}${dot(48, 110)}
+          ${lbl(62, 80, "D")}` : ""}
+      </svg>`;
+    }
+    return `<svg width="221" height="186" viewBox="-4 -10 221 186" fill="none">
+      ${chip(false)}
+      ${w("M82 60 H26")}${pin(68, 56, "7", "middle")}
+      ${w("M82 96 H56")}${w("M56 96 V60")}${dot(56, 60)}${pin(75, 94, "6")}
+      ${w("M82 110 H60")}${w("M60 110 V152")}${w("M60 152 H55")}
+      ${port(52, 152)}${pin(75, 108, "2")}${lbl(52, 166, "Trig", "middle")}
+      ${w("M26 10 V18")}${part(zigV(26, 18))}${w("M26 54 V60")}${lbl(14, 42, "R", "end")}
+      ${dot(26, 60)}
+      ${w("M26 60 V126")}${capV(26, 126)}${w("M26 132 V144")}${ground(26, 144)}${lbl(14, 140, "C", "end")}
+    </svg>`;
+  }
+
+  // Drawn from the computed times, so an asymmetric duty looks asymmetric and
+  // the diode case visibly crosses below half.
+  function timing(r) {
+    if (r.problem) return `<svg width="308" height="56" viewBox="0 0 308 56" fill="none"></svg>`;
+    const x0 = 34, x1 = 300, W = x1 - x0;
+    if (r.astable) {
+      const per = W / 2.4, wh = per * (r.tHigh / r.period), wl = per - wh;
+      let d = `M${x0} 36`, x = x0, hi = false;
+      while (x < x1) {
+        const step = hi ? wh : wl;
+        if (x + step >= x1) { d += ` H${x1}`; break; }
+        x += step;
+        d += ` H${x.toFixed(1)} V${hi ? 36 : 8}`;
+        hi = !hi;
+      }
+      return `<svg width="308" height="56" viewBox="0 0 308 56" fill="none">
+        <path d="${d}" stroke="${comp}" stroke-width="2.2" fill="none"/>
+        <text x="30" y="26" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Out</text>
+      </svg>`;
+    }
+    const span = r.width * 2.6, pw = (r.width / span) * W, lead = W * 0.1;
+    return `<svg width="308" height="56" viewBox="0 0 308 56" fill="none">
+      <path d="M${x0} 16 H${(x0 + lead).toFixed(1)} V6 H${(x0 + lead + 5).toFixed(1)} V16 H${x1}" stroke="${wire}" stroke-width="1.6" fill="none"/>
+      <text x="30" y="14" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">Trig</text>
+      <path d="M${x0} 46 H${(x0 + lead).toFixed(1)} V30 H${(x0 + lead + pw).toFixed(1)} V46 H${x1}" stroke="${comp}" stroke-width="2.2" fill="none"/>
+      <text x="30" y="42" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Out</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  // Pin 7 sinks Vcc/R1 the instant the discharge transistor turns on, so the
+  // datasheets set 1 kΩ as the floor; at the top end the threshold pin's bias
+  // current, tens of nanoamps, starts to rival the charging current and the
+  // timing wanders. Neither is an error — both are reachable from a perfectly
+  // reasonable-looking spec — so they read as a caution, not a refusal.
+  function caution(r) {
+    const msgs = [];
+    const low = r.astable ? si("r1") : si("rm");
+    const high = r.astable ? si("r1") + 2 * si("r2") : si("rm");
+    if (low > 0 && low < 1000) {
+      msgs.push(r.astable
+        ? "R1 is under 1 kΩ, which overloads the discharge pin. Raise C, or move the duty further from 50%."
+        : "R is under 1 kΩ, which overloads the discharge pin. Raise C instead.");
+    }
+    if (high > 10e6) {
+      msgs.push("Past about 10 MΩ the threshold pin's bias current rivals the charging current and the timing drifts. Raise C instead.");
+    }
+    return msgs.length ? `<div class="error-text" style="color:#E0A85E">${msgs.join(" ")}</div>` : "";
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const e = seriesName();
+    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight">${cells}</div>`;
+    if (r.astable) {
+      return grid(`
+        ${cell("t high", siFormat(r.tHigh, "s"))}
+        ${cell("t low", siFormat(r.tLow, "s"))}
+        ${cell(`R1 (${e})`, siFormat(r.r1e, "Ω"))}
+        ${cell(`R2 (${e})`, siFormat(r.r2e, "Ω"))}
+        ${cell("Threshold", siFormat(r.thr, "V"))}`) + caution(r);
+    }
+    return grid(`
+      ${cell(`R (${e})`, siFormat(r.re, "Ω"))}
+      ${cell("Threshold", siFormat(r.thr, "V"))}
+      ${cell("Trigger", siFormat(r.trig, "V"))}`) + caution(r);
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = timing(r);
+    app.querySelector('[data-res="schem"]').innerHTML = diagram(state.mode === "astable");
+    app.querySelector('[data-res="formula"]').innerHTML = formulaBlock(state.mode === "astable");
+  }
+
+  function field(id, name, label, units) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            ${units ? `<select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>` : ""}
+          </div>
+        </div>`;
+  }
+
+  function syncField(id, name) {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = state[name];
+    const u = document.getElementById(id + "-unit");
+    if (u && state[name + "Unit"]) u.value = state[name + "Unit"];
+  }
+
+  function afterEdit(name) {
+    const astable = state.mode === "astable";
+    if (astable && ["r1", "r2", "c"].includes(name)) {
+      specFromParts();
+      syncField("t5-fd", "fd");
+      syncField("t5-duty", "duty");
+    } else if (astable && (name === "fd" || name === "duty")) {
+      partsFromSpec();
+      syncField("t5-r1", "r1");
+      syncField("t5-r2", "r2");
+    } else if (!astable && ["rm", "cm"].includes(name)) {
+      specFromParts();
+      syncField("t5-tdp", "tdp");
+    } else if (!astable && name === "tdp") {
+      resistorFromPulse();
+      syncField("t5-rm", "rm");
+    }
+    refresh();
+  }
+
+  function formulaBlock(astable) {
+    return formulaSection(
+          astable
+            ? [state.diode ? "t high = ln2 × R1 × C   (diode bypasses R2)" : "t high = ln2 × (R1 + R2) × C",
+               "t low = ln2 × R2 × C",
+               "Frequency = 1 / (t high + t low)",
+               state.diode ? "Duty = R1 / (R1 + R2)" : "Duty = (R1 + R2) / (R1 + 2 × R2)",
+               "Threshold = ⅔ Vcc,  Trigger = ⅓ Vcc"]
+            : ["Pulse width = ln3 × R × C = 1.0986 × R × C",
+               "Threshold = ⅔ Vcc,  Trigger = ⅓ Vcc"],
+          astable
+            ? `Every box is live in both directions: type a frequency and both resistors scale, type a duty and they redistribute, type a part and the frequency follows. The capacitor is never rewritten for you. ${state.diode
+                ? "You asked for 50% or less, so the drawing has grown a diode across R2. It has to: the plain circuit charges through R1 + R2 and discharges through R2 alone, so t high always exceeds t low and the duty can never reach half. The diode takes R2 out of the charge path. Its forward drop is ignored here, as datasheets ignore it, so expect the real duty a little off."
+                : "The duty here cannot go below 50%, because the charge path is R1 + R2 and the discharge path is R2 alone. Ask for 50% or less and a diode appears across R2 to take it out of the charge path."} The timing holds no Vcc term at all — the comparators sit on three equal internal resistors, so they trip at fractions of whatever the supply is and it cancels. Vcc is here only to tell you the two voltages you would probe. Pin 5 wants the 10 nF shown, not for timing but because the divider node is high impedance and picks up the supply glitch the output stage makes when it switches.`
+            : `Pulse width and R are live in both directions, and C is never rewritten for you. The constant is ln3, not ln2: the capacitor starts from empty and has to reach ⅔ Vcc, which is 1.0986 RC, the 1.1 RC every datasheet quotes. Two things catch people. The trigger pulse has to be shorter than the output pulse, or the 555 holds its output high as long as pin 2 stays low. And the timing carries no Vcc term — the comparators trip at fractions of the supply, so it cancels; Vcc is here only to give you the two voltages you would probe. Pin 5 wants the 10 nF shown, not for timing but because that divider node is high impedance.`
+        );
+  }
+
+  function paint() {
+    specFromParts();
+    const r = compute();
+    const astable = state.mode === "astable";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, astable
+        ? "Free-running square wave, duty always above half"
+        : "One shot: 1.1 RC, trigger shorter than the pulse")}
+
+      ${pillRow([["astable", "Astable"], ["mono", "Monostable"]], state.mode, domain.bg)}
+
+      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
+        <div data-res="schem">${diagram(astable)}</div>
+        <div data-res="wave">${timing(r)}</div>
+      </div>
+
+      ${astable ? `
+      <div class="field-pair">
+        ${field("t5-fd", "fd", "Frequency", F_UNITS)}
+        ${field("t5-duty", "duty", "Duty %")}
+      </div>
+      <div class="field-pair">
+        ${field("t5-r1", "r1", "R1", OHM_UNITS)}
+        ${field("t5-r2", "r2", "R2", OHM_UNITS)}
+      </div>
+      <div class="field-pair">
+        ${field("t5-c", "c", "C", CAP_UNITS)}
+        ${field("t5-vcc", "vcc", "Vcc", VOLT_UNITS)}
+      </div>` : `
+      <div class="field-pair">
+        ${field("t5-tdp", "tdp", "Pulse width", RC_TIME_UNITS)}
+      </div>
+      <div class="field-pair">
+        ${field("t5-rm", "rm", "R", OHM_UNITS)}
+        ${field("t5-cm", "cm", "C", CAP_UNITS)}
+        ${field("t5-vcc", "vcc", "Vcc", VOLT_UNITS)}
+      </div>`}
+
+      <div class="section-label split" style="color:#5DCAA5">
+        <span>Output</span>
+        <span></span>
+        <select id="t5-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      <div data-res="formula">${formulaBlock(astable)}</div>
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    document.getElementById("t5-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); paint(); };
+
+    [["t5-fd", "fd"], ["t5-duty", "duty"], ["t5-r1", "r1"], ["t5-r2", "r2"], ["t5-c", "c"],
+     ["t5-tdp", "tdp"], ["t5-rm", "rm"], ["t5-cm", "cm"], ["t5-vcc", "vcc"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
       if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
       const u = document.getElementById(id + "-unit");

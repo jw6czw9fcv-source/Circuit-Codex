@@ -164,7 +164,19 @@ pills. Each half-cycle is ln2·RC; the timing trace is drawn from the
 computed times so an asymmetric duty looks asymmetric. Monostable adds
 the number people miss — recovery through the collector resistor, which
 sets the real max trigger rate. Bistable deliberately absent: that is
-the SR latch in the flip-flop tool, and the note says so)
+the SR latch in the flip-flop tool, and the note says so) ·
+555 Timer astable/monostable (the IC, live in both directions like the
+discrete pair: frequency and duty against R1/R2/C, pulse width against
+R/C, with an E-series picker on the results. The astable’s duty cannot
+reach 50% — charge is through R1+R2 and discharge through R2 alone — so
+asking for 50% or less grows a diode across R2 in the drawing and
+switches the formulas with it, which teaches the limitation at the
+moment it blocks you. Vcc is an input only to report the ⅔ and ⅓
+thresholds, since the comparators sit on three equal internal resistors
+and the supply cancels out of every time constant. Monostable is ln3·RC,
+not ln2 — the cap starts empty and climbs to ⅔ Vcc, the 1.1·RC of the
+datasheets. Amber cautions when R1 falls under 1 kΩ or the chain passes
+10 MΩ, the two bounds every application note gives)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -221,7 +233,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] 555 Timer (astable/monostable)
 - [ ] Karnaugh map simplification
 - [ ] I2C pull-up resistor
 - [ ] UART baud rate
