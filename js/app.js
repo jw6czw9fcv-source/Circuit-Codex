@@ -15480,12 +15480,12 @@ function render555(domain, tool, favId) {
       ${pin(130, 139, "1")}
 
       ${w("M106 44 V0")}${w("M142 44 V0")}
-      ${w("M124 124 V146")}${ground(124, 146)}
+      ${w("M124 124 V148")}${ground(124, 148)}
       ${w("M20 0 H142")}${w("M124 0 V-8")}${port(124, -11)}${lbl(133, -7, "Vcc")}
 
       ${w("M166 56 H193")}${port(196, 56)}${lbl(196, 44, "Out", "middle")}
-      ${w("M166 112 H196")}${w("M196 112 V120")}${capV(196, 120)}${w("M196 126 V140")}${ground(196, 140)}
-      ${lbl(208, 126, "10n", "start", 9)}`;
+      ${w("M166 112 H196")}${w("M196 112 V128")}${capV(196, 128)}${w("M196 134 V148")}${ground(196, 148)}
+      ${lbl(208, 134, "10n", "start", 9)}`;
   }
 
   function diagram(astable) {
@@ -15506,11 +15506,11 @@ function render555(domain, tool, favId) {
           ${w("M44 90 V112")}${dot(44, 112)}${lbl(44, 50, "D", "middle")}` : ""}
       </svg>`;
     }
-    return `<svg width="244" height="204" viewBox="-12 -22 244 204" fill="none">
+    return `<svg width="244" height="186" viewBox="-12 -22 244 186" fill="none">
       ${chip()}
       ${w("M82 56 H20")}
       ${w("M82 84 H62")}${w("M62 84 V56")}${dot(62, 56)}
-      ${w("M82 112 H62")}${w("M62 112 V158")}${port(62, 161)}${lbl(62, 175, "Trig", "middle")}
+      ${w("M82 112 H62")}${w("M62 112 V145")}${port(62, 148)}${lbl(70, 152, "Trig")}
 
       ${w("M20 0 V10")}${part(zigV(20, 10))}${w("M20 46 V56")}${lbl(8, 32, "R", "end")}${dot(20, 56)}
       ${w("M20 56 V128")}${capV(20, 128)}${w("M20 134 V148")}${ground(20, 148)}${lbl(8, 136, "C", "end")}
