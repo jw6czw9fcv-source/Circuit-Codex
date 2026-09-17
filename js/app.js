@@ -15455,59 +15455,65 @@ function render555(domain, tool, favId) {
   const pin = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="${wire}" font-size="9" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
 
   // Laid out on one symmetric grid rather than by eye. The box is 84 x 80 with
-  // its centre at (124, 80); the three left pins sit 24 apart about that
+  // its centre at (124, 84); the three left pins sit 28 apart about that
   // centre, the two right pins mirror each other across it, and the two top
-  // pins sit 18 either side of it, with Vcc rising from the midpoint between
-  // them so it faces the ground lead across the box. Every pin number is the
-  // same 6px from the edge it belongs to. Drawn by function, not by DIP pin order, which is how
-  // both application circuits appear in every datasheet.
+  // pins sit 18 either side, with Vcc rising from the midpoint between them so
+  // it faces the ground lead across the box. Every pin number is the same 6px
+  // from the edge it belongs to, offset sideways off its own lead. Drawn by
+  // function, not by DIP pin order, which is how both application circuits
+  // appear in every datasheet.
+  //
+  // The vertical spacing follows from the resistors: no zigzag may touch
+  // another element, so every one gets a 10px stub at BOTH ends, which fixes
+  // 56px between the rail and the first node and between the two nodes, and
+  // that in turn sets where the left pins sit.
   function chip() {
     return `
-      <rect x="82" y="40" width="84" height="80" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
-      ${lbl(124, 85, "555", "middle", 13)}
-      ${pin(86, 60, "DIS")}${pin(86, 84, "THR")}${pin(86, 108, "TRG")}
-      ${pin(162, 60, "OUT", "end")}${pin(162, 108, "CTL", "end")}
+      <rect x="82" y="44" width="84" height="80" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      ${lbl(124, 89, "555", "middle", 13)}
+      ${pin(86, 60, "DIS")}${pin(86, 88, "THR")}${pin(86, 116, "TRG")}
+      ${pin(162, 60, "OUT", "end")}${pin(162, 116, "CTL", "end")}
 
-      ${pin(76, 52, "7", "end")}${pin(76, 76, "6", "end")}${pin(76, 100, "2", "end")}
-      ${pin(172, 52, "3")}${pin(172, 100, "5")}
-      ${pin(100, 34, "8", "end")}${pin(148, 34, "4")}
-      ${pin(130, 135, "1")}
+      ${pin(76, 52, "7", "end")}${pin(76, 80, "6", "end")}${pin(76, 108, "2", "end")}
+      ${pin(172, 52, "3")}${pin(172, 108, "5")}
+      ${pin(100, 40, "8", "end")}${pin(148, 40, "4")}
+      ${pin(130, 139, "1")}
 
-      ${w("M106 40 V10")}${w("M142 40 V10")}
-      ${w("M124 120 V142")}${ground(124, 142)}
-      ${w("M20 10 H142")}${w("M124 10 V2")}${port(124, -1)}${lbl(133, 3, "Vcc")}
+      ${w("M106 44 V0")}${w("M142 44 V0")}
+      ${w("M124 124 V146")}${ground(124, 146)}
+      ${w("M20 0 H142")}${w("M124 0 V-8")}${port(124, -11)}${lbl(133, -7, "Vcc")}
 
       ${w("M166 56 H193")}${port(196, 56)}${lbl(196, 44, "Out", "middle")}
-      ${w("M166 104 H196")}${w("M196 104 V112")}${capV(196, 112)}${w("M196 118 V132")}${ground(196, 132)}
-      ${lbl(208, 118, "10n", "start", 9)}`;
+      ${w("M166 112 H196")}${w("M196 112 V120")}${capV(196, 120)}${w("M196 126 V140")}${ground(196, 140)}
+      ${lbl(208, 126, "10n", "start", 9)}`;
   }
 
   function diagram(astable) {
     if (astable) {
-      return `<svg width="242" height="170" viewBox="-10 -12 242 170" fill="none">
+      return `<svg width="244" height="186" viewBox="-12 -22 244 186" fill="none">
         ${chip()}
         ${w("M82 56 H20")}
-        ${w("M82 80 H62")}${w("M62 80 V104")}${w("M82 104 H62")}${dot(62, 104)}
-        ${w("M62 104 H20")}
+        ${w("M82 84 H62")}${w("M62 84 V112")}${w("M82 112 H62")}${dot(62, 112)}
+        ${w("M62 112 H20")}
 
-        ${w("M20 10 V20")}${part(zigV(20, 20))}${lbl(8, 42, "R1", "end")}${dot(20, 56)}
-        ${w("M20 56 V64")}${part(zigV(20, 64))}${w("M20 100 V104")}${lbl(8, 86, "R2", "end")}${dot(20, 104)}
-        ${w("M20 104 V120")}${capV(20, 120)}${w("M20 126 V140")}${ground(20, 140)}${lbl(8, 128, "C", "end")}
+        ${w("M20 0 V10")}${part(zigV(20, 10))}${w("M20 46 V56")}${lbl(8, 32, "R1", "end")}${dot(20, 56)}
+        ${w("M20 56 V66")}${part(zigV(20, 66))}${w("M20 102 V112")}${lbl(8, 88, "R2", "end")}${dot(20, 112)}
+        ${w("M20 112 V128")}${capV(20, 128)}${w("M20 134 V148")}${ground(20, 148)}${lbl(8, 136, "C", "end")}
 
         ${state.diode ? `
-          ${dot(44, 56)}${w("M44 56 V74")}
-          ${part("M38 74 L50 74 L44 86 Z")}${part("M38 86 H50")}
-          ${w("M44 86 V104")}${dot(44, 104)}${lbl(44, 50, "D", "middle")}` : ""}
+          ${dot(44, 56)}${w("M44 56 V78")}
+          ${part("M38 78 L50 78 L44 90 Z")}${part("M38 90 H50")}
+          ${w("M44 90 V112")}${dot(44, 112)}${lbl(44, 50, "D", "middle")}` : ""}
       </svg>`;
     }
-    return `<svg width="242" height="188" viewBox="-10 -12 242 188" fill="none">
+    return `<svg width="244" height="204" viewBox="-12 -22 244 204" fill="none">
       ${chip()}
       ${w("M82 56 H20")}
-      ${w("M82 80 H62")}${w("M62 80 V56")}${dot(62, 56)}
-      ${w("M82 104 H44")}${w("M44 104 V150")}${port(44, 153)}${lbl(44, 167, "Trig", "middle")}
+      ${w("M82 84 H62")}${w("M62 84 V56")}${dot(62, 56)}
+      ${w("M82 112 H44")}${w("M44 112 V158")}${port(44, 161)}${lbl(44, 175, "Trig", "middle")}
 
-      ${w("M20 10 V20")}${part(zigV(20, 20))}${lbl(8, 42, "R", "end")}${dot(20, 56)}
-      ${w("M20 56 V120")}${capV(20, 120)}${w("M20 126 V140")}${ground(20, 140)}${lbl(8, 128, "C", "end")}
+      ${w("M20 0 V10")}${part(zigV(20, 10))}${w("M20 46 V56")}${lbl(8, 32, "R", "end")}${dot(20, 56)}
+      ${w("M20 56 V128")}${capV(20, 128)}${w("M20 134 V148")}${ground(20, 148)}${lbl(8, 136, "C", "end")}
     </svg>`;
   }
 
