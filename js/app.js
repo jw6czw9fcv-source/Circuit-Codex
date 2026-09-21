@@ -15945,8 +15945,7 @@ function renderKarnaugh(domain, tool, favId) {
       <div class="eseries-grid eseries-grid--tight">
         ${cell("Minterms", `${ones}${dcs ? ` + ${dcs} X` : ""}`)}
         ${cell("Terms", result.constant === null ? result.terms.length : result.constant === 1 ? "1" : "0")}
-        ${cell("Literals", `${after}`)}
-        ${cell("Canonical", `${before}`)}
+        ${cell("Literals", before ? `${after} of ${before}` : `${after}`)}
       </div>`;
   }
 
@@ -15989,8 +15988,8 @@ function renderKarnaugh(domain, tool, favId) {
       <div data-res="results">${resultsHTML(result)}</div>
 
       ${formulaSection(
-        ["Group 2^k cells → k variables drop out", "Groups may overlap and wrap at the edges", "Literals = variables left after grouping"],
-        "The Gray ordering along both axes is the point: neighbouring cells differ in exactly one variable, so any rectangle of 2, 4, 8 or 16 cells is a term with that many variables cancelled. Edges wrap — the map is a torus — so the four corners of a 4-variable map are one group of four, and a wrapping group is drawn here in pieces at the edges rather than as one box that cannot be drawn. Overlapping groups are normal and often necessary; a cell covered twice costs nothing. An X is a don't-care: the minimiser folds it into a group when that makes the group bigger and ignores it otherwise, which is where most of the saving usually comes from. The answer is an exact minimum, found by Quine-McCluskey with an exhaustive search over the non-essential terms rather than a greedy pick, because greedy can miss the true minimum and this is a tool for checking your own work. For the product-of-sums minimum, group the zeros instead and invert: that is the same procedure on the complement."
+        ["Group 2^k cells → k variables drop out", "Groups may overlap and wrap at the edges"],
+        "Neighbouring cells differ in exactly one variable — that is what the 00 01 11 10 order along the edges is for — so a rectangle of 2, 4, 8 or 16 cells is a term with that many variables cancelled. An X is a don't-care: it joins a group when that makes the group bigger, and is ignored otherwise."
       )}
       ${calcFooter()}
     `;
