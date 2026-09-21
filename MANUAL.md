@@ -7,6 +7,22 @@ The in-app note on a tool carries only what you need to use it without getting a
 wrong answer. Everything else — where a formula comes from, why a bound exists,
 what the method can and cannot see — lives here.
 
+<a id="index"></a>
+## Index
+
+Anchors are each tool's `calc:` id rather than its title, so a section stays
+findable when a title is reworded, and the Help screen can look one up straight
+from the app's own tool list.
+
+### Digital
+
+- Logic gates → [Karnaugh map simplification](#karnaugh)
+- Timing & interfaces → [I²C pull-up resistor](#i2c-pullup)
+
+Tools finished before this file existed get their section when they are next
+touched. The completeness pass under **Before release** in `TODO.md` catches
+whatever is still missing.
+
 ## How a section is written
 
 Every tool gets the same five headings, in this order:
@@ -32,6 +48,7 @@ catches whatever is still missing.
 
 # Digital
 
+<a id="karnaugh"></a>
 ## Karnaugh map simplification
 
 `calc: karnaugh` · Digital › Logic gates
@@ -140,8 +157,11 @@ The parity detector was checked exhaustively over all 256 three-variable
 functions: exactly eight are parity forms (three pairs and one triple, each with
 its complement), and each one's exclusive-OR form reproduces its truth table.
 
+[↑ Index](#index)
+
 ---
 
+<a id="i2c-pullup"></a>
 ## I²C pull-up resistor
 
 `calc: i2c-pullup` · Digital › Timing & interfaces
@@ -229,3 +249,5 @@ an active bus buffer that isolates segments.
   once per segment.
 - **Level shifters.** A MOSFET level shifter between two voltage domains puts a
   pull-up on each side, and the two interact. Not modelled.
+
+[↑ Index](#index)
