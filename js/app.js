@@ -15726,9 +15726,10 @@ function render555(domain, tool, favId) {
 // one variable, so a rectangle of 2^k cells is a term with k variables gone.
 const KM_GRAY = [0, 1, 3, 2];
 const KM_NAMES = ["A", "B", "C", "D"];
-// #B79BEA is deliberately absent: the note calls the exclusive-OR line "the
-// purple line", so a fifth group must not also be purple.
-const KM_COLOURS = ["#8FC1F5", "#5DCAA5", "#E0A85E", "#E08585", "#7FD4D4"];
+const KM_COLOURS = ["#6FB3F2", "#3FD69A", "#F5C242", "#FF6B5B", "#9D7BF0", "#FF6FC3"];
+// The exclusive-OR line is not a group and has no box to be matched to, so it
+// takes a neutral and leaves every hue to the groups.
+const KM_XOR_COLOUR = "#DFE5EC";
 
 const kmRows = (n) => (n === 4 ? 4 : 2);
 const kmCols = (n) => (n === 2 ? 2 : 4);
@@ -15921,7 +15922,7 @@ function renderKarnaugh(domain, tool, favId) {
         const idx = kmIndex(r, c, n);
         const x = GX + c * CELL, y = GY + r * CELL;
         const val = v[idx];
-        const fill = val === 1 ? "#8FC1F5" : val === 2 ? "#E0A85E" : "#6B7280";
+        const fill = val === 1 ? "#E6ECF3" : val === 2 ? "#E0A85E" : "#5A6169";
         cells.push(`
           <rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" fill="#1B1F24" stroke="${wire}" stroke-width="1.2" data-km="${idx}" style="cursor:pointer"/>
           <text x="${x + CELL / 2}" y="${y + CELL / 2 + 6}" fill="${fill}" font-size="17" font-weight="700" text-anchor="middle" pointer-events="none">${val === 2 ? "X" : val}</text>
@@ -15981,7 +15982,7 @@ function renderKarnaugh(domain, tool, favId) {
     return `
       <div class="formula-card formula-card--static" style="margin:0 16px 10px; font-size:15px;">
         <div class="formula-line" style="font-size:15px">${expressionHTML(result)}</div>
-        ${par ? `<div class="formula-line" style="font-size:15px;color:#B79BEA">F = ${kmParityText(par, n)}</div>` : ""}
+        ${par ? `<div class="formula-line" style="font-size:15px;color:${KM_XOR_COLOUR}">F = ${kmParityText(par, n)}</div>` : ""}
       </div>
       <div class="eseries-grid eseries-grid--tight">
         ${cell("Minterms", `${ones}${dcs ? ` + ${dcs} X` : ""}`)}
@@ -15994,7 +15995,7 @@ function renderKarnaugh(domain, tool, favId) {
     return formulaSection(
       ["Group 2^k cells → k variables drop out", "Groups may overlap and wrap at the edges"],
       "Neighbouring cells differ in exactly one variable — that is what the 00 01 11 10 order along the edges is for — so a rectangle of 2, 4, 8 or 16 cells is a term with that many variables cancelled. An X is a don't-care: it joins a group when that makes the group bigger, and is ignored otherwise."
-      + (parityOf(result) ? " The purple line is the same function written as exclusive-OR. A checkerboard of ones has no two cells adjacent, so every group is a single cell and the map gives its worst answer — parity is the one thing it cannot see. Two XOR gates beat four ANDs and an OR." : "")
+      + (parityOf(result) ? " The second line is the same function written as exclusive-OR. A checkerboard of ones has no two cells adjacent, so every group is a single cell and the map gives its worst answer — parity is the one thing it cannot see. Two XOR gates beat four ANDs and an OR." : "")
     );
   }
 
