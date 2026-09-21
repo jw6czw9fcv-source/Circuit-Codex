@@ -243,6 +243,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "multivibrator") return renderMultivibrator(domain, tool, favId);
   if (calcId === "555-timer") return render555(domain, tool, favId);
   if (calcId === "karnaugh") return renderKarnaugh(domain, tool, favId);
+  if (calcId === "i2c-pullup") return renderI2CPullup(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -1567,7 +1568,10 @@ function siFormat(v, unit, digits = 4) {
   if (!isFinite(v)) return "—";
   if (v === 0) return `0 ${unit}`;
   const fig = (x) => Number(x.toPrecision(digits)).toString();
-  for (const [scale, prefix] of [[1e9, "G"], [1e6, "M"], [1e3, "k"], [1, ""], [1e-3, "m"], [1e-6, "µ"], [1e-9, "n"]]) {
+  // Runs down to femto: it used to stop at nano, so anything smaller fell
+  // through to the raw exponential — a 420 pF bus capacitance printed as
+  // "4.2e-10 F". Picoseconds and picoamps have the same problem.
+  for (const [scale, prefix] of [[1e9, "G"], [1e6, "M"], [1e3, "k"], [1, ""], [1e-3, "m"], [1e-6, "µ"], [1e-9, "n"], [1e-12, "p"], [1e-15, "f"]]) {
     if (Math.abs(v) >= scale) return `${fig(v / scale)} ${prefix}${unit}`;
   }
   return `${fig(v)} ${unit}`;
@@ -16059,6 +16063,214 @@ function renderKarnaugh(domain, tool, favId) {
       refresh();
     };
     wireCells();
+  }
+
+  paint();
+}
+
+// Every number here is from the I2C specification, NXP UM10204, not from a
+// rule of thumb. The rise time budget and the bus capacitance ceiling change
+// with the mode, and so does what the open-drain stage has to sink: 3 mA up
+// to Fast mode, 20 mA in Fast mode Plus.
+const I2C_MODES = {
+  std: { label: "100 kHz", tr: 1000e-9, cbMax: 400e-12, iol: 3 },
+  fast: { label: "400 kHz", tr: 300e-9, cbMax: 400e-12, iol: 3 },
+  fmp: { label: "1 MHz", tr: 120e-9, cbMax: 550e-12, iol: 20 },
+};
+
+// The 0.8473 is not a fudge. Rise time is specified between 0.3 and 0.7 Vdd,
+// and an RC charge reaches those at ln(1/0.7) and ln(1/0.3) time constants,
+// so the span is ln(1/0.3) - ln(1/0.7) = ln(7/3) = 0.8473 RC.
+const I2C_K = Math.log(7 / 3);
+const I2C_VOL = 0.4;
+
+// Every E-series value between two bounds, so a suggestion can be a real part
+// rather than the nearest value to a target that may sit outside the window.
+function eSeriesBetween(lo, hi, name) {
+  const vals = eSeriesValues(name);
+  const base = vals[0] >= 100 ? 100 : 10;
+  const out = [];
+  for (let d = -2; d <= 9; d++) {
+    const mult = Math.pow(10, d);
+    for (const v of vals) {
+      const x = (v / base) * mult;
+      if (x >= lo && x <= hi) out.push(x);
+    }
+  }
+  return out;
+}
+
+function renderI2CPullup(domain, tool, favId) {
+  const state = {
+    mode: "fast", tol: 5,
+    vdd: 3.3, vddUnit: "V",
+    cb: 100, cbUnit: "pF",
+    rp: 2.2, rpUnit: "kΩ",
+    iol: 3, iolUnit: "mA",
+  };
+
+  const UNITS = { vdd: VOLT_UNITS, cb: CAP_UNITS, rp: OHM_UNITS, iol: AMP_UNITS };
+  const si = (name) => state[name] * UNITS[name][state[name + "Unit"]];
+  const seriesName = () => eSeriesForTolerance(state.tol);
+
+  function compute() {
+    const m = I2C_MODES[state.mode];
+    const vdd = si("vdd"), cb = si("cb"), rp = si("rp"), iol = si("iol");
+    if (!(vdd > I2C_VOL)) return { problem: "Vdd has to be above the 0.4 V output-low level." };
+    if (!(cb > 0) || !(rp > 0) || !(iol > 0)) return { problem: "Bus capacitance, Rp and I_OL must all be greater than zero." };
+
+    const rpMin = (vdd - I2C_VOL) / iol;
+    const rpMax = m.tr / (I2C_K * cb);
+    const feasible = rpMax > rpMin;
+    let suggested = NaN;
+    if (feasible) {
+      const target = Math.sqrt(rpMin * rpMax);
+      const list = eSeriesBetween(rpMin, rpMax, seriesName());
+      if (list.length) {
+        suggested = list.reduce((best, x) =>
+          Math.abs(Math.log(x / target)) < Math.abs(Math.log(best / target)) ? x : best, list[0]);
+      }
+    }
+    return {
+      problem: "", m, cb, rp, rpMin, rpMax, feasible, suggested,
+      tRise: I2C_K * rp * cb,
+      iSink: (vdd - I2C_VOL) / rp,
+    };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`;
+  const part = (d) => `<path d="${d}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+  const ground = (x, y) => `<path d="M${x - 11} ${y} H${x + 11} M${x - 7} ${y + 4} H${x + 7} M${x - 3} ${y + 8} H${x + 3}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+  const zigV = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+  const capV = (x, y) => `${part(`M${x - 9} ${y} H${x + 9}`)}${part(`M${x - 9} ${y + 6} H${x + 9}`)}`;
+  const lbl = (x, y, t, anchor, size) => `<text x="${x}" y="${y}" fill="${comp}" font-size="${size || 11}" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
+
+  // Both lines are drawn as vertical columns with the devices tapping them from
+  // between: identical either side of the centre, and with no wire crossing
+  // another, which two stacked horizontal lines fed from one rail cannot avoid.
+  function diagram() {
+    const col = (x, dir, name) => `
+      ${w(`M${x} 10 V20`)}${part(zigV(x, 20))}${w(`M${x} 56 V148`)}
+      ${capV(x, 148)}${w(`M${x} 154 V168`)}${ground(x, 168)}
+      ${w(`M${x} 100 H${x + dir * 16}`)}
+      ${lbl(x + dir * 12, 42, "Rp", dir < 0 ? "end" : "start")}
+      ${lbl(x + dir * 12, 162, "Cb", dir < 0 ? "end" : "start")}
+      ${lbl(x + dir * 12, 88, name, dir < 0 ? "end" : "start")}`;
+    return `<svg width="155" height="195" viewBox="11 -14 155 195" fill="none">
+      ${w("M50 10 H130")}${w("M90 10 V2")}${port(90, -1)}${lbl(99, 3, "Vdd")}
+      ${col(50, -1, "SDA")}
+      ${col(130, 1, "SCL")}
+      <rect x="66" y="84" width="48" height="32" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      <text x="90" y="104" fill="${comp}" font-size="10" font-weight="600" text-anchor="middle">Devices</text>
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  // Three different things can be wrong and they are not the same severity.
+  // No window at all is a dead end; the others are choices to reconsider.
+  function warnings(r) {
+    if (!r.feasible) {
+      return `<div class="error-text">No value works: at ${siFormat(r.cb, "F")} the bus cannot rise inside the ${r.m.label} budget while still respecting I_OL. Shorten the bus, drop devices, move to a slower mode, or use a bus buffer.</div>`;
+    }
+    const msgs = [];
+    if (r.cb > r.m.cbMax) msgs.push(`Bus capacitance is past the ${siFormat(r.m.cbMax, "F")} the spec allows at ${r.m.label}.`);
+    if (r.rp < r.rpMin) msgs.push("Your Rp draws more than I_OL at the 0.4 V output-low level.");
+    else if (r.rp > r.rpMax) msgs.push("Your Rp is too slow: the rise time is past the budget for this mode.");
+    if (!isFinite(r.suggested)) msgs.push("No E-series value falls inside the window; try a finer series.");
+    return msgs.length ? `<div class="error-text" style="color:#E0A85E">${msgs.join(" ")}</div>` : "";
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Rp min", siFormat(r.rpMin, "Ω"))}
+        ${cell("Rp max", siFormat(r.rpMax, "Ω"))}
+        ${cell("Suggested", isFinite(r.suggested) ? siFormat(r.suggested, "Ω") : "—")}
+        ${cell("Rise time", siFormat(r.tRise, "s"))}
+        ${cell("Sink current", siFormat(r.iSink, "A"))}
+      </div>
+      ${warnings(r)}`;
+  }
+
+  function refresh() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
+  }
+
+  function field(id, name, label, units) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Fast enough to rise, gentle enough to sink")}
+
+      ${pillRow(Object.keys(I2C_MODES).map((k) => [k, I2C_MODES[k].label]), state.mode, domain.bg)}
+
+      <div class="diagram-box" style="padding:4px 6px;">
+        <div>${diagram()}</div>
+      </div>
+
+      <div class="field-pair">
+        ${field("i2c-vdd", "vdd", "Vdd", VOLT_UNITS)}
+        ${field("i2c-cb", "cb", "Bus C", CAP_UNITS)}
+      </div>
+      <div class="field-pair">
+        ${field("i2c-rp", "rp", "Rp", OHM_UNITS)}
+        ${field("i2c-iol", "iol", "I_OL", AMP_UNITS)}
+      </div>
+
+      <div class="section-label split" style="color:#5DCAA5">
+        <span>Output</span>
+        <span></span>
+        <select id="i2c-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Rp min = (Vdd − 0.4 V) / I_OL",
+         "Rp max = t_r / (0.8473 × Cb)",
+         "Suggested = √(Rp min × Rp max), on the E-series",
+         "Rise time = 0.8473 × Rp × Cb",
+         "Sink current = (Vdd − 0.4 V) / Rp"],
+        "Both limits come from the I2C specification, NXP UM10204. The low one is the open-drain stage: it has to pull the line under 0.4 V without being asked for more than I_OL, which the spec puts at 3 mA up to Fast mode and 20 mA in Fast mode Plus. The high one is the rise: nothing drives the line up but Rp, so the bus climbs as an RC and has to cross from 0.3 to 0.7 Vdd inside the mode's budget — 1000 ns at 100 kHz, 300 ns at 400 kHz, 120 ns at 1 MHz. That is where 0.8473 comes from: it is ln(7/3), the span between those two fractions on an RC curve. The suggestion is the geometric mean of the two limits, which is the middle of the window on a log scale, so there is margin on both sides rather than all of it at one end. Bus capacitance is the number people guess worst: reckon on a few pF per centimetre of track plus around 10 pF per device, and measure it if the bus is long. When the window closes entirely there is no resistor that works, and the answer is a shorter bus, fewer devices, a slower mode or a bus buffer."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => {
+      state.mode = m;
+      state.iol = I2C_MODES[m].iol;
+      state.iolUnit = "mA";
+      paint();
+    });
+    document.getElementById("i2c-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); refresh(); };
+
+    [["i2c-vdd", "vdd"], ["i2c-cb", "cb"], ["i2c-rp", "rp"], ["i2c-iol", "iol"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+      const u = document.getElementById(id + "-unit");
+      if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; refresh(); };
+    });
   }
 
   paint();

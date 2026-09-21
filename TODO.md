@@ -190,7 +190,20 @@ draw in two or four pieces at the edges, the four corners included.
 Verified against a second minimiser written separately — all cubes
 enumerated, smallest cover by iterative deepening — agreeing on term
 and literal counts over 3500 random functions, with the truth table
-reproduced on every care position of 12000 more)
+reproduced on every care position of 12000 more) ·
+I2C pull-up resistor (both bounds straight from NXP UM10204, not from
+a rule of thumb: Rp min is what the open-drain stage can sink at the
+0.4 V low level, Rp max is what lets the line climb from 0.3 to 0.7
+Vdd inside the mode’s budget. The 0.8473 is ln(7/3), the span between
+those two fractions on an RC curve, and the note says so rather than
+leaving it a magic number. Three pills move the rise budget, the bus
+capacitance ceiling and I_OL together — 20 mA in Fast mode Plus, not
+3. Rp is editable so an existing value can be checked, and the
+suggestion is the geometric mean of the two bounds snapped to the
+chosen E-series, which puts 3.3k on a 3.3 V standard-mode bus, the
+value everyone actually fits. The case worth seeing is the window
+closing: past about 366 pF in Fast mode no resistor satisfies both
+ends, and the tool says so in red with what to do about it)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -247,7 +260,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] I2C pull-up resistor
 - [ ] UART baud rate
 - [ ] Crystal load capacitance
 - [ ] Oscillator stability (ppm → Hz)
