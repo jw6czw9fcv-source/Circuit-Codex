@@ -242,6 +242,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "flip-flops") return renderFlipFlops(domain, tool, favId);
   if (calcId === "multivibrator") return renderMultivibrator(domain, tool, favId);
   if (calcId === "555-timer") return render555(domain, tool, favId);
+  if (calcId === "karnaugh") return renderKarnaugh(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -15716,6 +15717,290 @@ function render555(domain, tool, favId) {
       const u = document.getElementById(id + "-unit");
       if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; afterEdit(name); };
     });
+  }
+
+  paint();
+}
+
+// Gray order is the whole reason the map works: neighbours differ in exactly
+// one variable, so a rectangle of 2^k cells is a term with k variables gone.
+const KM_GRAY = [0, 1, 3, 2];
+const KM_NAMES = ["A", "B", "C", "D"];
+const KM_COLOURS = ["#8FC1F5", "#5DCAA5", "#E0A85E", "#E08585", "#B79BEA", "#7FD4D4"];
+
+const kmRows = (n) => (n === 4 ? 4 : 2);
+const kmCols = (n) => (n === 2 ? 2 : 4);
+
+// Which minterm sits at (row, col). A is the most significant bit throughout.
+function kmIndex(r, c, n) {
+  if (n === 2) return (r << 1) | c;
+  if (n === 3) return (r << 2) | KM_GRAY[c];
+  return (KM_GRAY[r] << 2) | KM_GRAY[c];
+}
+
+const kmLiterals = (t, n) => {
+  let c = 0;
+  for (let i = 0; i < n; i++) if (!(t.dash & (1 << i))) c++;
+  return c;
+};
+
+// Quine-McCluskey. Exhaustive rather than greedy, because at four variables
+// the search is trivial and a greedy cover can miss the true minimum — which
+// would make the tool wrong exactly where someone is checking their own work.
+function kmMinimise(values, n) {
+  const N = 1 << n;
+  const ones = [], care = [];
+  for (let i = 0; i < N; i++) {
+    if (values[i] === 1) { ones.push(i); care.push(i); }
+    else if (values[i] === 2) care.push(i);
+  }
+  if (!ones.length) return { terms: [], constant: 0 };
+  if (care.length === N) return { terms: [{ bits: 0, dash: N - 1 }], constant: 1 };
+
+  const key = (t) => `${t.bits}|${t.dash}`;
+  let current = care.map((m) => ({ bits: m, dash: 0 }));
+  const found = [];
+  while (current.length) {
+    const used = new Set();
+    const next = new Map();
+    for (let i = 0; i < current.length; i++) {
+      for (let j = i + 1; j < current.length; j++) {
+        const a = current[i], b = current[j];
+        if (a.dash !== b.dash) continue;
+        const diff = a.bits ^ b.bits;
+        if (diff && (diff & (diff - 1)) === 0) {
+          used.add(i); used.add(j);
+          const t = { bits: a.bits & ~diff, dash: a.dash | diff };
+          next.set(key(t), t);
+        }
+      }
+    }
+    current.forEach((t, i) => { if (!used.has(i)) found.push(t); });
+    current = [...next.values()];
+  }
+  const seen = new Set(), pis = [];
+  for (const t of found) { const k = key(t); if (!seen.has(k)) { seen.add(k); pis.push(t); } }
+
+  const covers = pis.map((t) => ones.filter((m) => (m & ~t.dash) === t.bits));
+  const chosen = [];
+  for (const m of ones) {
+    const hits = pis.map((_, i) => i).filter((i) => covers[i].includes(m));
+    if (hits.length === 1 && !chosen.includes(hits[0])) chosen.push(hits[0]);
+  }
+  const done = new Set();
+  chosen.forEach((i) => covers[i].forEach((m) => done.add(m)));
+  const left = ones.filter((m) => !done.has(m));
+
+  if (left.length) {
+    const rest = pis.map((_, i) => i).filter((i) => !chosen.includes(i));
+    // Fewest terms first, then fewest literals. Without the second key the
+    // search returns whichever minimum-size cover it happens to reach first,
+    // which on a third of the ties here was the wordier one — the answer would
+    // have been a correct minimum by term count and still not what a textbook
+    // prints. The prune stays on size alone, so an equal-size cover reached
+    // through a different prefix can still win on literals.
+    let best = null;
+    const search = (start, picked, todo, lits) => {
+      if (best && todo.length && picked.length >= best.picked.length) return;
+      if (!todo.length) {
+        if (!best || picked.length < best.picked.length
+            || (picked.length === best.picked.length && lits < best.lits)) {
+          best = { picked: picked.slice(), lits };
+        }
+        return;
+      }
+      for (let k = start; k < rest.length; k++) {
+        const i = rest[k];
+        const rem = todo.filter((m) => !covers[i].includes(m));
+        if (rem.length === todo.length) continue;
+        picked.push(i);
+        search(k + 1, picked, rem, lits + kmLiterals(pis[i], n));
+        picked.pop();
+      }
+    };
+    search(0, [], left, 0);
+    if (best) chosen.push(...best.picked);
+  }
+  return { terms: chosen.map((i) => pis[i]), constant: null };
+}
+
+function kmTermText(t, n) {
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    const bit = 1 << (n - 1 - i);
+    if (t.dash & bit) continue;
+    out += KM_NAMES[i] + ((t.bits & bit) ? "" : "\u0304");
+  }
+  return out;
+}
+
+// A term's cells always form a rectangle on the torus, so the run of rows and
+// the run of columns are found separately and multiplied. A run that passes
+// the edge comes back as two pieces, which is why a wrapping group draws as
+// two or four boxes instead of one.
+function kmRects(t, n) {
+  const R = kmRows(n), C = kmCols(n);
+  const rs = new Set(), cs = new Set();
+  for (let r = 0; r < R; r++) {
+    for (let c = 0; c < C; c++) {
+      if ((kmIndex(r, c, n) & ~t.dash) === t.bits) { rs.add(r); cs.add(c); }
+    }
+  }
+  const runs = (set, len) => {
+    const arr = [...set].sort((a, b) => a - b);
+    if (arr.length === len) return [[0, len - 1]];
+    for (const start of arr) {
+      let ok = true;
+      for (let i = 0; i < arr.length; i++) if (!set.has((start + i) % len)) { ok = false; break; }
+      if (ok) {
+        const end = start + arr.length - 1;
+        return end < len ? [[start, end]] : [[start, len - 1], [0, end - len]];
+      }
+    }
+    return arr.map((v) => [v, v]);
+  };
+  const out = [];
+  for (const [r0, r1] of runs(rs, R)) for (const [c0, c1] of runs(cs, C)) out.push({ r0, r1, c0, c1 });
+  return out;
+}
+
+function renderKarnaugh(domain, tool, favId) {
+  const state = { vars: 4, cells: {} };
+  const values = () => {
+    const N = 1 << state.vars;
+    const v = state.cells[state.vars] || (state.cells[state.vars] = new Array(N).fill(0));
+    return v;
+  };
+
+  const CELL = 42;
+  const GX = 40, GY = 36;
+
+  function mapSVG(result) {
+    const n = state.vars, R = kmRows(n), C = kmCols(n), v = values();
+    const wire = "#3A4048";
+    const rowVar = n === 4 ? "AB" : "A";
+    const colVar = n === 2 ? "B" : n === 3 ? "BC" : "CD";
+    const heads = (count) => (count === 2 ? ["0", "1"] : ["00", "01", "11", "10"]);
+    const W = GX + C * CELL, H = GY + R * CELL;
+
+    const cells = [];
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) {
+        const idx = kmIndex(r, c, n);
+        const x = GX + c * CELL, y = GY + r * CELL;
+        const val = v[idx];
+        const fill = val === 1 ? "#8FC1F5" : val === 2 ? "#E0A85E" : "#6B7280";
+        cells.push(`
+          <rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" fill="#1B1F24" stroke="${wire}" stroke-width="1.2" data-km="${idx}" style="cursor:pointer"/>
+          <text x="${x + CELL / 2}" y="${y + CELL / 2 + 6}" fill="${fill}" font-size="17" font-weight="700" text-anchor="middle" pointer-events="none">${val === 2 ? "X" : val}</text>
+          <text x="${x + 4}" y="${y + 12}" fill="#4A5058" font-size="9" pointer-events="none">${idx}</text>`);
+      }
+    }
+
+    const groups = (result.terms || []).map((t, i) => {
+      const colour = KM_COLOURS[i % KM_COLOURS.length];
+      const inset = 4 + (i % 3) * 4;
+      return kmRects(t, n).map((g) => {
+        const x = GX + g.c0 * CELL + inset, y = GY + g.r0 * CELL + inset;
+        const w = (g.c1 - g.c0 + 1) * CELL - 2 * inset, h = (g.r1 - g.r0 + 1) * CELL - 2 * inset;
+        return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9" fill="none" stroke="${colour}" stroke-width="2.2" pointer-events="none"/>`;
+      }).join("");
+    }).join("");
+
+    return `<svg width="${W + 6}" height="${H + 6}" viewBox="0 0 ${W + 6} ${H + 6}" fill="none">
+      <text x="${GX + (C * CELL) / 2}" y="12" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="middle">${colVar}</text>
+      <text x="12" y="${GY + (R * CELL) / 2}" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 12 ${GY + (R * CELL) / 2})">${rowVar}</text>
+      ${heads(C).map((h, c) => `<text x="${GX + c * CELL + CELL / 2}" y="${GY - 7}" fill="#5A6169" font-size="11" font-weight="600" text-anchor="middle">${h}</text>`).join("")}
+      ${heads(R).map((h, r) => `<text x="${GX - 7}" y="${GY + r * CELL + CELL / 2 + 4}" fill="#5A6169" font-size="11" font-weight="600" text-anchor="end">${h}</text>`).join("")}
+      ${cells.join("")}
+      ${groups}
+    </svg>`;
+  }
+
+  function expressionHTML(result) {
+    const n = state.vars;
+    if (result.constant === 0) return `F = <span style="color:#6B7280">0</span>`;
+    if (result.constant === 1) return `F = <span style="color:#5DCAA5">1</span>`;
+    return "F = " + result.terms.map((t, i) =>
+      `<span style="color:${KM_COLOURS[i % KM_COLOURS.length]}">${kmTermText(t, n)}</span>`).join(" + ");
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(result) {
+    const n = state.vars, v = values();
+    const ones = v.filter((x) => x === 1).length;
+    const dcs = v.filter((x) => x === 2).length;
+    const before = ones * n;
+    const after = result.constant === null ? result.terms.reduce((a, t) => a + kmLiterals(t, n), 0) : 0;
+    return `
+      <div class="formula-card formula-card--static" style="margin:0 16px 10px; font-size:15px;">
+        <div class="formula-line" style="font-size:15px">${expressionHTML(result)}</div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Minterms", `${ones}${dcs ? ` + ${dcs} X` : ""}`)}
+        ${cell("Terms", result.constant === null ? result.terms.length : result.constant === 1 ? "1" : "0")}
+        ${cell("Literals", `${after}`)}
+        ${cell("Canonical", `${before}`)}
+      </div>`;
+  }
+
+  function refresh() {
+    const result = kmMinimise(values(), state.vars);
+    app.querySelector('[data-res="map"]').innerHTML = mapSVG(result);
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(result);
+    wireCells();
+  }
+
+  // Tap cycles 0 -> 1 -> X. Delegated from the svg, because the cells are
+  // rebuilt on every change.
+  function wireCells() {
+    app.querySelectorAll("[data-km]").forEach((el) => {
+      el.onclick = () => {
+        const i = +el.dataset.km;
+        const v = values();
+        v[i] = (v[i] + 1) % 3;
+        refresh();
+      };
+    });
+  }
+
+  function paint() {
+    const result = kmMinimise(values(), state.vars);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Tap a cell to cycle 0 · 1 · X, and read the groups")}
+
+      ${pillRow([[2, "2 vars"], [3, "3 vars"], [4, "4 vars"]].map(([k, l]) => [String(k), l]), String(state.vars), domain.bg)}
+
+      <div class="diagram-box" style="padding:6px; flex-direction:column; gap:0;">
+        <div data-res="map">${mapSVG(result)}</div>
+      </div>
+
+      <div class="section-label split" style="color:#5DCAA5">
+        <span>Output</span>
+        <span></span>
+        <button class="label-btn" id="km-clear">Clear</button>
+      </div>
+      <div data-res="results">${resultsHTML(result)}</div>
+
+      ${formulaSection(
+        ["Group 2^k cells → k variables drop out", "Groups may overlap and wrap at the edges", "Literals = variables left after grouping"],
+        "The Gray ordering along both axes is the point: neighbouring cells differ in exactly one variable, so any rectangle of 2, 4, 8 or 16 cells is a term with that many variables cancelled. Edges wrap — the map is a torus — so the four corners of a 4-variable map are one group of four, and a wrapping group is drawn here in pieces at the edges rather than as one box that cannot be drawn. Overlapping groups are normal and often necessary; a cell covered twice costs nothing. An X is a don't-care: the minimiser folds it into a group when that makes the group bigger and ignores it otherwise, which is where most of the saving usually comes from. The answer is an exact minimum, found by Quine-McCluskey with an exhaustive search over the non-essential terms rather than a greedy pick, because greedy can miss the true minimum and this is a tool for checking your own work. For the product-of-sums minimum, group the zeros instead and invert: that is the same procedure on the complement."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.vars = +m; paint(); });
+    document.getElementById("km-clear").onclick = () => {
+      state.cells[state.vars] = new Array(1 << state.vars).fill(0);
+      refresh();
+    };
+    wireCells();
   }
 
   paint();

@@ -97,7 +97,7 @@ const DOMAINS = [
     bg: "#1F3B33",
     icon: "binary",
     sections: [
-      { title: "Logic gates", tools: [{ name: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)", calc: "logic-gates" }, { name: "Karnaugh map simplification" }] },
+      { title: "Logic gates", tools: [{ name: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)", calc: "logic-gates" }, { name: "Karnaugh map simplification", calc: "karnaugh" }] },
       { title: "Sequential logic", tools: [{ name: "Flip-flops (SR, D, JK, T)", calc: "flip-flops" }, { name: "Multivibrators (astable/monostable)", calc: "multivibrator" }, { name: "555 Timer (astable/monostable)", calc: "555-timer" }] },
       { title: "Number systems", tools: [{ name: "DEC / HEX / OCT / BIN conversion", calc: "dec-hex-bin" }, { name: "ASCII table", calc: "ascii-table" }] },
       {

@@ -176,7 +176,21 @@ thresholds, since the comparators sit on three equal internal resistors
 and the supply cancels out of every time constant. Monostable is ln3·RC,
 not ln2 — the cap starts empty and climbs to ⅔ Vcc, the 1.1·RC of the
 datasheets. Amber cautions when R1 falls under 1 kΩ or the chain passes
-10 MΩ, the two bounds every application note gives)
+10 MΩ, the two bounds every application note gives) ·
+Karnaugh map simplification (2, 3 or 4 variables; tap a cell to cycle
+0 · 1 · X. The minimum sum of products comes from Quine-McCluskey with
+an exhaustive cover search, ordered fewest terms then fewest literals
+— greedy would be wrong exactly where someone is checking their own
+homework, and without the literal tie-break a third of the ties came
+out wordier than a textbook prints. The payoff is the overlay: each
+group is boxed on the map in its own colour and the matching term in
+the expression carries that colour, so the link between a rectangle
+and a product term is visible rather than asserted. Wrapping groups
+draw in two or four pieces at the edges, the four corners included.
+Verified against a second minimiser written separately — all cubes
+enumerated, smallest cover by iterative deepening — agreeing on term
+and literal counts over 3500 random functions, with the truth table
+reproduced on every care position of 12000 more)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -233,7 +247,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Karnaugh map simplification
 - [ ] I2C pull-up resistor
 - [ ] UART baud rate
 - [ ] Crystal load capacitance
