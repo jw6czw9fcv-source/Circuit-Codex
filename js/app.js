@@ -16252,7 +16252,7 @@ function renderI2CPullup(domain, tool, favId) {
          "Suggested = √(Rp min × Rp max), on the E-series",
          "Rise time = 0.8473 × Rp × Cb",
          "Sink current = (Vdd − 0.4 V) / Rp"],
-        "Both limits come from the I2C specification, NXP UM10204. The low one is the open-drain stage: it has to pull the line under 0.4 V without being asked for more than I_OL, which the spec puts at 3 mA up to Fast mode and 20 mA in Fast mode Plus. The high one is the rise: nothing drives the line up but Rp, so the bus climbs as an RC and has to cross from 0.3 to 0.7 Vdd inside the mode's budget — 1000 ns at 100 kHz, 300 ns at 400 kHz, 120 ns at 1 MHz. That is where 0.8473 comes from: it is ln(7/3), the span between those two fractions on an RC curve. The suggestion is the geometric mean of the two limits, which is the middle of the window on a log scale, so there is margin on both sides rather than all of it at one end. Bus capacitance is the number people guess worst: reckon on a few pF per centimetre of track plus around 10 pF per device, and measure it if the bus is long. When the window closes entirely there is no resistor that works, and the answer is a shorter bus, fewer devices, a slower mode or a bus buffer."
+        "Limits are from the I2C spec, NXP UM10204. Bus capacitance is the number people guess worst: reckon a few pF per centimetre of track plus around 10 pF per device, and measure it if the bus is long. I_OL follows the mode — 3 mA up to Fast mode, 20 mA in Fast mode Plus — so change it only if your parts say otherwise. When the window closes no resistor works: shorten the bus, drop devices, use a slower mode, or fit a bus buffer."
       )}
       ${calcFooter()}
     `;
