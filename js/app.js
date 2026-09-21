@@ -15951,9 +15951,9 @@ function renderKarnaugh(domain, tool, favId) {
       }).join("");
     }).join("");
 
-    return `<svg width="${W + 6}" height="${H + 6}" viewBox="0 0 ${W + 6} ${H + 6}" fill="none">
-      <text x="${GX + (C * CELL) / 2}" y="12" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="middle">${colVar}</text>
-      <text x="12" y="${GY + (R * CELL) / 2}" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="middle" transform="rotate(-90 12 ${GY + (R * CELL) / 2})">${rowVar}</text>
+    return `<svg width="${W + 12}" height="${H + 12}" viewBox="-6 -5 ${W + 12} ${H + 12}" fill="none">
+      <text x="${GX + (C * CELL) / 2}" y="13" fill="#8FC1F5" font-size="14" font-weight="700" text-anchor="middle">${colVar}</text>
+      <text x="13" y="${GY + (R * CELL) / 2}" fill="#8FC1F5" font-size="14" font-weight="700" text-anchor="middle" transform="rotate(-90 13 ${GY + (R * CELL) / 2})">${rowVar}</text>
       ${heads(C).map((h, c) => `<text x="${GX + c * CELL + CELL / 2}" y="${GY - 7}" fill="#5A6169" font-size="11" font-weight="600" text-anchor="middle">${h}</text>`).join("")}
       ${heads(R).map((h, r) => `<text x="${GX - 7}" y="${GY + r * CELL + CELL / 2 + 4}" fill="#5A6169" font-size="11" font-weight="600" text-anchor="end">${h}</text>`).join("")}
       ${cells.join("")}
