@@ -15726,7 +15726,9 @@ function render555(domain, tool, favId) {
 // one variable, so a rectangle of 2^k cells is a term with k variables gone.
 const KM_GRAY = [0, 1, 3, 2];
 const KM_NAMES = ["A", "B", "C", "D"];
-const KM_COLOURS = ["#8FC1F5", "#5DCAA5", "#E0A85E", "#E08585", "#B79BEA", "#7FD4D4"];
+// #B79BEA is deliberately absent: the note calls the exclusive-OR line "the
+// purple line", so a fifth group must not also be purple.
+const KM_COLOURS = ["#8FC1F5", "#5DCAA5", "#E0A85E", "#E08585", "#7FD4D4"];
 
 const kmRows = (n) => (n === 4 ? 4 : 2);
 const kmCols = (n) => (n === 2 ? 2 : 4);
@@ -15822,6 +15824,36 @@ function kmMinimise(values, n) {
     if (best) chosen.push(...best.picked);
   }
   return { terms: chosen.map((i) => pis[i]), constant: null };
+}
+
+// Is the function the parity of some set of its variables, or the complement
+// of one? Sixteen subsets at four variables, so try them all and keep the one
+// using fewest variables. A single variable is excluded, because "F = A" is
+// not an insight.
+function kmParity(values, n) {
+  const N = 1 << n;
+  const pop = (x) => { let c = 0; while (x) { c += x & 1; x >>= 1; } return c; };
+  let best = null;
+  for (let mask = 1; mask < N; mask++) {
+    if (pop(mask) < 2) continue;
+    for (const inv of [0, 1]) {
+      let sawCare = false, matched = true;
+      for (let m = 0; m < N; m++) {
+        if (values[m] === 2) continue;
+        sawCare = true;
+        if (((pop(m & mask) & 1) ^ inv) !== (values[m] === 1 ? 1 : 0)) { matched = false; break; }
+      }
+      if (sawCare && matched && (!best || pop(mask) < pop(best.mask))) best = { mask, inv };
+    }
+  }
+  return best;
+}
+
+function kmParityText(par, n) {
+  const names = [];
+  for (let i = 0; i < n; i++) if (par.mask & (1 << (n - 1 - i))) names.push(KM_NAMES[i]);
+  const body = names.join(" ⊕ ");
+  return par.inv ? `<span style="text-decoration:overline">${body}</span>` : body;
 }
 
 function kmTermText(t, n) {
@@ -15932,15 +15964,24 @@ function renderKarnaugh(domain, tool, favId) {
     </div>`;
   }
 
+  // Only raised once the sum of products runs to three terms or more. Below
+  // that it is already short and a second form is noise.
+  function parityOf(result) {
+    if (result.constant !== null || result.terms.length < 3) return null;
+    return kmParity(values(), state.vars);
+  }
+
   function resultsHTML(result) {
     const n = state.vars, v = values();
     const ones = v.filter((x) => x === 1).length;
     const dcs = v.filter((x) => x === 2).length;
     const before = ones * n;
     const after = result.constant === null ? result.terms.reduce((a, t) => a + kmLiterals(t, n), 0) : 0;
+    const par = parityOf(result);
     return `
       <div class="formula-card formula-card--static" style="margin:0 16px 10px; font-size:15px;">
         <div class="formula-line" style="font-size:15px">${expressionHTML(result)}</div>
+        ${par ? `<div class="formula-line" style="font-size:15px;color:#B79BEA">F = ${kmParityText(par, n)}</div>` : ""}
       </div>
       <div class="eseries-grid eseries-grid--tight">
         ${cell("Minterms", `${ones}${dcs ? ` + ${dcs} X` : ""}`)}
@@ -15949,10 +15990,19 @@ function renderKarnaugh(domain, tool, favId) {
       </div>`;
   }
 
+  function formulaBlock(result) {
+    return formulaSection(
+      ["Group 2^k cells → k variables drop out", "Groups may overlap and wrap at the edges"],
+      "Neighbouring cells differ in exactly one variable — that is what the 00 01 11 10 order along the edges is for — so a rectangle of 2, 4, 8 or 16 cells is a term with that many variables cancelled. An X is a don't-care: it joins a group when that makes the group bigger, and is ignored otherwise."
+      + (parityOf(result) ? " The purple line is the same function written as exclusive-OR. A checkerboard of ones has no two cells adjacent, so every group is a single cell and the map gives its worst answer — parity is the one thing it cannot see. Two XOR gates beat four ANDs and an OR." : "")
+    );
+  }
+
   function refresh() {
     const result = kmMinimise(values(), state.vars);
     app.querySelector('[data-res="map"]').innerHTML = mapSVG(result);
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(result);
+    app.querySelector('[data-res="formula"]').innerHTML = formulaBlock(result);
     wireCells();
   }
 
@@ -15987,10 +16037,7 @@ function renderKarnaugh(domain, tool, favId) {
       </div>
       <div data-res="results">${resultsHTML(result)}</div>
 
-      ${formulaSection(
-        ["Group 2^k cells → k variables drop out", "Groups may overlap and wrap at the edges"],
-        "Neighbouring cells differ in exactly one variable — that is what the 00 01 11 10 order along the edges is for — so a rectangle of 2, 4, 8 or 16 cells is a term with that many variables cancelled. An X is a don't-care: it joins a group when that makes the group bigger, and is ignored otherwise."
-      )}
+      <div data-res="formula">${formulaBlock(result)}</div>
       ${calcFooter()}
     `;
 
