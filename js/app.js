@@ -15930,13 +15930,24 @@ function renderKarnaugh(domain, tool, favId) {
       }
     }
 
+    // One inset for every group, and a corner radius of half a one-cell band.
+    // That makes the whole family consistent: a single cell comes out a circle,
+    // a row or column of them a pill, and a block a square rounded by the same
+    // amount rather than by whatever its own size happened to be. The radius
+    // used to be a flat 9 against an inset that cycled 4, 8, 12, so the same
+    // one-cell group was a rounded square or a circle depending only on its
+    // position in the list.
+    //
+    // A single inset is safe because prime implicants are maximal, so no group
+    // can sit inside another and two outlines can never coincide.
+    const INSET = 5;
+    const RADIUS = (CELL - 2 * INSET) / 2;
     const groups = (result.terms || []).map((t, i) => {
       const colour = KM_COLOURS[i % KM_COLOURS.length];
-      const inset = 4 + (i % 3) * 4;
       return kmRects(t, n).map((g) => {
-        const x = GX + g.c0 * CELL + inset, y = GY + g.r0 * CELL + inset;
-        const w = (g.c1 - g.c0 + 1) * CELL - 2 * inset, h = (g.r1 - g.r0 + 1) * CELL - 2 * inset;
-        return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9" fill="none" stroke="${colour}" stroke-width="2.2" pointer-events="none"/>`;
+        const x = GX + g.c0 * CELL + INSET, y = GY + g.r0 * CELL + INSET;
+        const w = (g.c1 - g.c0 + 1) * CELL - 2 * INSET, h = (g.r1 - g.r0 + 1) * CELL - 2 * INSET;
+        return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${RADIUS}" fill="none" stroke="${colour}" stroke-width="2.2" pointer-events="none"/>`;
       }).join("");
     }).join("");
 
