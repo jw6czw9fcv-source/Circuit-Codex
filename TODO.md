@@ -370,3 +370,11 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 - [ ] Frequency counter
 - [ ] Saved links
 - [ ] Personal notes
+
+**Before release**
+
+- [ ] MANUAL.md completeness pass — every built tool has a section.
+      Sections are written as each tool is built; tools finished before
+      that decision (2026-09-20) get theirs when next touched, so this
+      pass catches whatever is still missing.
+- [ ] Help screen that presents MANUAL.md in the app

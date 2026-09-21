@@ -38,6 +38,10 @@ sw.js                Service worker (offline caching)
 icons/                App icons (generated to match the design system — literal resistor mark)
 REFERENCE.md          Full product spec: navigation, naming convention, visual system, complete
                        domain/tool taxonomy, deliberately-excluded items, calculator screen template
+MANUAL.md             User manual content: the theory behind each tool, one section per tool.
+                       Written as each tool is built, because the derivations are only in reach then.
+                       In-app notes stay practical; everything explanatory belongs here. The Help
+                       screen that presents it is built last.
 ```
 
 ## Design system (see REFERENCE.md section 4 for full detail)
