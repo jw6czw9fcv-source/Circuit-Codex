@@ -10,14 +10,15 @@ what the method can and cannot see — lives here.
 <a id="index"></a>
 ## Index
 
-Anchors are each tool's `calc:` id rather than its title, so a section stays
-findable when a title is reworded, and the Help screen can look one up straight
-from the app's own tool list.
+Links point at the anchors the renderer makes from the headings, which is the
+form that works in the most places. Each section also carries an explicit
+`calc:` id anchor — `#karnaugh`, `#i2c-pullup` — which is what the Help screen
+will key on, since that is the id the app already holds for each tool.
 
 ### Digital
 
-- Logic gates → [Karnaugh map simplification](#karnaugh)
-- Timing & interfaces → [I²C pull-up resistor](#i2c-pullup)
+- Logic gates → [Karnaugh map simplification](#karnaugh-map-simplification)
+- Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -162,7 +163,7 @@ its complement), and each one's exclusive-OR form reproduces its truth table.
 ---
 
 <a id="i2c-pullup"></a>
-## I²C pull-up resistor
+## I2C pull-up resistor
 
 `calc: i2c-pullup` · Digital › Timing & interfaces
 
