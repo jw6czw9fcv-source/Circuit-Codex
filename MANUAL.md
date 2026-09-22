@@ -19,6 +19,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Logic gates → [Karnaugh map simplification](#karnaugh-map-simplification)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
+- Timing & interfaces → [UART baud rate](#uart-baud-rate)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -250,5 +251,123 @@ an active bus buffer that isolates segments.
   once per segment.
 - **Level shifters.** A MOSFET level shifter between two voltage domains puts a
   pull-up on each side, and the two interact. Not modelled.
+
+[↑ Index](#index)
+
+---
+
+<a id="uart-baud"></a>
+## UART baud rate
+
+`calc: uart-baud` · Digital › Timing & interfaces
+
+### What it computes
+
+The divisor a UART needs to reach a wanted baud rate from a given peripheral
+clock, the rate it actually produces once that divisor is rounded to an
+integer, and the resulting error — with the error shown against every standard
+rate on the same clock.
+
+### Source
+
+There is no single standard for baud generation: it is per-device, and the
+register is called BRR, UBRR, DLL/DLM or SBRG depending on whose part it is.
+What is common to nearly all of them is the shape — an integer divider off a
+peripheral clock, with the receiver oversampling each bit — and 16x
+oversampling, inherited from the 8250 and 16550 and still the default almost
+everywhere. The error budget below is derived from the sampling behaviour, not
+quoted.
+
+### Why the formulas are these
+
+A UART has no oscillator of its own. It divides whatever clock it is given:
+
+    Divisor = Clock / (Oversample × Baud)
+
+The divider is a counter, so the value written is an **integer**. Rounding it
+is the whole problem:
+
+    Actual baud = Clock / (Oversample × round(Divisor))
+
+At 16 MHz, 115200 baud and 16x oversampling the divisor comes to 8.68. Written
+as 9, the line runs at 111111 baud — 3.55% slow. That single fact is why
+14.7456 MHz crystals exist: 14745600 / 16 = 921600, which divides exactly into
+every standard rate, so the divisor is always a whole number and the error is
+zero. 11.0592 MHz and 18.432 MHz are the same trick at other speeds.
+
+**Why the error matters, and how much is allowed.** There is no clock shared
+between the two ends. The receiver finds the falling edge of the start bit,
+starts its own counter, and samples each bit at what it believes is the middle.
+Take the receiver as the reference: it samples bit *n* at time
+
+    (n + 0.5) × T_rx
+
+while the transmitter's bit *n* occupies
+
+    [ n × T_tx , (n+1) × T_tx ]
+
+Writing r = T_tx / T_rx, the sample lands in the right bit only while
+
+    n × r  <  n + 0.5  <  (n+1) × r
+
+Nothing resynchronises inside a frame, so the worst case is the last bit. For
+8N1 that is the stop bit, n = 9:
+
+    9 r < 9.5      →  r < 1.0556
+    9.5 < 10 r     →  r > 0.95
+
+So the two clocks may differ by about **−5.0% to +5.56%** — usually quoted as
+±5%, and slightly asymmetric because the sample point is fixed at mid-bit
+while the bit it must land in is what stretches. That budget covers **both**
+ends together, which is why 2% each is the practical rule: it leaves room for
+the other end plus edge jitter and finite rise time.
+
+Note what does *not* happen: the error does not accumulate across a message.
+The receiver re-finds the start edge on every frame, so the drift resets ten
+bits at a time. A 3% error is not 3% worse each byte; it is the same 3% on each
+of them, which is why it either works or does not.
+
+**The drawing shows exactly this.** The waveform is drawn at the transmitter's
+real bit width, stretched or squeezed by the error, while the sample marks stay
+evenly spaced where the receiver puts them. Raise the error and the marks visibly
+walk toward the bit edges; the ones that fall outside their own bit turn red.
+It is the inequality above, drawn.
+
+### Assumptions and limits
+
+- **8N1 is assumed** — one start bit, eight data, one stop, no parity. Adding
+  parity or a second stop bit makes the frame longer and the budget tighter,
+  since the worst case moves to a later bit.
+- **The receiver is taken as exact.** In reality both ends have error and the
+  two add; the tool reports one side's, which is why the caution appears at 2%
+  rather than 5%.
+- **Integer divisors only.** See below.
+- Oversampling is a divider stage, not noise immunity: 8x doubles the top speed
+  from a given clock and halves the margin around each sample, so a noisy line
+  suffers more.
+
+### What it deliberately does not do
+
+- **Fractional dividers.** Many modern UARTs — STM32, SAM, nRF — add fractional
+  bits below the integer divisor, which cuts the error by roughly the resolution
+  of that fraction and would make the numbers here pessimistic for those parts.
+  Modelling it means picking a vendor, since the fraction is 4 bits on some
+  parts, 6 on others, and a full 16-bit accumulator on a few.
+- **Auto-baud detection**, where the receiver measures a known character
+  instead of being told the rate.
+- **Anything above the physical layer**: framing errors, break detection, flow
+  control.
+
+### How it was checked
+
+The classic cases were recomputed by hand: 16 MHz at 115200 gives divisor 8.68,
+used 9, 111111 baud, −3.549%; 14.7456 MHz gives exactly 8 and 0%; 16 MHz at
+9600 gives 104.17, used 104, +0.160%, which is why that part runs 9600 happily
+and 115200 badly. 8 MHz at 115200 gives +8.507%.
+
+The sample-point test in the drawing was checked against the inequality above
+at several errors: at 0% and −3.5% every sample lands inside its bit, at +0.16%
+likewise, and at +8.5% the last four fail — which is what
+n × 0.9216 < n + 0.5 predicts, the first failure being at n = 6.
 
 [↑ Index](#index)

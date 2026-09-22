@@ -203,7 +203,17 @@ suggestion is the geometric mean of the two bounds snapped to the
 chosen E-series, which puts 3.3k on a 3.3 V standard-mode bus, the
 value everyone actually fits. The case worth seeing is the window
 closing: past about 366 pF in Fast mode no resistor satisfies both
-ends, and the tool says so in red with what to do about it)
+ends, and the tool says so in red with what to do about it) ·
+UART baud rate (the divisor is an integer and the rounding is the
+error — 16 MHz at 115200 wants 8.68, gets 9, runs 3.55% slow, which
+is the whole reason 14.7456 MHz crystals exist. The drawing is the
+part that teaches: a frame drawn at the transmitter’s real bit width
+against evenly spaced sample marks, so raising the error walks the
+marks toward the bit edges and the ones that fall outside turn red.
+That is the sampling inequality drawn rather than asserted. Under it,
+a table of every standard rate on the chosen clock, colour-coded and
+tappable, which answers the question people actually have: with this
+crystal, what works?)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -260,7 +270,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] UART baud rate
 - [ ] Crystal load capacitance
 - [ ] Oscillator stability (ppm → Hz)
 - [ ] PLL multiplication factor

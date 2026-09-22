@@ -244,6 +244,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "555-timer") return render555(domain, tool, favId);
   if (calcId === "karnaugh") return renderKarnaugh(domain, tool, favId);
   if (calcId === "i2c-pullup") return renderI2CPullup(domain, tool, favId);
+  if (calcId === "uart-baud") return renderUartBaud(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -16283,6 +16284,201 @@ function renderI2CPullup(domain, tool, favId) {
       const u = document.getElementById(id + "-unit");
       if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; refresh(); };
     });
+  }
+
+  paint();
+}
+
+const UART_STANDARD = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
+
+// A frame the drift shows up in: 0xAA sent LSB first alternates every bit, so
+// a sample that slips into its neighbour reads a different value.
+// Start low, then d0..d7, then stop high.
+const UART_FRAME = [0, 0, 1, 0, 1, 0, 1, 0, 1, 1];
+const UART_BIT_NAMES = ["S", "0", "1", "2", "3", "4", "5", "6", "7", "P"];
+
+function renderUartBaud(domain, tool, favId) {
+  const state = { mode: "16", clk: 16, clkUnit: "MHz", baud: 115200 };
+  const F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+  const clkHz = () => state.clk * F_UNITS[state.clkUnit];
+
+  // One divisor, one rounding, one error. Everything else follows.
+  function solve(baud) {
+    const f = clkHz(), os = +state.mode;
+    const exact = f / (os * baud);
+    const used = Math.max(1, Math.round(exact));
+    const actual = f / (os * used);
+    return { exact, used, actual, error: ((actual - baud) / baud) * 100 };
+  }
+
+  function compute() {
+    const f = clkHz();
+    if (!(f > 0)) return { problem: "The clock has to be greater than zero." };
+    if (!(state.baud > 0)) return { problem: "The baud rate has to be greater than zero." };
+    const r = solve(state.baud);
+    if (r.exact < 1) {
+      return { problem: `That baud needs a divisor below 1. The fastest this clock reaches at ${state.mode}x is ${siFormat(f / +state.mode, "Bd")}.` };
+    }
+    return { problem: "", ...r, frame: 10 / r.actual };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const bad = "#E08585";
+  const warn = "#E0A85E";
+
+  // The receiver re-finds the start edge, then samples on its own clock at
+  // evenly spaced points. The transmitted bits are what stretch or shrink, so
+  // the waveform is drawn at the errored width and the sample marks stay put:
+  // the drift you see is the real mechanism, not an illustration of it.
+  function frameSVG(r) {
+    if (r.problem) return `<svg width="340" height="92" viewBox="0 0 340 92" fill="none"></svg>`;
+    const x0 = 22, bw = 28, hi = 26, lo = 54;
+    // Clamped only for drawing: past about a tenth the frame would run off the
+    // panel, and by then the picture already says "this cannot work".
+    const ratio = Math.min(1.12, Math.max(0.88, state.baud / r.actual));
+
+    let d = `M0 ${hi} H${x0}`;
+    let x = x0;
+    UART_FRAME.forEach((lvl, k) => {
+      const nx = x0 + (k + 1) * bw * ratio;
+      if (k === 0) d += ` V${lvl ? hi : lo}`;
+      else if (lvl !== UART_FRAME[k - 1]) d += ` V${lvl ? hi : lo}`;
+      d += ` H${nx.toFixed(1)}`;
+      x = nx;
+    });
+    d += ` V${hi} H340`;
+
+    const names = UART_FRAME.map((lvl, k) => {
+      const cx = x0 + (k + 0.5) * bw * ratio;
+      return `<text x="${cx.toFixed(1)}" y="16" fill="${wire}" font-size="9" font-weight="600" text-anchor="middle">${UART_BIT_NAMES[k]}</text>`;
+    }).join("");
+
+    const marks = UART_FRAME.map((lvl, k) => {
+      const cx = x0 + (k + 0.5) * bw;
+      const inside = k * ratio < k + 0.5 && k + 0.5 < (k + 1) * ratio;
+      const c = inside ? comp : bad;
+      return `<path d="M${cx.toFixed(1)} 22 V72" stroke="${c}" stroke-width="1" stroke-dasharray="2 3"/>
+        <circle cx="${cx.toFixed(1)}" cy="74" r="2.6" fill="${c}"/>`;
+    }).join("");
+
+    return `<svg width="340" height="92" viewBox="0 0 340 92" fill="none">
+      ${names}
+      ${marks}
+      <path d="${d}" stroke="${comp}" stroke-width="2" fill="none"/>
+      <text x="4" y="88" fill="${wire}" font-size="9" font-weight="600">sample points</text>
+    </svg>`;
+  }
+
+  function cell(label, value, colour) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
+    </div>`;
+  }
+
+  const verdict = (e) => (Math.abs(e) <= 2 ? comp : Math.abs(e) <= 3 ? warn : bad);
+
+  function tableHTML() {
+    return `<div class="eseries-grid eseries-grid--tight">
+      ${UART_STANDARD.map((b) => {
+        const r = solve(b);
+        const off = r.exact < 1;
+        return `<div class="eseries-cell" data-baud="${b}" style="cursor:pointer">
+          <div style="font-weight:600;color:${domain.color};">${b >= 1000 ? b / 1000 + "k" : b}</div>
+          <div style="color:${off ? bad : verdict(r.error)}">${off ? "\u2014" : `${r.error >= 0 ? "+" : ""}${trim(r.error)}%`}</div>
+        </div>`;
+      }).join("")}
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const e = Math.abs(r.error);
+    const caution = e > 3
+      ? `<div class="error-text">${trim(r.error)}% is past what a frame survives. The last bit is sampled 9.5 bit-times after the start edge, so anything over about 5% fails outright and the two ends share that budget.</div>`
+      : e > 2
+        ? `<div class="error-text" style="color:${warn}">${trim(r.error)}% leaves little for the other end of the link, which has its own error.</div>`
+        : "";
+    return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Divisor", trim(r.exact))}
+        ${cell("Divisor used", `${r.used}`)}
+        ${cell("Actual baud", `${Math.round(r.actual)}`)}
+        ${cell("Error", `${r.error >= 0 ? "+" : ""}${trim(r.error)}%`, verdict(r.error))}
+        ${cell("Frame", siFormat(r.frame, "s"))}
+      </div>
+      ${caution}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="frame"]').innerHTML = frameSVG(r);
+    app.querySelector('[data-res="table"]').innerHTML = tableHTML();
+    wireTable();
+  }
+
+  function wireTable() {
+    app.querySelectorAll("[data-baud]").forEach((el) => {
+      el.onclick = () => {
+        state.baud = +el.dataset.baud;
+        const f = document.getElementById("ub-baud");
+        if (f) f.value = state.baud;
+        refresh();
+      };
+    });
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The divisor is an integer, and the rounding is the error")}
+
+      ${pillRow([["16", "16x oversample"], ["8", "8x oversample"]], state.mode, domain.bg)}
+
+      <div class="diagram-box" style="padding:4px 6px;">
+        <div data-res="frame">${frameSVG(r)}</div>
+      </div>
+
+      <div class="field-pair">
+        <div class="field">
+          <label>Clock</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ub-clk" value="${state.clk}" />
+            <select id="ub-clk-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.clkUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Baud</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="ub-baud" value="${state.baud}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      <div class="section-label">Standard rates on this clock</div>
+      <div data-res="table">${tableHTML()}</div>
+
+      ${formulaSection(
+        ["Divisor = Clock / (Oversample \u00d7 Baud)",
+         "Actual baud = Clock / (Oversample \u00d7 round(Divisor))",
+         "Error = (Actual \u2212 Baud) / Baud",
+         "Frame = 10 bits, 8N1"],
+        "Both ends of a link add their own error, so about 2% each is the usual budget. Nothing accumulates past one frame \u2014 the receiver re-finds the start edge every time. When the numbers will not come out, the fix is the clock rather than the divisor: 14.7456 MHz divides exactly into every standard rate, which is the only reason that part exists. Tap a rate in the table to try it."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    const clk = document.getElementById("ub-clk");
+    clk.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.clk = v; refresh(); } };
+    document.getElementById("ub-clk-unit").onchange = (e) => { state.clkUnit = e.target.value; refresh(); };
+    document.getElementById("ub-baud").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.baud = v; refresh(); } };
+    wireTable();
   }
 
   paint();
