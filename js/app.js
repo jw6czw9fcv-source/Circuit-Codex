@@ -16173,7 +16173,7 @@ function renderI2CPullup(domain, tool, favId) {
       ${w("M72 6 V16")}${part(zigV(72, 16))}${w("M72 52 V70")}${lbl(84, 36, "Rp", "start")}
 
       ${w("M72 70 H240")}${w("M40 96 H240")}
-      ${lbl(92, 64, "SDA", "start")}${lbl(92, 112, "SCL", "start")}
+      ${lbl(84, 64, "SDA", "start")}${lbl(84, 90, "SCL", "start")}
 
       ${device(112, "MCU")}
       ${device(172, "IC")}
