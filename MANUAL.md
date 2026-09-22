@@ -20,6 +20,7 @@ will key on, since that is the id the app already holds for each tool.
 - Logic gates → [Karnaugh map simplification](#karnaugh-map-simplification)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
+- Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -369,5 +370,113 @@ The sample-point test in the drawing was checked against the inequality above
 at several errors: at 0% and −3.5% every sample lands inside its bit, at +0.16%
 likewise, and at +8.5% the last four fail — which is what
 n × 0.9216 < n + 0.5 predicts, the first failure being at n = 6.
+
+[↑ Index](#index)
+
+---
+
+<a id="crystal-load"></a>
+## Crystal load capacitance
+
+`calc: crystal-load` · Digital › Timing & interfaces
+
+### What it computes
+
+The two capacitors a Pierce oscillator needs so the crystal sees the load it
+was cut for, the load a given pair actually presents, and how far off frequency
+the difference pulls it.
+
+### Source
+
+The series expression appears in every oscillator application note — ST AN2867,
+the Abracon and Epson design guides, and the NXP equivalents. The pulling
+expression comes from the crystal's equivalent circuit, the Butterworth–Van
+Dyke model: a motional arm of Lm, Cm and Rm in series, all in parallel with the
+shunt capacitance C0 of the electrodes and holder.
+
+### Why the formulas are these
+
+**The two capacitors are in series, not in parallel.** This is the step people
+get backwards. Each one runs from one crystal terminal to ground, so the loop
+the crystal drives is: out through CL1, along the ground, back through CL2.
+Two capacitors in series:
+
+    CL1 × CL2 / (CL1 + CL2)
+
+which for an equal pair is just half of one of them. Add the stray capacitance
+of the two tracks and the two oscillator pins — that sits directly across the
+same nodes, so it adds on:
+
+    Load = CL1 × CL2 / (CL1 + CL2) + Stray
+
+Turn it round for a symmetric pair and the capacitors come out at
+
+    CL1 = CL2 = 2 × (CL spec − Stray)
+
+A crystal marked 12.5 pF on a board with 3 pF of stray therefore wants **19 pF**
+parts, not 25 pF and not 12.5 pF. Both of those are common mistakes, and the
+second is the worse one.
+
+**Why the load changes the frequency at all.** A crystal has two resonances. At
+series resonance the motional arm is purely resistive; a little above it the
+arm looks inductive and resonates with everything capacitive across it — C0 and
+whatever load the circuit adds. The parallel-resonant frequency is
+
+    fp = fs × [ 1 + Cm / (2 × (C0 + CL)) ]
+
+A crystal is cut and trimmed so that this lands on the marked frequency **for
+one particular CL**. Present a different load and it lands somewhere else, which
+is the whole reason the number is on the datasheet.
+
+Differentiating that with respect to CL gives the sensitivity, which is what the
+tool reports as pullability:
+
+    d(Δf/f) / dCL = − Cm / (2 × (C0 + CL)²)
+
+The sign is negative: **more load, lower frequency**. For a typical MHz part
+with Cm = 8 fF and C0 = 3 pF at CL = 12.5 pF that comes to about 16.6 ppm/pF, so
+fitting 22 pF where 19 pF was wanted — 1.5 pF too much load — pulls it roughly
+25 ppm slow. A 32.768 kHz tuning fork has a tenth the motional capacitance and
+pulls far less per pF, around 6 ppm/pF on the same load, which is why watch
+crystals are specified so tightly: there is little room to trim them back.
+
+### Assumptions and limits
+
+- **Stray is an estimate and it dominates the mistakes.** Two to five picofarads
+  is the usual range for the pins plus short tracks, but a long or guarded
+  layout can be well outside it. If the frequency matters, measure.
+- **C0 and Cm come from the datasheet.** The presets are typical for each
+  family, not for any specific part, and a wrong Cm scales the pullability
+  proportionally.
+- The pulling figure is a **slope taken at the specified load**, so it is exact
+  for small errors and increasingly optimistic for large ones, since the true
+  curve flattens as CL grows.
+- Sizing assumes a **symmetric pair**. Asymmetric capacitors are legitimate and
+  the tool will report the load they present, but it will not propose them.
+
+### What it deliberately does not do
+
+- **Drive level and negative-resistance margin.** Whether the oscillator starts
+  and whether it overdrives the crystal are the other half of the design, set by
+  the amplifier's transconductance, the crystal's ESR and any series resistor.
+  It is a separate calculation with separate datasheet numbers.
+- **The feedback resistor**, which is inside the MCU on every part this applies
+  to and is not drawn for that reason.
+- **Temperature and ageing.** The load error here is a fixed offset; drift over
+  temperature is the crystal's cut and belongs with the ppm tooling.
+
+### How it was checked
+
+Recomputed by hand: 12.5 pF specified with 3 pF stray gives 19 pF capacitors and
+a presented load of exactly 12.5 pF, 0 ppm. Fitting 22 pF instead presents
+14 pF, 1.5 pF over, and pulls −24.97 ppm against 16.65 × 1.5 = 24.98 by hand.
+Fitting 33 pF presents 19.5 pF and pulls −116.5 ppm against 16.65 × 7 = 116.6.
+The watch preset returns 6.378 ppm/pF against 2.5 fF / (2 × (1.5 + 12.5 pF)²)
+= 6.38 by hand.
+
+The pullability was wrong by twelve orders of magnitude on first write:
+Cm / (2(C0+CL)²) is *per farad*, not dimensionless, because the numerator is
+first order in capacitance and the denominator is second. It needs multiplying
+by one picofarad to become per-pF. The hand check is what caught it.
 
 [↑ Index](#index)

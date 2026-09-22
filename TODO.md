@@ -213,7 +213,17 @@ marks toward the bit edges and the ones that fall outside turn red.
 That is the sampling inequality drawn rather than asserted. Under it,
 a table of every standard rate on the chosen clock, colour-coded and
 tappable, which answers the question people actually have: with this
-crystal, what works?)
+crystal, what works?) ·
+Crystal load capacitance (the two load capacitors are in SERIES as
+the crystal sees them — out through one, along the ground, back
+through the other — which is the step people get backwards. With
+stray added, a 12.5 pF crystal on a 3 pF board wants 19 pF parts,
+not 25 and certainly not 12.5. Two-way: editing the spec or the
+stray sizes the pair, editing a capacitor moves the presented load
+instead, which is how to check a board that already exists. The
+payoff is pullability, Cm/(2(C0+CL)²), so a load error becomes ppm
+rather than a shrug — and the two pills carry the fact that a watch
+tuning fork pulls a third as far per pF as an MHz plate)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -270,7 +280,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Crystal load capacitance
 - [ ] Oscillator stability (ppm → Hz)
 - [ ] PLL multiplication factor
 - [ ] ADC resolution / quantization

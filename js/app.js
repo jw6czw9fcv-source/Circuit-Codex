@@ -245,6 +245,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "karnaugh") return renderKarnaugh(domain, tool, favId);
   if (calcId === "i2c-pullup") return renderI2CPullup(domain, tool, favId);
   if (calcId === "uart-baud") return renderUartBaud(domain, tool, favId);
+  if (calcId === "crystal-load") return renderCrystalLoad(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -16479,6 +16480,224 @@ function renderUartBaud(domain, tool, favId) {
     document.getElementById("ub-clk-unit").onchange = (e) => { state.clkUnit = e.target.value; refresh(); };
     document.getElementById("ub-baud").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.baud = v; refresh(); } };
     wireTable();
+  }
+
+  paint();
+}
+
+// The two families behave differently enough that one set of defaults would be
+// wrong for half the users: a watch tuning fork has a tenth the motional
+// capacitance of an MHz plate, so it pulls far less per pF of load error but
+// has far less margin for drive. Datasheet values override these.
+const XTAL_KINDS = {
+  mhz: { label: "MHz crystal", c0: 3, cm: 8, cl: 12.5 },
+  khz: { label: "32.768 kHz", c0: 1.5, cm: 2.5, cl: 12.5 },
+};
+
+function renderCrystalLoad(domain, tool, favId) {
+  const FF_UNITS = { fF: 1e-15, pF: 1e-12 };
+  const state = {
+    kind: "mhz", tol: 10,
+    cl: 12.5, clUnit: "pF",
+    stray: 3, strayUnit: "pF",
+    c1: 19, c1Unit: "pF",
+    c2: 19, c2Unit: "pF",
+    c0: 3, c0Unit: "pF",
+    cm: 8, cmUnit: "fF",
+  };
+  const UNITS = { cl: CAP_UNITS, stray: CAP_UNITS, c1: CAP_UNITS, c2: CAP_UNITS, c0: CAP_UNITS, cm: FF_UNITS };
+  const si = (n) => state[n] * UNITS[n][state[n + "Unit"]];
+  const seriesName = () => eSeriesForTolerance(state.tol);
+
+  function setScaled(name, farads) {
+    const units = UNITS[name];
+    const keys = Object.keys(units).sort((a, b) => units[b] - units[a]);
+    const k = keys.find((u) => Math.abs(farads) >= units[u]) || keys[keys.length - 1];
+    state[name] = +(farads / units[k]).toPrecision(4);
+    state[name + "Unit"] = k;
+  }
+
+  // The spec CL is a datasheet number and is never rewritten. Editing it, or
+  // the stray, sizes the pair; editing a capacitor lets the presented load
+  // move instead, which is how you check a board someone already built.
+  function capsFromSpec() {
+    const want = si("cl") - si("stray");
+    if (!(want > 0)) return;
+    setScaled("c1", 2 * want);
+    setScaled("c2", 2 * want);
+  }
+
+  function compute() {
+    const cl = si("cl"), stray = si("stray"), c1 = si("c1"), c2 = si("c2");
+    const c0 = si("c0"), cm = si("cm");
+    if (!(cl > 0)) return { problem: "The specified load has to be greater than zero." };
+    if (!(c1 > 0) || !(c2 > 0)) return { problem: "Both load capacitors have to be greater than zero." };
+    if (stray >= cl) {
+      return { problem: `Stray alone is already ${siFormat(stray, "F")}, at or past the ${siFormat(cl, "F")} the crystal wants. Shorten the tracks or pick a crystal specified for a higher load.` };
+    }
+    const load = (c1 * c2) / (c1 + c2) + stray;
+    // Pullability: differentiate the standard pulling expression about CL, so
+    // it is the slope at the specified load rather than an average over a jump.
+    const pull = c0 > 0 && cm > 0 ? (cm / (2 * Math.pow(c0 + cl, 2))) * 1e-12 * 1e6 : NaN;
+    // Below a thousandth of a picofarad the difference is floating-point noise
+    // from the capacitor values, not a real mismatch, so it reads as zero.
+    const errPF = Math.abs(load - cl) < 1e-15 ? 0 : (load - cl) / 1e-12;
+    const ppm = isFinite(pull) ? -pull * errPF : NaN;
+    const ideal = 2 * (cl - stray);
+    return {
+      problem: "", load, cl, errPF, pull, ppm,
+      suggested: ideal > 0 ? nearestESeries(ideal / 1e-12, seriesName()).value * 1e-12 : NaN,
+    };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`;
+  const part = (d) => `<path d="${d}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
+  const dot = (x, y) => `<circle cx="${x}" cy="${y}" r="2.6" fill="${wire}"/>`;
+  const ground = (x, y) => `<path d="M${x - 11} ${y} H${x + 11} M${x - 7} ${y + 4} H${x + 7} M${x - 3} ${y + 8} H${x + 3}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+  const capH = (x, y) => `${part(`M${x - 9} ${y} H${x + 9}`)}${part(`M${x - 9} ${y + 6} H${x + 9}`)}`;
+  const lbl = (x, y, t, anchor, size) => `<text x="${x}" y="${y}" fill="${comp}" font-size="${size || 11}" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
+
+  // Pierce, drawn symmetric about the crystal: the two load capacitors are the
+  // same part doing the same job on either side, and the picture should say so.
+  // The feedback resistor is inside the MCU on every part this applies to, so
+  // it is not drawn — only what gets soldered.
+  function diagram() {
+    const arm = (x, dir) => `
+      ${dot(x, 88)}${w(`M${x} 88 H${x + dir * 38}`)}${w(`M${x + dir * 38} 88 V120`)}
+      ${capH(x + dir * 38, 120)}${w(`M${x + dir * 38} 126 V146`)}${ground(x + dir * 38, 146)}`;
+    return `<svg width="196" height="142" viewBox="23 20 196 142" fill="none">
+      ${w("M100 60 H110")}${part("M110 48 V72")}
+      <rect x="114" y="46" width="12" height="28" rx="2" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      ${part("M130 48 V72")}${w("M130 60 H140")}
+      ${lbl(120, 38, "XTAL", "middle")}
+
+      ${w("M100 60 V118")}${w("M140 60 V118")}
+      ${arm(100, -1)}${arm(140, 1)}
+      ${lbl(46, 126, "CL1", "end")}${lbl(194, 126, "CL2", "start")}
+
+      <rect x="78" y="118" width="84" height="38" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      <text x="100" y="132" fill="${wire}" font-size="9" font-weight="600" text-anchor="middle">XI</text>
+      <text x="140" y="132" fill="${wire}" font-size="9" font-weight="600" text-anchor="middle">XO</text>
+      ${lbl(120, 150, "MCU", "middle", 10)}
+    </svg>`;
+  }
+
+  function cell(label, value, colour) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const offPF = r.errPF;
+    const tight = Math.abs(r.ppm) <= 10 ? comp : Math.abs(r.ppm) <= 30 ? "#E0A85E" : "#E08585";
+    const caution = Math.abs(r.ppm) > 30
+      ? `<div class="error-text" style="color:#E0A85E">${trim(Math.abs(r.ppm))} ppm of pulling is more than most crystals are specified to within. Move the capacitors, or pick a crystal cut for the load this board actually presents.</div>`
+      : "";
+    return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Load", siFormat(r.load, "F"))}
+        ${cell("Load error", `${offPF >= 0 ? "+" : ""}${trim(offPF)} pF`)}
+        ${cell("Pullability", isFinite(r.pull) ? `${trim(r.pull)} ppm/pF` : "\u2014")}
+        ${cell("Pulled", isFinite(r.ppm) ? `${r.ppm >= 0 ? "+" : ""}${trim(r.ppm)} ppm` : "\u2014", tight)}
+        ${cell("Suggested", isFinite(r.suggested) ? siFormat(r.suggested, "F") : "\u2014")}
+      </div>
+      ${caution}`;
+  }
+
+  function refresh() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
+  }
+
+  function syncField(id, name) {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = state[name];
+    const u = document.getElementById(id + "-unit");
+    if (u && state[name + "Unit"]) u.value = state[name + "Unit"];
+  }
+
+  function afterEdit(name) {
+    if (name === "cl" || name === "stray") {
+      capsFromSpec();
+      syncField("xl-c1", "c1");
+      syncField("xl-c2", "c2");
+    }
+    refresh();
+  }
+
+  function field(id, name, label, units) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Stray counts, which is why 12.5 pF needs 19 pF parts")}
+
+      ${pillRow(Object.keys(XTAL_KINDS).map((k) => [k, XTAL_KINDS[k].label]), state.kind, domain.bg)}
+
+      <div class="diagram-box" style="padding:4px 6px;">
+        <div>${diagram()}</div>
+      </div>
+
+      <div class="field-pair">
+        ${field("xl-cl", "cl", "CL spec", CAP_UNITS)}
+        ${field("xl-stray", "stray", "Stray", CAP_UNITS)}
+      </div>
+      <div class="field-pair">
+        ${field("xl-c1", "c1", "CL1", CAP_UNITS)}
+        ${field("xl-c2", "c2", "CL2", CAP_UNITS)}
+      </div>
+      <div class="field-pair">
+        ${field("xl-c0", "c0", "C0 shunt", CAP_UNITS)}
+        ${field("xl-cm", "cm", "Cm motional", FF_UNITS)}
+      </div>
+
+      <div class="section-label split" style="color:#5DCAA5">
+        <span>Output</span>
+        <span></span>
+        <select id="xl-tol" class="label-select">
+          ${[1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>\u00b1${t}% \u00b7 ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        ["Load = CL1 \u00d7 CL2 / (CL1 + CL2) + Stray",
+         "CL1 = CL2 = 2 \u00d7 (CL spec \u2212 Stray)",
+         "Pullability = Cm / (2 \u00d7 (C0 + CL spec)\u00b2)",
+         "Pulled = \u2212Pullability \u00d7 Load error"],
+        "Stray is the part people leave out: the two tracks and the two oscillator pins, typically 2\u20135 pF together, and it sits in series with nothing \u2014 it adds straight onto the load. Measure or estimate it before trusting the capacitor values. C0 and Cm come off the crystal datasheet; the presets are typical for each family and will be wrong for a specific part. Editing the spec or the stray sizes the pair; editing a capacitor moves the presented load instead, which is how to check a board that already exists."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => {
+      const k = XTAL_KINDS[m];
+      state.kind = m;
+      state.c0 = k.c0; state.c0Unit = "pF";
+      state.cm = k.cm; state.cmUnit = "fF";
+      paint();
+    });
+    document.getElementById("xl-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); refresh(); };
+
+    [["xl-cl", "cl"], ["xl-stray", "stray"], ["xl-c1", "c1"], ["xl-c2", "c2"], ["xl-c0", "c0"], ["xl-cm", "cm"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
+      const u = document.getElementById(id + "-unit");
+      if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; afterEdit(name); };
+    });
   }
 
   paint();
