@@ -16148,23 +16148,35 @@ function renderI2CPullup(domain, tool, favId) {
   const capV = (x, y) => `${part(`M${x - 9} ${y} H${x + 9}`)}${part(`M${x - 9} ${y + 6} H${x + 9}`)}`;
   const lbl = (x, y, t, anchor, size) => `<text x="${x}" y="${y}" fill="${comp}" font-size="${size || 11}" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
 
-  // Both lines are drawn as vertical columns with the devices tapping them from
-  // between: identical either side of the centre, and with no wire crossing
-  // another, which two stacked horizontal lines fed from one rail cannot avoid.
+  // The conventional bus figure, the one every datasheet and application note
+  // draws: two horizontal lines with the pull-ups at the left and the devices
+  // hanging off them. An earlier version stood the lines up as columns to keep
+  // every wire clear of every other, which worked and stopped looking like a
+  // bus. Devices below two stacked lines mean the upper line's stubs cross the
+  // lower one; that crossing is drawn plainly, with no junction dot, which is
+  // how it appears in the specification's own figures.
+  //
+  // The pull-ups are ordered so neither drop crosses a line: the one feeding
+  // the lower line sits left of where the upper line begins.
   function diagram() {
-    const col = (x, dir, name) => `
-      ${w(`M${x} 10 V20`)}${part(zigV(x, 20))}${w(`M${x} 56 V148`)}
-      ${capV(x, 148)}${w(`M${x} 154 V168`)}${ground(x, 168)}
-      ${w(`M${x} 100 H${x + dir * 16}`)}
-      ${lbl(x + dir * 12, 42, "Rp", dir < 0 ? "end" : "start")}
-      ${lbl(x + dir * 12, 162, "Cb", dir < 0 ? "end" : "start")}
-      ${lbl(x + dir * 12, 88, name, dir < 0 ? "end" : "start")}`;
-    return `<svg width="155" height="195" viewBox="11 -14 155 195" fill="none">
-      ${w("M50 10 H130")}${w("M90 10 V2")}${port(90, -1)}${lbl(99, 3, "Vdd")}
-      ${col(50, -1, "SDA")}
-      ${col(130, 1, "SCL")}
-      <rect x="66" y="84" width="48" height="32" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
-      <text x="90" y="104" fill="${comp}" font-size="10" font-weight="600" text-anchor="middle">Devices</text>
+    const device = (x, name) => {
+      const cx = x + 22;
+      return `
+        <rect x="${x}" y="124" width="44" height="32" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
+        <text x="${cx}" y="144" fill="${comp}" font-size="10" font-weight="600" text-anchor="middle">${name}</text>
+        ${w(`M${cx - 8} 124 V96`)}${w(`M${cx + 8} 124 V70`)}`;
+    };
+    return `<svg width="240" height="182" viewBox="8 -18 240 182" fill="none">
+      ${w("M40 6 H72")}${w("M56 6 V-2")}${port(56, -5)}${lbl(65, -1, "Vdd")}
+
+      ${w("M40 6 V16")}${part(zigV(40, 16))}${w("M40 52 V96")}${lbl(28, 36, "Rp", "end")}
+      ${w("M72 6 V16")}${part(zigV(72, 16))}${w("M72 52 V70")}${lbl(84, 36, "Rp", "start")}
+
+      ${w("M72 70 H240")}${w("M40 96 H240")}
+      ${lbl(92, 64, "SDA", "start")}${lbl(92, 112, "SCL", "start")}
+
+      ${device(112, "MCU")}
+      ${device(172, "IC")}
     </svg>`;
   }
 
@@ -16230,7 +16242,7 @@ function renderI2CPullup(domain, tool, favId) {
 
       <div class="field-pair">
         ${field("i2c-vdd", "vdd", "Vdd", VOLT_UNITS)}
-        ${field("i2c-cb", "cb", "Bus C", CAP_UNITS)}
+        ${field("i2c-cb", "cb", "Bus capacitance", CAP_UNITS)}
       </div>
       <div class="field-pair">
         ${field("i2c-rp", "rp", "Rp", OHM_UNITS)}
