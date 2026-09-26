@@ -16111,7 +16111,17 @@ function renderI2CPullup(domain, tool, favId) {
     iol: 3, iolUnit: "mA",
   };
 
-  const UNITS = { vdd: VOLT_UNITS, cb: CAP_UNITS, rp: OHM_UNITS, iol: AMP_UNITS };
+  // Each field offers only the units its quantity actually comes in. Vdd is
+  // volts, bus capacitance picofarads and I_OL milliamps on every I2C bus;
+  // offering kV, µF or amps there was the generic picker reused without
+  // thought, and it invited a wrong entry. Rp keeps a choice because it really
+  // does span both: 145 Ω in Fast mode Plus, 11.8 kΩ in Standard mode.
+  const UNITS = {
+    vdd: { V: 1 },
+    cb: { pF: 1e-12 },
+    rp: { "Ω": 1, "kΩ": 1e3 },
+    iol: { mA: 1e-3 },
+  };
   const si = (name) => state[name] * UNITS[name][state[name + "Unit"]];
   const seriesName = () => eSeriesForTolerance(state.tol);
 
@@ -16221,12 +16231,16 @@ function renderI2CPullup(domain, tool, favId) {
   }
 
   function field(id, name, label, units) {
+    const keys = Object.keys(units);
+    const unit = keys.length === 1
+      ? `<span class="unit-fixed">${keys[0]}</span>`
+      : `<select id="${id}-unit">${keys.map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     return `
         <div class="field">
           <label>${label}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            ${unit}
           </div>
         </div>`;
   }
@@ -16243,12 +16257,12 @@ function renderI2CPullup(domain, tool, favId) {
       </div>
 
       <div class="field-pair">
-        ${field("i2c-vdd", "vdd", "Vdd", VOLT_UNITS)}
-        ${field("i2c-cb", "cb", "Bus capacitance", CAP_UNITS)}
+        ${field("i2c-vdd", "vdd", "Vdd", UNITS.vdd)}
+        ${field("i2c-cb", "cb", "Bus capacitance", UNITS.cb)}
       </div>
       <div class="field-pair">
-        ${field("i2c-rp", "rp", "Rp", OHM_UNITS)}
-        ${field("i2c-iol", "iol", "I_OL", AMP_UNITS)}
+        ${field("i2c-rp", "rp", "Rp", UNITS.rp)}
+        ${field("i2c-iol", "iol", "I_OL", UNITS.iol)}
       </div>
 
       <div class="section-label split" style="color:#5DCAA5">
