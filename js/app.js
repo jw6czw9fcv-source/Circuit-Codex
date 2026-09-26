@@ -16529,8 +16529,10 @@ function renderCrystalLoad(domain, tool, favId) {
   // changes; pullability is its slope at the chosen load, so it follows.
   // Many datasheets give pullability instead of C1, so typing it works too
   // and C1 is worked back from it.
+  // Not at CL 0: that is the Series case, where the slope at zero load is a
+  // large and irrelevant number that would sit in the field looking alarming.
   function pullFromCm() {
-    if (state.c0 + state.cl > 0 && state.cm > 0) state.pull = round4(pullFrom(state.cm, state.c0, state.cl));
+    if (state.cl > 0 && state.cm > 0) state.pull = round4(pullFrom(state.cm, state.c0, state.cl));
   }
   function cmFromPull() {
     if (state.c0 + state.cl > 0 && state.pull > 0) state.cm = round4(cmFrom(state.pull, state.c0, state.cl));
