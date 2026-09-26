@@ -22,6 +22,7 @@ will key on, since that is the id the app already holds for each tool.
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
 - Timing & interfaces → [Oscillator stability](#oscillator-stability)
+- Timing & interfaces → [PLL multiplication factor](#pll-multiplication-factor)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -630,5 +631,103 @@ By hand, MHz defaults: 20 + 30 + 3 = 53 ppm worst case; √(400 + 900 + 9) =
 limits the window is −44.25 to +1.75 ppm, worst −44.25 ppm, −3.82 s a day.
 Switching pills resets pulling, which on first build carried over from one
 family to the other.
+
+[↑ Index](#index)
+
+---
+
+<a id="pll"></a>
+## PLL multiplication factor
+
+`calc: pll` · Digital › Timing & interfaces
+
+### What it computes
+
+Every combination of input divider M, feedback multiplier N and output divider P
+that a chip's PLL allows, walked exhaustively, with the ones that land closest
+to a target frequency listed first — each with its error in ppm and the
+frequencies at the phase detector and the VCO, so the limits can be seen being
+respected.
+
+### Source
+
+The limits are taken from the vendors' own code rather than from summaries,
+which disagree with each other:
+
+- **STM32F4** — ST's HAL driver (`stm32f4xx_hal_rcc.h`, `stm32f4xx_hal_rcc_ex.h`):
+  PLLM 2–63, PLLN 50–432, PLLP 2, 4, 6 or 8, PLLQ 2–15, and the VCO input
+  between 1 and 2 MHz. The VCO output window of 100–432 MHz and the 168 MHz
+  system clock of the F405/407 are from RM0090.
+- **RP2040** — the Pico SDK's own calculator, `vcocalc.py`: reference divider
+  1–63 with at least 5 MHz after it, FBDIV 16–320, VCO 750–1600 MHz, and two
+  post-dividers each 1–7. The 133 MHz system clock rating is the datasheet's.
+
+### Why the formulas are these
+
+An integer-N PLL has one loop and three dividers:
+
+    PFD = Input / M
+    VCO = PFD × N
+    Out = VCO / P
+
+The input is divided down to the **phase-frequency detector** (PFD) rate. The
+VCO runs at N times that, because the loop compares the VCO divided by N
+against the PFD reference and steers the VCO until they match. The output is
+the VCO divided down again. Each stage has a window it must stay inside: the PFD
+because the detector and its filter are designed for a range, the VCO because
+the oscillator only tunes over a range. That is what makes this a search rather
+than a division — the obvious M and N often put one of the stages outside its
+window.
+
+**Ranking.** Rows are ordered by error first. Among equally good rows:
+
+- on the STM32F4, a row whose VCO also divides by some Q to exactly 48 MHz comes
+  first, since USB OTG will not work on anything else;
+- then the **higher PFD**. ST's manual recommends a 2 MHz VCO input to limit
+  jitter, and in general a faster comparison lets the loop correct the VCO more
+  often and filter less, which is quieter;
+- then the higher VCO.
+
+That is why 8 MHz to 168 MHz on the STM32F4 comes out as M 4, N 168, P 2, Q 7
+(PFD 2 MHz, VCO 336 MHz, USB 48 MHz) ahead of the equally exact M 8, N 336,
+which runs the detector at 1 MHz.
+
+**RP2040's two post-dividers** multiply, so the tool offers each distinct
+product once, as the pair with the larger first divider — the SDK prefers that
+split for power.
+
+### Assumptions and limits
+
+- **Integer-N only.** Many modern PLLs add a fractional part to N, which can hit
+  almost any target but trades it for spurs and depends on each vendor's
+  modulator. Not modelled.
+- The preset limits are for the named parts. Other members of a family can
+  differ — the F401, for one, needs its VCO in 192–432 MHz, and
+  the RP2350 is not the RP2040 — so use Generic with the right reference
+  manual when in doubt.
+- Lock time, loop-filter design and phase noise are not addressed; the tool
+  answers only which settings are legal and how close they land.
+- On Generic, the search stops at three million combinations to stay responsive
+  and says so; narrow the ranges for a complete answer.
+
+### What it deliberately does not do
+
+- **Vendor clock trees beyond the PLL** — AHB and APB prescalers, peripheral
+  clock muxes, flash wait states for the chosen frequency. Those are the next
+  steps after this one, and every family arranges them differently.
+- **Other presets.** The Generic pill covers any integer-N PLL given its manual;
+  a preset is only worth adding for a part used often enough to save the
+  reading.
+
+### How it was checked
+
+Against the configurations the vendors ship: 8 MHz to 168 MHz on the STM32F4
+gives M 4, N 168, P 2, Q 7 with USB at exactly 48 MHz, and from a 25 MHz crystal
+M 25, N 336, P 2, Q 7 — the standard setting for that crystal. 180 MHz is
+flagged as above the part's 168 MHz rating and as leaving USB at 45 MHz.
+
+On the RP2040, 12 MHz to 125 MHz gives VCO 1500 MHz with post-dividers 6 and 2,
+and 133 MHz gives VCO 1596 MHz with 6 and 2 — both exactly the Pico SDK's own
+default settings. The full RP2040 search takes about 3 ms.
 
 [↑ Index](#index)

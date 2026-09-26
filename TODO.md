@@ -231,7 +231,15 @@ so a window of −69 to −23 ppm reads as −69, a clock that can only lose
 time, not ±69. Worst case and RSS both shown, then hertz, seconds a day
 and minutes a year. The 32.768 kHz pill draws the tuning-fork parabola
 with the operating point on it, which is why a logger outdoors in
-winter runs slow; the MHz pill stacks the budget as a bar)
+winter runs slow; the MHz pill stacks the budget as a bar) ·
+PLL multiplication factor (not the division, which is trivial, but the
+search: every M, N and P the chip allows, walked exhaustively and
+ranked by error, then on STM32 by whether Q gives USB exactly 48 MHz,
+then by the higher PFD. Presets for STM32F4 and RP2040 with limits taken
+from ST's HAL and the Pico SDK's vcocalc.py, not from summaries, which
+disagree; Generic takes any integer-N PLL's ranges. Matches the shipped
+settings exactly: 8→168 MHz gives M4 N168 P2 Q7, 12→125 MHz gives VCO
+1500 with 6·2. The chain is drawn with each stage's frequency on it)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -288,7 +296,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] PLL multiplication factor
 - [ ] ADC resolution / quantization
 - [ ] DAC resolution
 - [ ] SNR estimation

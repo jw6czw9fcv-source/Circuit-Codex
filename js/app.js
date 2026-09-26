@@ -247,6 +247,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "uart-baud") return renderUartBaud(domain, tool, favId);
   if (calcId === "crystal-load") return renderCrystalLoad(domain, tool, favId);
   if (calcId === "osc-stability") return renderOscStability(domain, tool, favId);
+  if (calcId === "pll") return renderPll(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -16953,6 +16954,282 @@ function renderOscStability(domain, tool, favId) {
     });
     const u = document.getElementById("os-f-unit");
     if (u) u.onchange = (e) => { state.fUnit = e.target.value; refresh(); };
+  }
+
+  paint();
+}
+
+// Constraints come from the vendors' own code, not from memory:
+// STM32F4 from ST's HAL (stm32f4xx_hal_rcc.h / _rcc_ex.h: PLLM 2..63, PLLN
+// 50..432, PLLP 2/4/6/8, PLLQ 2..15, VCO input 1..2 MHz) and RM0090 (VCO
+// output 100..432 MHz, 168 MHz SYSCLK on the F405/407); RP2040 from the Pico
+// SDK's vcocalc.py (REFDIV 1..63 with at least 5 MHz after it, FBDIV 16..320,
+// VCO 750..1600 MHz, two post-dividers 1..7).
+function pllPostPairs() {
+  // RP2040 has two post-dividers in series. Many pairs give the same product;
+  // keep the one with the larger first divider, which is what the SDK prefers.
+  const best = new Map();
+  for (let a = 1; a <= 7; a++) for (let b = 1; b <= a; b++) {
+    const v = a * b;
+    if (!best.has(v) || best.get(v)[0] < a) best.set(v, [a, b]);
+  }
+  return [...best.entries()].sort((x, y) => x[0] - y[0]).map(([v, [a, b]]) => ({ v, label: `${a}\u00b7${b}` }));
+}
+const PLL_PRESETS = {
+  stm32f4: {
+    label: "STM32F4", fref: 8, target: 168, sysMax: 168, usb: true, pName: "P",
+    mMin: 2, mMax: 63, nMin: 50, nMax: 432, pfdMin: 1, pfdMax: 2, vcoMin: 100, vcoMax: 432,
+    P: [2, 4, 6, 8].map((v) => ({ v, label: `${v}` })), pText: "2, 4, 6, 8",
+  },
+  rp2040: {
+    label: "RP2040", fref: 12, target: 125, sysMax: 133, usb: false, pName: "PD1\u00b7PD2",
+    mMin: 1, mMax: 63, nMin: 16, nMax: 320, pfdMin: 5, pfdMax: 1e9, vcoMin: 750, vcoMax: 1600,
+    P: pllPostPairs(), pText: "PD1\u00b7PD2, each 1\u20137",
+  },
+  generic: {
+    label: "Generic", fref: 10, target: 100, sysMax: 0, usb: false, pName: "P",
+    mMin: 1, mMax: 16, nMin: 2, nMax: 512, pfdMin: 1, pfdMax: 50, vcoMin: 100, vcoMax: 1000,
+    pMin: 1, pMax: 16,
+  },
+};
+
+function renderPll(domain, tool, favId) {
+  const state = { kind: "stm32f4", pick: 0, ...PLL_PRESETS.stm32f4 };
+  delete state.label;
+
+  function cfg() {
+    const c = { ...state };
+    if (state.kind === "generic") {
+      c.P = [];
+      for (let v = Math.max(1, Math.round(state.pMin)); v <= Math.round(state.pMax); v++) c.P.push({ v, label: `${v}` });
+    } else {
+      c.P = PLL_PRESETS[state.kind].P;
+    }
+    return c;
+  }
+
+  // The whole search space is small enough to walk: 62 M x 383 N x 4 P on an
+  // STM32F4, a few hundred thousand on an RP2040. Only a short best-list is
+  // kept, ranked by error, then (on STM32) by whether Q can make USB's 48 MHz
+  // exactly, then by the higher PFD \u2014 ST recommends 2 MHz there to limit
+  // jitter, and a faster comparison is quieter on any PLL \u2014 then higher VCO.
+  function search() {
+    const c = cfg();
+    const fref = state.fref, target = state.target;
+    if (!(fref > 0) || !(target > 0)) return { problem: "Input and target have to be greater than zero." };
+    if (!(c.mMax >= c.mMin) || !(c.nMax >= c.nMin) || !c.P.length || !(c.vcoMax >= c.vcoMin) || !(c.pfdMax >= c.pfdMin)) {
+      return { problem: "Each range needs its maximum at or above its minimum." };
+    }
+    const K = state.kind === "generic" ? 5 : 6, best = [];
+    const rank = (r) => [Math.round(Math.abs(r.err) * 1e3) / 1e3, r.usbPenalty, -r.pfd, -r.vco];
+    const better = (a, b) => { const x = rank(a), y = rank(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
+    let iter = 0, truncated = false;
+    outer:
+    for (let m = Math.round(c.mMin); m <= c.mMax; m++) {
+      const pfd = fref / m;
+      if (pfd < c.pfdMin - 1e-9 || pfd > c.pfdMax + 1e-9) continue;
+      for (let n = Math.round(c.nMin); n <= c.nMax; n++) {
+        const vco = pfd * n;
+        if (vco < c.vcoMin - 1e-9 || vco > c.vcoMax + 1e-9) continue;
+        let q = null, usb = null, usbPenalty = 0;
+        if (c.usb) {
+          let bq = 2;
+          for (let qq = 2; qq <= 15; qq++) if (Math.abs(vco / qq - 48) < Math.abs(vco / bq - 48)) bq = qq;
+          q = bq; usb = vco / bq;
+          usbPenalty = Math.abs(usb - 48) < 1e-9 ? 0 : 1;
+        }
+        for (const pp of c.P) {
+          if (++iter > 3e6) { truncated = true; break outer; }
+          const f = vco / pp.v;
+          const r = { m, n, p: pp, q, usb, usbPenalty, pfd, vco, f, err: ((f - target) / target) * 1e6 };
+          if (best.length < K || better(r, best[best.length - 1])) {
+            best.push(r);
+            best.sort((a, b) => (better(a, b) ? -1 : better(b, a) ? 1 : 0));
+            if (best.length > K) best.pop();
+          }
+        }
+      }
+    }
+    if (!best.length) return { problem: "No combination reaches that target inside these limits. Check the input frequency against the PFD window: no whole M brings it into range." };
+    return { problem: "", best, truncated, c };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const mhz = (v) => `${trim(v)} MHz`;
+
+  // The chain as it sits in silicon: reference, input divider, phase
+  // detector, VCO, output divider, with the feedback divider closing the loop
+  // underneath. Each stage carries the frequency it runs at for the chosen
+  // row, so an out-of-window stage is visible, not just a number in a table.
+  function chainSVG(r) {
+    if (r.problem) return "";
+    const s0 = r.best[Math.min(state.pick, r.best.length - 1)];
+    const box = (x, y, w, t, sub) => `<rect x="${x}" y="${y}" width="${w}" height="24" rx="4" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      <text x="${x + w / 2}" y="${y + 16}" fill="${comp}" font-size="10" font-weight="700" text-anchor="middle">${t}</text>`;
+    const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+    const arrow = (x, y) => `<path d="M${x - 5} ${y - 4} L${x} ${y} L${x - 5} ${y + 4}" stroke="${wire}" stroke-width="1.5" fill="none" stroke-linejoin="round"/>`;
+    const tag = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="#9AA4B0" font-size="9" font-weight="600" text-anchor="${anchor || "middle"}">${t}</text>`;
+    const Y = 44;
+    const usb = r.c.usb ? `
+      ${w(`M226 ${Y + 12} V${Y - 26} H240`)}${arrow(240, Y - 26)}
+      ${box(240, Y - 38, 34, `\u00f7${s0.q}`)}
+      ${w(`M274 ${Y - 26} H290`)}${tag(292, Y - 22, `${trim(s0.usb)} USB`, "start")}` : "";
+    return `<svg width="340" height="118" viewBox="0 -2 340 118" fill="none">
+      ${tag(14, Y + 16, "ref", "middle")}${tag(14, Y + 30, mhz(state.fref), "middle")}
+      ${w(`M30 ${Y + 12} H44`)}${arrow(44, Y + 12)}
+      ${box(44, Y, 34, `\u00f7${s0.m}`)}
+      ${w(`M78 ${Y + 12} H96`)}${arrow(96, Y + 12)}${tag(87, Y + 38, mhz(s0.pfd))}
+      ${box(96, Y, 38, "PFD")}
+      ${w(`M134 ${Y + 12} H152`)}${arrow(152, Y + 12)}
+      ${box(152, Y, 38, "VCO")}
+      ${w(`M190 ${Y + 12} H240`)}${arrow(240, Y + 12)}${tag(212, Y + 6, mhz(s0.vco))}
+      ${box(240, Y, 38, `\u00f7${s0.p.label}`)}
+      ${w(`M278 ${Y + 12} H292`)}${tag(296, Y + 16, mhz(s0.f), "start")}
+      ${w(`M208 ${Y + 12} V${Y + 58} H176`)}${arrow(176, Y + 58)}
+      ${box(138, Y + 46, 38, `\u00f7${s0.n}`)}
+      ${w(`M138 ${Y + 58} H115 V${Y + 24}`)}
+      <path d="M111 ${Y + 29} L115 ${Y + 24} L119 ${Y + 29}" stroke="${wire}" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+      ${usb}
+    </svg>`;
+  }
+
+  const ppm = (e) => (Math.abs(e) < 1e-6 ? "0" : `${e > 0 ? "+" : "\u2212"}${trim(Math.abs(e))}`);
+
+  function tableHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const cols = r.c.usb ? 6 : 5;
+    const head = ["M", "N", r.c.pName, ...(r.c.usb ? ["Q"] : []), "Out MHz", "ppm"];
+    return `
+      <div class="truth-table" style="--tt-cols:${cols}">
+        <div class="tt-row tt-head">${head.map((h) => `<span>${h}</span>`).join("")}</div>
+        ${r.best.map((b, i) => `<div class="tt-row" data-pick="${i}" style="cursor:pointer${i === state.pick ? ";background:rgba(143,193,245,0.12)" : ""}">
+          <span>${b.m}</span><span>${b.n}</span><span>${b.p.label}</span>${r.c.usb ? `<span${b.usbPenalty ? ' style="color:#E0A85E"' : ""}>${b.q}</span>` : ""}
+          <span class="tt-out">${trim(b.f)}</span><span>${ppm(b.err)}</span></div>`).join("")}
+      </div>
+      ${r.truncated ? `<div class="error-text" style="color:#E0A85E">The ranges are wide enough that the search stopped at three million combinations; narrow them for a complete answer.</div>` : ""}`;
+  }
+
+  function cell(label, value, colour) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
+    </div>`;
+  }
+
+  function summaryHTML(r) {
+    if (r.problem) return "";
+    const b = r.best[Math.min(state.pick, r.best.length - 1)];
+    const over = r.c.sysMax && b.f > r.c.sysMax + 1e-9;
+    return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Out", mhz(b.f))}
+        ${cell("Error", `${ppm(b.err)} ppm`, Math.abs(b.err) < 1e-6 ? null : "#E0A85E")}
+        ${cell("PFD", mhz(b.pfd))}
+        ${cell("VCO", mhz(b.vco))}
+        ${r.c.usb ? cell("USB", mhz(b.usb), b.usbPenalty ? "#E08585" : null) : ""}
+      </div>
+      ${over ? `<div class="error-text" style="color:#E0A85E">${mhz(b.f)} is above the ${mhz(r.c.sysMax)} this part is rated for.</div>` : ""}
+      ${r.c.usb && b.usbPenalty ? `<div class="error-text" style="color:#E0A85E">No Q gives exactly 48 MHz from this VCO, so USB will not work on this setting.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = search();
+    if (!r.problem && state.pick >= r.best.length) state.pick = 0;
+    app.querySelector('[data-res="chain"]').innerHTML = chainSVG(r);
+    app.querySelector('[data-res="table"]').innerHTML = tableHTML(r);
+    app.querySelector('[data-res="summary"]').innerHTML = summaryHTML(r);
+    app.querySelectorAll("[data-pick]").forEach((el) => {
+      el.onclick = () => { state.pick = +el.dataset.pick; refresh(); };
+    });
+  }
+
+  function field(id, name, label, unit, grow) {
+    return `
+        <div class="field"${grow ? ` style="flex:${grow}"` : ""}>
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            ${unit ? `<span class="unit-fixed">${unit}</span>` : ""}
+          </div>
+        </div>`;
+  }
+
+  function limitsHTML() {
+    if (state.kind !== "generic") {
+      const p = PLL_PRESETS[state.kind];
+      const pfd = p.pfdMax >= 1e8 ? `\u2265 ${p.pfdMin} MHz` : `${p.pfdMin}\u2013${p.pfdMax} MHz`;
+      return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">Limits: M ${p.mMin}\u2013${p.mMax} \u00b7 N ${p.nMin}\u2013${p.nMax} \u00b7 ${p.pName} ${p.pText} \u00b7 PFD ${pfd} \u00b7 VCO ${p.vcoMin}\u2013${p.vcoMax} MHz${p.usb ? " \u00b7 Q 2\u201315" : ""}</div>`;
+    }
+    // Generic packs the input and target in with the limits, four to a row:
+    // stacked two to a row they pushed the results table 56px under the tab
+    // bar, and the answer is the part that has to stay on screen.
+    // At a quarter row, a three-digit value and a "MHz" suffix do not both
+    // fit, so the unit is said once above the grid instead of in every box.
+    return `
+      <div class="error-text" style="color:var(--text-secondary);margin-top:0">Frequencies in MHz.</div>
+      <div class="field-pair">
+        ${field("pl-fref", "fref", "Input")}${field("pl-target", "target", "Target")}
+        ${field("pl-pfdmin", "pfdMin", "PFD min")}${field("pl-pfdmax", "pfdMax", "PFD max")}
+      </div>
+      <div class="field-pair">
+        ${field("pl-mmin", "mMin", "M min")}${field("pl-mmax", "mMax", "M max")}
+        ${field("pl-nmin", "nMin", "N min")}${field("pl-nmax", "nMax", "N max")}
+      </div>
+      <div class="field-pair">
+        ${field("pl-pmin", "pMin", "P min")}${field("pl-pmax", "pMax", "P max")}
+        ${field("pl-vcomin", "vcoMin", "VCO min")}${field("pl-vcomax", "vcoMax", "VCO max")}
+      </div>`;
+  }
+
+  function paint() {
+    const r = search();
+    if (!r.problem && state.pick >= r.best.length) state.pick = 0;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Every allowed M, N and P, ranked by error")}
+
+      ${pillRow(Object.keys(PLL_PRESETS).map((k) => [k, PLL_PRESETS[k].label]), state.kind, domain.bg)}
+
+      <div class="diagram-box" style="padding:6px;">
+        <div data-res="chain">${chainSVG(r)}</div>
+      </div>
+
+      ${state.kind === "generic" ? "" : `<div class="field-pair">
+        ${field("pl-fref", "fref", "Input", "MHz")}
+        ${field("pl-target", "target", "Target", "MHz")}
+      </div>`}
+      ${limitsHTML()}
+
+      <div class="section-label" style="color:#5DCAA5">Best settings \u2014 tap one</div>
+      <div data-res="table">${tableHTML(r)}</div>
+      <div data-res="summary">${summaryHTML(r)}</div>
+
+      ${formulaSection(
+        ["PFD = Input / M", "VCO = PFD \u00d7 N", "Out = VCO / " + (state.kind === "rp2040" ? "(PD1 \u00d7 PD2)" : "P"),
+         ...(state.usb ? ["USB = VCO / Q, must be exactly 48 MHz"] : [])],
+        "Rows are ranked by error, then " + (state.usb ? "by whether USB gets exactly 48 MHz, then " : "")
+        + "by the higher PFD, which runs the loop's comparison faster and quieter. Two rows can give the same output from different PFD and VCO frequencies; either works. "
+        + (state.kind === "generic" ? "The limits come from your chip's reference manual: the M, N and P ranges and the PFD and VCO windows." : "The limits are this chip's, from the vendor's own code.")
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => {
+      Object.assign(state, PLL_PRESETS[m]);
+      delete state.label;
+      state.kind = m;
+      state.pick = 0;
+      paint();
+    });
+
+    [["pl-fref", "fref"], ["pl-target", "target"], ["pl-mmin", "mMin"], ["pl-mmax", "mMax"], ["pl-nmin", "nMin"], ["pl-nmax", "nMax"],
+     ["pl-pmin", "pMin"], ["pl-pmax", "pMax"], ["pl-pfdmin", "pfdMin"], ["pl-pfdmax", "pfdMax"], ["pl-vcomin", "vcoMin"], ["pl-vcomax", "vcoMax"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; state.pick = 0; refresh(); } };
+    });
+    app.querySelectorAll("[data-pick]").forEach((el) => {
+      el.onclick = () => { state.pick = +el.dataset.pick; refresh(); };
+    });
   }
 
   paint();
