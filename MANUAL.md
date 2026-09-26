@@ -23,6 +23,7 @@ will key on, since that is the id the app already holds for each tool.
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
 - Timing & interfaces → [Oscillator stability](#oscillator-stability)
 - Timing & interfaces → [PLL multiplication factor](#pll-multiplication-factor)
+- Data conversion → [ADC resolution / quantization](#adc-resolution--quantization)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -729,5 +730,120 @@ flagged as above the part's 168 MHz rating and as leaving USB at 45 MHz.
 On the RP2040, 12 MHz to 125 MHz gives VCO 1500 MHz with post-dividers 6 and 2,
 and 133 MHz gives VCO 1596 MHz with 6 and 2 — both exactly the Pico SDK's own
 default settings. The full RP2040 search takes about 3 ms.
+
+[↑ Index](#index)
+
+---
+
+<a id="adc"></a>
+## ADC resolution / quantization
+
+`calc: adc` · Digital › Data conversion
+
+### What it computes
+
+For an ideal N-bit converter and its reference: the size of one step (the LSB),
+the code a given input produces, the voltage that code stands for, and the
+quantization error between the two, in volts and in LSB. It works both ways:
+type a voltage to get the code, or type a code — say, one read off a register —
+to get the voltage. The range of inputs and codes is shown under the fields.
+
+Two pills cover the two ways converters are built:
+
+- **Single-ended** — 0 to VREF, codes 0 to 2ᴺ − 1. Every MCU ADC (AVR, STM32,
+  RP2040, ESP32) works this way.
+- **Bipolar ±** — −FSR to +FSR, codes −2ᴺ⁻¹ to 2ᴺ⁻¹ − 1 in two's complement.
+  Differential converters such as the ADS1115 work this way.
+
+### Source
+
+- The ideal transfer function is the one in IEEE Std 1241 and the one MCU
+  datasheets measure their errors against. The ATmega328P datasheet (ADC
+  characteristics) defines offset error as the deviation of the first transition
+  from its ideal place "at 0.5 LSB", gain error against a last transition 1.5 LSB
+  below full scale, and gives ±0.5 LSB as the ideal absolute accuracy.
+- The bipolar pill follows the TI ADS1115 datasheet (SBAS444E): the full-scale
+  range is set by the PGA to ±6.144, ±4.096, ±2.048 (the power-up default),
+  ±1.024, ±0.512 or ±0.256 V; Table 7-1 gives the LSB as 125 µV at ±4.096 V
+  and 62.5 µV at ±2.048 V; output is binary two's complement, clipping at 7FFFh
+  and 8000h.
+
+### Why the formulas are these
+
+**The step.** N bits give 2ᴺ codes. Spread over the reference:
+
+    Single-ended:  LSB = VREF / 2ᴺ
+    Bipolar:       LSB = 2 × FSR / 2ᴺ
+
+The bipolar span is twice FSR because it runs from −FSR to +FSR. The ADS1115
+datasheet writes its Equation 4 as LSB = FSR / 2¹⁶, but its own table (125 µV
+at ±4.096 V) only works with FSR as the whole 8.192 V span — the tool asks for
+the ± figure, as the datasheet's register table quotes it, and doubles it.
+
+**The code.** Code k stands for k × LSB and covers half an LSB either side, so
+the ideal converter rounds:
+
+    Code = round(Input / LSB)
+
+The first transition, 0 to 1, is at ½ LSB. That is why the quantization error
+is ±½ LSB rather than 0 to −1 LSB: the steps are centred on the ideal straight
+line, and the error is the sawtooth between the line and the staircase. The
+drawing shows eight codes around the input at scale, with the dashed ideal line
+through the step centres.
+
+**The top of the range.** The highest code is 2ᴺ − 1, not 2ᴺ, so the largest
+voltage a code stands for is VREF − 1 LSB: 3.2992 V for 12 bits on 3.3 V. An
+input at VREF itself reads the top code, a whole LSB short.
+
+**Two's complement.** A bipolar converter's register holds negative codes as
+2ᴺ + code, so −1 reads FFFFh and −FS reads 8000h. The Hex cell shows the
+register as it would be read, the Code field the signed value it means.
+
+**Dividing by 2ᴺ − 1.** Arduino's ReadAnalogVoltage example computes
+code × 5.0 / 1023, and ST's LL macro divides by 4095. That treats the top code
+as exactly VREF, stretching the scale: the reading is k / (2ᴺ − 1) instead of
+k / 2ᴺ of VREF, high by up to one LSB near the top. Small beside a real ADC's
+errors, but a systematic one, and it is why a 3.3 V input "reads 3.3 V" on
+those examples and 3.2992 V here.
+
+### Assumptions and limits
+
+- **An ideal converter.** Offset, gain error, INL, DNL and noise are not
+  modelled; on a real MCU ADC they add up to several LSB, far more than the
+  quantization shown here. Their datasheet figures are in LSB, which is what
+  this tool gives the size of.
+- **VREF is taken as exact.** On most MCUs it is the supply, so the supply's
+  own tolerance scales every reading. A 1% regulator is 41 LSB at 12 bits.
+- **Inputs past the range** read the end code; the tool says so and the error
+  then is the overshoot, not quantization. On the ADS1115 the ±4.096 and
+  ±6.144 V settings are scaling only — the pins themselves never go past
+  VDD + 0.3 V or below GND − 0.3 V.
+- **Single-ended on a bipolar part.** The ADS1115 measuring one input against
+  ground uses only codes 0000h to 7FFFh, so it is a 15-bit converter in that
+  mode. Model it on the bipolar pill with 16 bits, and read only the positive
+  half.
+
+### What it deliberately does not do
+
+- **SNR, ENOB, oversampling.** The noise that quantization adds, and what
+  averaging buys back, is the next tool, SNR estimation.
+- **DAC.** The reverse conversion has its own tool.
+- **Offset-binary and sign-magnitude codes.** Some bipolar converters output
+  these instead of two's complement; they are rare enough on current parts to
+  leave out.
+
+### How it was checked
+
+By hand, single-ended 12 bits on 3.3 V: LSB = 3.3 / 4096 = 805.66 µV;
+1.2 V / 805.66 µV = 1489.45, code 1489 = 0x5D1, code voltage 1.19963 V,
+error +366.2 µV = +0.4545 LSB. Code 4095 gives 3.29919 V; 3.4 V reads 4095
+and is flagged as over range.
+
+Bipolar 16 bits on ±2.048 V: LSB 62.5 µV, matching the ADS1115's Table 7-1.
+−1.23456 V / 62.5 µV = −19752.96, code −19753, register 0xB2D7
+(65536 − 19753 = 45783); error +2.5 µV = +0.04 LSB. At ±4.096 V the LSB is
+125 µV, again the datasheet's figure. Code −32768 reads 0x8000 and −4.096 V,
+the datasheet's −FS. 24 and 32 bits keep enough figures in the code voltage
+to tell neighbouring codes apart, and the hex fits its cell.
 
 [↑ Index](#index)

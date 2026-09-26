@@ -248,6 +248,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "crystal-load") return renderCrystalLoad(domain, tool, favId);
   if (calcId === "osc-stability") return renderOscStability(domain, tool, favId);
   if (calcId === "pll") return renderPll(domain, tool, favId);
+  if (calcId === "adc") return renderAdc(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -17229,6 +17230,270 @@ function renderPll(domain, tool, favId) {
     });
     app.querySelectorAll("[data-pick]").forEach((el) => {
       el.onclick = () => { state.pick = +el.dataset.pick; refresh(); };
+    });
+  }
+
+  paint();
+}
+
+// ---------- ADC resolution / quantization ----------
+// The ideal converter of IEEE 1241: code k stands for k LSB and covers half an
+// LSB either side of it, so the code is the input rounded, and what a code
+// "means" is the centre of its step. The ATmega328P datasheet defines its
+// offset error against exactly this, a first transition at 0.5 LSB.
+const ADC_KINDS = {
+  single: { label: "Single-ended", bits: 12, ref: 3.3, vin: 1.2, refName: "VREF" },
+  bipolar: { label: "Bipolar ±", bits: 16, ref: 2.048, vin: -1.23456, refName: "FSR ±" },
+};
+
+function renderAdc(domain, tool, favId) {
+  const state = { kind: "single", bits: 12, ref: 3.3, vin: 1.2, code: 0 };
+
+  const bipolar = () => state.kind === "bipolar";
+  // Single-ended spans 0..VREF in 2^N steps. Bipolar spans -FSR..+FSR, so the
+  // same 2^N codes cover twice the voltage: the ADS1115's 125 uV LSB is
+  // 2 x 4.096 V / 65536, which is how its datasheet's Table 7-1 lists it.
+  const lsb = () => (bipolar() ? 2 : 1) * state.ref / Math.pow(2, state.bits);
+  const codeMin = () => (bipolar() ? -Math.pow(2, state.bits - 1) : 0);
+  const codeMax = () => (bipolar() ? Math.pow(2, state.bits - 1) - 1 : Math.pow(2, state.bits) - 1);
+  const valid = () => Number.isInteger(state.bits) && state.bits >= 1 && state.bits <= 32 && state.ref > 0;
+
+  // Enough figures that a 24-bit code survives the round trip through the field.
+  const fig = (x) => +x.toPrecision(10);
+
+  function codeFromVin() {
+    if (!valid()) return;
+    state.code = Math.min(codeMax(), Math.max(codeMin(), Math.round(state.vin / lsb())));
+  }
+  function vinFromCode() {
+    if (!valid()) return;
+    state.vin = fig(state.code * lsb());
+  }
+  codeFromVin();
+
+  // Two's complement is what a bipolar ADC's register actually holds, so that
+  // is the hex shown; single-ended codes are the plain binary.
+  function hex(code) {
+    const raw = code < 0 ? code + Math.pow(2, state.bits) : code;
+    return "0x" + raw.toString(16).toUpperCase().padStart(Math.ceil(state.bits / 4), "0");
+  }
+
+  function compute() {
+    if (!Number.isInteger(state.bits) || state.bits < 1 || state.bits > 32) {
+      return { problem: "Resolution has to be a whole number of bits, 1 to 32." };
+    }
+    if (!(state.ref > 0)) return { problem: `${ADC_KINDS[state.kind].refName} has to be greater than zero.` };
+    const q = lsb();
+    const code = state.code;
+    const vcode = code * q;
+    const err = state.vin - vcode;
+    const low = codeMin() * q, high = codeMax() * q;
+    // Past the ends the ADC just sits on its end code; the error is then the
+    // whole overshoot and no longer a quantization figure.
+    const over = state.vin > high + q / 2 ? "high" : state.vin < low - q / 2 ? "low" : "";
+    return { problem: "", q, code, vcode, err, errLsb: err / q, low, high, over };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const hit = "#5DCAA5";
+  const warn = "#E0A85E";
+
+  // Eight codes around the input, drawn to scale. At 12 bits the full transfer
+  // curve is 4096 steps and looks like a straight line; zoomed in, each step
+  // is one LSB wide and the input sits somewhere along one of them.
+  function stairSVG(r) {
+    const W = 340, H = 132;
+    if (r.problem) return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none"></svg>`;
+    const n = Math.min(8, codeMax() - codeMin() + 1);
+    const k0 = Math.max(codeMin(), Math.min(codeMax() - n + 1, r.code - Math.floor((n - 1) / 2)));
+    const x0 = 56, x1 = 324, y0 = 112, y1 = 14;
+    const sx = (x1 - x0) / n, sy = (y0 - y1) / n;
+    // Code k is centred at k LSB and its step runs from k - 1/2 to k + 1/2.
+    const X = (lsbs) => x0 + (lsbs - (k0 - 0.5)) * sx;
+    const Y = (k) => y0 - (k - k0 + 0.5) * sy;
+
+    let d = "";
+    for (let k = k0; k < k0 + n; k++) {
+      const a = k === codeMin() ? x0 : X(k - 0.5);
+      const b = k === codeMax() ? x1 : X(k + 0.5);
+      d += `${k === k0 ? "M" : " V"}${k === k0 ? `${a.toFixed(1)} ${Y(k).toFixed(1)}` : Y(k).toFixed(1)} H${b.toFixed(1)}`;
+    }
+
+    // Ideal straight line through the step centres: the error is the gap
+    // between it and the step, which is the sawtooth quantization is.
+    const ideal = `M${x0} ${Y(k0 - 0.5).toFixed(1)} L${x1} ${Y(k0 + n - 0.5).toFixed(1)}`;
+
+    const inside = r.vin >= (k0 - 0.5) * r.q && r.vin <= (k0 + n - 0.5) * r.q;
+    const pxRaw = X(state.vin / r.q);
+    const px = Math.min(x1, Math.max(x0, pxRaw));
+    const py = Y(r.code);
+    const cx = X(r.code);
+
+    const labels = [];
+    for (let k = k0; k < k0 + n; k++) {
+      const on = k === r.code;
+      labels.push(`<text x="${x0 - 6}" y="${(Y(k) + 3).toFixed(1)}" fill="${on ? hit : wire}" font-size="${on ? 10 : 9}" font-weight="600" text-anchor="end">${k}</text>`);
+    }
+
+    // One step dimensioned, the one the input is on, under the axis.
+    const da = X(r.code - 0.5), db = X(r.code + 0.5);
+    const dim = `<path d="M${da.toFixed(1)} ${y0 + 6} V${y0 + 12} M${db.toFixed(1)} ${y0 + 6} V${y0 + 12} M${da.toFixed(1)} ${y0 + 9} H${db.toFixed(1)}" stroke="${comp}" stroke-width="1.2"/>
+      <text x="${((da + db) / 2).toFixed(1)}" y="${y0 + 20}" fill="${comp}" font-size="9" font-weight="600" text-anchor="middle">1 LSB</text>`;
+
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none">
+      <path d="M${x0} ${y1 - 4} V${y0} H${x1 + 4}" stroke="${wire}" stroke-width="1.2"/>
+      <text x="4" y="${y1 + 2}" fill="${wire}" font-size="9" font-weight="600">Code</text>
+      ${labels.join("")}
+      <path d="${ideal}" stroke="${wire}" stroke-width="1" stroke-dasharray="3 3"/>
+      <path d="${d}" stroke="${comp}" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <path d="M${cx.toFixed(1)} ${(py - 4).toFixed(1)} V${(py + 4).toFixed(1)}" stroke="${comp}" stroke-width="1.2"/>
+      ${inside || !r.over ? `<path d="M${px.toFixed(1)} ${py.toFixed(1)} V${y0}" stroke="${hit}" stroke-width="1" stroke-dasharray="2 3"/>` : ""}
+      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.4" fill="${r.over ? warn : hit}"/>
+      ${dim}
+      <text x="${x1 + 4}" y="${y0 + 20}" fill="${wire}" font-size="9" font-weight="600" text-anchor="end">Input</text>
+    </svg>`;
+  }
+
+  function cell(label, value, colour) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
+    </div>`;
+  }
+
+  const signed = (x, unit) => (x > 0 ? "+" : "") + (unit ? siFormat(x, unit) : trim(x));
+  // A code voltage needs as many figures as the code has, or 1489 and 1490
+  // both print as 1.2 V and the top of the range reads as VREF itself.
+  const volts = (v) => siFormat(v, "V", Math.min(10, Math.max(4, Math.ceil(state.bits * Math.LOG10E * Math.LN2) + 1)));
+
+  function rangeHTML(r) {
+    if (r.problem) return "";
+    return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">Range ${volts(r.low)} to ${volts(r.high)} · codes ${codeMin()} to ${codeMax()}</div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    // Snap float noise: a code typed in gives an input exactly on the step
+    // centre, and 1e-16 V of residue should read as zero.
+    const err = Math.abs(r.errLsb) < 1e-6 ? 0 : r.err;
+    const errLsb = Math.abs(r.errLsb) < 1e-6 ? 0 : r.errLsb;
+    const caution = r.over
+      ? `<div class="error-text" style="color:${warn}">The input is ${r.over === "high" ? "above" : "below"} the range, so the ADC reads its end code and the error is the overshoot, not quantization.</div>`
+      : "";
+    return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("LSB", siFormat(r.q, "V"))}
+        ${cell("Hex", hex(r.code))}
+        ${cell("Code voltage", volts(r.vcode))}
+        ${cell("Error", signed(err, "V"), r.over ? warn : "")}
+        ${cell("Error LSB", signed(errLsb), r.over ? warn : "")}
+      </div>
+      ${caution}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="stair"]').innerHTML = stairSVG(r);
+    app.querySelector('[data-res="range"]').innerHTML = rangeHTML(r);
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function syncField(id, name) {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = state[name];
+  }
+
+  // Bits, the reference and the input are the things you know; the code
+  // follows them. Typing a code instead puts the input on that code's centre.
+  function afterEdit(name) {
+    if (name === "code") {
+      vinFromCode();
+      syncField("ad-vin", "vin");
+    } else {
+      codeFromVin();
+      syncField("ad-code", "code");
+    }
+    refresh();
+  }
+
+  // The iPhone decimal keypad has no minus key, and a bipolar input or code is
+  // as often negative as not, so those two fields get the text keyboard's
+  // number row instead.
+  function field(id, name, label, unit, signedField) {
+    const mode = signedField && bipolar() ? `type="text" inputmode="text" autocomplete="off"` : `type="number" inputmode="decimal" step="any"`;
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input ${mode} id="${id}" value="${state[name]}" />
+            ${unit ? `<span class="unit-fixed">${unit}</span>` : ""}
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    const k = ADC_KINDS[state.kind];
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Each code is one LSB wide, and the input is rounded to it")}
+
+      ${pillRow(Object.keys(ADC_KINDS).map((m) => [m, ADC_KINDS[m].label]), state.kind, domain.bg)}
+
+      <div class="diagram-box" style="padding:4px 6px;">
+        <div data-res="stair">${stairSVG(r)}</div>
+      </div>
+
+      <div class="field-pair">
+        ${field("ad-bits", "bits", "Resolution", "bits")}
+        ${field("ad-ref", "ref", k.refName, "V")}
+      </div>
+      <div class="field-pair">
+        ${field("ad-vin", "vin", "Input", "V", true)}
+        ${field("ad-code", "code", "Code", "", true)}
+      </div>
+      <div data-res="range">${rangeHTML(r)}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        bipolar()
+          ? ["LSB = 2 × FSR / 2ᴺ",
+             "Code = round(Input / LSB), −2ᴺ⁻¹ to 2ᴺ⁻¹ − 1",
+             "Code voltage = Code × LSB",
+             "Error = Input − Code voltage, within ±½ LSB"]
+          : ["LSB = VREF / 2ᴺ",
+             "Code = round(Input / LSB), 0 to 2ᴺ − 1",
+             "Code voltage = Code × LSB",
+             "Error = Input − Code voltage, within ±½ LSB"],
+        (bipolar()
+          ? "FSR is the ± full-scale range the datasheet quotes, often set by a PGA: ±2.048 V on an ADS1115 by default. Negative codes are two’s complement, which is how the register holds them and what Hex shows. "
+          : "VREF is whatever the ADC measures against — often the supply on an MCU, which makes the supply’s accuracy part of every reading. ")
+        + "Converting back, Arduino’s examples and ST’s LL macros divide by 2ᴺ − 1 (1023, 4095) rather than 2ᴺ, which reads up to one LSB high near the top. Typing a code puts the input on that code’s centre."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => {
+      const kk = ADC_KINDS[m];
+      state.kind = m;
+      state.bits = kk.bits;
+      state.ref = kk.ref;
+      state.vin = kk.vin;
+      codeFromVin();
+      paint();
+    });
+
+    [["ad-bits", "bits"], ["ad-ref", "ref"], ["ad-vin", "vin"], ["ad-code", "code"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => {
+        const v = parseFloat(String(e.target.value).replace("−", "-"));
+        if (!isFinite(v)) return;
+        state[name] = name === "code" ? Math.round(v) : v;
+        if (name === "code") state.code = Math.min(codeMax(), Math.max(codeMin(), state.code));
+        afterEdit(name);
+      };
     });
   }
 

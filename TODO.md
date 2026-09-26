@@ -239,7 +239,14 @@ then by the higher PFD. Presets for STM32F4 and RP2040 with limits taken
 from ST's HAL and the Pico SDK's vcocalc.py, not from summaries, which
 disagree; Generic takes any integer-N PLL's ranges. Matches the shipped
 settings exactly: 8→168 MHz gives M4 N168 P2 Q7, 12→125 MHz gives VCO
-1500 with 6·2. The chain is drawn with each stage's frequency on it)
+1500 with 6·2. The chain is drawn with each stage's frequency on it) ·
+ADC resolution / quantization (LSB, code, code voltage and error both
+ways — type a voltage or a code. Single-ended and Bipolar ± pills, the
+second in two's complement as the ADS1115 register holds it. Rounds as
+the ideal converter does, first transition at ½ LSB, which the
+ATmega328P datasheet confirms; the note warns that Arduino and ST's LL
+macros divide by 2ᴺ − 1. The staircase is drawn zoomed to eight codes
+around the input, since 4096 steps look like a line)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -296,7 +303,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] ADC resolution / quantization
 - [ ] DAC resolution
 - [ ] SNR estimation
 - [ ] Antenna length (dipole/monopole)

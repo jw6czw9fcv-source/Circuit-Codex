@@ -107,7 +107,7 @@ const DOMAINS = [
           { name: "Crystal load capacitance", calc: "crystal-load" }, { name: "Oscillator stability (ppm → Hz)", calc: "osc-stability" }, { name: "PLL multiplication factor", calc: "pll" },
         ],
       },
-      { title: "Data conversion", tools: [{ name: "ADC resolution / quantization" }, { name: "DAC resolution" }, { name: "SNR estimation" }] },
+      { title: "Data conversion", tools: [{ name: "ADC resolution / quantization", calc: "adc" }, { name: "DAC resolution" }, { name: "SNR estimation" }] },
     ],
   },
   {
