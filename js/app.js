@@ -16893,12 +16893,16 @@ function renderOscStability(domain, tool, favId) {
     app.querySelector('[data-res="chart"]').innerHTML = r.problem ? "" : (state.kind === "khz" ? forkSVG(r) : budgetSVG(r));
   }
 
-  function field(id, name, label, unit, grow) {
+  // The iPhone decimal keypad has no minus key, and pulling and the fork's
+  // temperature are as often negative as not, so those fields get the text
+  // keyboard's number row instead.
+  function field(id, name, label, unit, grow, signedField) {
+    const mode = signedField ? `type="text" inputmode="text" autocomplete="off"` : `type="number" inputmode="decimal" step="any"`;
     return `
         <div class="field"${grow ? ` style="flex:${grow}"` : ""}>
           <label>${label}</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            <input ${mode} id="${id}" value="${state[name]}" />
             ${unit === "F" ? `<select id="${id}-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.fUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>` : `<span class="unit-fixed">${unit}</span>`}
           </div>
         </div>`;
@@ -16921,9 +16925,9 @@ function renderOscStability(domain, tool, favId) {
         ${field("os-tol", "tol", "Tolerance", "ppm")}
       </div>
       <div class="field-pair">
-        ${fork ? field("os-temp", "temp", "Temperature", "\u00b0C") : field("os-temp", "temp", "Temp. stability", "ppm")}
+        ${fork ? field("os-temp", "temp", "Temperature", "\u00b0C", 0, true) : field("os-temp", "temp", "Temp. stability", "ppm")}
         ${field("os-age", "age", "Ageing", "ppm")}
-        ${field("os-pull", "pull", "Pulling", "ppm")}
+        ${field("os-pull", "pull", "Pulling", "ppm", 0, true)}
       </div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
@@ -16951,7 +16955,7 @@ function renderOscStability(domain, tool, favId) {
 
     [["os-f", "f"], ["os-tol", "tol"], ["os-temp", "temp"], ["os-age", "age"], ["os-pull", "pull"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
-      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+      if (el) el.oninput = (e) => { const v = parseFloat(String(e.target.value).replace("\u2212", "-")); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
     const u = document.getElementById("os-f-unit");
     if (u) u.onchange = (e) => { state.fUnit = e.target.value; refresh(); };
