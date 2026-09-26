@@ -466,6 +466,17 @@ meaning. Every capacitance here only ever comes in one unit — pF for load,
 stray and shunt, fF for motional — so the fields show the unit fixed rather
 than offering a picker.
 
+**When CL says "Series".** Some datasheets offer, or list, a series-resonant
+cut: the crystal is trimmed to its marked frequency with no load at all. A
+Pierce oscillator cannot present no load, so the part runs above its marking by
+the whole parallel-resonance offset,
+
+    Δf/f = C1 / (2 × (C0 + Load))
+
+which is not a trim but a few hundred ppm: 8 fF against 3 pF + 12.5 pF is
++258 ppm. Type 0 in CL spec to see it. The fix is to order the part with a load
+capacitance, or to use it in a circuit that runs it at series resonance.
+
 ### Assumptions and limits
 
 - **Stray is an estimate and it dominates the mistakes.** Two to five picofarads
@@ -526,8 +537,11 @@ Tools does that; this tool is the budget that produces the figure.
 ### Source
 
 The contributions and their names are the ones on crystal datasheets:
-frequency tolerance at 25 °C, frequency stability over the operating
-temperature range, and ageing, usually per first year. The 32.768 kHz
+frequency tolerance at a reference temperature, frequency stability over the
+operating temperature range, and ageing, usually per first year. The reference
+is 20 °C on some datasheets and 25 °C on others — one Petermann-Technik page
+quotes both for the same part — so the field is labelled Tolerance without a
+temperature. The 32.768 kHz
 temperature curve is the parabola the tuning-fork datasheets from Epson,
 Abracon and Micro Crystal all quote, with a coefficient of about
 −0.034 ppm/°C² (±0.006) about a turnover near 25 °C.
@@ -587,6 +601,13 @@ fold it into one ±ppm figure over the range, which is what the MHz pill asks fo
   specified, even though the real AT-cut curve is not symmetric.
 - Pulling is carried in as a signed figure from the crystal load tool and is
   treated as exact.
+- **Tolerance never includes temperature on a crystal datasheet.** The
+  temperature stability is a separate line, often a separate ordering table,
+  and the two add: ±20 ppm tolerance with ±30 ppm over −40/+85 °C is up to
+  ±50 ppm before ageing. A packaged **XO or TCXO** is different: its
+  "frequency stability" is often one all-inclusive figure covering tolerance,
+  temperature, supply and load, sometimes ageing too. Read the footnote; if it
+  is all-inclusive, enter it as Tolerance and leave the rest at zero.
 
 ### What it deliberately does not do
 

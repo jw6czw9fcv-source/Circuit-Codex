@@ -16549,8 +16549,18 @@ function renderCrystalLoad(domain, tool, favId) {
 
   function compute() {
     const { cl, stray, c1, c2, pull } = state;
-    if (!(cl > 0)) return { problem: "The specified load has to be greater than zero." };
+    if (!(cl >= 0)) return { problem: "The specified load cannot be negative. Type 0 for a crystal specified as Series." };
     if (!(c1 > 0) || !(c2 > 0)) return { problem: "Both load capacitors have to be greater than zero." };
+    // "Series" in a datasheet's CL box means the crystal was cut to run at
+    // series resonance, with no load at all. A Pierce oscillator always adds
+    // load, so such a part runs above its marked frequency by the full
+    // C1 / (2(C0 + load)) — not a small correction but typically a few hundred
+    // ppm, which is the thing worth showing.
+    if (cl === 0) {
+      const load = (c1 * c2) / (c1 + c2) + stray;
+      const ppm = state.cm > 0 ? ((state.cm / 1000) / (2 * (state.c0 + load))) * 1e6 : NaN;
+      return { problem: "", series: true, load, ppm };
+    }
     if (stray >= cl) {
       return { problem: `Stray alone is already ${trim(stray)} pF, at or past the ${trim(cl)} pF the crystal wants. Shorten the tracks or pick a crystal specified for a higher load.` };
     }
@@ -16611,6 +16621,16 @@ function renderCrystalLoad(domain, tool, favId) {
 
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    if (r.series) {
+      return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Load", `${trim(r.load)} pF`)}
+        ${cell("Load error", "—")}
+        ${cell("Pulled", isFinite(r.ppm) ? `+${trim(r.ppm)} ppm` : "—", "#E08585")}
+        ${cell("Suggested", "—")}
+      </div>
+      <div class="error-text" style="color:#E0A85E">CL 0 means Series: the crystal was cut to run with no load, and this circuit adds ${trim(r.load)} pF, so it runs about ${isFinite(r.ppm) ? trim(r.ppm) : "several hundred"} ppm fast. Order the part with a load capacitance instead, or use it in a series-resonant circuit.</div>`;
+    }
     const tight = Math.abs(r.ppm) <= 10 ? comp : Math.abs(r.ppm) <= 30 ? "#E0A85E" : "#E08585";
     const caution = Math.abs(r.ppm) > 30
       ? `<div class="error-text" style="color:#E0A85E">${trim(Math.abs(r.ppm))} ppm of pulling is more than most crystals are specified to within. Move the capacitors, or pick a crystal cut for the load this board actually presents.</div>`
@@ -16703,7 +16723,7 @@ function renderCrystalLoad(domain, tool, favId) {
          "CL1 = CL2 = 2 \u00d7 (CL spec \u2212 Stray)",
          "Pullability = C1 / (2 \u00d7 (C0 + CL spec)\u00b2)",
          "Pulled = \u2212Pullability \u00d7 Load error"],
-        "Where each number comes from: CL spec and C0 are on the crystal datasheet. C1 motional often is not \u2014 when it is missing, type the pullability instead if the datasheet gives it, and C1 is worked back. Stray is never on the crystal datasheet: it is your board, the oscillator pins (sometimes in the MCU datasheet) plus the tracks, typically 2\u20135 pF. The pills load typical C0 and C1 for each family. Editing the spec or the stray sizes the pair; editing a capacitor moves the presented load instead."
+        "Where each number comes from: CL spec and C0 are on the crystal datasheet; a CL of Series is typed as 0. C1 motional often is not \u2014 when it is missing, type the pullability instead if the datasheet gives it, and C1 is worked back. Stray is never on the crystal datasheet: it is your board, the oscillator pins (sometimes in the MCU datasheet) plus the tracks, typically 2\u20135 pF. The pills load typical C0 and C1 for each family. Editing the spec or the stray sizes the pair; editing a capacitor moves the presented load instead."
       )}
       ${calcFooter()}
     `;
@@ -16894,7 +16914,7 @@ function renderOscStability(domain, tool, favId) {
 
       <div class="field-pair">
         ${field("os-f", "f", "Frequency", "F")}
-        ${field("os-tol", "tol", "Tolerance at 25\u00b0C", "ppm")}
+        ${field("os-tol", "tol", "Tolerance", "ppm")}
       </div>
       <div class="field-pair">
         ${fork ? field("os-temp", "temp", "Temperature", "\u00b0C") : field("os-temp", "temp", "Temp. stability", "ppm")}
@@ -16914,7 +16934,7 @@ function renderOscStability(domain, tool, favId) {
         (fork
           ? "Temperature is where the fork is running, not a spec: type the coldest or hottest it will see. "
           : "Temp. stability is the datasheet's \u00b1ppm over its operating range. ")
-        + "Ageing is usually quoted for the first year and slows after, so a figure for several years is less than years \u00d7 the first. Pulling is the signed result from the crystal load tool \u2014 negative when the board loads it too heavily. Worst case is what datasheets call overall stability; RSS is the likelier figure when the errors are independent."
+        + "Tolerance is at the datasheet's reference temperature, 20 or 25 °C, and does not include temperature: the two add. A packaged XO or TCXO often quotes one all-inclusive stability instead — put that in Tolerance and leave the rest at zero. Ageing is usually quoted for the first year and slows after, so a figure for several years is less than years \u00d7 the first. Pulling is the signed result from the crystal load tool \u2014 negative when the board loads it too heavily. Worst case is what datasheets call overall stability; RSS is the likelier figure when the errors are independent."
       )}
       ${calcFooter()}
     `;
