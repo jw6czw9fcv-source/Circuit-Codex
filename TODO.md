@@ -223,7 +223,15 @@ stray sizes the pair, editing a capacitor moves the presented load
 instead, which is how to check a board that already exists. The
 payoff is pullability, C1/(2(C0+CL)²), so a load error becomes ppm
 rather than a shrug — and the two pills carry the fact that a watch
-tuning fork pulls a third as far per pF as an MHz plate)
+tuning fork pulls a third as far per pF as an MHz plate) ·
+Oscillator stability (not a second ppm converter — that already exists
+under Tools — but the budget that produces the figure: tolerance,
+temperature, ageing and load pulling. Limits and offsets are kept apart,
+so a window of −69 to −23 ppm reads as −69, a clock that can only lose
+time, not ±69. Worst case and RSS both shown, then hertz, seconds a day
+and minutes a year. The 32.768 kHz pill draws the tuning-fork parabola
+with the operating point on it, which is why a logger outdoors in
+winter runs slow; the MHz pill stacks the budget as a bar)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -280,7 +288,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] Oscillator stability (ppm → Hz)
 - [ ] PLL multiplication factor
 - [ ] ADC resolution / quantization
 - [ ] DAC resolution

@@ -246,6 +246,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "i2c-pullup") return renderI2CPullup(domain, tool, favId);
   if (calcId === "uart-baud") return renderUartBaud(domain, tool, favId);
   if (calcId === "crystal-load") return renderCrystalLoad(domain, tool, favId);
+  if (calcId === "osc-stability") return renderOscStability(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -16722,6 +16723,214 @@ function renderCrystalLoad(domain, tool, favId) {
       const el = document.getElementById(id);
       if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
     });
+  }
+
+  paint();
+}
+
+// A tuning fork's frequency falls off either side of its turnover point along
+// a parabola; -0.034 ppm/\u00b0C\u00b2 about 25 \u00b0C is the figure the 32.768 kHz
+// datasheets quote. AT-cut MHz crystals follow a cubic that depends on the cut
+// angle, which is why their datasheets give one \u00b1ppm over a range instead.
+const OSC_FORK_K = 0.034;
+const OSC_FORK_T0 = 25;
+const OSC_PRESETS = {
+  mhz: { label: "MHz crystal", f: 16, fUnit: "MHz", tol: 20, temp: 30, age: 3, pull: 0 },
+  khz: { label: "32.768 kHz", f: 32.768, fUnit: "kHz", tol: 20, temp: 0, age: 3, pull: 0 },
+};
+
+function renderOscStability(domain, tool, favId) {
+  const F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+  const state = { kind: "mhz", pull: 0, ...OSC_PRESETS.mhz };
+
+  // Two kinds of error. Tolerance, temperature stability and ageing are
+  // symmetric \u00b1 limits: the part is somewhere inside them. The fork's
+  // temperature drift and the load pulling are offsets with a sign: they move
+  // the whole window. Keeping them apart is what makes the range honest.
+  function compute() {
+    const f = state.f * F_UNITS[state.fUnit];
+    if (!(f > 0)) return { problem: "The frequency has to be greater than zero." };
+    const fork = state.kind === "khz";
+    const drift = fork ? -OSC_FORK_K * Math.pow(state.temp - OSC_FORK_T0, 2) : 0;
+    const terms = fork ? [state.tol, state.age] : [state.tol, state.temp, state.age];
+    if (terms.some((x) => !(x >= 0))) return { problem: "Tolerance, temperature stability and ageing are \u00b1 limits, so they cannot be negative." };
+    const offset = drift + state.pull;
+    const spread = terms.reduce((a, b) => a + b, 0);
+    const rssSpread = Math.sqrt(terms.reduce((a, b) => a + b * b, 0));
+    const lo = offset - spread, hi = offset + spread;
+    // Signed extremes: a window of -69 to -23 ppm is a crystal that can only
+    // run slow, and a plus-or-minus figure would say it might run fast too.
+    const extreme = (a, b) => (Math.abs(a) >= Math.abs(b) ? a : b);
+    const worst = extreme(lo, hi);
+    const rss = extreme(offset - rssSpread, offset + rssSpread);
+    return { problem: "", f, fork, drift, offset, spread, lo, hi, worst, rss };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const COLS = { tol: "#6FB3F2", temp: "#F5C242", age: "#3FD69A", pull: "#FF6B5B" };
+
+  // The fork's parabola with the operating point on it: the reason a watch
+  // loses time in winter is visible, rather than a number to believe.
+  function forkSVG(r) {
+    const x0 = 34, x1 = 326, y0 = 14, y1 = 104;
+    const tMin = -40, tMax = 85, pMin = -150;
+    const X = (t) => x0 + ((t - tMin) / (tMax - tMin)) * (x1 - x0);
+    const Y = (ppm) => y0 + (ppm / pMin) * (y1 - y0);
+    let d = "";
+    for (let t = tMin; t <= tMax; t += 2.5) {
+      const ppm = -OSC_FORK_K * Math.pow(t - OSC_FORK_T0, 2);
+      d += `${d ? "L" : "M"}${X(t).toFixed(1)} ${Y(Math.max(ppm, pMin)).toFixed(1)} `;
+    }
+    const tc = Math.min(tMax, Math.max(tMin, state.temp));
+    const pc = Math.max(pMin, -OSC_FORK_K * Math.pow(tc - OSC_FORK_T0, 2));
+    const xTicks = [-40, 0, 25, 85].map((t) => `
+      <path d="M${X(t).toFixed(1)} ${y1} V${y1 + 4}" stroke="${wire}" stroke-width="1"/>
+      <text x="${X(t).toFixed(1)}" y="${y1 + 15}" fill="${wire}" font-size="9" font-weight="600" text-anchor="middle">${t}\u00b0</text>`).join("");
+    const yTicks = [0, -50, -100, -150].map((p) => `
+      <path d="M${x0 - 4} ${Y(p).toFixed(1)} H${x1}" stroke="#2A2F36" stroke-width="1"/>
+      <text x="${x0 - 7}" y="${(Y(p) + 3).toFixed(1)}" fill="${wire}" font-size="9" font-weight="600" text-anchor="end">${p}</text>`).join("");
+    const labelRight = X(tc) < (x0 + x1) / 2;
+    return `<svg width="340" height="124" viewBox="0 0 340 124" fill="none">
+      ${yTicks}${xTicks}
+      <path d="${d}" stroke="${comp}" stroke-width="2" fill="none"/>
+      <path d="M${X(tc).toFixed(1)} ${y0} V${y1}" stroke="${COLS.temp}" stroke-width="1" stroke-dasharray="2 3"/>
+      <circle cx="${X(tc).toFixed(1)}" cy="${Y(pc).toFixed(1)}" r="4" fill="${COLS.temp}"/>
+      <text x="${(X(tc) + (labelRight ? 8 : -8)).toFixed(1)}" y="${(Y(pc) + (pc < -120 ? -8 : 16)).toFixed(1)}" fill="${COLS.temp}" font-size="10" font-weight="700" text-anchor="${labelRight ? "start" : "end"}">${trim(r.drift)} ppm</text>
+      <text x="${x1}" y="10" fill="${wire}" font-size="9" font-weight="600" text-anchor="end">ppm</text>
+    </svg>`;
+  }
+
+  // The MHz budget as a stack: each contribution's share of the total is the
+  // length it takes, so the one worth attacking is the widest.
+  function budgetSVG(r) {
+    const parts = [["Tolerance", state.tol, COLS.tol], ["Temperature", state.temp, COLS.temp],
+                   ["Ageing", state.age, COLS.age], ["Pulling", Math.abs(state.pull), COLS.pull]].filter((p) => p[1] > 0);
+    const total = parts.reduce((a, p) => a + p[1], 0) || 1;
+    const x0 = 14, W = 312;
+    let x = x0;
+    const bars = parts.map(([name, v, c]) => {
+      const w = (v / total) * W;
+      const seg = `<rect x="${x.toFixed(1)}" y="20" width="${Math.max(w - 2, 1).toFixed(1)}" height="26" rx="3" fill="${c}"/>
+        ${w > 34 ? `<text x="${(x + w / 2 - 1).toFixed(1)}" y="37" fill="#15181C" font-size="10" font-weight="700" text-anchor="middle">${trim(v)}</text>` : ""}`;
+      x += w;
+      return seg;
+    }).join("");
+    const legend = parts.map(([name, v, c], i) => {
+      const lx = x0 + (i % 2) * 160, ly = 70 + Math.floor(i / 2) * 18;
+      return `<rect x="${lx}" y="${ly - 9}" width="10" height="10" rx="2" fill="${c}"/>
+        <text x="${lx + 16}" y="${ly}" fill="${wire}" font-size="10" font-weight="600">${name} \u00b1${trim(v)} ppm</text>`;
+    }).join("");
+    return `<svg width="340" height="100" viewBox="0 -4 340 100" fill="none">
+      <text x="${x0}" y="12" fill="${wire}" font-size="9" font-weight="600">worst case, \u00b1ppm</text>
+      <text x="${x0 + W}" y="12" fill="${comp}" font-size="10" font-weight="700" text-anchor="end">\u00b1${trim(total)} ppm</text>
+      ${bars}${legend}
+    </svg>`;
+  }
+
+  function cell(label, value, colour) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
+    </div>`;
+  }
+
+  // Below 1 Hz, siFormat would print "688 mHz", one capital away from
+  // megahertz on a screen about oscillators. Plain hertz there.
+  const hz = (v) => (Math.abs(v) < 1000 ? `${trim(v)} Hz` : siFormat(v, "Hz"));
+  const perYear = (ppm) => {
+    const sec = ppm * 31.5576;
+    return sec >= 60 ? `${trim(sec / 60)} min` : `${trim(sec)} s`;
+  };
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    // Centred windows read plus-or-minus; an offset window reads with its sign,
+    // which for time is the useful part: negative ppm runs slow and loses time.
+    const centred = r.offset === 0;
+    const sg = (v, text) => (centred ? `±${text}` : `${v < 0 ? "−" : "+"}${text}`);
+    const range = r.offset !== 0
+      ? `<div class="error-text" style="color:var(--text-secondary)">Window ${trim(r.lo)} to ${trim(r.hi)} ppm \u2014 not centred, because ${r.fork && r.drift !== 0 ? "the temperature drift" : "the pulling"} moves it.${r.hi < 0 ? " It can only run slow, losing time." : r.lo > 0 ? " It can only run fast, gaining time." : ""}</div>`
+      : "";
+    return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Worst case", sg(r.worst, `${trim(Math.abs(r.worst))} ppm`))}
+        ${cell("RSS", sg(r.rss, `${trim(Math.abs(r.rss))} ppm`))}
+        ${cell("Hz", sg(r.worst, hz(Math.abs(r.worst) * r.f * 1e-6)))}
+        ${cell("Per day", sg(r.worst, siFormat(Math.abs(r.worst) * 0.0864, "s")))}
+        ${cell("Per year", sg(r.worst, perYear(Math.abs(r.worst))))}
+      </div>
+      ${range}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="chart"]').innerHTML = r.problem ? "" : (state.kind === "khz" ? forkSVG(r) : budgetSVG(r));
+  }
+
+  function field(id, name, label, unit, grow) {
+    return `
+        <div class="field"${grow ? ` style="flex:${grow}"` : ""}>
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            ${unit === "F" ? `<select id="${id}-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.fUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>` : `<span class="unit-fixed">${unit}</span>`}
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    const fork = state.kind === "khz";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Add up every way it can be wrong, then say it in seconds")}
+
+      ${pillRow(Object.keys(OSC_PRESETS).map((k) => [k, OSC_PRESETS[k].label]), state.kind, domain.bg)}
+
+      <div class="diagram-box" style="padding:6px;">
+        <div data-res="chart">${r.problem ? "" : (fork ? forkSVG(r) : budgetSVG(r))}</div>
+      </div>
+
+      <div class="field-pair">
+        ${field("os-f", "f", "Frequency", "F")}
+        ${field("os-tol", "tol", "Tolerance at 25\u00b0C", "ppm")}
+      </div>
+      <div class="field-pair">
+        ${fork ? field("os-temp", "temp", "Temperature", "\u00b0C") : field("os-temp", "temp", "Temp. stability", "ppm")}
+        ${field("os-age", "age", "Ageing", "ppm")}
+        ${field("os-pull", "pull", "Pulling", "ppm")}
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        [...(fork ? ["Drift = −0.034 ppm/°C² × (T − 25 °C)²", "Offset = Drift + Pulling"] : ["Offset = Pulling"]),
+         "Worst case = offset ± (Tol + " + (fork ? "Age)" : "Temp + Age)"),
+         "RSS = offset ± √(sum of squares)",
+         "Hz = ppm \u00d7 f / 10\u2076",
+         "Per day = ppm × 86.4 ms", "Per year = ppm × 31.6 s"],
+        (fork
+          ? "Temperature is where the fork is running, not a spec: type the coldest or hottest it will see. "
+          : "Temp. stability is the datasheet's \u00b1ppm over its operating range. ")
+        + "Ageing is usually quoted for the first year and slows after, so a figure for several years is less than years \u00d7 the first. Pulling is the signed result from the crystal load tool \u2014 negative when the board loads it too heavily. Worst case is what datasheets call overall stability; RSS is the likelier figure when the errors are independent."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => {
+      Object.assign(state, OSC_PRESETS[m]);
+      state.kind = m;
+      paint();
+    });
+
+    [["os-f", "f"], ["os-tol", "tol"], ["os-temp", "temp"], ["os-age", "age"], ["os-pull", "pull"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    });
+    const u = document.getElementById("os-f-unit");
+    if (u) u.onchange = (e) => { state.fUnit = e.target.value; refresh(); };
   }
 
   paint();

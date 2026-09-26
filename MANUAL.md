@@ -21,6 +21,7 @@ will key on, since that is the id the app already holds for each tool.
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
+- Timing & interfaces → [Oscillator stability](#oscillator-stability)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -502,5 +503,111 @@ The pullability was wrong by twelve orders of magnitude on first write:
 C1 / (2(C0+CL)²) is *per farad*, not dimensionless, because the numerator is
 first order in capacitance and the denominator is second. It needs multiplying
 by one picofarad to become per-pF. The hand check is what caught it.
+
+[↑ Index](#index)
+
+---
+
+<a id="osc-stability"></a>
+## Oscillator stability
+
+`calc: osc-stability` · Digital › Timing & interfaces
+
+### What it computes
+
+The total frequency error budget of a crystal oscillator — tolerance,
+temperature, ageing and load pulling combined — as a worst case and as a
+root-sum-square estimate, then expressed as hertz and as time gained or lost
+per day and per year.
+
+For a single ppm figure applied to a single value, the **PPM converter** under
+Tools does that; this tool is the budget that produces the figure.
+
+### Source
+
+The contributions and their names are the ones on crystal datasheets:
+frequency tolerance at 25 °C, frequency stability over the operating
+temperature range, and ageing, usually per first year. The 32.768 kHz
+temperature curve is the parabola the tuning-fork datasheets from Epson,
+Abracon and Micro Crystal all quote, with a coefficient of about
+−0.034 ppm/°C² (±0.006) about a turnover near 25 °C.
+
+### Why the formulas are these
+
+**Two kinds of error, kept apart.** Tolerance, temperature stability and ageing
+are *limits*: the part is somewhere within ± each of them, and which way it
+sits is not known. The tuning fork's temperature drift and the load pulling are
+*offsets*: they have a known sign and they move the whole window. Mixing the two
+kinds is how budgets end up either too pessimistic or wrong-signed, so the tool
+computes
+
+    Offset     = Drift + Pulling
+    Worst case = Offset ± (Tolerance + Temperature + Ageing)
+
+and reports the extreme of that window with its sign. A window of −69 to
+−23 ppm is a clock that can only lose time, and writing it as ±69 ppm would
+throw that away.
+
+**Worst case and RSS.** The worst case adds every limit at full size in the same
+direction. It is what datasheets call *overall stability*, and it is the right
+figure to design against when failure is not an option. If the contributions are
+independent, all of them sitting at their extremes together is unlikely, and the
+root-sum-square
+
+    RSS = Offset ± √(Tolerance² + Temperature² + Ageing²)
+
+is the likelier spread. Offsets are added directly, never squared: they are not
+random.
+
+**The tuning-fork parabola.** A 32.768 kHz crystal is a quartz tuning fork, and
+its frequency falls off either side of a turnover temperature:
+
+    Δf/f = −0.034 ppm/°C² × (T − 25 °C)²
+
+It only ever goes down. At 0 °C that is −21 ppm, about 1.8 seconds a day; at
+−20 °C it is −69 ppm, six seconds a day. That is why a watch or a data
+logger left outdoors in winter runs slow, and why the tool asks for the
+temperature the fork will actually see rather than a spec. MHz crystals are
+AT-cut plates, whose curve is a cubic set by the cut angle; their datasheets
+fold it into one ±ppm figure over the range, which is what the MHz pill asks for.
+
+**Into time.** A day is 86 400 s, so 1 ppm is 86.4 ms a day, and a year of
+31 557 600 s makes 1 ppm about 31.6 s a year. Twenty ppm is 1.73 s a day or
+10.5 minutes a year.
+
+### Assumptions and limits
+
+- **Ageing is not linear.** It is fastest in the first months and slows roughly
+  logarithmically, so ten years is much less than ten times the first-year
+  figure. Enter the total you expect over the period, not a rate.
+- **The parabola is typical**, not the part's own curve: the coefficient varies
+  by about ±18% and the turnover by several degrees. Near 25 °C that barely
+  matters; at the extremes it does.
+- The MHz temperature figure is taken as a symmetric ± limit, which is how it is
+  specified, even though the real AT-cut curve is not symmetric.
+- Pulling is carried in as a signed figure from the crystal load tool and is
+  treated as exact.
+
+### What it deliberately does not do
+
+- **Compensated oscillators.** A TCXO or an RTC with digital trimming cancels
+  most of the temperature term; its datasheet gives a residual stability, which
+  can be entered as Temp. stability on the MHz pill.
+- **Short-term stability and jitter.** Phase noise and Allan deviation are a
+  different question from where the average frequency sits.
+- **Protocol limits.** Whether a budget meets USB, CAN or Ethernet timing needs
+  those standards' own tolerances and belongs with the tools for each.
+
+### How it was checked
+
+By hand, MHz defaults: 20 + 30 + 3 = 53 ppm worst case; √(400 + 900 + 9) =
+36.18 ppm RSS; 53 ppm of 16 MHz is 848 Hz; 53 × 86.4 ms = 4.579 s a day; 53 ×
+31.56 s = 27.88 minutes a year. With −25 ppm of pulling the window becomes
+−78 to +28 ppm and the worst case reads −78, signed.
+
+32.768 kHz at 0 °C: drift −0.034 × 25² = −21.25 ppm; with ±23 ppm of
+limits the window is −44.25 to +1.75 ppm, worst −44.25 ppm, −3.82 s a day.
+Switching pills resets pulling, which on first build carried over from one
+family to the other.
 
 [↑ Index](#index)
