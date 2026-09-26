@@ -221,7 +221,7 @@ stray added, a 12.5 pF crystal on a 3 pF board wants 19 pF parts,
 not 25 and certainly not 12.5. Two-way: editing the spec or the
 stray sizes the pair, editing a capacitor moves the presented load
 instead, which is how to check a board that already exists. The
-payoff is pullability, Cm/(2(C0+CL)²), so a load error becomes ppm
+payoff is pullability, C1/(2(C0+CL)²), so a load error becomes ppm
 rather than a shrug — and the two pills carry the fact that a watch
 tuning fork pulls a third as far per pF as an MHz plate)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,

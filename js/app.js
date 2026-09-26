@@ -16495,58 +16495,59 @@ const XTAL_KINDS = {
 };
 
 function renderCrystalLoad(domain, tool, favId) {
-  const FF_UNITS = { fF: 1e-15, pF: 1e-12 };
-  const state = {
-    kind: "mhz", tol: 10,
-    cl: 12.5, clUnit: "pF",
-    stray: 3, strayUnit: "pF",
-    c1: 19, c1Unit: "pF",
-    c2: 19, c2Unit: "pF",
-    c0: 3, c0Unit: "pF",
-    cm: 8, cmUnit: "fF",
-  };
-  const UNITS = { cl: CAP_UNITS, stray: CAP_UNITS, c1: CAP_UNITS, c2: CAP_UNITS, c0: CAP_UNITS, cm: FF_UNITS };
-  const si = (n) => state[n] * UNITS[n][state[n + "Unit"]];
+  // Every capacitance here only ever comes in one unit \u2014 load, stray and shunt
+  // in pF, motional in fF \u2014 so the fields hold plain numbers in those units
+  // and show the unit as fixed text instead of a picker offering nF, \u00b5F and F.
+  // Names follow the crystal datasheet: C0 shunt and C1 motional. The load
+  // capacitors are CL1 and CL2, which is what the MCU application notes call
+  // them and which keeps C1 free for its datasheet meaning.
+  const state = { kind: "mhz", tol: 10, cl: 12.5, stray: 3, c1: 19, c2: 19, c0: 3, cm: 8, pull: 0 };
+
+  // Pullability in ppm/pF from C1 motional (fF), C0 and CL (pF):
+  // Cm / (2(C0+CL)^2) is per pF once Cm is in pF, then x1e6 for ppm.
+  const pullFrom = (cmFF, c0, cl) => ((cmFF / 1000) / (2 * Math.pow(c0 + cl, 2))) * 1e6;
+  const cmFrom = (pull, c0, cl) => (pull / 1e6) * 2 * Math.pow(c0 + cl, 2) * 1000;
+  const round4 = (x) => +x.toPrecision(4);
   const seriesName = () => eSeriesForTolerance(state.tol);
 
-  function setScaled(name, farads) {
-    const units = UNITS[name];
-    const keys = Object.keys(units).sort((a, b) => units[b] - units[a]);
-    const k = keys.find((u) => Math.abs(farads) >= units[u]) || keys[keys.length - 1];
-    state[name] = +(farads / units[k]).toPrecision(4);
-    state[name + "Unit"] = k;
+  // C1 motional is a property of the crystal and stays put when the load
+  // changes; pullability is its slope at the chosen load, so it follows.
+  // Many datasheets give pullability instead of C1, so typing it works too
+  // and C1 is worked back from it.
+  function pullFromCm() {
+    if (state.c0 + state.cl > 0 && state.cm > 0) state.pull = round4(pullFrom(state.cm, state.c0, state.cl));
   }
+  function cmFromPull() {
+    if (state.c0 + state.cl > 0 && state.pull > 0) state.cm = round4(cmFrom(state.pull, state.c0, state.cl));
+  }
+  pullFromCm();
 
   // The spec CL is a datasheet number and is never rewritten. Editing it, or
   // the stray, sizes the pair; editing a capacitor lets the presented load
   // move instead, which is how you check a board someone already built.
   function capsFromSpec() {
-    const want = si("cl") - si("stray");
+    const want = state.cl - state.stray;
     if (!(want > 0)) return;
-    setScaled("c1", 2 * want);
-    setScaled("c2", 2 * want);
+    state.c1 = round4(2 * want);
+    state.c2 = round4(2 * want);
   }
 
   function compute() {
-    const cl = si("cl"), stray = si("stray"), c1 = si("c1"), c2 = si("c2");
-    const c0 = si("c0"), cm = si("cm");
+    const { cl, stray, c1, c2, pull } = state;
     if (!(cl > 0)) return { problem: "The specified load has to be greater than zero." };
     if (!(c1 > 0) || !(c2 > 0)) return { problem: "Both load capacitors have to be greater than zero." };
     if (stray >= cl) {
-      return { problem: `Stray alone is already ${siFormat(stray, "F")}, at or past the ${siFormat(cl, "F")} the crystal wants. Shorten the tracks or pick a crystal specified for a higher load.` };
+      return { problem: `Stray alone is already ${trim(stray)} pF, at or past the ${trim(cl)} pF the crystal wants. Shorten the tracks or pick a crystal specified for a higher load.` };
     }
     const load = (c1 * c2) / (c1 + c2) + stray;
-    // Pullability: differentiate the standard pulling expression about CL, so
-    // it is the slope at the specified load rather than an average over a jump.
-    const pull = c0 > 0 && cm > 0 ? (cm / (2 * Math.pow(c0 + cl, 2))) * 1e-12 * 1e6 : NaN;
     // Below a thousandth of a picofarad the difference is floating-point noise
     // from the capacitor values, not a real mismatch, so it reads as zero.
-    const errPF = Math.abs(load - cl) < 1e-15 ? 0 : (load - cl) / 1e-12;
-    const ppm = isFinite(pull) ? -pull * errPF : NaN;
+    const errPF = Math.abs(load - cl) < 1e-3 ? 0 : load - cl;
+    const ppm = pull > 0 ? -pull * errPF : NaN;
     const ideal = 2 * (cl - stray);
     return {
-      problem: "", load, cl, errPF, pull, ppm,
-      suggested: ideal > 0 ? nearestESeries(ideal / 1e-12, seriesName()).value * 1e-12 : NaN,
+      problem: "", load, errPF, ppm,
+      suggested: ideal > 0 ? nearestESeries(ideal, seriesName()).value : NaN,
     };
   }
 
@@ -16562,7 +16563,7 @@ function renderCrystalLoad(domain, tool, favId) {
   // Pierce, drawn symmetric about the crystal: the two load capacitors are the
   // same part doing the same job on either side, and the picture should say so.
   // The feedback resistor is inside the MCU on every part this applies to, so
-  // it is not drawn — only what gets soldered.
+  // it is not drawn \u2014 only what gets soldered.
   function diagram() {
     const arm = (x, dir) => `
       ${dot(x, 88)}${w(`M${x} 88 H${x + dir * 38}`)}${w(`M${x + dir * 38} 88 V120`)}
@@ -16591,20 +16592,20 @@ function renderCrystalLoad(domain, tool, favId) {
     </div>`;
   }
 
+  const signed = (x) => `${x >= 0 ? "+" : ""}${trim(x)}`;
+
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const offPF = r.errPF;
     const tight = Math.abs(r.ppm) <= 10 ? comp : Math.abs(r.ppm) <= 30 ? "#E0A85E" : "#E08585";
     const caution = Math.abs(r.ppm) > 30
       ? `<div class="error-text" style="color:#E0A85E">${trim(Math.abs(r.ppm))} ppm of pulling is more than most crystals are specified to within. Move the capacitors, or pick a crystal cut for the load this board actually presents.</div>`
       : "";
     return `
       <div class="eseries-grid eseries-grid--tight">
-        ${cell("Load", siFormat(r.load, "F"))}
-        ${cell("Load error", `${offPF >= 0 ? "+" : ""}${trim(offPF)} pF`)}
-        ${cell("Pullability", isFinite(r.pull) ? `${trim(r.pull)} ppm/pF` : "\u2014")}
-        ${cell("Pulled", isFinite(r.ppm) ? `${r.ppm >= 0 ? "+" : ""}${trim(r.ppm)} ppm` : "\u2014", tight)}
-        ${cell("Suggested", isFinite(r.suggested) ? siFormat(r.suggested, "F") : "\u2014")}
+        ${cell("Load", `${trim(r.load)} pF`)}
+        ${cell("Load error", `${signed(r.errPF)} pF`)}
+        ${cell("Pulled", isFinite(r.ppm) ? `${signed(r.ppm)} ppm` : "\u2014", tight)}
+        ${cell("Suggested", isFinite(r.suggested) ? `${trim(r.suggested)} pF` : "\u2014")}
       </div>
       ${caution}`;
   }
@@ -16616,8 +16617,6 @@ function renderCrystalLoad(domain, tool, favId) {
   function syncField(id, name) {
     const el = document.getElementById(id);
     if (el && document.activeElement !== el) el.value = state[name];
-    const u = document.getElementById(id + "-unit");
-    if (u && state[name + "Unit"]) u.value = state[name + "Unit"];
   }
 
   function afterEdit(name) {
@@ -16626,16 +16625,26 @@ function renderCrystalLoad(domain, tool, favId) {
       syncField("xl-c1", "c1");
       syncField("xl-c2", "c2");
     }
+    if (name === "pull") {
+      cmFromPull();
+      syncField("xl-cm", "cm");
+    } else if (name === "cm" || name === "c0" || name === "cl") {
+      pullFromCm();
+      syncField("xl-pull", "pull");
+    }
     refresh();
   }
 
-  function field(id, name, label, units) {
+  // grow: share of the row. Equal thirds clipped the pullability value behind
+  // its "ppm/pF" suffix while C0, which never needs more than "1.5 pF", sat
+  // on space it did not use.
+  function field(id, name, label, unit, grow) {
     return `
-        <div class="field">
+        <div class="field"${grow ? ` style="flex:${grow}"` : ""}>
           <label>${label}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <span class="unit-fixed">${unit}</span>
           </div>
         </div>`;
   }
@@ -16652,16 +16661,17 @@ function renderCrystalLoad(domain, tool, favId) {
       </div>
 
       <div class="field-pair">
-        ${field("xl-cl", "cl", "CL spec", CAP_UNITS)}
-        ${field("xl-stray", "stray", "Stray", CAP_UNITS)}
+        ${field("xl-cl", "cl", "CL spec", "pF")}
+        ${field("xl-stray", "stray", "Stray", "pF")}
       </div>
       <div class="field-pair">
-        ${field("xl-c1", "c1", "CL1", CAP_UNITS)}
-        ${field("xl-c2", "c2", "CL2", CAP_UNITS)}
+        ${field("xl-c1", "c1", "CL1", "pF")}
+        ${field("xl-c2", "c2", "CL2", "pF")}
       </div>
       <div class="field-pair">
-        ${field("xl-c0", "c0", "C0 shunt", CAP_UNITS)}
-        ${field("xl-cm", "cm", "Cm motional", FF_UNITS)}
+        ${field("xl-c0", "c0", "C0 shunt", "pF", 0.85)}
+        ${field("xl-cm", "cm", "C1 motional", "fF", 1)}
+        ${field("xl-pull", "pull", "Pullability", "ppm/pF", 1.3)}
       </div>
 
       <div class="section-label split" style="color:#5DCAA5">
@@ -16676,9 +16686,9 @@ function renderCrystalLoad(domain, tool, favId) {
       ${formulaSection(
         ["Load = CL1 \u00d7 CL2 / (CL1 + CL2) + Stray",
          "CL1 = CL2 = 2 \u00d7 (CL spec \u2212 Stray)",
-         "Pullability = Cm / (2 \u00d7 (C0 + CL spec)\u00b2)",
+         "Pullability = C1 / (2 \u00d7 (C0 + CL spec)\u00b2)",
          "Pulled = \u2212Pullability \u00d7 Load error"],
-        "Stray is the part people leave out: the two tracks and the two oscillator pins, typically 2\u20135 pF together, and it sits in series with nothing \u2014 it adds straight onto the load. Measure or estimate it before trusting the capacitor values. C0 and Cm come off the crystal datasheet; the presets are typical for each family and will be wrong for a specific part. Editing the spec or the stray sizes the pair; editing a capacitor moves the presented load instead, which is how to check a board that already exists."
+        "Where each number comes from: CL spec and C0 are on the crystal datasheet. C1 motional often is not \u2014 when it is missing, type the pullability instead if the datasheet gives it, and C1 is worked back. Stray is never on the crystal datasheet: it is your board, the oscillator pins (sometimes in the MCU datasheet) plus the tracks, typically 2\u20135 pF. The pills load typical C0 and C1 for each family. Editing the spec or the stray sizes the pair; editing a capacitor moves the presented load instead."
       )}
       ${calcFooter()}
     `;
@@ -16686,17 +16696,17 @@ function renderCrystalLoad(domain, tool, favId) {
     wireCalc(favId, paint, (m) => {
       const k = XTAL_KINDS[m];
       state.kind = m;
-      state.c0 = k.c0; state.c0Unit = "pF";
-      state.cm = k.cm; state.cmUnit = "fF";
+      state.c0 = k.c0;
+      state.cm = k.cm;
+      pullFromCm();
       paint();
     });
     document.getElementById("xl-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); refresh(); };
 
-    [["xl-cl", "cl"], ["xl-stray", "stray"], ["xl-c1", "c1"], ["xl-c2", "c2"], ["xl-c0", "c0"], ["xl-cm", "cm"]].forEach(([id, name]) => {
+    [["xl-cl", "cl"], ["xl-stray", "stray"], ["xl-c1", "c1"], ["xl-c2", "c2"],
+     ["xl-c0", "c0"], ["xl-cm", "cm"], ["xl-pull", "pull"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
       if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
-      const u = document.getElementById(id + "-unit");
-      if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; afterEdit(name); };
     });
   }
 

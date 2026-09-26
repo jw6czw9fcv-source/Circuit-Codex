@@ -391,7 +391,7 @@ the difference pulls it.
 The series expression appears in every oscillator application note — ST AN2867,
 the Abracon and Epson design guides, and the NXP equivalents. The pulling
 expression comes from the crystal's equivalent circuit, the Butterworth–Van
-Dyke model: a motional arm of Lm, Cm and Rm in series, all in parallel with the
+Dyke model: a motional arm of L1, C1 and R1 in series, all in parallel with the
 shunt capacitance C0 of the electrodes and holder.
 
 ### Why the formulas are these
@@ -422,7 +422,7 @@ series resonance the motional arm is purely resistive; a little above it the
 arm looks inductive and resonates with everything capacitive across it — C0 and
 whatever load the circuit adds. The parallel-resonant frequency is
 
-    fp = fs × [ 1 + Cm / (2 × (C0 + CL)) ]
+    fp = fs × [ 1 + C1 / (2 × (C0 + CL)) ]
 
 A crystal is cut and trimmed so that this lands on the marked frequency **for
 one particular CL**. Present a different load and it lands somewhere else, which
@@ -431,23 +431,47 @@ is the whole reason the number is on the datasheet.
 Differentiating that with respect to CL gives the sensitivity, which is what the
 tool reports as pullability:
 
-    d(Δf/f) / dCL = − Cm / (2 × (C0 + CL)²)
+    d(Δf/f) / dCL = − C1 / (2 × (C0 + CL)²)
 
 The sign is negative: **more load, lower frequency**. For a typical MHz part
-with Cm = 8 fF and C0 = 3 pF at CL = 12.5 pF that comes to about 16.6 ppm/pF, so
+with C1 = 8 fF and C0 = 3 pF at CL = 12.5 pF that comes to about 16.6 ppm/pF, so
 fitting 22 pF where 19 pF was wanted — 1.5 pF too much load — pulls it roughly
 25 ppm slow. A 32.768 kHz tuning fork has a tenth the motional capacitance and
 pulls far less per pF, around 6 ppm/pF on the same load, which is why watch
 crystals are specified so tightly: there is little room to trim them back.
+
+### Where the inputs come from, and what they are called
+
+Three of the inputs are easy to look for in the wrong place.
+
+- **C0** — on the crystal datasheet, as `C0`, "shunt capacitance" or "static
+  capacitance". Often given only as a maximum; that is usable.
+- **C1** — the motional capacitance, `C1` on datasheets that give it, after
+  the Butterworth–Van Dyke model. **Many do not.** When it is missing, look
+  for a pullability figure in ppm/pF, or a "frequency versus load
+  capacitance" curve, and type that into Pullability instead: the tool works
+  C1 back from it. C1 is the one that stays fixed when the load changes — it
+  is the crystal — while pullability is its slope at whatever load is chosen,
+  so changing CL spec recomputes pullability, not C1.
+- **Stray** — **never** on the crystal datasheet, because it is not the
+  crystal. It is the capacitance of the two oscillator pins, sometimes listed
+  in the MCU datasheet, plus the two tracks. Application notes such as ST
+  AN2867 give 2–5 pF as the usual range; that is an order of magnitude, not a
+  value to copy.
+
+The load capacitors are called **CL1 and CL2** rather than C1 and C2, which is
+how MCU application notes label them and which keeps C1 free for its datasheet
+meaning. Every capacitance here only ever comes in one unit — pF for load,
+stray and shunt, fF for motional — so the fields show the unit fixed rather
+than offering a picker.
 
 ### Assumptions and limits
 
 - **Stray is an estimate and it dominates the mistakes.** Two to five picofarads
   is the usual range for the pins plus short tracks, but a long or guarded
   layout can be well outside it. If the frequency matters, measure.
-- **C0 and Cm come from the datasheet.** The presets are typical for each
-  family, not for any specific part, and a wrong Cm scales the pullability
-  proportionally.
+- The presets are typical for each family, not for any specific part, and
+  a wrong C1 scales the pullability proportionally.
 - The pulling figure is a **slope taken at the specified load**, so it is exact
   for small errors and increasingly optimistic for large ones, since the true
   curve flattens as CL grows.
@@ -475,7 +499,7 @@ The watch preset returns 6.378 ppm/pF against 2.5 fF / (2 × (1.5 + 12.5 pF)²)
 = 6.38 by hand.
 
 The pullability was wrong by twelve orders of magnitude on first write:
-Cm / (2(C0+CL)²) is *per farad*, not dimensionless, because the numerator is
+C1 / (2(C0+CL)²) is *per farad*, not dimensionless, because the numerator is
 first order in capacitance and the denominator is second. It needs multiplying
 by one picofarad to become per-pF. The hand check is what caught it.
 

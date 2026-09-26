@@ -528,6 +528,17 @@ html, body {
      too — the open dropdown is painted by the platform, not by the page. */
   color: var(--text);
 }
+/* A unit that never changes, shown where a picker would sit. Some quantities
+   only ever come in one unit — crystal capacitances are always pF, motional
+   capacitance always fF — and offering nF, µF or F there is noise that
+   invites a wrong entry. Matches the select's type so the row reads the same. */
+.unit-fixed {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
 .field select option {
   color: var(--text);
   background: var(--card);
