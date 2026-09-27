@@ -1306,8 +1306,15 @@ function renderSmdCode(domain, tool, favId) {
     const exponent = e - n + 1;
     if (exponent > 9) return null;
     if (exponent >= 0) return d + String(exponent);
-    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
-    return code.length <= digits + 1 ? code : null;
+    // Below that, R takes the decimal point's place and the marking keeps its
+    // length: two numerals on a 3-digit part (4R7, R47), three on a 4-digit
+    // one (4R70, R470, R010). Counting significant digits instead, as this
+    // once did, printed 10 mΩ as "R0100", five characters no part carries.
+    const frac = digits - 1 - Math.max(0, e + 1);
+    const fixed = ohms.toFixed(frac);
+    if (Number(fixed) === 0) return null;
+    const [whole, part] = fixed.split(".");
+    return `${whole === "0" ? "" : whole}R${part || ""}`;
   }
 
   function ohmsFor(code) {
@@ -1320,8 +1327,9 @@ function renderSmdCode(domain, tool, favId) {
       const v = parseFloat(raw.replace("R", "."));
       return isFinite(v) ? v : NaN;
     }
+    // Zero-ohm links are marked 0, 000 or 0000.
+    if (/^0+$/.test(raw) && raw.length <= digits) return 0;
     if (!/^[0-9]+$/.test(raw) || raw.length !== digits) return NaN;
-    if (Number(raw) === 0) return 0;
     const n = sig();
     return Number(raw.slice(0, n)) * Math.pow(10, Number(raw.slice(n)));
   }
@@ -1382,6 +1390,16 @@ function renderSmdCode(domain, tool, favId) {
       refresh("value", snapped ? `Rounded to the nearest EIA-96 value, ${formatOhms(e.ohms)}.` : "");
       return;
     }
+    // A marking holds two or three significant figures, so a value with more
+    // is rounded to what the part could carry, and the screen says so rather
+    // than showing a code and a resistance that disagree.
+    const code = codeFor(v);
+    const marked = code === null ? NaN : ohmsFor(code);
+    if (isFinite(marked) && Math.abs(marked - v) > v * 1e-9) {
+      state.ohms = marked;
+      refresh("value", `Rounded to what a ${state.mode}-digit marking can show, ${formatOhms(marked)}.`);
+      return;
+    }
     state.ohms = v;
     refresh("value");
   }
@@ -1430,8 +1448,8 @@ function renderSmdCode(domain, tool, favId) {
           ? ["Value = E96 table[2-digit code] × multiplier letter"]
           : [`Value = (${sig() === 2 ? "D1D2" : "D1D2D3"}) × 10^${sig() === 2 ? "D3" : "D4"}`],
         state.mode === "96"
-          ? "The 2-digit index looks up an E96 mantissa; the letter (A, B, C, …) sets which decade it's multiplied into."
-          : "R stands in for the decimal point when there's no room for an exponent — 4R7 marks 4.7 Ω, R47 marks 0.47 Ω."
+          ? "EIA-96 is for small ±1% parts where four digits do not fit. The two digits are not the value but its place among the 96 standard E96 values, 01 = 100 up to 96 = 976, and the letter is the multiplier: X ×0.1, A ×1, B ×10, C ×100, D ×1000. So 01C is 100 × 100 = 10 kΩ. Codes follow IEC 60062:2016."
+          : "Chip resistors are too small for colour bands, so the value is printed as digits. The last digit is how many zeros follow the others: 472 is 47 and two zeros, 4.7 kΩ. 4-digit codes, used on ±1% parts, carry three figures: 4992 is 49.9 kΩ. R stands for the decimal point: 4R7 is 4.7 Ω, R010 is 10 mΩ. 0 or 000 is a zero-ohm link. Codes follow IEC 60062:2016."
       )}
       ${calcFooter()}
     `;

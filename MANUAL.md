@@ -21,6 +21,7 @@ will key on, since that is the id the app already holds for each tool.
 ### Passive components
 
 - Resistors → [Resistor color code](#resistor-color-code)
+- Resistors → [SMD resistor code](#smd-resistor-code)
 
 ### Digital
 
@@ -154,6 +155,95 @@ Brown–black–red–gold reads 1 kΩ ±5%, 950 Ω to 1.05 kΩ, E6. At grey's �
 range reads 999.9 Ω to 1.0001 kΩ — at four figures it had printed as
 "1 kΩ", which the range now shows to enough figures to see. Typing 4.7 k gives
 yellow–violet–red; 0.22 Ω gives red–red–silver.
+
+[↑ Index](#index)
+
+---
+
+<a id="smd-code"></a>
+## SMD resistor code
+
+`calc: smd-code` · Passive components › Resistors
+
+### What it computes
+
+The resistance printed on a surface-mount (chip) resistor, from its marking —
+3-digit, 4-digit or EIA-96 — and the other way round: the marking a value would
+carry. It says whether the value is a standard E-series value.
+
+### Source
+
+**IEC 60062:2016**, *Marking codes for resistors and capacitors*, which defines
+the 3- and 4-character numerical codes, R as the decimal point, and the
+three-character code for E96 values that the industry calls EIA-96.
+
+### What the marking means
+
+A chip resistor is far too small for colour bands, so the value is printed as
+characters, three or four of them.
+
+- **3-digit code** — usual on ±5% parts. The first two digits are the value's
+  figures, the last is how many zeros follow them. 472 is 47 followed by two
+  zeros: 4700 Ω, 4.7 kΩ. 334 is 330 kΩ; 100 is 10 Ω, not 100 Ω.
+- **4-digit code** — usual on ±1% parts, which need a third figure. The first
+  three are the figures, the last the number of zeros. 1001 is 1.00 kΩ, 4992 is
+  49.9 kΩ.
+- **R** — below 10 Ω (3-digit) or 100 Ω (4-digit) there is no zero count small
+  enough, so R stands where the decimal point is. 4R7 is 4.7 Ω, R47 0.47 Ω,
+  47R0 47.0 Ω, R010 10 mΩ — the last one a current-sense resistor.
+- **0, 000 or 0000** — a zero-ohm link, used as a jumper that a pick-and-place
+  machine can fit.
+- **EIA-96** — on small 1% parts (0603 and below) even four characters do not
+  fit. Two digits and a letter do: the digits are not the value but its
+  position among the 96 values of the E96 series, 01 for 100 up to 96 for 976,
+  and the letter is the multiplier. 01C is the first E96 value, 100, times 100:
+  10 kΩ. 68X is 499 × 0.1 = 49.9 Ω.
+
+### How the value is worked out
+
+    3-digit:  Value = D1D2 × 10^D3
+    4-digit:  Value = D1D2D3 × 10^D4
+    EIA-96:   Value = E96[code] × multiplier
+
+EIA-96 multiplier letters: Z ×0.001, Y or R ×0.01, X or S ×0.1, A ×1, B or H
+×10, C ×100, D ×1000, E ×10⁴, F ×10⁵. Where two letters share a multiplier the
+tool reads both and prints the first.
+
+Typing a value runs it backwards. A marking holds only two or three figures, so
+a value with more is rounded to what the part could carry — 12 345 Ω becomes
+1232, 12.3 kΩ — and the tool says so. In EIA-96 only E96 values exist, so a
+value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.
+
+### Assumptions and limits
+
+- **The marking does not say the tolerance.** A 3-digit code is usually ±5% and
+  a 4-digit or EIA-96 code ±1%, but only the datasheet or the reel label says.
+- **Which scheme a part uses** shows in the marking: a letter other than R
+  means EIA-96, and digits only are the 3- or 4-digit code, told apart by how
+  many there are. Pick the pill that matches.
+- **Small parts may not be marked at all.** 0402 and smaller usually carry no
+  marking; the value is only on the reel.
+- Some makers use their own schemes for current-sense resistors (such as a
+  lowercase m for milliohms); those are not covered.
+
+### What it deliberately does not do
+
+- **Colour bands** are the Color code tool.
+- **SMD capacitor and inductor markings** have their own tools, since the same
+  characters mean picofarads or microhenries there.
+
+### How it was checked
+
+Against the examples given with the IEC 60062:2016 codes: 334 is 330 kΩ, 222
+is 2.2 kΩ, 1001 is 1.00 kΩ, 4992 is 49.9 kΩ, R300 is 0.30 Ω, 01C is 10 kΩ; also
+68X is 49.9 Ω and 66B 4.75 kΩ.
+
+The review found four faults, now fixed. 47 mΩ on the 3-digit pill printed
+"R047", four characters, where the marking is R05; 10 mΩ on the 4-digit pill
+printed "R0100", five characters, instead of R010, and typing R010 showed
+R0100 on the chip. A marking of just "0" for a zero-ohm link was rejected. And
+12 345 Ω showed the code 1232 beside a resistance of 12.35 kΩ, with nothing to
+say the code means 12.3 kΩ.
 
 [↑ Index](#index)
 

@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=8bbe7c3df0" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=cf58e36947" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -105,7 +105,7 @@ th { background: var(--card); }
 </div>
 <nav id="index" class="index">
   <h2 class="index-title">Index</h2>
-  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
+  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
 </nav>
 
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
@@ -184,6 +184,81 @@ range reads 999.9 Ω to 1.0001 kΩ — at four figures it had printed as
 "1 kΩ", which the range now shows to enough figures to see. Typing 4.7 k gives
 yellow–violet–red; 0.22 Ω gives red–red–silver.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A0/resistor-color-code">Open the tool</a></p>
+</section>
+<section class="tool" id="smd-code" style="--accent:#5B9BE0">
+  <div class="crumb">Passive components › Resistors</div>
+  <h2>SMD resistor code</h2>
+  <figure class="shot"><img src="manual/img/smd-code.jpg?h=7ffbd2c87a" loading="lazy" alt="SMD code as it appears in the app" width="430" height="932"></figure>
+  <h3>What it computes</h3>
+<p>The resistance printed on a surface-mount (chip) resistor, from its marking —
+3-digit, 4-digit or EIA-96 — and the other way round: the marking a value would
+carry. It says whether the value is a standard E-series value.</p>
+<h3>Source</h3>
+<p><strong>IEC 60062:2016</strong>, <em>Marking codes for resistors and capacitors</em>, which defines
+the 3- and 4-character numerical codes, R as the decimal point, and the
+three-character code for E96 values that the industry calls EIA-96.</p>
+<h3>What the marking means</h3>
+<p>A chip resistor is far too small for colour bands, so the value is printed as
+characters, three or four of them.</p>
+<ul>
+<li><strong>3-digit code</strong> — usual on ±5% parts. The first two digits are the value's
+  figures, the last is how many zeros follow them. 472 is 47 followed by two
+  zeros: 4700 Ω, 4.7 kΩ. 334 is 330 kΩ; 100 is 10 Ω, not 100 Ω.</li>
+<li><strong>4-digit code</strong> — usual on ±1% parts, which need a third figure. The first
+  three are the figures, the last the number of zeros. 1001 is 1.00 kΩ, 4992 is
+  49.9 kΩ.</li>
+<li><strong>R</strong> — below 10 Ω (3-digit) or 100 Ω (4-digit) there is no zero count small
+  enough, so R stands where the decimal point is. 4R7 is 4.7 Ω, R47 0.47 Ω,
+  47R0 47.0 Ω, R010 10 mΩ — the last one a current-sense resistor.</li>
+<li><strong>0, 000 or 0000</strong> — a zero-ohm link, used as a jumper that a pick-and-place
+  machine can fit.</li>
+<li><strong>EIA-96</strong> — on small 1% parts (0603 and below) even four characters do not
+  fit. Two digits and a letter do: the digits are not the value but its
+  position among the 96 values of the E96 series, 01 for 100 up to 96 for 976,
+  and the letter is the multiplier. 01C is the first E96 value, 100, times 100:
+  10 kΩ. 68X is 499 × 0.1 = 49.9 Ω.</li>
+</ul>
+<h3>How the value is worked out</h3>
+<pre><code>3-digit:  Value = D1D2 × 10^D3
+4-digit:  Value = D1D2D3 × 10^D4
+EIA-96:   Value = E96[code] × multiplier
+</code></pre>
+<p>EIA-96 multiplier letters: Z ×0.001, Y or R ×0.01, X or S ×0.1, A ×1, B or H
+×10, C ×100, D ×1000, E ×10⁴, F ×10⁵. Where two letters share a multiplier the
+tool reads both and prints the first.</p>
+<p>Typing a value runs it backwards. A marking holds only two or three figures, so
+a value with more is rounded to what the part could carry — 12 345 Ω becomes
+1232, 12.3 kΩ — and the tool says so. In EIA-96 only E96 values exist, so a
+value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.</p>
+<h3>Assumptions and limits</h3>
+<ul>
+<li><strong>The marking does not say the tolerance.</strong> A 3-digit code is usually ±5% and
+  a 4-digit or EIA-96 code ±1%, but only the datasheet or the reel label says.</li>
+<li><strong>Which scheme a part uses</strong> shows in the marking: a letter other than R
+  means EIA-96, and digits only are the 3- or 4-digit code, told apart by how
+  many there are. Pick the pill that matches.</li>
+<li><strong>Small parts may not be marked at all.</strong> 0402 and smaller usually carry no
+  marking; the value is only on the reel.</li>
+<li>Some makers use their own schemes for current-sense resistors (such as a
+  lowercase m for milliohms); those are not covered.</li>
+</ul>
+<h3>What it deliberately does not do</h3>
+<ul>
+<li><strong>Colour bands</strong> are the Color code tool.</li>
+<li><strong>SMD capacitor and inductor markings</strong> have their own tools, since the same
+  characters mean picofarads or microhenries there.</li>
+</ul>
+<h3>How it was checked</h3>
+<p>Against the examples given with the IEC 60062:2016 codes: 334 is 330 kΩ, 222
+is 2.2 kΩ, 1001 is 1.00 kΩ, 4992 is 49.9 kΩ, R300 is 0.30 Ω, 01C is 10 kΩ; also
+68X is 49.9 Ω and 66B 4.75 kΩ.</p>
+<p>The review found four faults, now fixed. 47 mΩ on the 3-digit pill printed
+"R047", four characters, where the marking is R05; 10 mΩ on the 4-digit pill
+printed "R0100", five characters, instead of R010, and typing R010 showed
+R0100 on the chip. A marking of just "0" for a zero-ohm link was rejected. And
+12 345 Ω showed the code 1232 beside a resistance of 12.35 kΩ, with nothing to
+say the code means 12.3 kΩ.</p>
+  <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A1/smd-code">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Logic gates</div>
