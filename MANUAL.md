@@ -1028,7 +1028,27 @@ so the total is always a little worse than the worse of the two, and a term
 10 dB better than the other barely counts. When jitter is the lower one, the
 tool says so — more bits will not help.
 
-**ENOB.** The SNR equation solved for N, with the level term of MT-003:
+**What ENOB means.** ENOB, the *effective number of bits*, answers the
+question "how many bits is this converter really worth?". The resolution on
+the datasheet, 12 bits say, only counts the codes the ADC can output. A real
+ADC also adds its own noise and distortion, so the last few bits are buried in
+them: they change from reading to reading without telling you anything about
+the signal. ENOB is the resolution of a perfect converter that would be exactly
+as noisy as the real one. A 12-bit ADC with an ENOB of 8.7 gives, on a changing
+signal, the same quality as a flawless 8.7-bit ADC; the bottom 3.3 bits are
+noise. ENOB is not a whole number, because it is worked back from a measured
+ratio, not counted.
+
+**What SINAD means.** SINAD, the *signal-to-noise-and-distortion ratio*, is
+that measured ratio: a pure sine is fed in, and the power of the sine is
+compared with the power of everything else in the output — noise and the
+harmonics that distortion adds. SNR is the same measurement leaving the
+harmonics out, which is why a datasheet's SNR is always the higher of the two.
+Because a perfect N-bit converter has an SINAD of 6.02N + 1.76 dB, the two
+figures are the same fact in different units, and datasheets quote either.
+
+**ENOB from the ratio.** The SNR equation solved for N, with the level term of
+MT-003:
 
     ENOB = (SNR − 1.76 − Level) / 6.02
 
