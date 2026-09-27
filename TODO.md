@@ -431,4 +431,8 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
       says in plain words what the tool and its terms mean before the
       formulas. Pierre, 2026-09-27: the user has to understand how every
       function works, briefly in the app, fully in the manual.
-- [ ] Help screen that presents MANUAL.md in the app
+- [ ] Manual as in-app HTML + PDF — a script builds the manual page from
+      MANUAL.md (index first, clickable; app screenshots taken at 430x932
+      by headless Chrome) and a downloadable PDF from the same page.
+      Regenerated in one command, never edited by hand. Not Word — Pierre,
+      2026-09-27.

@@ -3,13 +3,20 @@
 const VERSION = "v411";
 const CACHE = `circuit-codex-${VERSION}`;
 
+// The query must match what index.html asks for, or the precache holds copies
+// under keys nothing requests and a first offline launch has no app. It was
+// left at ?v=351 through sixty releases; deriving it from VERSION keeps the
+// two from drifting apart again.
+const V = VERSION.slice(1);
 const ASSETS = [
   "./",
   "./index.html",
-  "./css/styles.css?v=351",
-  "./js/data.js?v=351",
-  "./js/formulas.js?v=351",
-  "./js/app.js?v=351",
+  `./css/styles.css?v=${V}`,
+  `./js/data.js?v=${V}`,
+  `./js/formulas.js?v=${V}`,
+  `./js/manual-index.js?v=${V}`,
+  `./js/app.js?v=${V}`,
+  "./manual.html",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

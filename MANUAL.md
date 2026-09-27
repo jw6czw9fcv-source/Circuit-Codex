@@ -4,8 +4,11 @@ The theory behind each tool. This file is the **content**; the Help screen that
 presents it gets built once, at the end, when the structure is obvious.
 
 The in-app note on a tool carries only what you need to use it without getting a
-wrong answer. Everything else — where a formula comes from, why a bound exists,
-what the method can and cannot see — lives here.
+wrong answer, plus a line on what the tool does and what each of its terms
+means — enough to understand it, not to derive it. Everything else — where a
+formula comes from, why a bound exists, what the method can and cannot see —
+lives here, starting with a plain explanation of what the tool and its terms
+mean, for a reader who has never met them.
 
 <a id="index"></a>
 ## Index
@@ -14,6 +17,10 @@ Links point at the anchors the renderer makes from the headings, which is the
 form that works in the most places. Each section also carries an explicit
 `calc:` id anchor — `#karnaugh`, `#i2c-pullup` — which is what the Help screen
 will key on, since that is the id the app already holds for each tool.
+
+### Passive components
+
+- Resistors → [Resistor color code](#resistor-color-code)
 
 ### Digital
 
@@ -38,6 +45,9 @@ Every tool gets the same five headings, in this order:
 - **What it computes** — the job, in a sentence or two.
 - **Source** — the standard, datasheet or derivation the numbers come from. If
   there is no citable source, say so.
+- **What it means** — the tool and its terms in plain words, before any
+  formula, so a beginner can follow what the numbers are. For a reference
+  table this may be most of the section.
 - **Why the formulas are these** — the derivation. This is the part that cannot
   be written later from memory, so it is written while the tool is built.
 - **Assumptions and limits** — what has been idealised away, and where the
@@ -51,6 +61,101 @@ is what answers "why should I trust this number".
 Sections are written as each tool is built. Tools built before this decision get
 theirs when they are next touched, and a completeness pass before release
 catches whatever is still missing.
+
+---
+
+# Passive components
+
+<a id="resistor-color-code"></a>
+## Resistor color code
+
+`calc: resistor-color-code` · Passive components › Resistors
+
+### What it computes
+
+The resistance, tolerance and, on 6-band parts, temperature coefficient that a
+resistor's colour bands stand for — and the other way round: type a value and
+it shows the bands. It also says whether the value is a standard E-series value
+and, if not, the nearest one.
+
+### Source
+
+**IEC 60062:2016**, *Marking codes for resistors and capacitors*. Its table
+gives each colour a digit, a multiplier, a tolerance and a temperature
+coefficient.
+
+### What the bands mean
+
+A resistor is too small to print a number on, so the value is painted as rings
+of colour, one digit per ring. Each colour stands for a digit from 0 to 9:
+black 0, brown 1, red 2, orange 3, yellow 4, green 5, blue 6, violet 7,
+grey 8, white 9.
+
+- **Digit bands** — the first two (4-band parts) or three (5- and 6-band parts)
+  give the significant figures.
+- **Multiplier** — the next band says how many zeros follow, as a power of ten:
+  red is ×100, orange ×1000. Gold (×0.1) and silver (×0.01) make values below
+  10 Ω.
+- **Tolerance** — how far the actual resistance may be from the marked value:
+  gold ±5% means a 1 kΩ part measures somewhere from 950 Ω to 1050 Ω. Leaving
+  the band off means ±20%.
+- **Temperature coefficient** (6-band only) — how much the resistance drifts
+  per degree of temperature change, in parts per million per kelvin: brown is
+  100 ppm/K, so 0.01% per degree.
+
+Brown–black–red–gold is therefore 1, 0, ×100, ±5%: 1 kΩ ±5%.
+
+**Which end to start from.** The tolerance band usually stands apart from the
+others, on the right; the digits are bunched on the left. Gold and silver are
+never digits, so a part with gold at one end is read from the other.
+
+**Standard values.** Resistors are made only in preferred values, the
+E-series, spaced so that neighbouring values just overlap within their
+tolerance. The tool reports the coarsest series the value belongs to — 4.7 kΩ
+is an E6 value even when bought at 1% — and when the value is in none, the
+nearest one in the series its tolerance implies.
+
+### How the value is worked out
+
+    4 bands:  Value = (10 × D1 + D2) × Multiplier
+    5, 6:     Value = (100 × D1 + 10 × D2 + D3) × Multiplier
+
+Typing a value runs it backwards: the value is split into as many significant
+digits as the band count allows, rounded, and the remaining power of ten picks
+the multiplier colour. The smallest value a code can show is 0.1 Ω on 4 bands
+(brown–black–silver) and 1 Ω on 5 or 6; the largest is 99 GΩ and 999 GΩ.
+Outside that there is no band for it, and the tool says so.
+
+### Assumptions and limits
+
+- **The 2016 tolerance colours.** IEC 60062:2016 made orange ±0.05%, yellow
+  ±0.02% and grey ±0.01%. Before that edition some manufacturers used grey for
+  a non-standard ±0.05%, so a grey tolerance band on an old part may mean that.
+- **Colours are only as good as the light.** Red, orange and brown are easily
+  confused on a real part, and so are violet and grey. When in doubt, measure.
+- **Zero-ohm links** are marked with a single black band and are not a colour
+  code as such.
+
+### What it deliberately does not do
+
+- **Capacitor and inductor colour codes** have their own tools, since the same
+  colours mean different units and tolerances there.
+- **SMD resistor codes** (the three- and four-digit and EIA-96 markings) are
+  the SMD code tool.
+
+### How it was checked
+
+Against the IEC 60062:2016 table: digits, multipliers, tolerances and
+temperature coefficients for every colour. This check found the app had grey
+as ±0.05%, the pre-2016 non-standard value, and no tolerance for orange or
+yellow; all three now follow the standard.
+
+Brown–black–red–gold reads 1 kΩ ±5%, 950 Ω to 1.05 kΩ, E6. At grey's ±0.01% the
+range reads 999.9 Ω to 1.0001 kΩ — at four figures it had printed as
+"1 kΩ", which the range now shows to enough figures to see. Typing 4.7 k gives
+yellow–violet–red; 0.22 Ω gives red–red–silver.
+
+[↑ Index](#index)
 
 ---
 

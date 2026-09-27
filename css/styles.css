@@ -1066,3 +1066,12 @@ html, body {
   padding: 10px 4px 6px;
 }
 .tt-out { color: #5DCAA5; font-weight: 600; }
+
+/* Link from a tool's formula card to its section of the manual. */
+.manual-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 10px; font-size: 14px; font-weight: 600;
+  color: #8FC1F5; text-decoration: none;
+}
+.manual-link svg { width: 17px; height: 17px; flex-shrink: 0; }
+a.icon-btn { text-decoration: none; }

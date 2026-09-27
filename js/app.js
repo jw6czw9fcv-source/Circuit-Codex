@@ -85,6 +85,7 @@ const ICONS = {
   star: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 3 L14.6 9.3 L21.4 9.8 L16.2 14.1 L17.9 20.7 L12 17.1 L6.1 20.7 L7.8 14.1 L2.6 9.8 L9.4 9.3 Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
   chevronLeft: `<svg viewBox="0 0 24 24" fill="none"><path d="M15 5 L8 12 L15 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   chevronRight: `<svg viewBox="0 0 24 24" fill="none"><path d="M9 5 L16 12 L9 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  book: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 6.5 C10 5 7 4.5 3.5 5 V18.5 C7 18 10 18.5 12 20 C14 18.5 17 18 20.5 18.5 V5 C17 4.5 14 5 12 6.5 Z M12 6.5 V20" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
   info: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11 V16 M12 8 V8.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   bolt2: `<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 L4 14 H11 L9 22 L20 9 H13 L15 2 Z" fill="currentColor"/></svg>`,
   reset: `<svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 4 V9 H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
@@ -122,7 +123,11 @@ function renderHome() {
   const domains = DOMAINS.filter(d => d.id !== "tools");
   const toolsDomain = DOMAINS.find(d => d.id === "tools");
   app.innerHTML = `
-    <div class="topbar"><h1>Circuit Codex</h1></div>
+    <div class="topbar back-row">
+      <span class="icon-btn" style="visibility:hidden">${ICONS.book}</span>
+      <h1>Circuit Codex</h1>
+      <a class="icon-btn" href="manual.html" aria-label="Manual">${ICONS.book}</a>
+    </div>
     <div class="sub">Electronics reference and tools</div>
     <div class="domain-grid">
       ${domains.map(d => `
@@ -180,7 +185,12 @@ function findTool(key) {
   return { domain: d, section: sec, tool, key };
 }
 
+// The tool on screen, so shared pieces like formulaSection can link to its
+// manual section without every calculator passing its id along.
+let CURRENT_CALC = null;
+
 function renderTool(rawKey, calcId) {
+  CURRENT_CALC = calcId;
   const key = decodeURIComponent(rawKey);
   const found = findTool(key);
   if (!found) return renderHome();
@@ -425,11 +435,16 @@ function calcFooter(note) {
 // screen's own card styling. Scrolling to see it is fine: unlike the rest of
 // a calculator screen, this section only exists to be read, not glanced at.
 function formulaSection(lines, note) {
+  // The note is kept short on purpose; the manual has the rest, so a tool
+  // that has a section says where to find it.
+  const more = typeof MANUAL_SECTIONS !== "undefined" && MANUAL_SECTIONS.has(CURRENT_CALC)
+    ? `<a class="manual-link" href="manual.html#${CURRENT_CALC}">${ICONS.book}Read more in the manual</a>` : "";
   return `
     <div class="section-label" style="color:#9AA0A8">Formula</div>
     <div class="formula-card formula-card--static" style="margin:0 16px 10px;">
       ${lines.map(l => `<div class="formula-line">${l}</div>`).join("")}
       ${note ? `<div class="formula-card-note">${note}</div>` : ""}
+      ${more}
     </div>`;
 }
 
@@ -674,12 +689,15 @@ const BAND_COLORS = {
   black:  { hex: "#1A1A1A", digit: 0, mult: 1,    tol: 20, tc: 250 },
   brown:  { hex: "#7A4A21", digit: 1, mult: 1e1,  tol: 1,    tc: 100 },
   red:    { hex: "#C62828", digit: 2, mult: 1e2,  tol: 2,    tc: 50 },
-  orange: { hex: "#EF6C00", digit: 3, mult: 1e3,             tc: 15 },
-  yellow: { hex: "#F2C200", digit: 4, mult: 1e4,             tc: 25 },
+  // Orange, yellow and grey tolerances are IEC 60062:2016's. Before that
+  // edition some makers used grey for a non-standard ±0.05%, which is what
+  // this table said until it was checked against the standard.
+  orange: { hex: "#EF6C00", digit: 3, mult: 1e3,  tol: 0.05, tc: 15 },
+  yellow: { hex: "#F2C200", digit: 4, mult: 1e4,  tol: 0.02, tc: 25 },
   green:  { hex: "#2E8B45", digit: 5, mult: 1e5,  tol: 0.5,  tc: 20 },
   blue:   { hex: "#2160C4", digit: 6, mult: 1e6,  tol: 0.25, tc: 10 },
   violet: { hex: "#7C4DBE", digit: 7, mult: 1e7,  tol: 0.1,  tc: 5 },
-  grey:   { hex: "#9AA0A8", digit: 8, mult: 1e8,  tol: 0.05, tc: 1 },
+  grey:   { hex: "#9AA0A8", digit: 8, mult: 1e8,  tol: 0.01, tc: 1 },
   white:  { hex: "#F2F2F2", digit: 9, mult: 1e9 },
   gold:   { hex: "#C9A227",           mult: 0.1,  tol: 5 },
   silver: { hex: "#C0C4C8",           mult: 0.01, tol: 10 },
@@ -864,7 +882,7 @@ function syncSliderPositions(series, getOhms, getBounds) {
   });
 }
 
-const TOL_ORDER = ["brown", "red", "green", "blue", "violet", "grey", "gold", "silver", "none"];
+const TOL_ORDER = ["brown", "red", "orange", "yellow", "green", "blue", "violet", "grey", "gold", "silver", "none"];
 
 const BAND_ROLE_LABEL = {
   d1: "1st digit", d2: "2nd digit", d3: "3rd digit",
@@ -1030,6 +1048,13 @@ function renderResistorColorCode(domain, tool, favId) {
     syncRollers();
   }
 
+  // The tolerance range needs as many figures as the tolerance is fine: at
+  // ±0.01% a 1 kΩ part spans 999.9 Ω to 1.0001 kΩ, which four figures would
+  // print as "1 kΩ" and hide.
+  function rangeOhms(v, tol) {
+    return siFormat(v, "Ω", tol < 0.1 ? 6 : tol < 1 ? 5 : 4);
+  }
+
   // Report the coarsest series the value belongs to, not the one its tolerance
   // implies: 4.7k is a stock E6 value even when bought at 2%, and calling that
   // "not E48" would be true of the grid but misleading about the part. The
@@ -1059,7 +1084,7 @@ function renderResistorColorCode(domain, tool, favId) {
     app.querySelector('[data-res="ohms"]').textContent = formatOhms(r.ohms);
     app.querySelector('[data-res="tol"]').textContent = `±${r.tol}%`;
     app.querySelector('[data-res="sub"]').innerHTML =
-      `${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}`;
+      `${rangeOhms(r.min, r.tol)} – ${rangeOhms(r.max, r.tol)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}`;
     app.querySelector('[data-res="series"]').textContent = seriesLine(r);
 
     // Mirror the bands back into the value field, unless the user is mid-edit
@@ -1119,14 +1144,14 @@ function renderResistorColorCode(domain, tool, favId) {
           <span class="unit" data-res="tol">±${r.tol}%</span>
         </div>
         <div class="result-sub" data-res="series">${seriesLine(r)}</div>
-        <div class="result-sub" data-res="sub">${formatOhms(r.min)} – ${formatOhms(r.max)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}</div>
+        <div class="result-sub" data-res="sub">${rangeOhms(r.min, r.tol)} – ${rangeOhms(r.max, r.tol)}${r.tc === null ? "" : ` &nbsp;·&nbsp; ${r.tc} ppm/K`}</div>
       </div>
 
       ${formulaSection(
         [roles.filter(x => x[0] === "d").length === 2
           ? "Value = (10 × D1 + D2) × Multiplier"
           : "Value = (100 × D1 + 10 × D2 + D3) × Multiplier"],
-        "Tolerance band sets ±%; the temperature-coefficient band (6-band only) adds ppm/K drift per degree."
+        "The first two or three bands are digits and the next is the multiplier, how many zeros follow. Then comes the tolerance: how far the real part may be from the marked value. On 6-band parts the last band is the temperature coefficient, the drift in ppm per degree. Read from the end away from the gap: tolerance stands apart on the right, and gold or silver is never first. Type a value to get its bands. Colours follow IEC 60062:2016."
       )}
       ${calcFooter()}
     `;
@@ -4626,9 +4651,11 @@ function renderIpRatings(domain, tool, favId) {
 // working code for a second consumer that doesn't exist yet beyond this one.
 const INDUCTOR_UNITS = { nH: 1e-3, "µH": 1, mH: 1e3, H: 1e6 };
 // Inductor-only: adds "black" (±20%, an alternate to leaving the band off)
-// ahead of "none" — kept separate from the resistor screen's TOL_ORDER so
-// that addition can't leak into the resistor tolerance picker.
-const INDUCTOR_TOL_ORDER = [...TOL_ORDER.slice(0, -1), "black", "none"];
+// ahead of "none". Spelled out rather than derived from TOL_ORDER, so the
+// resistor's precision bands (orange, yellow: ±0.05%, ±0.02%) stay off it —
+// no inductor is made to those. Grey's meaning on inductors is to be checked
+// when this screen is reviewed.
+const INDUCTOR_TOL_ORDER = ["brown", "red", "green", "blue", "violet", "grey", "gold", "silver", "black", "none"];
 
 function formatInductance(uH) {
   if (!isFinite(uH)) return "—";
