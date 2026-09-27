@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=cf58e36947" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=06852974b7" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -105,7 +105,7 @@ th { background: var(--card); }
 </div>
 <nav id="index" class="index">
   <h2 class="index-title">Index</h2>
-  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
+  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
 </nav>
 
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
@@ -259,6 +259,85 @@ R0100 on the chip. A marking of just "0" for a zero-ohm link was rejected. And
 12 345 Ω showed the code 1232 beside a resistance of 12.35 kΩ, with nothing to
 say the code means 12.3 kΩ.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A1/smd-code">Open the tool</a></p>
+</section>
+<section class="tool" id="resistor-power-rating" style="--accent:#5B9BE0">
+  <div class="crumb">Passive components › Resistors</div>
+  <h2>Resistor power rating</h2>
+  <figure class="shot"><img src="manual/img/resistor-power-rating.jpg?h=780b0577d2" loading="lazy" alt="Power rating as it appears in the app" width="430" height="932"></figure>
+  <h3>What it computes</h3>
+<p>A reference table: how much power each common resistor size can dissipate, with
+its dimensions. Surface-mount parts are listed by package code, with their
+maximum working voltage; through-hole parts by their wattage class, with a
+typical body size. It can be filtered to SMD or through-hole and searched by
+package or wattage.</p>
+<h3>Source</h3>
+<ul>
+<li><strong>SMD</strong> — Yageo's RC_L general-purpose thick-film chip resistor datasheet
+  (V.11): rated power at 70 °C, maximum working voltage and operating
+  temperature range for each size from 01005 to 2512. These are the
+  conventional figures most tables repeat.</li>
+<li><strong>Vishay D/CRCW e3</strong> (revision April 2026) as the counter-example: the same
+  sizes rated higher, 0.125 W for 0603 and 0.25 W for 0805.</li>
+<li><strong>Through-hole</strong> body sizes are typical ranges from distributor listings,
+  not a standard.</li>
+</ul>
+<h3>What it means</h3>
+<p>When current flows through a resistor, the resistor turns electrical power into
+heat. The power rating is the most heat it can get rid of, continuously,
+without being damaged or drifting out of tolerance. Exceed it and the part
+runs hot, its value shifts, and eventually it fails.</p>
+<p>The power a resistor actually has to handle comes from what is across it or
+through it:</p>
+<pre><code>P = V² / R = I² × R
+</code></pre>
+<p>A 1 kΩ resistor with 5 V across it dissipates 25 / 1000 = 25 mW, well inside an
+0603's 100 mW. The same resistor at 12 V dissipates 144 mW, and needs an 0805
+at least, or better a 1206.</p>
+<p><strong>Temperature.</strong> The rating holds only while the air around the part is at
+70 °C or cooler. Above that the part can shed less heat, and the allowed power
+falls in a straight line to nothing at 155 °C, the maximum film temperature —
+125 °C for 0201 and 01005. A common rule is to use no more than half the
+rating, which leaves room for a warm enclosure and for the board around the
+part heating it too.</p>
+<p><strong>Voltage.</strong> Each size also has a maximum working voltage, set by the gap
+between its terminals. For high resistance values this limit is reached before
+the power one:</p>
+<pre><code>V = √(P × R), or the maximum working voltage, whichever is lower
+</code></pre>
+<p>An 0603 (1/10 W, 75 V) at 1 MΩ would reach its power rating at 316 V, but may
+only see 75 V, which is 75² / 1 MΩ = 5.6 mW. For high-voltage dividers the
+voltage rating, not the wattage, sets the size — or several resistors in
+series share the voltage.</p>
+<h3>Assumptions and limits</h3>
+<ul>
+<li><strong>Ratings depend on the series, not only the size.</strong> The table gives the
+  conventional general-purpose figures; anti-surge, high-power and some newer
+  thick-film series rate the same package two or four times higher. The part's
+  own datasheet has the last word.</li>
+<li><strong>The board matters.</strong> An SMD rating assumes the copper pads and board carry
+  heat away as in the maker's test. Small pads, thin copper or neighbouring hot
+  parts lower it.</li>
+<li><strong>Through-hole sizes vary by maker and technology</strong>: a metal-film 1/4 W part
+  and a carbon-film one are not the same size. The ranges are for recognising a
+  part, not for a footprint.</li>
+<li>Pulses are a separate question: a short pulse can exceed the continuous
+  rating, within limits the datasheet gives as a pulse curve.</li>
+</ul>
+<h3>What it deliberately does not do</h3>
+<ul>
+<li><strong>Package dimensions in detail</strong> (pad sizes, heights) are the SMD package
+  sizes tool.</li>
+<li><strong>Temperature rise</strong> from a given power and board is a thermal calculation,
+  not a rating lookup.</li>
+</ul>
+<h3>How it was checked</h3>
+<p>Every SMD power rating, working voltage and the 125 °C / 155 °C limits against
+the Yageo RC_L datasheet. The review corrected the 1210's size in inches, which
+read 0.12″ × 0.125″ against the 0.12″ × 0.10″ its name encodes, and the
+0805's width to 1.25 mm; it also withdrew the claim that SMD ratings are
+standard across manufacturers, which the Vishay datasheet contradicts. The
+maximum working voltages were added then.</p>
+  <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A2/resistor-power-rating">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Logic gates</div>

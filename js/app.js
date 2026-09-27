@@ -5822,9 +5822,11 @@ function renderSmdPackageSizes(domain, tool, favId) {
 }
 
 // ---------- Resistor power rating ----------
-// Two genuinely different kinds of table, not one. SMD power rating is set
-// by the package code the same way its physical size is — 0603 means
-// 1/10 W the way it means 1.6×0.8mm, a real industry-standard lookup.
+// Two genuinely different kinds of table, not one. SMD power rating follows
+// the package: these are the general-purpose thick-film ratings at 70 °C and
+// the maximum working voltages from Yageo's RC_L datasheet, the conventional
+// figures. They are not universal — Vishay's CRCW e3 rates 0603 at 0.125 W
+// and 0805 at 0.25 W — so the screen says whose they are.
 // Through-hole has no equivalent code: a "1/4W resistor" is a wattage spec,
 // not a size spec, and the body that delivers it is genuinely
 // manufacturer-dependent (carbon film and metal film parts rated the same
@@ -5833,15 +5835,15 @@ function renderSmdPackageSizes(domain, tool, favId) {
 // sizes as the SMD package sizes screen; the THT figures are typical
 // ranges, not a spec to design against.
 const RESISTOR_POWER = [
-  { group: "smd", imperial: "01005", metric: "0402", watts: "1/32 W (≈0.031 W)", inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine-placement only — below practical hand-soldering size." },
-  { group: "smd", imperial: "0201", metric: "0603", watts: "1/20 W (0.05 W)", inches: "0.02\" × 0.01\"", mm: "0.6 × 0.3 mm", note: "Rare as a resistor outside very dense boards." },
-  { group: "smd", imperial: "0402", metric: "1005", watts: "1/16 W (0.0625 W)", inches: "0.04\" × 0.02\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
-  { group: "smd", imperial: "0603", metric: "1608", watts: "1/10 W (0.1 W)", inches: "0.06\" × 0.03\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size." },
-  { group: "smd", imperial: "0805", metric: "2012", watts: "1/8 W (0.125 W)", inches: "0.08\" × 0.05\"", mm: "2.0 × 1.2 mm", note: "The easiest common size to hand-solder." },
-  { group: "smd", imperial: "1206", metric: "3216", watts: "1/4 W (0.25 W)", inches: "0.12\" × 0.06\"", mm: "3.2 × 1.6 mm", note: "Reach for this over 0805 when a design needs the extra headroom." },
-  { group: "smd", imperial: "1210", metric: "3225", watts: "1/2 W (0.5 W)", inches: "0.12\" × 0.125\"", mm: "3.2 × 2.5 mm", note: "Getting into current-sense and small power-resistor territory." },
-  { group: "smd", imperial: "2010", metric: "5025", watts: "3/4 W (0.75 W)", inches: "0.20\" × 0.10\"", mm: "5.0 × 2.5 mm", note: "Less common — mostly current-sense and power applications." },
-  { group: "smd", imperial: "2512", metric: "6332", watts: "1 W (1.0 W)", inches: "0.25\" × 0.125\"", mm: "6.3 × 3.2 mm", note: "The common largest standard SMD size before wirewound/thick-film chips take over." },
+  { group: "smd", imperial: "01005", metric: "0402", watts: "1/32 W (≈0.031 W)", volts: 15, inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine-placement only — below practical hand-soldering size." },
+  { group: "smd", imperial: "0201", metric: "0603", watts: "1/20 W (0.05 W)", volts: 25, inches: "0.02\" × 0.01\"", mm: "0.6 × 0.3 mm", note: "Rare as a resistor outside very dense boards." },
+  { group: "smd", imperial: "0402", metric: "1005", watts: "1/16 W (0.0625 W)", volts: 50, inches: "0.04\" × 0.02\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
+  { group: "smd", imperial: "0603", metric: "1608", watts: "1/10 W (0.1 W)", volts: 75, inches: "0.06\" × 0.03\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size." },
+  { group: "smd", imperial: "0805", metric: "2012", watts: "1/8 W (0.125 W)", volts: 150, inches: "0.08\" × 0.05\"", mm: "2.0 × 1.25 mm", note: "The easiest common size to hand-solder." },
+  { group: "smd", imperial: "1206", metric: "3216", watts: "1/4 W (0.25 W)", volts: 200, inches: "0.12\" × 0.06\"", mm: "3.2 × 1.6 mm", note: "Reach for this over 0805 when a design needs the extra headroom." },
+  { group: "smd", imperial: "1210", metric: "3225", watts: "1/2 W (0.5 W)", volts: 200, inches: "0.12\" × 0.10\"", mm: "3.2 × 2.5 mm", note: "Getting into current-sense and small power-resistor territory." },
+  { group: "smd", imperial: "2010", metric: "5025", watts: "3/4 W (0.75 W)", volts: 200, inches: "0.20\" × 0.10\"", mm: "5.0 × 2.5 mm", note: "Less common — mostly current-sense and power applications." },
+  { group: "smd", imperial: "2512", metric: "6332", watts: "1 W (1.0 W)", volts: 200, inches: "0.25\" × 0.12\"", mm: "6.3 × 3.2 mm", note: "The common largest standard SMD size before wirewound/thick-film chips take over." },
   { group: "tht", code: "1/8 W", watts: "0.125 W", size: "≈3.2–3.6 mm body × 1.6–1.8 mm dia.", note: "Small axial; used in dense hobbyist/prototyping boards where SMD isn't." },
   { group: "tht", code: "1/4 W", watts: "0.25 W", size: "≈6.0–6.5 mm body × 2.2–2.6 mm dia.", note: "The classic general-purpose through-hole size — what most people picture as \"a resistor\"." },
   { group: "tht", code: "1/2 W", watts: "0.5 W", size: "≈9.0–9.5 mm body × 3.4–3.6 mm dia.", note: "Reach for this when 1/4W runs too hot — higher-voltage pull-ups, LED strings." },
@@ -5863,7 +5865,7 @@ function renderResistorPowerRating(domain, tool, favId) {
         <div class="formula-card-head">
           <span class="formula-card-title">${title}</span>
         </div>
-        <div class="breadcrumb">${p.watts}</div>
+        <div class="breadcrumb">${p.watts}${p.volts ? ` &nbsp;·&nbsp; ${p.volts} V max` : ""}</div>
         <div class="formula-line">${size}</div>
         ${p.note ? `<div class="formula-card-note">${p.note}</div>` : ""}
       </div>`;
@@ -5882,7 +5884,7 @@ function renderResistorPowerRating(domain, tool, favId) {
 
   function groupedHTML(list) {
     const groups = [
-      { key: "smd", name: "SMD — set by package code, standard across manufacturers" },
+      { key: "smd", name: "SMD — general-purpose ratings at 70 °C (Yageo RC_L)" },
       { key: "tht", name: "Through-hole — set by the part, not a code; sizes below are typical only" },
     ];
     return groups
@@ -5916,6 +5918,10 @@ function renderResistorPowerRating(domain, tool, favId) {
         <input id="rpr-input" type="text" placeholder="Search a package or wattage" autocapitalize="off" spellcheck="false" value="${state.query}" />
       </div>
       <div id="rpr-results"></div>
+      ${formulaSection(
+        ["P = V² / R = I² × R", "Vmax = √(P × R), or the V max if lower"],
+        "A resistor turns current into heat, and its power rating is the most it can shed continuously without damage. The rating holds up to 70 °C around the part and falls off above that, to nothing at 155 °C (125 °C for 0201 and smaller), so design to about half of it. On high values the voltage limit comes first: a 0603 at 75 V can only dissipate 75² / 1 MΩ = 5.6 mW. Other series rate the same size higher — Vishay CRCW e3 gives 0.125 W for 0603 — so the part's datasheet has the last word."
+      )}
       ${tabbarHTML("")}
     `;
 

@@ -22,6 +22,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Resistors → [Resistor color code](#resistor-color-code)
 - Resistors → [SMD resistor code](#smd-resistor-code)
+- Resistors → [Resistor power rating](#resistor-power-rating)
 
 ### Digital
 
@@ -244,6 +245,99 @@ printed "R0100", five characters, instead of R010, and typing R010 showed
 R0100 on the chip. A marking of just "0" for a zero-ohm link was rejected. And
 12 345 Ω showed the code 1232 beside a resistance of 12.35 kΩ, with nothing to
 say the code means 12.3 kΩ.
+
+[↑ Index](#index)
+
+---
+
+<a id="resistor-power-rating"></a>
+## Resistor power rating
+
+`calc: resistor-power-rating` · Passive components › Resistors
+
+### What it computes
+
+A reference table: how much power each common resistor size can dissipate, with
+its dimensions. Surface-mount parts are listed by package code, with their
+maximum working voltage; through-hole parts by their wattage class, with a
+typical body size. It can be filtered to SMD or through-hole and searched by
+package or wattage.
+
+### Source
+
+- **SMD** — Yageo's RC_L general-purpose thick-film chip resistor datasheet
+  (V.11): rated power at 70 °C, maximum working voltage and operating
+  temperature range for each size from 01005 to 2512. These are the
+  conventional figures most tables repeat.
+- **Vishay D/CRCW e3** (revision April 2026) as the counter-example: the same
+  sizes rated higher, 0.125 W for 0603 and 0.25 W for 0805.
+- **Through-hole** body sizes are typical ranges from distributor listings,
+  not a standard.
+
+### What it means
+
+When current flows through a resistor, the resistor turns electrical power into
+heat. The power rating is the most heat it can get rid of, continuously,
+without being damaged or drifting out of tolerance. Exceed it and the part
+runs hot, its value shifts, and eventually it fails.
+
+The power a resistor actually has to handle comes from what is across it or
+through it:
+
+    P = V² / R = I² × R
+
+A 1 kΩ resistor with 5 V across it dissipates 25 / 1000 = 25 mW, well inside an
+0603's 100 mW. The same resistor at 12 V dissipates 144 mW, and needs an 0805
+at least, or better a 1206.
+
+**Temperature.** The rating holds only while the air around the part is at
+70 °C or cooler. Above that the part can shed less heat, and the allowed power
+falls in a straight line to nothing at 155 °C, the maximum film temperature —
+125 °C for 0201 and 01005. A common rule is to use no more than half the
+rating, which leaves room for a warm enclosure and for the board around the
+part heating it too.
+
+**Voltage.** Each size also has a maximum working voltage, set by the gap
+between its terminals. For high resistance values this limit is reached before
+the power one:
+
+    V = √(P × R), or the maximum working voltage, whichever is lower
+
+An 0603 (1/10 W, 75 V) at 1 MΩ would reach its power rating at 316 V, but may
+only see 75 V, which is 75² / 1 MΩ = 5.6 mW. For high-voltage dividers the
+voltage rating, not the wattage, sets the size — or several resistors in
+series share the voltage.
+
+### Assumptions and limits
+
+- **Ratings depend on the series, not only the size.** The table gives the
+  conventional general-purpose figures; anti-surge, high-power and some newer
+  thick-film series rate the same package two or four times higher. The part's
+  own datasheet has the last word.
+- **The board matters.** An SMD rating assumes the copper pads and board carry
+  heat away as in the maker's test. Small pads, thin copper or neighbouring hot
+  parts lower it.
+- **Through-hole sizes vary by maker and technology**: a metal-film 1/4 W part
+  and a carbon-film one are not the same size. The ranges are for recognising a
+  part, not for a footprint.
+- Pulses are a separate question: a short pulse can exceed the continuous
+  rating, within limits the datasheet gives as a pulse curve.
+
+### What it deliberately does not do
+
+- **Package dimensions in detail** (pad sizes, heights) are the SMD package
+  sizes tool.
+- **Temperature rise** from a given power and board is a thermal calculation,
+  not a rating lookup.
+
+### How it was checked
+
+Every SMD power rating, working voltage and the 125 °C / 155 °C limits against
+the Yageo RC_L datasheet. The review corrected the 1210's size in inches, which
+read 0.12″ × 0.125″ against the 0.12″ × 0.10″ its name encodes, and the
+0805's width to 1.25 mm; it also withdrew the claim that SMD ratings are
+standard across manufacturers, which the Vishay datasheet contradicts. The
+maximum working voltages were added then.
 
 [↑ Index](#index)
 
