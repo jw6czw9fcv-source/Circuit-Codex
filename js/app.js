@@ -722,10 +722,17 @@ const E_LISTED = {
   E24: [10, 11, 12, 13, 15, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 43, 47, 51, 56, 62, 68, 75, 82, 91],
 };
 
+// E48, E96 and E192 are the formula rounded to three figures, with one
+// exception IEC 60063:2015 makes: the 186th E192 value is 920, not the 919 the
+// formula gives. E6 to E24 are older and listed outright above, since eight of
+// the E24 values (2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 8.2) differ from it.
 function eSeriesValues(name) {
   if (E_LISTED[name]) return E_LISTED[name];
   const count = { E48: 48, E96: 96, E192: 192 }[name];
-  return Array.from({ length: count }, (_, i) => Number((Math.pow(10, i / count) * 100).toPrecision(3)));
+  return Array.from({ length: count }, (_, i) => {
+    const v = Number((Math.pow(10, i / count) * 100).toPrecision(3));
+    return v === 919 && count === 192 ? 920 : v;
+  });
 }
 
 // Each series exists to cover a tolerance band: at ±5% the E24 steps just touch,
@@ -1503,12 +1510,14 @@ function renderESeries(domain, tool, favId) {
 
 
 
-  // The decade the entered value sits in, and the factor that puts a table
+  // The decade the nearest value sits in, and the factor that puts a table
   // mantissa into it. E6/E12/E24 are listed two-digit, the rest three-digit.
+  // Taken from the nearest value, not the typed one: 97 kΩ rounds up to
+  // 100 kΩ, and a table of the 10k decade would not show the value it found.
   function decade() {
     const values = eSeriesValues(state.series);
     const places = values[0] >= 100 ? 3 : 2;
-    return Math.pow(10, Math.floor(Math.log10(state.ohms)) - (places - 1));
+    return Math.pow(10, Math.floor(Math.log10(nearest().value) + 1e-9) - (places - 1));
   }
 
   function nearest() {
@@ -1581,7 +1590,7 @@ function renderESeries(domain, tool, favId) {
 
       ${formulaSection(
         ["Eᵢ = 10^(i / N), for i = 0 … N−1", "N = 6, 12, 24, 48, 96, or 192"],
-        "Values space evenly on a logarithmic scale, so every part in a series covers the same percentage gap to its neighbours regardless of decade — that spacing is set to just cover the series' own tolerance."
+        "Resistors and capacitors are only made in standard values. Each E-series splits a decade into N steps of equal ratio, so neighbours are always the same percentage apart, and that gap matches the tolerance: ±5% parts come in E24, ±1% in E96. Type the value you want to get the nearest one you can buy. E48 to E192 follow the formula; E6 to E24 are older and differ from it in eight places, such as 4.7 and 3.3, and E192 uses 920 for 919. Values from IEC 60063:2015."
       )}
       ${calcFooter(`Table follows the decade of your value &nbsp;·&nbsp; ${E_TOLERANCE[state.series]} parts`)}
     `;

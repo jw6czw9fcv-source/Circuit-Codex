@@ -23,6 +23,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Resistor color code](#resistor-color-code)
 - Resistors → [SMD resistor code](#smd-resistor-code)
 - Resistors → [Resistor power rating](#resistor-power-rating)
+- Resistors → [E-series standard values](#e-series-standard-values)
 
 ### Digital
 
@@ -338,6 +339,88 @@ read 0.12″ × 0.125″ against the 0.12″ × 0.10″ its name encodes, and th
 0805's width to 1.25 mm; it also withdrew the claim that SMD ratings are
 standard across manufacturers, which the Vishay datasheet contradicts. The
 maximum working voltages were added then.
+
+[↑ Index](#index)
+
+---
+
+<a id="e-series"></a>
+## E-series standard values
+
+`calc: e-series` · Passive components › Resistors
+
+### What it computes
+
+The standard value nearest to the one you want, in the series you choose (E6 to
+E192), how far off it is in percent, and the whole series across the decade of
+your value, with the nearest one highlighted.
+
+### Source
+
+**IEC 60063:2015**, *Preferred number series for resistors and capacitors*. It
+lists every series value by value, and its tolerances: E6 ±20%, E12 ±10%, E24
+±5%, E48 ±2%, E96 ±1%, E192 ±0.5% and better.
+
+### What it means
+
+Resistors and capacitors are not made in every value. It would be impossible to
+stock them all, and pointless: a ±5% 1000 Ω resistor can be anything from 950
+to 1050 Ω, so a separate 1010 Ω part would overlap it completely. Instead,
+manufacturers make a fixed set of **preferred values**, the E-series.
+
+Each series splits a decade — 1 to 10, 10 to 100, and so on — into a fixed
+number of steps: 6 for E6, 24 for E24, 96 for E96. The steps are not equal in
+ohms but equal in **ratio**, so each value is the same percentage above the
+previous one, whatever the decade. And the number of steps is chosen so that
+the gap between neighbours matches the tolerance: in E24 each value is about
+10% above the last, so ±5% parts either side just meet. That is why the
+tolerance tells you the series — ±5% parts come in E24 values, ±1% in E96.
+
+In practice: pick the tolerance you need, look up the nearest value in its
+series, and check whether the percent difference matters for your circuit. If
+it does, a tighter series has a closer value, or two parts in series or
+parallel can make up the difference.
+
+### How the values are worked out
+
+    Eᵢ = 10^(i / N),  i = 0 … N−1,  rounded to 2 figures (E6–E24) or 3 (E48–E192)
+
+N is the number of values in the series. E48, E96 and E192 follow this formula,
+with one exception: the standard lists 920 in E192 where the formula gives
+919. E6, E12 and E24 are older than the formula and were chosen by hand; eight
+E24 values differ from it — 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7 and 8.2 — which is
+why 4.7 kΩ, not 4.6 kΩ, is the value everyone knows. The tool uses the
+standard's lists, not the formula, for those.
+
+The nearest value is the one with the smallest percentage difference from what
+you typed. The top of a decade counts as the start of the next one, so 97 kΩ in
+E24 gives 100 kΩ, not 91 kΩ.
+
+### Assumptions and limits
+
+- **E3** (±40%: 1.0, 2.2, 4.7) exists in the standard but is rarely used for new
+  parts and is not offered.
+- **Exactly between two values** the lower one is given; both are equally far
+  off.
+- **Capacitors** follow the same series, but in practice ceramic capacitors are
+  mostly stocked in E6 or E12 values, and electrolytics in E3 or E6.
+- The table shows the decade of the nearest value, so the value found is always
+  highlighted in it: for 97 kΩ in E24 that is the 100 kΩ decade.
+
+### What it deliberately does not do
+
+- **Combining two standard values** to hit an exact one is a series/parallel
+  question, the Series/parallel tool's job.
+
+### How it was checked
+
+Every E48 and E96 value against the IEC 60063 list, and E192 against the same
+list. The review found the E192 exception missing: the tool showed 919 where
+the standard has 920, so 9.2 kΩ was reported as not standard; it now uses 920.
+The E6, E12 and E24 lists, including the eight values that differ from the
+formula, match the standard. The table also showed the decade of the typed
+value, so a nearest value in the next decade (97 kΩ → 100 kΩ) was not
+highlighted; it now shows the nearest value's decade.
 
 [↑ Index](#index)
 
