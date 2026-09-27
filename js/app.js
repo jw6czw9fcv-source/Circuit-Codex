@@ -249,6 +249,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "osc-stability") return renderOscStability(domain, tool, favId);
   if (calcId === "pll") return renderPll(domain, tool, favId);
   if (calcId === "adc") return renderAdc(domain, tool, favId);
+  if (calcId === "dac") return renderDac(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -17496,6 +17497,230 @@ function renderAdc(domain, tool, favId) {
         if (!isFinite(v)) return;
         state[name] = name === "code" ? Math.round(v) : v;
         if (name === "code") state.code = Math.min(codeMax(), Math.max(codeMin(), state.code));
+        afterEdit(name);
+      };
+    });
+  }
+
+  paint();
+}
+
+// ---------- DAC resolution ----------
+// Vendors disagree on the divisor, and it is not a rounding detail: it decides
+// whether the top code reaches VREF. Microchip writes Vout = VREF x Dn / 2^N
+// (MCP4725, MCP4822), so the top code stops one LSB short. ST's own LL code
+// divides by 2^N - 1 (__LL_DAC_DIGITAL_SCALE is 0xFFF), so 4095 is VREF, and
+// a bench test on a NUCLEO-G071RB agrees, although RM0444 writes 4096.
+const DAC_KINDS = {
+  pow2: { label: "÷ 2ᴺ" },
+  pow2m1: { label: "÷ (2ᴺ − 1)" },
+};
+
+function renderDac(domain, tool, favId) {
+  const state = { kind: "pow2", bits: 12, ref: 3.3, gain: 1, vt: 1.2, code: 0 };
+
+  const divisor = () => Math.pow(2, state.bits) - (state.kind === "pow2m1" ? 1 : 0);
+  const lsb = () => state.ref * state.gain / divisor();
+  const codeMax = () => Math.pow(2, state.bits) - 1;
+  const valid = () => Number.isInteger(state.bits) && state.bits >= 1 && state.bits <= 32 && state.ref > 0 && state.gain > 0;
+
+  // Enough figures that a 24-bit code survives the round trip through the field.
+  const fig = (x) => +x.toPrecision(10);
+
+  function codeFromTarget() {
+    if (!valid()) return;
+    state.code = Math.min(codeMax(), Math.max(0, Math.round(state.vt / lsb())));
+  }
+  function targetFromCode() {
+    if (!valid()) return;
+    state.vt = fig(state.code * lsb());
+  }
+  codeFromTarget();
+
+  const hex = (code) => "0x" + code.toString(16).toUpperCase().padStart(Math.ceil(state.bits / 4), "0");
+
+  function compute() {
+    if (!Number.isInteger(state.bits) || state.bits < 1 || state.bits > 32) {
+      return { problem: "Resolution has to be a whole number of bits, 1 to 32." };
+    }
+    if (!(state.ref > 0)) return { problem: "VREF has to be greater than zero." };
+    if (!(state.gain > 0)) return { problem: "Gain has to be greater than zero." };
+    const q = lsb();
+    const vout = state.code * q;
+    const err = vout - state.vt;
+    const top = codeMax() * q;
+    const over = state.vt > top + q / 2 ? "high" : state.vt < -q / 2 ? "low" : "";
+    return { problem: "", q, code: state.code, vout, err, errLsb: err / q, top, over };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const hit = "#5DCAA5";
+  const warn = "#E0A85E";
+
+  // A DAC does not make a staircase you slide along: it makes one level per
+  // code and nothing in between. So the picture is eight levels as points
+  // around the target, the target a line that falls between two of them, and
+  // the code chosen is the nearer one.
+  function levelsSVG(r) {
+    const W = 340, H = 132;
+    if (r.problem) return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none"></svg>`;
+    const n = Math.min(8, codeMax() + 1);
+    const k0 = Math.max(0, Math.min(codeMax() - n + 1, r.code - Math.floor((n - 1) / 2)));
+    const x0 = 40, x1 = 296, y0 = 108, y1 = 14;
+    const sx = (x1 - x0) / n, sy = (y0 - y1) / n;
+    const X = (k) => x0 + (k - k0 + 0.5) * sx;
+    const Y = (v) => y0 - (v / r.q - (k0 - 0.5)) * sy;
+    const yT = Math.min(y0, Math.max(y1, Y(state.vt)));
+
+    const ideal = `M${x0} ${Y((k0 - 0.5) * r.q).toFixed(1)} L${x1} ${Y((k0 + n - 0.5) * r.q).toFixed(1)}`;
+    const dots = [];
+    for (let k = k0; k < k0 + n; k++) {
+      const on = k === r.code;
+      dots.push(`<circle cx="${X(k).toFixed(1)}" cy="${Y(k * r.q).toFixed(1)}" r="${on ? 4.2 : 3}" fill="${on ? (r.over ? warn : hit) : comp}"/>`);
+    }
+
+    // One LSB dimensioned at the right, between the chosen level and its
+    // neighbour.
+    const nb = r.code + 1 <= k0 + n - 1 ? r.code + 1 : r.code - 1;
+    const ya = Y(r.code * r.q), yb = Y(nb * r.q);
+    const dim = `<path d="M302 ${ya.toFixed(1)} H310 M302 ${yb.toFixed(1)} H310 M306 ${ya.toFixed(1)} V${yb.toFixed(1)}" stroke="${comp}" stroke-width="1.2"/>
+      <text x="313" y="${((ya + yb) / 2 + 3).toFixed(1)}" fill="${comp}" font-size="9" font-weight="600">1 LSB</text>`;
+
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none">
+      <path d="M${x0} ${y1 - 4} V${y0} H${x1 + 4}" stroke="${wire}" stroke-width="1.2"/>
+      <text x="4" y="${y1 + 2}" fill="${wire}" font-size="9" font-weight="600">Vout</text>
+      <path d="${ideal}" stroke="${wire}" stroke-width="1" stroke-dasharray="3 3"/>
+      <path d="M${x0} ${yT.toFixed(1)} H${x1}" stroke="${hit}" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text x="${x0 + 4}" y="${(yT - 4).toFixed(1)}" fill="${hit}" font-size="9" font-weight="600">Target</text>
+      <path d="M${X(r.code).toFixed(1)} ${ya.toFixed(1)} V${y0}" stroke="${r.over ? warn : hit}" stroke-width="1" stroke-dasharray="2 3"/>
+      ${dots.join("")}
+      ${dim}
+      <text x="${X(r.code).toFixed(1)}" y="${y0 + 14}" fill="${r.over ? warn : hit}" font-size="10" font-weight="600" text-anchor="middle">${r.code}</text>
+      <text x="${x0 - 4}" y="${y0 + 14}" fill="${wire}" font-size="9" font-weight="600" text-anchor="end">Code</text>
+    </svg>`;
+  }
+
+  function cell(label, value, colour) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
+    </div>`;
+  }
+
+  const signed = (x, unit) => (x > 0 ? "+" : "") + (unit ? siFormat(x, unit) : trim(x));
+  // An output voltage needs as many figures as the code has, or neighbouring
+  // codes print alike.
+  const volts = (v) => siFormat(v, "V", Math.min(10, Math.max(4, Math.ceil(state.bits * Math.LOG10E * Math.LN2) + 1)));
+
+  function rangeHTML(r) {
+    if (r.problem) return "";
+    return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">Output 0 V to ${volts(r.top)} · codes 0 to ${codeMax()}</div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const snap = Math.abs(r.errLsb) < 1e-6;
+    const caution = r.over
+      ? `<div class="error-text" style="color:${warn}">The target is ${r.over === "high" ? "above the top" : "below the bottom"} of the output range, so the nearest the DAC gets is its end code.</div>`
+      : "";
+    return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("LSB", siFormat(r.q, "V"))}
+        ${cell("Hex", hex(r.code))}
+        ${cell("Vout", volts(r.vout))}
+        ${cell("Error", snap ? "0 V" : signed(r.err, "V"), r.over ? warn : "")}
+        ${cell("Error LSB", snap ? "0" : signed(r.errLsb), r.over ? warn : "")}
+      </div>
+      ${caution}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="levels"]').innerHTML = levelsSVG(r);
+    app.querySelector('[data-res="range"]').innerHTML = rangeHTML(r);
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function syncField(id, name) {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = state[name];
+  }
+
+  // The target is what you want; the code follows it. Typing a code instead
+  // shows what that code puts out.
+  function afterEdit(name) {
+    if (name === "code") {
+      targetFromCode();
+      syncField("da-vt", "vt");
+    } else {
+      codeFromTarget();
+      syncField("da-code", "code");
+    }
+    refresh();
+  }
+
+  function field(id, name, label, unit) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            ${unit ? `<span class="unit-fixed">${unit}</span>` : ""}
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    const pow2 = state.kind === "pow2";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "One level per code, and the target falls between two")}
+
+      ${pillRow(Object.keys(DAC_KINDS).map((m) => [m, DAC_KINDS[m].label]), state.kind, domain.bg)}
+
+      <div class="diagram-box" style="padding:4px 6px;">
+        <div data-res="levels">${levelsSVG(r)}</div>
+      </div>
+
+      <div class="field-pair">
+        ${field("da-bits", "bits", "Resolution", "bits")}
+        ${field("da-ref", "ref", "VREF", "V")}
+        ${field("da-gain", "gain", "Gain", "")}
+      </div>
+      <div class="field-pair">
+        ${field("da-vt", "vt", "Target", "V")}
+        ${field("da-code", "code", "Code", "")}
+      </div>
+      <div data-res="range">${rangeHTML(r)}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        [pow2 ? "LSB = VREF × Gain / 2ᴺ" : "LSB = VREF × Gain / (2ᴺ − 1)",
+         "Code = round(Target / LSB), 0 to 2ᴺ − 1",
+         "Vout = Code × LSB",
+         pow2 ? "Top = VREF × Gain − 1 LSB" : "Top = VREF × Gain exactly"],
+        "÷ 2ᴺ is what Microchip, TI and Analog Devices datasheets write: the top code stops one LSB short of VREF. ÷ (2ᴺ − 1) is what ST’s own code uses for the STM32 DAC, so 4095 is VREF itself. Pick the pill that matches your part’s datasheet. Gain is the output amplifier’s: ×1 or ×2 on an MCP4822, set by its GA bit. Typing a code shows what it puts out."
+      )}
+      ${calcFooter()}
+    `;
+
+    // The pill is the datasheet's convention, not a different part, so the
+    // numbers stay and only the code is worked out again.
+    wireCalc(favId, paint, (m) => {
+      state.kind = m;
+      codeFromTarget();
+      paint();
+    });
+
+    [["da-bits", "bits"], ["da-ref", "ref"], ["da-gain", "gain"], ["da-vt", "vt"], ["da-code", "code"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        state[name] = name === "code" ? Math.min(codeMax(), Math.max(0, Math.round(v))) : v;
         afterEdit(name);
       };
     });

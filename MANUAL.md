@@ -24,6 +24,7 @@ will key on, since that is the id the app already holds for each tool.
 - Timing & interfaces → [Oscillator stability](#oscillator-stability)
 - Timing & interfaces → [PLL multiplication factor](#pll-multiplication-factor)
 - Data conversion → [ADC resolution / quantization](#adc-resolution--quantization)
+- Data conversion → [DAC resolution](#dac-resolution)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -845,5 +846,99 @@ Bipolar 16 bits on ±2.048 V: LSB 62.5 µV, matching the ADS1115's Table 7-1.
 125 µV, again the datasheet's figure. Code −32768 reads 0x8000 and −4.096 V,
 the datasheet's −FS. 24 and 32 bits keep enough figures in the code voltage
 to tell neighbouring codes apart, and the hex fits its cell.
+
+[↑ Index](#index)
+
+---
+
+<a id="dac"></a>
+## DAC resolution
+
+`calc: dac` · Digital › Data conversion
+
+### What it computes
+
+For an N-bit DAC, its reference and its output gain: the step between
+neighbouring output levels (the LSB), the code to write for a target voltage,
+the voltage that code really puts out, and how far that is from the target, in
+volts and in LSB. It works both ways — type the voltage you want, or type a code
+to see what it outputs. The output range is shown under the fields.
+
+### Source
+
+- **Microchip MCP4802/4812/4822** datasheet (DS20002249B): VOUT = VREF × D / 4096
+  with the GA bit at 1 (×1), and 2 × VREF × D / 4096 with GA at 0 (×2), from the
+  internal 2.048 V reference; its table gives 0.5 mV per step at ×1 and 1 mV at
+  ×2. The MCP4725 datasheet writes the same VREF × Dn / 4096 with VREF = VDD.
+- **ST's LL driver** for the STM32 DAC (`stm32f4xx_ll_dac.h`):
+  `__LL_DAC_DIGITAL_SCALE` is 0xFFF, and `__LL_DAC_CALC_VOLTAGE_TO_DATA`
+  multiplies by it and divides by VREF, i.e. code = V × 4095 / VREF.
+
+### Why the formulas are these
+
+**One level per code.** A DAC puts out one voltage for each code and nothing in
+between:
+
+    Vout = Code × LSB
+
+so a target that is not exactly a level gets the nearer one, at most half an
+LSB away. That is why the picture is points, not a staircase: eight levels
+around the target at scale, the target a line between two of them, the chosen
+one in green.
+
+**Two divisors, and why it matters.** How big the step is depends on what the
+datasheet divides by:
+
+    ÷ 2ᴺ:        LSB = VREF × Gain / 2ᴺ         top code = VREF × Gain − 1 LSB
+    ÷ (2ᴺ − 1):  LSB = VREF × Gain / (2ᴺ − 1)   top code = VREF × Gain exactly
+
+Microchip, TI and Analog Devices write 2ᴺ: a resistor string or R-2R ladder of
+2ᴺ equal steps, of which the top code uses 2ᴺ − 1, so the output never quite
+reaches VREF. ST's own code for the STM32 DAC uses 2ᴺ − 1, so 4095 is VREF
+itself. ST's documents do not all agree — a user on ST's community forum
+points out that RM0444 and AN3126 write 4096 — but the driver says 4095, and
+that user's bench measurements on a NUCLEO-G071RB matched 4095 within a
+millivolt where 4096 was 3–5 mV out. The difference is under one LSB, but it is
+systematic, and it is always largest near the top of the range.
+
+**Gain.** Many DACs follow the ladder with an amplifier. On the MCP4822 the GA
+bit picks ×1 or ×2 from its internal 2.048 V reference, which is how a 2.048 V
+reference makes a 4.095 V range at 1 mV a step.
+
+### Assumptions and limits
+
+- **The output cannot reach the rails.** The MCP4822's amplifier swings from
+  10 mV to VDD − 40 mV, and its accuracy holds only between those. The STM32
+  DAC with its output buffer on is similarly limited near 0 V and VREF+. The
+  top and bottom few codes on the tool's range are therefore not really
+  available on those parts, and with ×2 gain the range can exceed VDD, which
+  the output will not follow either.
+- **An ideal DAC.** Offset, gain error, INL and DNL are not modelled; they are
+  specified in LSB, which is what this tool gives the size of.
+- **VREF is taken as exact.** When it is VDD, as on the MCP4725, the supply's
+  tolerance scales every output.
+
+### What it deliberately does not do
+
+- **Bipolar DACs** (±VREF output with offset-binary or two's-complement
+  codes) are rare on current general-purpose parts; the bipolar pill on the ADC
+  tool covers the arithmetic if needed.
+- **PWM as a DAC.** Resolution there is set by the timer and the filter, not a
+  ladder; it is a different calculation.
+- **SNR and ENOB** are the next tool.
+
+### How it was checked
+
+÷ 2ᴺ, 12 bits, 3.3 V: LSB 805.66 µV; 1.2 V gives code 1489 (0x5D1), output
+1.19963 V, error −366.2 µV = −0.4545 LSB. Code 4095 outputs 3.29919 V, one LSB
+short of VREF.
+
+÷ (2ᴺ − 1): LSB 3.3 / 4095 = 805.86 µV; code 4095 outputs exactly 3.3 V;
+1.2 V gives code 1489, output 1.19993 V.
+
+MCP4822 at ×2 (VREF 2.048 V, gain 2): LSB 1 mV, matching the datasheet's
+table; 3 V is code 3000 exactly; 5 V is flagged as above the 4.095 V range.
+8 bits on the same settings: LSB 16 mV. 24 bits: output shown to enough figures
+to tell neighbouring codes apart.
 
 [↑ Index](#index)

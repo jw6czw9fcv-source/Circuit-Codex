@@ -246,7 +246,14 @@ second in two's complement as the ADS1115 register holds it. Rounds as
 the ideal converter does, first transition at ½ LSB, which the
 ATmega328P datasheet confirms; the note warns that Arduino and ST's LL
 macros divide by 2ᴺ − 1. The staircase is drawn zoomed to eight codes
-around the input, since 4096 steps look like a line)
+around the input, since 4096 steps look like a line) ·
+DAC resolution (target voltage ↔ code, with the level actually put out
+and its error. Two pills for the divisor, because vendors disagree:
+÷ 2ᴺ as Microchip, TI and ADI write it, ÷ (2ᴺ − 1) as ST's LL driver
+does for the STM32 DAC, where 4095 is VREF itself. Output gain field for
+parts like the MCP4822, checked against its datasheet: 1 mV a step at
+×2. Drawn as discrete levels, not a staircase, with the target between
+two of them)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -303,7 +310,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] DAC resolution
 - [ ] SNR estimation
 - [ ] Antenna length (dipole/monopole)
 - [ ] Beamwidth & gain
