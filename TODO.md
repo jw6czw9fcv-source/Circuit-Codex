@@ -426,4 +426,9 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
       Sections are written as each tool is built; tools finished before
       that decision (2026-09-20) get theirs when next touched, so this
       pass catches whatever is still missing.
+- [ ] Understanding pass — every tool, in the app, defines each term it
+      shows in one plain line (ENOB, LSB, dBFS…), and its manual section
+      says in plain words what the tool and its terms mean before the
+      formulas. Pierre, 2026-09-27: the user has to understand how every
+      function works, briefly in the app, fully in the manual.
 - [ ] Help screen that presents MANUAL.md in the app

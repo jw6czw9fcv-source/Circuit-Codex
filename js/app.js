@@ -17473,7 +17473,8 @@ function renderAdc(domain, tool, favId) {
              "Code = round(Input / LSB), 0 to 2ᴺ − 1",
              "Code voltage = Code × LSB",
              "Error = Input − Code voltage, within ±½ LSB"],
-        (bipolar()
+        "An ADC turns a voltage into a number, the code. The LSB is the voltage of one step between codes; the input is rounded to the nearest step, and what is left over is the quantization error. "
+        + (bipolar()
           ? "FSR is the ± full-scale range the datasheet quotes, often set by a PGA: ±2.048 V on an ADS1115 by default. Negative codes are two’s complement, which is how the register holds them and what Hex shows. "
           : "VREF is whatever the ADC measures against — often the supply on an MCU, which makes the supply’s accuracy part of every reading. ")
         + "Converting back, Arduino’s examples and ST’s LL macros divide by 2ᴺ − 1 (1023, 4095) rather than 2ᴺ, which reads up to one LSB high near the top. Typing a code puts the input on that code’s centre."
@@ -17703,7 +17704,7 @@ function renderDac(domain, tool, favId) {
          "Code = round(Target / LSB), 0 to 2ᴺ − 1",
          "Vout = Code × LSB",
          pow2 ? "Top = VREF × Gain − 1 LSB" : "Top = VREF × Gain exactly"],
-        "÷ 2ᴺ is what Microchip, TI and Analog Devices datasheets write: the top code stops one LSB short of VREF. ÷ (2ᴺ − 1) is what ST’s own code uses for the STM32 DAC, so 4095 is VREF itself. Pick the pill that matches your part’s datasheet. Gain is the output amplifier’s: ×1 or ×2 on an MCP4822, set by its GA bit. Typing a code shows what it puts out."
+        "A DAC turns a number, the code, into a voltage. It has one output level per code, one LSB apart, and nothing in between, so a target between two levels gets the nearer one. ÷ 2ᴺ is what Microchip, TI and Analog Devices datasheets write: the top code stops one LSB short of VREF. ÷ (2ᴺ − 1) is what ST’s own code uses for the STM32 DAC, so 4095 is VREF itself. Pick the pill that matches your part’s datasheet. Gain is the output amplifier’s: ×1 or ×2 on an MCP4822, set by its GA bit. Typing a code shows what it puts out."
       )}
       ${calcFooter()}
     `;
@@ -17947,8 +17948,8 @@ function renderSnr(domain, tool, favId) {
              "Ideal SNR = 6.02N + 1.76",
              "Bits lost = N − ENOB"],
         est()
-          ? "Q is quantization, PG the process gain of oversampling, J the jitter limit. Level is the signal in dBFS, 0 at full scale. Bandwidth is what is kept after digital filtering: at fs/2 there is no process gain, and each 4× beyond buys about one bit, provided the signal is noisy enough to dither the quantization. Jitter is the rms sum of the clock’s and the ADC’s aperture jitter. Thermal noise and distortion are the ADC’s own and are not estimated — a datasheet’s SINAD includes them, which is what the other pill is for."
-          : "SINAD is on the ADC datasheet with the level it was measured at, often 0, −0.5 or −1 dBFS; entering that level normalises ENOB to full scale. The defaults are the RP2040’s: 54 dB of SINAD, so its 12-bit ADC gives 8.7 effective bits."
+          ? "SNR is how far the signal stands above the noise, in dB; about 6 dB is one bit. ENOB, the effective number of bits, is the resolution of a perfect ADC that would be just as noisy: the bits you really get. Q is the noise of rounding to codes, PG what oversampling and filtering win back, J the noise of a wobbly sampling clock. Level is the signal in dBFS, dB below full scale, 0 at full scale. Bandwidth is what is kept after digital filtering: at fs/2 there is no process gain, and each 4× beyond buys about one bit, provided the signal is noisy enough to dither the quantization. Jitter is the rms sum of the clock’s and the ADC’s aperture jitter. Thermal noise and distortion are the ADC’s own and are not estimated — a datasheet’s SINAD includes them, which is what the other pill is for."
+          : "SINAD is the datasheet's measured ratio of a pure sine to everything else the ADC outputs, noise and distortion together. ENOB, the effective number of bits, turns it into the resolution of a perfect ADC that would be just as noisy: the bits you really get. SINAD is quoted with the level it was measured at, often 0, −0.5 or −1 dBFS; entering that level normalises ENOB to full scale. The defaults are the RP2040’s: 54 dB of SINAD, so its 12-bit ADC gives 8.7 effective bits."
       )}
       ${calcFooter()}
     `;
