@@ -253,7 +253,13 @@ and its error. Two pills for the divisor, because vendors disagree:
 does for the STM32 DAC, where 4095 is VREF itself. Output gain field for
 parts like the MCP4822, checked against its datasheet: 1 mV a step at
 ×2. Drawn as discrete levels, not a staircase, with the target between
-two of them)
+two of them) ·
+SNR estimation (quantization, process gain of oversampling and the
+jitter limit, each shown and then added as powers into SNR and ENOB,
+from ADI's MT-001, MT-003 and MT-007 — and their worked examples
+reproduce. Says when jitter, not resolution, is the limit. The second
+pill turns a datasheet's SINAD into ENOB and bits lost, defaulting to
+the RP2040's measured 54 dB, 8.7 bits. Drawn as a dBFS level diagram)
 Op-amp: integrator (the inverting amp’s schematic with C in place of Rf,
 as the reference sheet draws it, plus a waveform panel under it — two
 cycles of the input sine against its integral, a cosine, on one shared
@@ -310,7 +316,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
-- [ ] SNR estimation
 - [ ] Antenna length (dipole/monopole)
 - [ ] Beamwidth & gain
 - [ ] Fresnel zone

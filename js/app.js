@@ -250,6 +250,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "pll") return renderPll(domain, tool, favId);
   if (calcId === "adc") return renderAdc(domain, tool, favId);
   if (calcId === "dac") return renderDac(domain, tool, favId);
+  if (calcId === "snr") return renderSnr(domain, tool, favId);
   if (calcId === "e-series") return renderESeries(domain, tool, favId);
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
@@ -17723,6 +17724,250 @@ function renderDac(domain, tool, favId) {
         state[name] = name === "code" ? Math.min(codeMax(), Math.max(0, Math.round(v))) : v;
         afterEdit(name);
       };
+    });
+  }
+
+  paint();
+}
+
+// ---------- SNR estimation ----------
+// Formulas from Walt Kester's ADI tutorials: MT-001 for 6.02N + 1.76 dB and
+// the process gain of oversampling, MT-003 for ENOB from SINAD (with its
+// correction for a signal below full scale), MT-007 for the aperture-jitter
+// limit. The ENOB pill's defaults are the RP2040's own measurement: SINAD
+// 54.0 dB at full scale, ENOB 8.7 (datasheet section 4.9.3).
+const SNR_FS_UNITS = { kSPS: 1e3, MSPS: 1e6 };
+const SNR_F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+const SNR_TJ_UNITS = { fs: 1e-15, ps: 1e-12, ns: 1e-9 };
+
+function renderSnr(domain, tool, favId) {
+  const state = {
+    kind: "est", bits: 12, level: 0,
+    fs: 1, fsUnit: "MSPS", bw: 500, bwUnit: "kHz", fin: 100, finUnit: "kHz", tj: 100, tjUnit: "ps",
+    sinad: 54, enob: 0,
+  };
+
+  const est = () => state.kind === "est";
+  const db = (x) => `${trim(x)} dB`;
+  const ideal = () => 6.02 * state.bits + 1.76;
+
+  // MT-003 Eq. 2: the level term normalises ENOB to full scale, so a SINAD
+  // measured at -1 dBFS does not read as a worse converter.
+  const enobFrom = (snr) => (snr - 1.76 - state.level) / 6.02;
+  function enobFromSinad() { state.enob = +enobFrom(state.sinad).toPrecision(4); }
+  function sinadFromEnob() { state.sinad = +(6.02 * state.enob + 1.76 + state.level).toPrecision(4); }
+  enobFromSinad();
+
+  function compute() {
+    if (!Number.isInteger(state.bits) || state.bits < 1 || state.bits > 32) {
+      return { problem: "Resolution has to be a whole number of bits, 1 to 32." };
+    }
+    if (state.level > 0) return { problem: "Level is in dBFS: 0 is full scale, and a signal can only sit at or below it." };
+    if (!est()) {
+      const floor = state.level - state.sinad;
+      return { problem: "", enob: enobFrom(state.sinad), lost: state.bits - enobFrom(state.sinad), floor, idealFloor: -ideal() };
+    }
+    const fs = state.fs * SNR_FS_UNITS[state.fsUnit];
+    const bw = state.bw * SNR_F_UNITS[state.bwUnit];
+    const fin = state.fin * SNR_F_UNITS[state.finUnit];
+    const tj = state.tj * SNR_TJ_UNITS[state.tjUnit];
+    if (!(fs > 0)) return { problem: "The sample rate has to be greater than zero." };
+    if (!(bw > 0)) return { problem: "The bandwidth has to be greater than zero." };
+    if (bw > fs / 2 * (1 + 1e-9)) {
+      return { problem: `The bandwidth can be at most fs/2, ${siFormat(fs / 2, "Hz")} here: past that, sampling folds it back on itself.` };
+    }
+    if (!(fin > 0) || !(tj >= 0)) return { problem: "Input frequency has to be above zero and jitter zero or more." };
+    const pg = 10 * Math.log10(fs / (2 * bw));
+    // Quantization noise sits at a fixed level below full scale, so the SNR
+    // it allows falls one for one as the signal drops below full scale.
+    const q = ideal() + pg + state.level;
+    // Jitter noise scales with the signal's own slope, so its SNR does not
+    // depend on the level at all.
+    const j = tj > 0 ? -20 * Math.log10(2 * Math.PI * fin * tj) : Infinity;
+    const snr = -10 * Math.log10(Math.pow(10, -q / 10) + (isFinite(j) ? Math.pow(10, -j / 10) : 0));
+    return {
+      problem: "", pg, q, j, snr, enob: enobFrom(snr),
+      qFloor: state.level - q, jFloor: isFinite(j) ? state.level - j : NaN, floor: state.level - snr,
+    };
+  }
+
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const hit = "#5DCAA5";
+  const warn = "#E0A85E";
+  const total = "#E6E8EB";
+
+  // A level diagram in dBFS: full scale at the top, the signal, then each
+  // noise floor as a line. The gap from the signal down to the total floor is
+  // the SNR, and whichever line sits highest is the one worth fixing.
+  function levelsSVG(r) {
+    const W = 340, H = 140;
+    if (r.problem) return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none"></svg>`;
+    const lines = est()
+      ? [["Quantization", r.qFloor, comp], ...(isFinite(r.jFloor) ? [["Jitter", r.jFloor, warn]] : []), ["Total noise", r.floor, total]]
+      : [["Ideal " + state.bits + "-bit", r.idealFloor, comp], ["Noise + dist.", r.floor, total]];
+    const lowest = Math.min(...lines.map((l) => l[1]));
+    const bottom = Math.min(-40, Math.floor((lowest - 8) / 20) * 20);
+    const x0 = 96, x1 = 280, y0 = 12, y1 = 128;
+    const Y = (d) => y0 + (d / bottom) * (y1 - y0);
+
+    // Labels sit left of their line; where two floors are close, they are
+    // pushed apart so neither is covered.
+    const all = [["Full scale", 0, wire], ...(state.level < 0 ? [["Signal", state.level, hit]] : []), ...lines]
+      .map(([name, d, c]) => ({ name, d, c, y: Y(d), ly: Y(d) + 3 }))
+      .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < all.length; i++) all[i].ly = Math.max(all[i].ly, all[i - 1].ly + 11);
+
+    const drawn = all.map((l) => `
+      <path d="M${x0} ${l.y.toFixed(1)} H${x1}" stroke="${l.c}" stroke-width="${l.name === "Total noise" || l.name === "Noise + dist." ? 2 : 1.4}"${l.name === "Full scale" ? ` stroke-dasharray="3 3"` : ""}/>
+      <text x="${x0 - 6}" y="${l.ly.toFixed(1)}" fill="${l.c}" font-size="9" font-weight="600" text-anchor="end">${l.name} ${l.d === 0 ? "0" : trim(l.d)}</text>`).join("");
+
+    const ys = Y(state.level), yn = Y(r.floor);
+    const gap = est() ? r.snr : state.sinad;
+    const arrow = `<path d="M292 ${(ys + 1).toFixed(1)} V${(yn - 1).toFixed(1)}" stroke="${hit}" stroke-width="1.4"/>
+      <path d="M288 ${(ys + 6).toFixed(1)} L292 ${ys.toFixed(1)} L296 ${(ys + 6).toFixed(1)} M288 ${(yn - 6).toFixed(1)} L292 ${yn.toFixed(1)} L296 ${(yn - 6).toFixed(1)}" stroke="${hit}" stroke-width="1.4" fill="none"/>
+      <text x="300" y="${((ys + yn) / 2 - 2).toFixed(1)}" fill="${hit}" font-size="9" font-weight="600">${est() ? "SNR" : "SINAD"}</text>
+      <text x="300" y="${((ys + yn) / 2 + 9).toFixed(1)}" fill="${hit}" font-size="9" font-weight="600">${trim(gap)}</text>`;
+
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none">
+      <text x="${x1}" y="${y1 + 10}" fill="${wire}" font-size="8" font-weight="600" text-anchor="end">dBFS</text>
+      ${drawn}
+      ${arrow}
+    </svg>`;
+  }
+
+  function cell(label, value, colour) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    if (!est()) {
+      return `
+        <div class="eseries-grid eseries-grid--tight">
+          ${cell("Ideal SNR", db(ideal()))}
+          ${cell("Bits lost", trim(r.lost), r.lost > 2 ? warn : "")}
+          ${cell("Noise floor", `${trim(r.floor)} dBFS`)}
+        </div>`;
+    }
+    const jitterRules = isFinite(r.j) && r.j < r.q;
+    return `
+      <div class="eseries-grid eseries-grid--tight">
+        ${cell("Quantization", db(r.q))}
+        ${cell("Process gain", `${trim(r.pg)} dB`)}
+        ${cell("Jitter", isFinite(r.j) ? db(r.j) : "—", jitterRules ? warn : "")}
+        ${cell("SNR", db(r.snr), hit)}
+        ${cell("ENOB", `${trim(r.enob)} bits`, hit)}
+      </div>
+      ${jitterRules ? `<div class="error-text" style="color:${warn}">Jitter, not resolution, sets the SNR here. More bits will not help; a cleaner clock or a lower input frequency will.</div>` : ""}`;
+  }
+
+  function refresh() {
+    const r = compute();
+    app.querySelector('[data-res="levels"]').innerHTML = levelsSVG(r);
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+  }
+
+  function syncField(id, name) {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = state[name];
+  }
+
+  // SINAD and ENOB are the same fact two ways; the one not being typed follows.
+  function afterEdit(name) {
+    if (!est()) {
+      if (name === "enob") { sinadFromEnob(); syncField("sn-sinad", "sinad"); }
+      else { enobFromSinad(); syncField("sn-enob", "enob"); }
+    }
+    refresh();
+  }
+
+  // Level is negative, and the iPhone decimal keypad has no minus key, so it
+  // gets the text keyboard's number row.
+  function field(id, name, label, units, unitKey, signedField) {
+    const mode = signedField ? `type="text" inputmode="text" autocomplete="off"` : `type="number" inputmode="decimal" step="any"`;
+    const unit = typeof units === "string"
+      ? (units ? `<span class="unit-fixed">${units}</span>` : "")
+      : `<select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[unitKey] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input ${mode} id="${id}" value="${state[name]}" />
+            ${unit}
+          </div>
+        </div>`;
+  }
+
+  function paint() {
+    const r = compute();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, est() ? "Every noise that counts, added as powers" : "What a datasheet's SINAD leaves of the bits")}
+
+      ${pillRow([["est", "Estimate"], ["enob", "ENOB ↔ SINAD"]], state.kind, domain.bg)}
+
+      <div class="diagram-box" style="padding:4px 6px;">
+        <div data-res="levels">${levelsSVG(r)}</div>
+      </div>
+
+      ${est() ? `
+      <div class="field-pair">
+        ${field("sn-bits", "bits", "Resolution", "bits")}
+        ${field("sn-fs", "fs", "Sample rate", SNR_FS_UNITS, "fsUnit")}
+        ${field("sn-bw", "bw", "Bandwidth", SNR_F_UNITS, "bwUnit")}
+      </div>
+      <div class="field-pair">
+        ${field("sn-level", "level", "Level", "dBFS", "", true)}
+        ${field("sn-fin", "fin", "Input freq.", SNR_F_UNITS, "finUnit")}
+        ${field("sn-tj", "tj", "Jitter rms", SNR_TJ_UNITS, "tjUnit")}
+      </div>` : `
+      <div class="field-pair">
+        ${field("sn-bits", "bits", "Resolution", "bits")}
+        ${field("sn-level", "level", "Level", "dBFS", "", true)}
+      </div>
+      <div class="field-pair">
+        ${field("sn-sinad", "sinad", "SINAD", "dB")}
+        ${field("sn-enob", "enob", "ENOB", "bits")}
+      </div>`}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="results">${resultsHTML(r)}</div>
+
+      ${formulaSection(
+        est()
+          ? ["Q = 6.02N + 1.76 + PG + Level",
+             "PG = 10 log(fs / 2BW)",
+             "J = −20 log(2π × fin × tj)",
+             "SNR = −10 log(10^(−Q/10) + 10^(−J/10))",
+             "ENOB = (SNR − 1.76 − Level) / 6.02"]
+          : ["ENOB = (SINAD − 1.76 − Level) / 6.02",
+             "Ideal SNR = 6.02N + 1.76",
+             "Bits lost = N − ENOB"],
+        est()
+          ? "Q is quantization, PG the process gain of oversampling, J the jitter limit. Level is the signal in dBFS, 0 at full scale. Bandwidth is what is kept after digital filtering: at fs/2 there is no process gain, and each 4× beyond buys about one bit, provided the signal is noisy enough to dither the quantization. Jitter is the rms sum of the clock’s and the ADC’s aperture jitter. Thermal noise and distortion are the ADC’s own and are not estimated — a datasheet’s SINAD includes them, which is what the other pill is for."
+          : "SINAD is on the ADC datasheet with the level it was measured at, often 0, −0.5 or −1 dBFS; entering that level normalises ENOB to full scale. The defaults are the RP2040’s: 54 dB of SINAD, so its 12-bit ADC gives 8.7 effective bits."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (m) => { state.kind = m; if (m === "enob") enobFromSinad(); paint(); });
+
+    [["sn-bits", "bits"], ["sn-fs", "fs"], ["sn-bw", "bw"], ["sn-level", "level"], ["sn-fin", "fin"], ["sn-tj", "tj"],
+     ["sn-sinad", "sinad"], ["sn-enob", "enob"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = (e) => {
+        const v = parseFloat(String(e.target.value).replace("−", "-"));
+        if (!isFinite(v)) return;
+        state[name] = v;
+        afterEdit(name);
+      };
+    });
+    [["sn-fs", "fsUnit"], ["sn-bw", "bwUnit"], ["sn-fin", "finUnit"], ["sn-tj", "tjUnit"]].forEach(([id, key]) => {
+      const u = document.getElementById(id + "-unit");
+      if (u) u.onchange = (e) => { state[key] = e.target.value; refresh(); };
     });
   }
 

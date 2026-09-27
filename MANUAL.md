@@ -25,6 +25,7 @@ will key on, since that is the id the app already holds for each tool.
 - Timing & interfaces → [PLL multiplication factor](#pll-multiplication-factor)
 - Data conversion → [ADC resolution / quantization](#adc-resolution--quantization)
 - Data conversion → [DAC resolution](#dac-resolution)
+- Data conversion → [SNR estimation](#snr-estimation)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -940,5 +941,139 @@ MCP4822 at ×2 (VREF 2.048 V, gain 2): LSB 1 mV, matching the datasheet's
 table; 3 V is code 3000 exactly; 5 V is flagged as above the 4.095 V range.
 8 bits on the same settings: LSB 16 mV. 24 bits: output shown to enough figures
 to tell neighbouring codes apart.
+
+[↑ Index](#index)
+
+---
+
+<a id="snr"></a>
+## SNR estimation
+
+`calc: snr` · Digital › Data conversion
+
+### What it computes
+
+Two things, one per pill.
+
+- **Estimate** — the signal-to-noise ratio an ADC can reach from the noises
+  that can be calculated: quantization, the process gain of oversampling, and
+  sampling-clock jitter. Each is shown on its own, then added as noise powers
+  into one SNR and expressed as an effective number of bits (ENOB).
+- **ENOB ↔ SINAD** — the conversion between the two figures ADC datasheets
+  quote, both ways, with how many of the converter's bits noise and distortion
+  take away.
+
+The picture is a level diagram in dBFS: full scale at the top, the signal, and
+each noise floor as a line. The gap from the signal down to the total floor is
+the SNR, and the highest noise line is the one worth fixing.
+
+### Source
+
+Walt Kester's Analog Devices tutorials:
+
+- **MT-001**, "Taking the Mystery out of the Infamous Formula, SNR = 6.02N +
+  1.76 dB": the ideal SNR of an N-bit converter for a full-scale sine measured
+  over dc to fs/2, and the correction 10 log(fs / 2BW) it calls process gain.
+- **MT-003**, "Understand SINAD, ENOB, SNR, THD, THD + N, and SFDR": ENOB from
+  SINAD, and its Equation 2, which adds the level below full scale so ENOB is
+  normalised to full scale.
+- **MT-007**, "Aperture Time, Aperture Jitter, Aperture Delay Time": the SNR
+  limit set by jitter, and that the total jitter is the root-sum-square of the
+  sampling clock's and the ADC's own aperture jitter.
+
+The ENOB pill's defaults come from the **RP2040 datasheet**, section 4.9.3:
+SINAD 54.0 dB typical at 997 Hz and almost full scale, ENOB 8.7.
+
+### Why the formulas are these
+
+**Quantization.** Rounding to the nearest code leaves an error spread evenly
+over ±½ LSB, whose rms value is q / √12. A full-scale sine has an rms value of
+2ᴺ q / (2√2). Their ratio, in dB, is
+
+    SNR = 6.02N + 1.76 dB
+
+— 6.02 dB per bit, which is 20 log 2, plus a constant from the shape of a sine.
+12 bits: 74.0 dB. 16 bits: 98.1 dB.
+
+**Level.** The quantization noise stays where it is when the signal gets
+smaller, so the SNR falls one dB for every dB below full scale. A 12-bit ADC
+reading a signal at −20 dBFS has 54 dB of SNR, the same as an ideal 8.7-bit
+one. That is the most common way resolution is wasted.
+
+**Process gain.** Quantization noise is spread evenly from dc to fs/2. Filter
+the result digitally down to a bandwidth BW and only the share of the noise
+inside BW remains:
+
+    PG = 10 log(fs / 2BW)
+
+Four times the bandwidth needed is 6.02 dB, one extra bit. MT-001's example: a
+65 MSPS ADC with channels 30 kHz wide gains 30.3 dB, 65 dB becoming 95.3 dB.
+
+**Jitter.** If the instant of sampling wanders by tj rms, the error it causes is
+the signal's slope times that wander. For a full-scale sine at fin the result
+is independent of amplitude:
+
+    SNR(jitter) = −20 log(2π × fin × tj)
+
+It depends on the input frequency, not the sample rate. 100 ps is harmless at
+1 kHz (124 dB) and ruinous at 100 MHz (24 dB). MT-007 notes that 14-bit
+performance at 100 MHz needs under 0.1 ps; the tool gives 84 dB at exactly
+0.1 ps, just under the 86 dB of 14 bits.
+
+**Adding them.** Uncorrelated noises add as powers:
+
+    SNR = −10 log(10^(−Q/10) + 10^(−J/10))
+
+so the total is always a little worse than the worse of the two, and a term
+10 dB better than the other barely counts. When jitter is the lower one, the
+tool says so — more bits will not help.
+
+**ENOB.** The SNR equation solved for N, with the level term of MT-003:
+
+    ENOB = (SNR − 1.76 − Level) / 6.02
+
+On the ENOB pill SINAD takes the place of SNR, as the datasheets do. The
+RP2040's 54.0 dB gives 8.68 bits, and its datasheet says 8.7: of its 12 bits,
+3.3 are lost to noise and distortion. Its SNR is 61.5 dB but its THD is −55 dB
+— its INL and DNL errors (the DNL spikes are erratum RP2040-E11) cost more
+than the noise.
+
+### Assumptions and limits
+
+- **Oversampling needs noise.** Process gain assumes the quantization error is
+  random. A clean, slow signal on a quiet ADC can give the same code every
+  time, and averaging a constant gives nothing. MT-001 warns about this
+  correlation; the cure is noise or dither of about an LSB at the input.
+- **Thermal noise and distortion are not estimated.** They are the ADC's own
+  and only its datasheet knows them. The Estimate pill gives the ceiling the
+  architecture allows; the ENOB pill gives what the part actually does.
+- **No noise shaping.** Delta-sigma converters push quantization noise out of
+  band and gain far more than 10 log per octave of oversampling. Their
+  datasheets give SNR directly.
+- **SINAD at other levels.** MT-003's level correction assumes the noise does
+  not change with level. Distortion usually drops at lower levels, so ENOB
+  normalised from a −6 dBFS measurement can read better than at full scale.
+
+### What it deliberately does not do
+
+- **THD, SFDR, THD + N.** Read from the datasheet, not calculated.
+- **Noise-free resolution and effective resolution** from rms input noise, the
+  measure for dc and slow signals. MT-003 warns not to confuse them with ENOB;
+  they are a different calculation from different data.
+
+### How it was checked
+
+Default Estimate: 12 bits, 1 MSPS, 500 kHz, 0 dBFS, 100 kHz, 100 ps.
+Q = 6.02 × 12 + 1.76 = 74.0 dB; J = −20 log(2π × 10⁵ × 10⁻¹⁰) = 84.04 dB;
+total 73.59 dB; ENOB 11.93 bits.
+
+MT-001's process-gain example: 65 MSPS and 30 kHz give 30.35 dB. MT-007's
+jitter example: 14 bits, 100 MHz, 0.1 ps give J = 84.04 dB, total 81.91 dB,
+with the jitter warning. 40 MHz of bandwidth at 65 MSPS is refused as past
+fs/2. With no jitter at −1 dBFS, 14 bits give 85.04 dB and an ENOB of 14.0,
+normalised.
+
+ENOB pill: SINAD 54.0 dB at 0 dBFS gives 8.678 bits — the RP2040's 8.7 — with
+3.32 bits lost; ENOB 10 gives SINAD 61.96 dB.
 
 [↑ Index](#index)
