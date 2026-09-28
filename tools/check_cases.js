@@ -226,6 +226,14 @@ const CHECK_CASES = {
   ],
   "cap-stored-energy": [
     { name: "1000 µF at 12 V", do: [], expect: [['[data-res="solved"]', "72 mJ"], ['[data-res="charge"]', "12 mC"]] },
+    { name: "example: camera flash", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="solved"]', "17.97 J"], ['[data-res="charge"]', "108.9 mC"]] },
+    { name: "example: mains bulk capacitor", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="solved"]', "24.82 J"]] },
+    { name: "example: C for 1 J at 12 V", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="solved"]', "13.89 mF"], [".pill.active", "Capacitance"]] },
+    { name: "the solve and units are remembered", do: [["pill", 1], ["set", 'select[data-unit="e"]', "J"], ["reopen"]],
+      expect: [[".pill.active", "Voltage"], ['select[data-unit="e"]', "J"]] },
   ],
   "inductor-color-code": [
     { name: "gold as decimal point: 4.7 µH",

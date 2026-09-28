@@ -8685,11 +8685,34 @@ function renderRcCharge(domain, tool, favId) {
 const ENERGY_UNITS = { "µJ": 1e-6, mJ: 1e-3, J: 1, kJ: 1e3 };
 
 function renderCapStoredEnergy(domain, tool, favId) {
+  const C = "cap-stored-energy";
   const state = {
-    solve: "energy",
+    solve: pref(C, "solve", "energy", ["energy", "voltage", "capacitance"]),
     values: { c: 1000, v: 12, e: 72 },
-    units: { c: "µF", v: "V", e: "mJ" },
+    // The units last chosen for each field, if any.
+    units: {
+      c: pref(C, "unit.c", "µF", Object.keys(CAP_UNITS)),
+      v: pref(C, "unit.v", "V", Object.keys(VOLT_UNITS)),
+      e: pref(C, "unit.e", "mJ", Object.keys(ENERGY_UNITS)),
+    },
   };
+
+  // Where the energy in a capacitor matters. Each sets what is solved for
+  // and the two known values with their units.
+  const example = (solve, values, units) => () => {
+    state.solve = solve;
+    Object.assign(state.values, values);
+    Object.assign(state.units, units);
+    paint();
+  };
+  useExamples([
+    { title: "Camera flash, 330 µF at 330 V", note: "About 18 J, released in a millisecond: why a flash capacitor can hurt long after the battery is out.",
+      apply: example("energy", { c: 330, v: 330 }, { c: "µF", v: "V" }) },
+    { title: "Mains bulk capacitor", note: "470 µF charged to 325 V, the peak of 230 V mains: 25 J, still there when the plug is pulled.",
+      apply: example("energy", { c: 470, v: 325 }, { c: "µF", v: "V" }) },
+    { title: "Capacitor for 1 J at 12 V", note: "C = 2E / V²: 13.9 mF. Doubling the voltage would need only a quarter of it.",
+      apply: example("capacitance", { v: 12, e: 1 }, { v: "V", e: "J" }) },
+  ]);
 
   const FIELD = {
     c: { label: "Capacitance (C)", units: CAP_UNITS },
@@ -8792,10 +8815,7 @@ function renderCapStoredEnergy(domain, tool, favId) {
           <span class="badge-calc">${ICONS.bolt2}Calculated</span>
         </div>
         <div class="result-value"><span class="num" data-res="solved">${solvedValue(r)}</span></div>
-      </div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">Charge stored (Q = C × V)</span></div>
-        <div class="result-value"><span class="num" data-res="charge">${problem(r) ? "—" : siFormat(r.q, "C")}</span></div>
+        <div class="result-sub">Charge stored, Q = C × V: <span data-res="charge">${problem(r) ? "—" : siFormat(r.q, "C")}</span></div>
       </div>
 
       ${formulaSection(
@@ -8805,7 +8825,7 @@ function renderCapStoredEnergy(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.solve = v; setPref(C, "solve", v); paint(); });
 
     app.querySelectorAll("input[data-var]").forEach(input => {
       input.oninput = () => {
@@ -8814,7 +8834,11 @@ function renderCapStoredEnergy(domain, tool, favId) {
       };
     });
     app.querySelectorAll("select[data-unit]").forEach(select => {
-      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+      select.onchange = () => {
+        state.units[select.dataset.unit] = select.value;
+        setPref(C, `unit.${select.dataset.unit}`, select.value);
+        updateResults();
+      };
     });
   }
 
