@@ -25,6 +25,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Resistor power rating](#resistor-power-rating)
 - Resistors → [E-series standard values](#e-series-standard-values)
 - Resistors → [Resistors in series and parallel](#resistors-in-series-and-parallel)
+- Resistors → [Voltage divider](#voltage-divider)
 
 ### Digital
 
@@ -506,6 +507,100 @@ that — but a worst-case design should not count on it.
 By hand: 1 k + 2.2 k = 3.2 kΩ; 1 k ∥ 1 k = 500 Ω; 1 k ∥ 4.7 k = 824.6 Ω, nearest
 E96 825 Ω; a third 1 kΩ in parallel gives 451.9 Ω; 1 k ∥ 0 = 0 Ω. The tolerance
 ranges are the total × (1 ± t).
+
+[↑ Index](#index)
+
+---
+
+<a id="voltage-divider"></a>
+## Voltage divider
+
+`calc: voltage-divider` · Passive components › Resistors
+
+### What it computes
+
+For two resistors in series across a voltage, any one of the output voltage,
+the top resistor R1 or the bottom resistor R2, from the other three. It also
+gives the output's worst-case spread from the resistors' tolerance, the current
+through the pair and the power in each resistor, and when a resistor is solved
+for, the nearest standard value and the output that value would give.
+
+### Source
+
+Ohm's law applied to two resistors in series; standard values from IEC 60063.
+
+### What it means
+
+A voltage divider makes a smaller voltage out of a larger one. Two resistors
+are connected in series from the input voltage to ground. The same current
+flows through both, so each drops a share of the voltage in proportion to its
+resistance, and the point between them — the output — sits at a fixed fraction
+of the input:
+
+    Vout = Vin × R2 / (R1 + R2)
+
+Equal resistors give half. A 10 kΩ over a 4.7 kΩ gives 4.7 / 14.7, about a
+third. Typical uses: bringing a 12 V signal down to what a 3.3 V ADC can read,
+setting a reference voltage, or biasing a transistor.
+
+Solved for either resistor:
+
+    R1 = R2 × (Vin − Vout) / Vout
+    R2 = R1 × Vout / (Vin − Vout)
+
+**Choosing the values.** Only the ratio sets Vout, so 1 kΩ/1 kΩ and 1 MΩ/1 MΩ
+both halve the voltage. What the size decides is the current: small values
+waste power (12 V across 2 kΩ is 6 mA, 72 mW), large ones make the output weak,
+easily pulled down by whatever it feeds and more sensitive to noise. Tens of kΩ
+is a common middle ground for signals.
+
+### Tolerance
+
+The output is furthest off when the two resistors miss in opposite directions:
+R2 high and R1 low pushes Vout up, the reverse pulls it down.
+
+    Vout max = Vin × R2(1+t) / (R1(1−t) + R2(1+t))
+    Vout min = Vin × R2(1−t) / (R1(1+t) + R2(1−t))
+
+So a divider built from ±1% parts is not a ±1% divider: 10 kΩ over 4.7 kΩ at
+±1% spreads by ±1.37%. The spread is widest when the output is a small fraction
+of the input, and approaches ±2t.
+
+### Loading
+
+The formula assumes nothing draws current from the output. Anything that does
+— an ADC input, a transistor base, a meter — is a resistor in parallel with R2,
+and lowers the output. Seen from the output, the divider behaves like a source
+with an internal resistance of R1 ∥ R2, so a load RL lowers Vout by roughly
+
+    (R1 ∥ R2) / RL
+
+1% for a load a hundred times R1 ∥ R2, 10% for one ten times. The fix is lower
+divider resistances or a buffer (the op-amp voltage follower).
+
+### Assumptions and limits
+
+- **Unloaded**, as above.
+- **Positive voltages.** For a negative supply, enter both voltages as
+  positive values; the ratio and the resistors are the same.
+- Vout must be between 0 and Vin when solving for a resistor; a divider can
+  only divide.
+- The standard value offered is from the one series the chosen tolerance
+  implies (±1% → E96).
+
+### What it deliberately does not do
+
+- **A load resistor** is not an input; the loading rule above covers it.
+- **Adjustable dividers** (a potentiometer with fixed end resistors) are not
+  modelled.
+
+### How it was checked
+
+By hand: 12 V over 10 k/10 k gives 6 V, 5.94–6.06 V at ±1%, 600 µA, 3.6 mW
+each. 10 k over 4.7 k gives 3.837 V, 3.78–3.89 V (±1.37%). R1 for 12 V to
+3.3 V with R2 = 10 kΩ is 26.36 kΩ, nearest E96 26.1 kΩ giving 3.32 V. R2 for
+5 V to 3.3 V with R1 = 10 kΩ is 19.41 kΩ, E96 19.6 kΩ giving 3.31 V. Vout equal
+to Vin, or below zero, is refused with a reason.
 
 [↑ Index](#index)
 

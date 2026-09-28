@@ -1836,7 +1836,7 @@ function renderVoltageDivider(domain, tool, favId) {
 
       ${formulaSection(
         ["Vout = Vin × R2 / (R1 + R2)", "R1 = R2 × (Vin − Vout) / Vout", "R2 = R1 × Vout / (Vin − Vout)"],
-        "Unloaded divider — assumes nothing else draws current from the Vout tap."
+        "Two resistors in series across a voltage: the point between them sits at a fixed fraction of it, R2 / (R1 + R2). Pick which of Vout, R1 or R2 to find. The line under the result gives the worst-case output from the tolerance (both resistors off in opposite directions, so it is wider than their ±%), the current through the pair, and the power in R1 / R2. Anything drawing current from Vout pulls it down by about (R1 ∥ R2) / R load: 1% for a load 100 times R1 ∥ R2. For a negative supply, enter both voltages as positive; the ratio is the same."
       )}
       ${calcFooter()}
     `;

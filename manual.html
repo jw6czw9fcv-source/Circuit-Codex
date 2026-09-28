@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=4a0e009acb" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=f0791bf70b" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -105,7 +105,7 @@ th { background: var(--card); }
 </div>
 <nav id="index" class="index">
   <h2 class="index-title">Index</h2>
-  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
+  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li><li><a href="#voltage-divider"><span class="i-name">Voltage divider</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
 </nav>
 
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
@@ -471,6 +471,80 @@ that — but a worst-case design should not count on it.</p>
 E96 825 Ω; a third 1 kΩ in parallel gives 451.9 Ω; 1 k ∥ 0 = 0 Ω. The tolerance
 ranges are the total × (1 ± t).</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A4/series-parallel">Open the tool</a></p>
+</section>
+<section class="tool" id="voltage-divider" style="--accent:#5B9BE0">
+  <div class="crumb">Passive components › Resistors</div>
+  <h2>Voltage divider</h2>
+  <figure class="shot"><img src="manual/img/voltage-divider.jpg?h=ee1b515662" loading="lazy" alt="Voltage divider as it appears in the app" width="430" height="932"></figure>
+  <h3>What it computes</h3>
+<p>For two resistors in series across a voltage, any one of the output voltage,
+the top resistor R1 or the bottom resistor R2, from the other three. It also
+gives the output's worst-case spread from the resistors' tolerance, the current
+through the pair and the power in each resistor, and when a resistor is solved
+for, the nearest standard value and the output that value would give.</p>
+<h3>Source</h3>
+<p>Ohm's law applied to two resistors in series; standard values from IEC 60063.</p>
+<h3>What it means</h3>
+<p>A voltage divider makes a smaller voltage out of a larger one. Two resistors
+are connected in series from the input voltage to ground. The same current
+flows through both, so each drops a share of the voltage in proportion to its
+resistance, and the point between them — the output — sits at a fixed fraction
+of the input:</p>
+<pre><code>Vout = Vin × R2 / (R1 + R2)
+</code></pre>
+<p>Equal resistors give half. A 10 kΩ over a 4.7 kΩ gives 4.7 / 14.7, about a
+third. Typical uses: bringing a 12 V signal down to what a 3.3 V ADC can read,
+setting a reference voltage, or biasing a transistor.</p>
+<p>Solved for either resistor:</p>
+<pre><code>R1 = R2 × (Vin − Vout) / Vout
+R2 = R1 × Vout / (Vin − Vout)
+</code></pre>
+<p><strong>Choosing the values.</strong> Only the ratio sets Vout, so 1 kΩ/1 kΩ and 1 MΩ/1 MΩ
+both halve the voltage. What the size decides is the current: small values
+waste power (12 V across 2 kΩ is 6 mA, 72 mW), large ones make the output weak,
+easily pulled down by whatever it feeds and more sensitive to noise. Tens of kΩ
+is a common middle ground for signals.</p>
+<h3>Tolerance</h3>
+<p>The output is furthest off when the two resistors miss in opposite directions:
+R2 high and R1 low pushes Vout up, the reverse pulls it down.</p>
+<pre><code>Vout max = Vin × R2(1+t) / (R1(1−t) + R2(1+t))
+Vout min = Vin × R2(1−t) / (R1(1+t) + R2(1−t))
+</code></pre>
+<p>So a divider built from ±1% parts is not a ±1% divider: 10 kΩ over 4.7 kΩ at
+±1% spreads by ±1.37%. The spread is widest when the output is a small fraction
+of the input, and approaches ±2t.</p>
+<h3>Loading</h3>
+<p>The formula assumes nothing draws current from the output. Anything that does
+— an ADC input, a transistor base, a meter — is a resistor in parallel with R2,
+and lowers the output. Seen from the output, the divider behaves like a source
+with an internal resistance of R1 ∥ R2, so a load RL lowers Vout by roughly</p>
+<pre><code>(R1 ∥ R2) / RL
+</code></pre>
+<p>1% for a load a hundred times R1 ∥ R2, 10% for one ten times. The fix is lower
+divider resistances or a buffer (the op-amp voltage follower).</p>
+<h3>Assumptions and limits</h3>
+<ul>
+<li><strong>Unloaded</strong>, as above.</li>
+<li><strong>Positive voltages.</strong> For a negative supply, enter both voltages as
+  positive values; the ratio and the resistors are the same.</li>
+<li>Vout must be between 0 and Vin when solving for a resistor; a divider can
+  only divide.</li>
+<li>The standard value offered is from the one series the chosen tolerance
+  implies (±1% → E96).</li>
+</ul>
+<h3>What it deliberately does not do</h3>
+<ul>
+<li><strong>A load resistor</strong> is not an input; the loading rule above covers it.</li>
+<li><strong>Adjustable dividers</strong> (a potentiometer with fixed end resistors) are not
+  modelled.</li>
+</ul>
+<h3>How it was checked</h3>
+<p>By hand: 12 V over 10 k/10 k gives 6 V, 5.94–6.06 V at ±1%, 600 µA, 3.6 mW
+each. 10 k over 4.7 k gives 3.837 V, 3.78–3.89 V (±1.37%). R1 for 12 V to
+3.3 V with R2 = 10 kΩ is 26.36 kΩ, nearest E96 26.1 kΩ giving 3.32 V. R2 for
+5 V to 3.3 V with R1 = 10 kΩ is 19.41 kΩ, E96 19.6 kΩ giving 3.31 V. Vout equal
+to Vin, or below zero, is refused with a reason.</p>
+  <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A5/voltage-divider">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Logic gates</div>
