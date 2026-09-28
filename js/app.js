@@ -8040,7 +8040,7 @@ function renderBatteryRuntime(domain, tool, favId) {
   function diagram() {
     const wire = "#5A6169";
     return `<svg width="220" height="90" viewBox="0 0 220 90" fill="none">
-      <path d="M30,18 H80 M140,18 H190 M190,18 V72 M190,72 H30 M30,72 V49 M30,35 V18" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M30,18 H80 M140,18 H190 M190,18 V72 M190,72 H30 M30,72 V54 M30,42 V18" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
       <rect x="80" y="8" width="60" height="20" rx="3" stroke="${domain.color}" stroke-width="1.6" fill="none"/>
       <text x="110" y="22" fill="${domain.color}" font-size="11" font-weight="600" text-anchor="middle">Load</text>
@@ -8531,7 +8531,7 @@ function renderRcCharge(domain, tool, favId) {
     // Symmetric about R: each side sits 40 from the resistor's ends, and the
     // viewBox is trimmed so the loop, not the empty width, is what centres.
     return `<svg width="190" height="100" viewBox="-5 0 190 100" fill="none">
-      <path d="M30,20 H70 M110,20 H150 M150,20 V44 M150,58 V80 M150,80 H30 ${charging ? "M30,80 V56 M30,32 V20" : "M30,80 V20"}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M30,20 H70 M110,20 H150 M150,20 V47 M150,53 V80 M150,80 H30 ${charging ? "M30,80 V54 M30,42 V20" : "M30,80 V20"}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${charging ? `<path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>` : ""}
       <path d="M70,20 L73,13 L79,27 L85,13 L91,27 L97,13 L103,27 L110,20" stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <path d="M140,47 H160 M140,53 H160" stroke="${domain.color}" stroke-width="2" stroke-linecap="round"/>
@@ -8770,7 +8770,7 @@ function renderCapStoredEnergy(domain, tool, favId) {
     // Source and capacitor 80 apart about the centre line: nothing sits
     // between them, so a wider loop was only empty wire.
     return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
-      <path d="M70,20 H150 M150,20 V44 M150,58 V80 M150,80 H70 M70,80 V56 M70,32 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M70,20 H150 M150,20 V47 M150,53 V80 M150,80 H70 M70,80 V54 M70,42 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M60,42 H80 M66,54 H74" stroke="${tone("v")}" stroke-width="2" stroke-linecap="round"/>
       <path d="M140,47 H160 M140,53 H160" stroke="${tone("c")}" stroke-width="2" stroke-linecap="round"/>
       <text x="167" y="53" fill="${tone("c")}" font-size="12" font-weight="600">C</text>
