@@ -5393,13 +5393,37 @@ function renderCeramicCode(domain, tool, favId) {
   // they're too small, so the reel is marked instead of the part. The disc
   // body and radial leads are what a real "104" is actually printed on.
   function disc(code) {
-    return `<svg width="220" height="104" viewBox="0 0 220 104" fill="none">
-      <path d="M92 72 V100 M128 72 V100" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
-      <circle cx="110" cy="40" r="36" fill="#E3B54F" stroke="#00000055" stroke-width="1"/>
-      <text x="110" y="46" fill="#241C0C" font-size="18" font-weight="600" text-anchor="middle"
+    // Seen from the front, to the proportions of a real 100 nF 50 V disc
+    // (Multicomp Pro MPCC50V104KY5U): leads 0.5 mm, 5 mm apart; the disc is
+    // at most 9 mm across, drawn at a typical 7 mm; the epoxy coating runs
+    // down the leads by up to 3 mm, drawn at 2. 12 px per mm.
+    const k = 14, cx = 110, D = 7 * k, cy = 6 + D / 2, F = 5 * k, lead = 0.5 * k, run = 2 * k;
+    const bottom = cy + D / 2;
+    // The coating leaves the disc a little outside the leads and tapers in
+    // to hug them, ending in a rounded tip on each lead.
+    const top = F / 2 + 0.7 * k, tip = F / 2 + lead / 2 + 0.2 * k;
+    const yJoin = cy + Math.sqrt((D / 2) ** 2 - top ** 2), yEnd = bottom + run;
+    const xl = cx - top, xr = cx + top, tl = cx - tip, tr = cx + tip, gap = cx - F / 2 + lead / 2 + 0.3 * k;
+    const drip = `M${xl} ${yJoin} C${xl} ${yJoin + 0.8 * k} ${tl} ${yEnd - 1.2 * k} ${tl} ${yEnd - 0.5 * k}`
+      + ` Q${tl} ${yEnd} ${cx - F / 2} ${yEnd} Q${gap} ${yEnd} ${gap} ${yEnd - 0.6 * k}`
+      + ` Q${cx} ${bottom + 0.2 * k} ${2 * cx - gap} ${yEnd - 0.6 * k}`
+      + ` Q${2 * cx - gap} ${yEnd} ${cx + F / 2} ${yEnd} Q${tr} ${yEnd} ${tr} ${yEnd - 0.5 * k}`
+      + ` C${tr} ${yEnd - 1.2 * k} ${xr} ${yJoin + 0.8 * k} ${xr} ${yJoin} Z`;
+    const leadLen = 22;
+    return `<svg width="220" height="${Math.ceil(yEnd + leadLen)}" viewBox="0 0 220 ${Math.ceil(yEnd + leadLen)}" fill="none">
+      <defs>
+        <linearGradient id="disc-lead" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E4E7EB"/><stop offset=".5" stop-color="#9AA0A8"/><stop offset="1" stop-color="#5E646C"/></linearGradient>
+        <linearGradient id="disc-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2C774"/><stop offset=".4" stop-color="#DDA743"/><stop offset="1" stop-color="#9A6E22"/></linearGradient>
+      </defs>
+      <rect x="${cx - F / 2 - lead / 2}" y="${bottom - 2}" width="${lead}" height="${run + leadLen + 2}" rx="${lead / 2}" fill="url(#disc-lead)"/>
+      <rect x="${cx + F / 2 - lead / 2}" y="${bottom - 2}" width="${lead}" height="${run + leadLen + 2}" rx="${lead / 2}" fill="url(#disc-lead)"/>
+      <path d="${drip}" fill="url(#disc-body)" stroke="#00000066" stroke-width="1"/>
+      <circle cx="${cx}" cy="${cy}" r="${D / 2}" fill="url(#disc-body)" stroke="#00000066" stroke-width="1"/>
+      <text x="${cx}" y="${cy + 7}" fill="#241C0C" font-size="20" font-weight="600" text-anchor="middle"
             font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="0.5">${code || "—"}</text>
     </svg>`;
   }
+
 
   // The disc shows what is printed on the part: when a marking was typed, that
   // marking — 479 stays 479 rather than turning into the equivalent 4R7.
