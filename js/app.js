@@ -726,22 +726,40 @@ function openExamples() {
   };
 }
 
-// The note sits under the header, in place of the subtitle: it says more
-// about what is on screen than the subtitle does, and a note that came on
-// top of it pushed the result under the tab bar. A redraw keeps it
-// (calcHeader prints it); an apply() that only refreshes gets it placed here.
+// The note sits under the header, in place of the subtitle (hidden, not
+// removed): it says more about what is on screen than the subtitle does, and
+// a note that came on top of it pushed the result under the tab bar. A redraw
+// keeps it (calcHeader prints it); an apply() that only refreshes gets it
+// placed here.
 function showExampleNote() {
   let el = app.querySelector(".example-note");
+  const sub = app.querySelector(".sub");
+  if (sub) sub.hidden = !!EXAMPLE_NOTE;
   if (!EXAMPLE_NOTE) { if (el) el.remove(); return; }
   if (!el) {
     el = document.createElement("div");
     el.className = "example-note";
-    const sub = app.querySelector(".sub");
-    if (sub) sub.replaceWith(el);
-    else app.querySelector(".topbar")?.insertAdjacentElement("afterend", el);
+    (sub || app.querySelector(".topbar"))?.insertAdjacentElement("afterend", el);
   }
   el.textContent = EXAMPLE_NOTE;
 }
+
+// Once the user changes anything the example set, the screen is no longer the
+// example, so its note goes and the subtitle comes back. Listened for in the
+// capture phase, so a control that redraws the screen (a pill) finds the note
+// already gone. Copying a result, the star and the bulb change nothing.
+function dropExampleNote() {
+  if (!EXAMPLE_NOTE) return;
+  EXAMPLE_NOTE = "";
+  showExampleNote();
+}
+const EDIT_CONTROLS = ".pill, .filter-btn, .slider-step, .r-drop, .label-btn, .sign-btn, .roller-track";
+["input", "change"].forEach((type) => app.addEventListener(type, (e) => {
+  if (e.target.closest("input, select, textarea") && !e.target.closest(".search-box")) dropExampleNote();
+}, true));
+["pointerdown", "click", "wheel"].forEach((type) => app.addEventListener(type, (e) => {
+  if (e.target.closest(EDIT_CONTROLS)) dropExampleNote();
+}, { capture: true, passive: true }));
 
 function calcHeader(tool, favId, subtitle) {
   const bulb = TOOL_EXAMPLES && TOOL_EXAMPLES.length;
@@ -755,8 +773,8 @@ function calcHeader(tool, favId, subtitle) {
       ${bulb ? `<button class="icon-btn example-btn" aria-label="Examples" onclick="openExamples()">${ICONS.bulb}</button>` : ""}
       <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
     </div>
-    ${EXAMPLE_NOTE ? `<div class="example-note">${EXAMPLE_NOTE}</div>`
-      : subtitle ? `<div class="sub">${subtitle}</div>` : ""}`;
+    ${subtitle ? `<div class="sub"${EXAMPLE_NOTE ? " hidden" : ""}>${subtitle}</div>` : ""}
+    ${EXAMPLE_NOTE ? `<div class="example-note">${EXAMPLE_NOTE}</div>` : ""}`;
 }
 
 // options is [value, label] pairs; the active one is tinted with the domain
