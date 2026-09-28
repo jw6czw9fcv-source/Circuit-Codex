@@ -31,6 +31,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Delta-Y transform](#delta-y-transform)
 - Resistors → [NTC/PTC thermistor](#ntcptc-thermistor)
 - Capacitors → [Ceramic capacitor code](#ceramic-capacitor-code)
+- Capacitors → [Film capacitor code](#film-capacitor-code)
 
 ### Digital
 
@@ -1043,6 +1044,89 @@ EIA-198. B, C and D above 10 pF were read as picofarads, so 101D showed
 ±0.5 pF instead of ±0.5%. And the units offered ran to millifarads and farads,
 which no ceramic capacitor reaches; they are now pF, nF and µF. The drawing now
 shows the marking as typed (479 stays 479 rather than becoming 4R7).
+
+[↑ Index](#index)
+
+---
+
+<a id="film-code"></a>
+## Film capacitor code
+
+`calc: film-code` · Passive components › Capacitors
+
+### What it computes
+
+The capacitance and tolerance printed on a film capacitor, in either of the two
+ways film parts are marked — the 3-digit picofarad code or the letter code
+(4n7) — and the other way round: the marking for a value.
+
+### Source
+
+- **EIA-198** for the 3-digit code, the same as on ceramic capacitors.
+- **IEC 60062:2016** for the letter code (the "RKM" code: p, n, µ in place of
+  the decimal point) and the tolerance letters.
+
+### What the marking means
+
+Film capacitors — polyester (PET), polypropylene (PP) and similar, usually a
+small rectangular box with two leads — carry their value in one of two ways.
+
+**The 3-digit code**, in picofarads. The first two digits are the figures, the
+last how many zeros follow: 104 is 100 000 pF = 100 nF, 473 is 47 nF, 102 is
+1 nF. As on ceramics, a last digit of 9 or 8 means ×0.1 or ×0.01 for values
+under 10 pF, though film parts that small are rare.
+
+**The letter code.** The unit letter stands where the decimal point would be:
+
+- p = picofarad, n = nanofarad, µ (often written u) = microfarad
+- 4n7 = 4.7 nF, n33 = 0.33 nF (330 pF), µ1 or u1 = 0.1 µF (100 nF),
+  2µ2 = 2.2 µF, 100p = 100 pF
+
+It is the same idea as 4k7 for a 4.7 kΩ resistor: no decimal point to rub off
+or be misread.
+
+**The tolerance letter** that often follows either form:
+
+| Letter | Tolerance |
+|---|---|
+| F | ±1% |
+| G | ±2% |
+| H | ±2.5% |
+| J | ±5% |
+| K | ±10% |
+| M | ±20% |
+
+**The voltage code.** Many film capacitors add a two-character voltage code in
+front of the value, per the same EIA scheme: 1H = 50 V, 2A = 100 V,
+2E = 250 V, 2G = 400 V, 2J = 630 V. So **2A104J** is a 100 V, 100 nF, ±5% part.
+Others print the voltage plainly (63 V, 400 V=).
+
+### Assumptions and limits
+
+- **Plain decimals** such as ".1" or "0.1" on older and larger parts mean
+  microfarads (0.1 µF); the tool reads only the two coded forms.
+- **The voltage code is not read** from the marking; type the part of the
+  marking that follows it.
+- A value typed in is encoded with the unit that gives the shortest marking;
+  n33 and 330p mean the same.
+
+### What it deliberately does not do
+
+- **Ceramic codes with the pF-based tolerance letters** (B, C, D) are the
+  Ceramic code tool; film capacitors are not made small enough to need them.
+- **Electrolytic** capacitors print their value and voltage in plain text.
+
+### How it was checked
+
+104J → 100 nF ±5%, 473K → 47 nF ±10%, 102H → 1 nF ±2.5%, 4n7 → 4.7 nF,
+4N7J → 4.7 nF ±5%, n33 → 330 pF, u1 and µ1 → 100 nF, 2u2K → 2.2 µF ±10%,
+100p → 100 pF.
+
+The review found the tolerance table borrowed from the inductor tool, which
+had no H (±2.5%), a common film tolerance; added it. It made the unit letter
+case-blind (4N7 was rejected), applied the 8 and 9 multipliers and the R-code
+length fix from the ceramic tool, limited the units to pF, nF and µF, and made
+the drawing show the marking as typed.
 
 [↑ Index](#index)
 

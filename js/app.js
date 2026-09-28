@@ -5355,6 +5355,12 @@ function renderCeramicCode(domain, tool, favId) {
 // entirely rather than reuse it where it wouldn't apply.
 function renderFilmCapacitorCode(domain, tool, favId) {
   const state = { mode: "code", farads: 100e-9, unit: "nF", tol: "" };
+  // Film capacitors run from tens of picofarads to tens of microfarads.
+  const FILM_UNITS = { pF: 1e-12, nF: 1e-9, "µF": 1e-6 };
+  // IEC 60062 tolerance letters as film capacitors use them. H, ±2.5%, is
+  // common on polypropylene parts and was missing while this screen borrowed
+  // the inductor table.
+  const FILM_TOL = { F: 1, G: 2, H: 2.5, J: 5, K: 10, M: 20 };
 
   function numericCode(pF) {
     if (pF === 0) return "000";
@@ -5365,14 +5371,18 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     const exponent = e - 1;
     if (exponent > 9) return null;
     if (exponent >= 0) return d + String(exponent);
-    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
-    return code.length <= 3 ? code : null;
+    // Below that, R takes the decimal point's place in three characters.
+    const frac = 2 - Math.max(0, e + 1);
+    const fixed = pF.toFixed(frac);
+    if (Number(fixed) === 0) return null;
+    const [whole, part] = fixed.split(".");
+    return `${whole === "0" ? "" : whole}R${part || ""}`;
   }
 
   function stripTol(raw) {
     let str = String(raw).trim();
     let tol = "";
-    if (str.length && SMD_IND_TOL_LETTER[str[str.length - 1]] !== undefined) {
+    if (str.length && FILM_TOL[str[str.length - 1]] !== undefined) {
       tol = str[str.length - 1];
       str = str.slice(0, -1);
     }
@@ -5389,7 +5399,9 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     }
     if (!/^[0-9]+$/.test(raw) || raw.length !== 3) return NaN;
     if (Number(raw) === 0) return 0;
-    return Number(raw.slice(0, 2)) * Math.pow(10, Number(raw.slice(2)));
+    // As on ceramics (EIA-198), a last digit of 9 or 8 is ×0.1 or ×0.01.
+    const last = Number(raw.slice(2));
+    return Number(raw.slice(0, 2)) * (last === 9 ? 0.1 : last === 8 ? 0.01 : Math.pow(10, last));
   }
 
   // p/n/µ sit where the decimal point would: 4n7 is 4.7 nF, n33 is 0.33 nF,
@@ -5401,9 +5413,12 @@ function renderFilmCapacitorCode(domain, tool, favId) {
   const DIRECT_LETTER = { p: "p", n: "n", u: "µ", "µ": "µ" };
 
   function directValueFor(rawStr) {
-    const m = /^(\d*)([pnuµ])(\d*)$/.exec(rawStr);
+    // Case-blind for the unit letter: 4N7 is as common as 4n7 on real parts.
+    // Tolerance letters have already been stripped, and none of P, N, U is one.
+    const m = /^(\d*)([pnuµ])(\d*)$/i.exec(rawStr);
     if (!m) return NaN;
-    const [, before, letter, after] = m;
+    const [, before, raw, after] = m;
+    const letter = raw.toLowerCase();
     if (!before && !after) return NaN;
     return parseFloat(`${before || "0"}.${after || "0"}`) * DIRECT_UNIT[letter];
   }
@@ -5441,7 +5456,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
   }
 
   function tolText(letter) {
-    return letter ? `±${SMD_IND_TOL_LETTER[letter]}%` : "No tolerance letter";
+    return letter ? `±${FILM_TOL[letter]}%` : "No tolerance letter";
   }
 
   function subtitle() {
@@ -5460,9 +5475,12 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     </svg>`;
   }
 
+  // The box shows what is printed on the part: a typed marking stays as typed
+  // (n33 stays n33 rather than turning into the equivalent 330p).
   function refresh(source, notice) {
     const code = codeFor(state.farads);
-    app.querySelector(".diagram-box").innerHTML = filmBox(code);
+    const typed = source === "code" ? app.querySelector("#film-code").value.trim() : "";
+    app.querySelector(".diagram-box").innerHTML = filmBox(typed || code);
     app.querySelector('[data-res="value"]').textContent = formatFarads(state.farads);
     app.querySelector('[data-res="series"]').textContent = seriesLine(state.farads);
     app.querySelector('[data-res="tol"]').textContent = tolText(state.tol);
@@ -5471,7 +5489,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     const tolField = app.querySelector("#film-tol");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
     if (source !== "value" && document.activeElement !== valueField) {
-      valueField.value = trim(state.farads / CAP_UNITS[state.unit]);
+      valueField.value = trim(state.farads / FILM_UNITS[state.unit]);
     }
     if (document.activeElement !== tolField) tolField.value = state.tol;
     app.querySelector('[data-res="err"]').textContent =
@@ -5479,7 +5497,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
   }
 
   function applyValue(raw) {
-    const v = parseFloat(raw) * CAP_UNITS[state.unit];
+    const v = parseFloat(raw) * FILM_UNITS[state.unit];
     if (!isFinite(v) || v < 0) return;
     state.farads = v;
     refresh("value");
@@ -5506,15 +5524,15 @@ function renderFilmCapacitorCode(domain, tool, favId) {
       <div class="field">
         <label>Capacitance</label>
         <div class="field-row">
-          <input id="film-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / CAP_UNITS[state.unit])}" />
-          <select id="film-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <input id="film-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / FILM_UNITS[state.unit])}" />
+          <select id="film-unit">${Object.keys(FILM_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
         </div>
       </div>
       <div class="field">
         <label>Tolerance letter</label>
         <select id="film-tol">
           <option value="" ${state.tol === "" ? "selected" : ""}>None</option>
-          ${Object.keys(SMD_IND_TOL_LETTER).map((l) => `<option value="${l}" ${state.tol === l ? "selected" : ""}>${l} — ±${SMD_IND_TOL_LETTER[l]}%</option>`).join("")}
+          ${Object.keys(FILM_TOL).map((l) => `<option value="${l}" ${state.tol === l ? "selected" : ""}>${l} — ±${FILM_TOL[l]}%</option>`).join("")}
         </select>
       </div>
       <div class="error-text" data-res="err"></div>
@@ -5535,11 +5553,11 @@ function renderFilmCapacitorCode(domain, tool, favId) {
       ${state.mode === "code"
         ? formulaSection(
             ["Value = (D1D2) × 10^D3, in pF"],
-            "R replaces the decimal point below 10 pF (4R7 = 4.7 pF). The trailing letter sets tolerance. This is the same EIA-198 scheme the ceramic disc and SMD screens use, reused here in pF — some film caps carry it, others don't."
+            "The same code as on ceramics, in picofarads: the last digit is how many zeros follow, so 104 is 100 nF and 473 is 47 nF. A trailing letter is the tolerance: F ±1%, G ±2%, H ±2.5%, J ±5%, K ±10%, M ±20%. Film parts often add a voltage code in front: 2A104J is 100 V, 100 nF, ±5% (1H 50 V, 2A 100 V, 2E 250 V, 2G 400 V, 2J 630 V)."
           )
         : formulaSection(
             ["p / n / µ = pF / nF / µF, in place of the decimal point"],
-            "4n7 = 4.7 nF, n33 = 0.33 nF, 100p = 100 pF. The lowercase letter sets the unit; an uppercase letter after it sets tolerance — the two can never be confused with each other. No milli or whole-farad letter: real film caps never reach that range."
+            "The letter p, n or µ (often written u) gives the unit and stands where the decimal point is: 4n7 is 4.7 nF, n33 is 0.33 nF, µ1 or u1 is 0.1 µF, 100p is 100 pF. A tolerance letter can follow: 4n7J is 4.7 nF ±5%. This is the IEC 60062 code, the same idea as 4k7 for resistors."
           )}
       ${calcFooter()}
     `;
