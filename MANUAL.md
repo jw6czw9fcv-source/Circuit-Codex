@@ -35,6 +35,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [SMD capacitor code](#smd-capacitor-code)
 - Capacitors → [Capacitors in series and parallel](#capacitors-in-series-and-parallel)
 - Capacitors → [RC charge and discharge](#rc-charge-and-discharge)
+- Capacitors → [Capacitor stored energy](#capacitor-stored-energy)
 
 ### Digital
 
@@ -1390,6 +1391,81 @@ The review fixed the layout, which put the voltage result 24 px under the tab
 bar on the target phone; R and C now share a line, the voltage and time fields
 share the next, and the results sit in one row. The schematic no longer shows a
 supply when discharging, and the resistance units are Ω, kΩ and MΩ.
+
+[↑ Index](#index)
+
+---
+
+<a id="cap-stored-energy"></a>
+## Capacitor stored energy
+
+`calc: cap-stored-energy` · Passive components › Capacitors
+
+### What it computes
+
+The energy stored in a charged capacitor from its capacitance and voltage, or
+either of those from the other two; and the charge it holds.
+
+### Source
+
+The energy of a capacitor charged from zero: the work done moving charge onto
+it against its own rising voltage. A standard result; no standard document is
+involved.
+
+### What it means
+
+A capacitor stores energy in the electric field between its plates. Charging it
+takes work, because each bit of charge has to be pushed on against the voltage
+already there; that work is held, and comes back out when the capacitor
+discharges.
+
+    E = ½ × C × V²      in joules, with C in farads and V in volts
+    Q = C × V            the charge, in coulombs
+
+**The square matters.** Twice the voltage stores four times the energy. A
+1000 µF capacitor at 12 V holds 72 mJ — a small spark; the same capacitor at
+400 V would hold 80 J. This is why the capacitors in mains power supplies,
+camera flashes and microwave ovens are dangerous long after the power is
+removed, and why they are discharged through a resistor before being touched.
+
+**How much is a joule.** One joule is one watt for one second. A 1 F
+supercapacitor at 2.7 V holds 3.6 J: enough to keep a 10 mW real-time clock
+circuit running for six minutes.
+
+Rearranged:
+
+    V = √(2E / C)       the voltage needed to store E in C
+    C = 2E / V²         the capacitance needed to store E at V
+
+### Usable energy
+
+A circuit seldom uses all of it. A device powered from a capacitor stops
+working when the voltage falls below its minimum, so the energy it can draw is
+the difference between two voltages:
+
+    E usable = ½ × C × (V start² − V min²)
+
+A supercapacitor charged to 5 V feeding a circuit that needs at least 3 V
+delivers only 1 − (3/5)² = 64% of what it holds. Use the tool twice, at the two
+voltages, and subtract.
+
+### Assumptions and limits
+
+- **An ideal capacitor.** Leakage slowly drains the stored energy; ESR turns
+  some of it to heat when it is drawn fast.
+- **Nominal capacitance.** Class 2 ceramics hold less than their marked value
+  at high voltage, and electrolytics lose capacitance with age.
+
+### What it deliberately does not do
+
+- **Discharge time** through a load is the RC charge and discharge tool's job.
+- **Hold-up time** from the usable energy is not calculated directly; it is the
+  usable energy divided by the power drawn.
+
+### How it was checked
+
+By hand: 1000 µF at 12 V holds 72 mJ and 12 mC; 1 F at 2.7 V holds 3.645 J;
+storing 1 J in 100 µF needs 141.4 V; storing 10 J at 400 V needs 125 µF.
 
 [↑ Index](#index)
 

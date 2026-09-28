@@ -7762,12 +7762,14 @@ function renderCapStoredEnergy(domain, tool, favId) {
     const known = inputsFor(state.solve);
     const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
     const wire = "#5A6169";
+    // Source and capacitor 80 apart about the centre line: nothing sits
+    // between them, so a wider loop was only empty wire.
     return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
-      <path d="M30,20 H190 M190,20 V44 M190,58 V80 M190,80 H30 M30,80 V56 M30,32 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M20,42 H40 M26,54 H34" stroke="${tone("v")}" stroke-width="2" stroke-linecap="round"/>
-      <path d="M180,47 H200 M180,53 H200" stroke="${tone("c")}" stroke-width="2" stroke-linecap="round"/>
-      <text x="207" y="53" fill="${tone("c")}" font-size="12" font-weight="600">C</text>
-      <text x="12" y="51" fill="${tone("v")}" font-size="12" font-weight="600" text-anchor="middle">V</text>
+      <path d="M70,20 H150 M150,20 V44 M150,58 V80 M150,80 H70 M70,80 V56 M70,32 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M60,42 H80 M66,54 H74" stroke="${tone("v")}" stroke-width="2" stroke-linecap="round"/>
+      <path d="M140,47 H160 M140,53 H160" stroke="${tone("c")}" stroke-width="2" stroke-linecap="round"/>
+      <text x="167" y="53" fill="${tone("c")}" font-size="12" font-weight="600">C</text>
+      <text x="52" y="51" fill="${tone("v")}" font-size="12" font-weight="600" text-anchor="middle">V</text>
     </svg>`;
   }
 
@@ -7816,7 +7818,7 @@ function renderCapStoredEnergy(domain, tool, favId) {
 
       ${formulaSection(
         ["E = ½ × C × V²", "V = √(2E / C)", "C = 2E / V²", "Q = C × V"],
-        "Same energy either way it's found — from the capacitor's own C and V, or handed to you as a target to solve toward."
+        "A charged capacitor holds energy in the electric field between its plates, and gives it back when it discharges. The energy grows with the square of the voltage: twice the voltage stores four times the energy. That is why a large capacitor charged to a few hundred volts can hurt long after the power is off. Charge Q is the electricity stored, in coulombs. Pick which of energy, voltage or capacitance to find."
       )}
       ${calcFooter()}
     `;
