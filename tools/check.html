@@ -151,6 +151,27 @@ async function checkTool(t) {
     if (gap < 0) r.problems.push(`first result is ${Math.round(-gap)} px under the tab bar`);
   }
 
+  // Every worked example must leave the result in view too: its note sits
+  // under the title and pushes everything down.
+  const bulb = doc.querySelector(".example-btn");
+  if (bulb && tab) {
+    bulb.click();
+    await wait(30);
+    const n = doc.querySelectorAll(".example-item").length;
+    doc.querySelector(".sheet-backdrop")?.remove();
+    for (let i = 0; i < n; i++) {
+      doc.querySelector(".example-btn").click();
+      await wait(30);
+      const item = doc.querySelector(`.example-item[data-ex="${i}"]`);
+      const title = item.querySelector(".example-title").textContent;
+      item.click();
+      await wait(40);
+      const res2 = firstResult(doc);
+      const gap2 = res2 ? doc.querySelector(".tabbar").getBoundingClientRect().top - res2.getBoundingClientRect().bottom : 0;
+      if (gap2 < 0) r.problems.push(`example "${title}": first result is ${Math.round(-gap2)} px under the tab bar`);
+    }
+  }
+
   for (const c of (CHECK_CASES[t.calc] || [])) {
     r.cases++;
     try {

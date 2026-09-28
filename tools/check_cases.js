@@ -117,6 +117,14 @@ const CHECK_CASES = {
   "wheatstone-bridge": [
     { name: "1 k, 2 k, 3 k balance with 6 k", do: [["set", 'input[data-var="r2"]', "2"], ["set", 'input[data-var="r3"]', "3"]],
       expect: [['[data-res="solved"]', "6 kΩ"]] },
+    { name: "example: ×10 ratio reads 4.75 k", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="solved"]', "4.75 kΩ"], ['[data-res="detail"]', "/Ratio R2 \/ R1 = 10/"]] },
+    { name: "example: PT100 at 25 °C", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="solved"]', "109.7 Ω"], [".pill.active", "R3"]] },
+    { name: "example: ×100 ratio arm", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="solved"]', "100 kΩ"], ['[data-res="detail"]', "E96 standard value"]] },
+    { name: "the solve, tolerance and units are remembered", do: [["pill", 3], ["set", "#wb-tol", "5"], ["set", 'select[data-unit="r1"]', "Ω"], ["reopen"]],
+      expect: [[".pill.active", "R3"], ["#wb-tol", "5"], ['select[data-unit="r1"]', "Ω"]] },
   ],
   "delta-y": [
     { name: "10, 20, 30 Ω delta", do: [["set", 'input[data-var="ab"]', "10"], ["set", 'input[data-var="bc"]', "20"], ["set", 'input[data-var="ca"]', "30"]],

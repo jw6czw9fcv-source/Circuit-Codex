@@ -726,16 +726,19 @@ function openExamples() {
   };
 }
 
-// The note sits under the header; a redraw keeps it (calcHeader prints it),
-// and an apply() that only refreshes gets it placed here.
+// The note sits under the header, in place of the subtitle: it says more
+// about what is on screen than the subtitle does, and a note that came on
+// top of it pushed the result under the tab bar. A redraw keeps it
+// (calcHeader prints it); an apply() that only refreshes gets it placed here.
 function showExampleNote() {
   let el = app.querySelector(".example-note");
   if (!EXAMPLE_NOTE) { if (el) el.remove(); return; }
   if (!el) {
     el = document.createElement("div");
     el.className = "example-note";
-    const anchor = app.querySelector(".sub") || app.querySelector(".topbar");
-    if (anchor) anchor.insertAdjacentElement("afterend", el);
+    const sub = app.querySelector(".sub");
+    if (sub) sub.replaceWith(el);
+    else app.querySelector(".topbar")?.insertAdjacentElement("afterend", el);
   }
   el.textContent = EXAMPLE_NOTE;
 }
@@ -752,8 +755,8 @@ function calcHeader(tool, favId, subtitle) {
       ${bulb ? `<button class="icon-btn example-btn" aria-label="Examples" onclick="openExamples()">${ICONS.bulb}</button>` : ""}
       <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
     </div>
-    ${subtitle ? `<div class="sub">${subtitle}</div>` : ""}
-    ${EXAMPLE_NOTE ? `<div class="example-note">${EXAMPLE_NOTE}</div>` : ""}`;
+    ${EXAMPLE_NOTE ? `<div class="example-note">${EXAMPLE_NOTE}</div>`
+      : subtitle ? `<div class="sub">${subtitle}</div>` : ""}`;
 }
 
 // options is [value, label] pairs; the active one is tinted with the domain
@@ -2703,12 +2706,32 @@ function renderCurrentDivider(domain, tool, favId) {
 // ratio arms, R3 the adjustable one, and Rx the unknown under test, but
 // nothing here assumes which physical role a given arm plays.
 function renderWheatstoneBridge(domain, tool, favId) {
+  const C = "wheatstone-bridge";
+  const R_UNIT = (n) => pref(C, `unit.${n}`, "kΩ", Object.keys(DIVIDER_R_UNITS));
   const state = {
-    solve: "rx",
-    tol: 1,
+    solve: pref(C, "solve", "rx", ["rx", "r1", "r2", "r3"]),
+    tol: pref(C, "tol", 1, [0.1, 0.5, 1, 2, 5, 10]),
     values: { r1: 1, r2: 1, r3: 1, rx: 1 },
-    units: { r1: "kΩ", r2: "kΩ", r3: "kΩ", rx: "kΩ" },
+    // The units last chosen for each arm, if any.
+    units: { r1: R_UNIT("r1"), r2: R_UNIT("r2"), r3: R_UNIT("r3"), rx: R_UNIT("rx") },
   };
+
+  // A bridge in use. Each sets the arm solved for and the other three, with
+  // their units; the parts are ±1%.
+  const example = (solve, values, units) => () => {
+    Object.assign(state, { solve, tol: 1 });
+    Object.assign(state.values, values);
+    Object.assign(state.units, units);
+    paint();
+  };
+  useExamples([
+    { title: "Read an unknown at ×10", note: "R2 / R1 = 10 sets the range: balanced with R3 at 475 Ω, the unknown Rx is 4.75 kΩ.",
+      apply: example("rx", { r1: 1, r2: 10, r3: 475 }, { r1: "kΩ", r2: "kΩ", r3: "Ω" }) },
+    { title: "PT100 at 25 °C", note: "109.73 Ω (IEC 60751). With equal ratio arms, R3 must match it for G to read zero.",
+      apply: example("r3", { r1: 1, r2: 1, rx: 109.73 }, { r1: "kΩ", r2: "kΩ", rx: "Ω" }) },
+    { title: "Ratio arm for a ×100 range", note: "To read about 100 kΩ against a 1 kΩ R3, R2 / R1 must be 100: R2 = 100 kΩ.",
+      apply: example("r2", { r1: 1, r3: 1, rx: 100 }, { r1: "kΩ", r3: "kΩ", rx: "kΩ" }) },
+  ]);
 
   const FIELD = {
     r1: { label: "R1 — top left" },
@@ -2862,7 +2885,7 @@ function renderWheatstoneBridge(domain, tool, favId) {
       </div>
       ${inputsFor(state.solve).map(name => `
         <div class="field">
-          <label><span class="field-name">${FIELD[name].label}</span><span class="field-hint" data-hint="${name}">${seriesHint(name)}</span></label>
+          <label><span class="field-name">${FIELD[name].label}</span>${name === "rx" ? "" : `<span class="field-hint" data-hint="${name}">${seriesHint(name)}</span>`}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${state.values[name]}" />
             <select data-unit="${name}">
@@ -2892,7 +2915,7 @@ function renderWheatstoneBridge(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.solve = v; setPref(C, "solve", v); paint(); });
 
     app.querySelectorAll("input[data-var]").forEach(input => {
       input.oninput = () => {
@@ -2901,10 +2924,15 @@ function renderWheatstoneBridge(domain, tool, favId) {
       };
     });
     app.querySelectorAll("select[data-unit]").forEach(select => {
-      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+      select.onchange = () => {
+        state.units[select.dataset.unit] = select.value;
+        setPref(C, `unit.${select.dataset.unit}`, select.value);
+        updateResults();
+      };
     });
     document.getElementById("wb-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);
+      setPref(C, "tol", state.tol);
       updateResults();
     };
     inputsFor(state.solve).forEach(name => {
