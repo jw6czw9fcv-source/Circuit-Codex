@@ -38,6 +38,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [Capacitor energy](#capacitor-energy)
 - Inductors → [Inductor color code](#inductor-color-code)
 - Inductors → [Inductor SMD code](#inductor-smd-code)
+- Passive filters → [RC filter](#rc-filter)
 
 ### Digital
 
@@ -1759,6 +1760,102 @@ standard or datasheet shows. It read a tolerance letter as part of the stamp,
 where datasheets put it only in the part number, and it had no ±30%. And its
 note said that "100" means 10 nH on some parts, a claim no source supported;
 it was removed.
+
+[↑ Index](#index)
+
+---
+
+<a id="rc-filter"></a>
+## RC filter
+
+`calc: rc-filter` · Passive components › Passive filters
+
+### What it computes
+
+The cutoff frequency of a filter made of one resistor and one capacitor — or
+the resistor or capacitor for a cutoff you want — as a low-pass or a
+high-pass, with up to six identical stages. It draws the frequency response,
+and gives the attenuation and phase shift at any frequency you pick.
+
+### Source
+
+No standard is needed: the results follow from Ohm's law and the impedance of
+a capacitor. The derivation is below.
+
+### What it means
+
+A **filter** passes some frequencies and weakens others. A **low-pass**
+(resistor in series, capacitor to ground) lets slow signals through and
+weakens fast ones: it smooths PWM into a steady voltage, or removes noise
+above the band you care about. A **high-pass** (capacitor in series,
+resistor to ground) does the reverse: it blocks DC and passes the signal
+riding on it, as a coupling capacitor does in audio.
+
+- **Cutoff frequency, fc** — where the output has fallen to 70.7% of the input
+  (1/√2). Below it a low-pass passes nearly everything; above it, less and
+  less.
+- **Decibels (dB)** — a way of comparing two levels on a scale that suits
+  signals: 20 × log₁₀(output ÷ input). −3 dB is 70.7%, −20 dB a tenth, −40 dB
+  a hundredth.
+- **Pole** — one RC stage. Past fc a single pole weakens the signal by a
+  further 20 dB for every tenfold increase in frequency (20 dB per decade);
+  two poles 40 dB, and so on.
+- **Phase shift** — how far the output's waveform is behind (lag) or ahead of
+  (lead) the input's, in degrees of a cycle. At fc it is 45°.
+
+### Why the formulas are these
+
+A capacitor's impedance falls with frequency: Z = 1 / (2πfC). The low-pass is
+a voltage divider of R on top and C below, so its output is the part of the
+input across C:
+
+    Vout / Vin = 1 / (1 + j·f/fc),     fc = 1 / (2πRC)
+
+At f = fc the real and imaginary parts are equal, so the magnitude is 1/√2
+(−3.01 dB) and the phase −45°. Well above fc the magnitude is fc/f: ten times
+the frequency, a tenth of the output, −20 dB. The high-pass swaps R and C, and
+its response is the same with f/fc turned upside down.
+
+Solving fc = 1 / (2πRC) for R or C gives the other two forms the tool uses.
+
+With N identical stages each **buffered** (an op-amp between them, so none
+loads the next), the responses multiply: the dB figures and the phase are N
+times one stage's. At each stage's fc the total is already −3N dB, so the
+system's own −3 dB point moves in:
+
+    f(−3 dB) = fc × √(2^(1/N) − 1)          (low-pass; high-pass divides instead)
+
+For two stages that is 0.644 × fc.
+
+### Assumptions and limits
+
+- **Nothing loads the output.** A load in parallel with the output changes the
+  divider: keep it well above R (ten times R or more costs under 10%), or
+  buffer it.
+- **The source drives it with little resistance of its own.** A source
+  resistance adds to R and lowers fc.
+- **Several poles here means buffered stages.** Unbuffered RC stages in a
+  chain load each other and give a softer knee than this.
+- Parts have tolerances: a ±5% R and a ±10% C move fc by up to about 15%.
+
+### What it deliberately does not do
+
+- **RL filters** have their own tool; **op-amp active filters** with gain and
+  sharper shapes (Butterworth, Sallen-Key) are not covered.
+- **The time response** — how the output settles after a step — is the RC
+  charge/discharge tool.
+
+### How it was checked
+
+10 kΩ with 100 nF gives 159.2 Hz; at fc the attenuation is −3.01 dB and the
+phase −45°. Two buffered poles put the system's −3 dB point at 102.4 Hz,
+0.644 × fc. 10 kΩ with 1 µF gives 15.92 Hz, and −35.97 dB at 1 kHz. A
+high-pass of the same parts is 2.13 dB down at 20 Hz. fc = 20 kHz with 1 kΩ
+needs 7.958 nF.
+
+The review found the frequency to explore opening at 159.2 Hz, a rounded fc,
+which showed −45.01°; it now starts at fc exactly. The units offered were cut
+to those RC filters use: Ω to MΩ, pF to µF, Hz to MHz.
 
 [↑ Index](#index)
 
