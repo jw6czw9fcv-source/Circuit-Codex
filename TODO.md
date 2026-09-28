@@ -316,6 +316,16 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 
 ## Tier 2 — Intermediate (a real circuit or standard behind the numbers)
 
+Priority first — the tools most asked for in apps like this (Pierre,
+2026-09-27):
+
+- [ ] PCB trace width / resistance
+- [ ] AC Ohm's law (impedance form)
+- [ ] Inductor series/parallel
+- [ ] Internal resistance (battery)
+
+Then:
+
 - [ ] Antenna length (dipole/monopole)
 - [ ] Beamwidth & gain
 - [ ] Fresnel zone
@@ -341,7 +351,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 - [ ] Constant current source/driver
 - [ ] Power factor
 - [ ] POE classes
-- [ ] Internal resistance (battery)
 - [ ] Accumulators
 - [ ] Thermal resistance (θJA / θJC)
 - [ ] Heat sink sizing
@@ -353,7 +362,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 - [ ] RPM ↔ frequency conversion
 - [ ] Starting current estimation
 - [ ] Relay driver
-- [ ] PCB trace width / resistance
 - [ ] Trace current capacity (ampacity)
 - [ ] Via current capacity
 - [ ] Signal propagation delay
@@ -370,7 +378,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 - [ ] Flex PCB bend radius
 - [ ] Cable current capacity
 - [ ] IEC cable reference
-- [ ] AC Ohm's law (impedance form)
 - [ ] Circuit calculators (divider, attenuator, delta-Y)
 - [ ] Quiescent current
 - [ ] 4-20mA loop conversion
@@ -385,7 +392,6 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 - [ ] Air-core coil (Wheeler)
 - [ ] Toroid winding
 - [ ] Transformer (turns ratio)
-- [ ] Inductor series/parallel
 - [ ] Toroid/ferrite reference table
 - [ ] VSWR / Return loss
 - [ ] Smith chart matching
@@ -447,8 +453,9 @@ an Example, then continue the review at tool 18)
 - [x] Comfort — copy a result (tap it), remember the last units chosen
       (pref()/setPref(); applied per tool during the re-walk — done so far
       on the voltage divider).
-- [ ] Light mode.
-- [ ] TODO priorities — PCB trace width, AC Ohm's law, inductor
+- [ ] Light mode — at the end, after the re-walk (Pierre, 2026-09-27):
+      follows the iPhone's appearance, with an Auto / Light / Dark choice.
+- [x] TODO priorities — PCB trace width, AC Ohm's law, inductor
       series/parallel, battery internal resistance first.
 
 **Before release**
