@@ -474,3 +474,15 @@ an Example, then continue the review at tool 18)
       by headless Chrome) and a downloadable PDF from the same page.
       Regenerated in one command, never edited by hand. Not Word — Pierre,
       2026-09-27.
+
+**After release — native iOS app** (Pierre asked, 2026-09-28)
+
+- [ ] Wrap the web app in a native iOS shell (Capacitor or a plain
+      WKWebView) rather than rewriting it in SwiftUI: the 84 tools, the
+      drawings and the manual stay one code base, still built and checked
+      here. Likely fixes the home-screen launch zoom bug the PWA cannot
+      (see the memory note on it). Needs a Mac with Xcode, or a cloud build
+      service (Codemagic or similar), and an Apple Developer account
+      (US$99 a year) for the App Store. A full SwiftUI rewrite was
+      considered and set aside: every tool redone, and nothing it could be
+      checked on from Windows.
