@@ -32,6 +32,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [NTC/PTC thermistor](#ntcptc-thermistor)
 - Capacitors → [Ceramic capacitor code](#ceramic-capacitor-code)
 - Capacitors → [Film capacitor code](#film-capacitor-code)
+- Capacitors → [SMD capacitor code](#smd-capacitor-code)
 
 ### Digital
 
@@ -1127,6 +1128,94 @@ had no H (±2.5%), a common film tolerance; added it. It made the unit letter
 case-blind (4N7 was rejected), applied the 8 and 9 multipliers and the R-code
 length fix from the ceramic tool, limited the units to pF, nF and µF, and made
 the drawing show the marking as typed.
+
+[↑ Index](#index)
+
+---
+
+<a id="cap-smd-code"></a>
+## SMD capacitor code
+
+`calc: cap-smd-code` · Passive components › Capacitors
+
+### What it computes
+
+The capacitance printed on a surface-mount capacitor, usually a tantalum part,
+with the letter printed next to it read either as the rated voltage or as the
+tolerance; and the other way round, the marking for a value.
+
+### Source
+
+- The capacitance digits are the EIA-198 picofarad code, as on ceramic parts.
+- The marking layout and voltage letters from the **Kyocera-AVX TAJ** tantalum
+  datasheet: "227 A" is 220 µF at 10 V (A = 10 V) on its larger cases; on its
+  small cases the letter sits above the digits, "J" over "106" for 10 µF at
+  6.3 V. The rest of the voltage letters are the EIA tantalum code.
+- The **KEMET T491** datasheet lists what its marking holds: polarity band,
+  picofarad code, rated voltage and a date code.
+
+### What the marking means
+
+Most small ceramic chip capacitors carry no marking at all — they are too small
+to print on, and the value is only on the reel. The SMD capacitors that are
+marked are mostly **tantalum** (and polymer) capacitors, which are larger and
+come in moulded cases.
+
+**The digits** are the capacitance in picofarads, as on a ceramic disc: the last
+digit is how many zeros follow the first two. 106 is 10 000 000 pF = 10 µF;
+227 is 220 µF; 475 is 4.7 µF.
+
+**The letter** is, on most tantalum parts, the **rated voltage** — the most it
+may see continuously:
+
+| Letter | Rated voltage |
+|---|---|
+| G | 4 V |
+| J | 6.3 V |
+| A | 10 V |
+| C | 16 V |
+| D | 20 V |
+| E | 25 V |
+| V | 35 V |
+| T | 50 V |
+
+It may be printed after the digits (227A) or before them (J106, often on a line
+of its own above); the tool reads both. Some parts instead use a **tolerance**
+letter (K ±10%, M ±20%). The two tables share letters — G and J mean 4 V and
+6.3 V in one, ±2% and ±5% in the other — so the marking alone cannot say which
+is meant; the datasheet can, and the pill chooses.
+
+**Polarity.** A tantalum capacitor is polarised: the band or bevel at one end
+marks the **positive** terminal — the opposite of an aluminium electrolytic,
+whose stripe marks the negative. Fitted backwards, a tantalum can fail short and
+burn.
+
+### Assumptions and limits
+
+- **Derate the voltage.** Tantalum (MnO₂) capacitors are usually run at no more
+  than half their rated voltage, to survive turn-on surges; the letter gives the
+  rating, not the voltage to design for.
+- **Makers' own marks** — date codes, logos, ID codes — share the same face and
+  are not read.
+- A value typed in is encoded with R below 10 pF; tantalum parts never go that
+  low.
+
+### What it deliberately does not do
+
+- **The two-character SMD capacitor code** (a letter for the figures and a
+  digit for the multiplier, IEC 60062 Annex B) is not read.
+- **Ceramic discs and film parts** have their own code tools.
+
+### How it was checked
+
+Against the AVX datasheet's own examples: 227A reads 220 µF at 10 V, J106 and
+J 106 read 10 µF at 6.3 V. Also 475V → 4.7 µF at 35 V, 106K → 10 µF ±10%,
+226M → 22 µF ±20%.
+
+The review made the tool read a voltage letter printed before the digits
+(J106 was rejected), applied the 8 and 9 multipliers and R-code length fix
+from the ceramic tool, limited the units to pF, nF and µF, and made the drawing
+show the marking as typed.
 
 [↑ Index](#index)
 

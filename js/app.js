@@ -5601,6 +5601,9 @@ const SMD_CAP_VOLTAGE_LETTER = { G: 4, J: 6.3, A: 10, C: 16, D: 20, E: 25, V: 35
 
 function renderCapSmdCode(domain, tool, favId) {
   const state = { farads: 10e-6, mode: "voltage", letter: "" };
+  // Marked SMD capacitors, mostly tantalum, run from picofarads to a few
+  // thousand microfarads.
+  const CSMD_UNITS = { pF: 1e-12, nF: 1e-9, "µF": 1e-6 };
 
   function letterTable() {
     return state.mode === "voltage" ? SMD_CAP_VOLTAGE_LETTER : SMD_IND_TOL_LETTER;
@@ -5615,8 +5618,12 @@ function renderCapSmdCode(domain, tool, favId) {
     const exponent = e - 1;
     if (exponent > 9) return null;
     if (exponent >= 0) return d + String(exponent);
-    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
-    return code.length <= 3 ? code : null;
+    // Below that, R takes the decimal point's place in three characters.
+    const frac = 2 - Math.max(0, e + 1);
+    const fixed = pF.toFixed(frac);
+    if (Number(fixed) === 0) return null;
+    const [whole, part] = fixed.split(".");
+    return `${whole === "0" ? "" : whole}R${part || ""}`;
   }
 
   function codeFor(farads) {
@@ -5625,12 +5632,18 @@ function renderCapSmdCode(domain, tool, favId) {
   }
 
   function faradsFor(raw) {
-    let str = String(raw).trim().toUpperCase();
+    let str = String(raw).trim().toUpperCase().replace(/\s+/g, "");
     let letter = "";
     const table = letterTable();
+    // The letter can come after the code (227A, as AVX prints its larger
+    // cases) or before it (J106, on the small ones where it sits on its own
+    // line above). The code itself is only digits and R, so either end works.
     if (str.length && table[str[str.length - 1]] !== undefined) {
       letter = str[str.length - 1];
       str = str.slice(0, -1);
+    } else if (str.length > 1 && table[str[0]] !== undefined && str[0] !== "R") {
+      letter = str[0];
+      str = str.slice(1);
     }
     if (!str) return { farads: NaN, letter };
     if (str.includes("R")) {
@@ -5640,7 +5653,9 @@ function renderCapSmdCode(domain, tool, favId) {
     }
     if (!/^[0-9]+$/.test(str) || str.length !== 3) return { farads: NaN, letter };
     if (Number(str) === 0) return { farads: 0, letter };
-    const pF = Number(str.slice(0, 2)) * Math.pow(10, Number(str.slice(2)));
+    // As on ceramics (EIA-198), a last digit of 9 or 8 is ×0.1 or ×0.01.
+    const last = Number(str.slice(2));
+    const pF = Number(str.slice(0, 2)) * (last === 9 ? 0.1 : last === 8 ? 0.01 : Math.pow(10, last));
     return { farads: pF * 1e-12, letter };
   }
 
@@ -5672,9 +5687,11 @@ function renderCapSmdCode(domain, tool, favId) {
     </svg>`;
   }
 
+  // The chip shows the marking as typed, J106 stays J106.
   function refresh(source, notice) {
     const code = codeFor(state.farads);
-    app.querySelector(".diagram-box").innerHTML = chip(code);
+    const typed = source === "code" ? app.querySelector("#csmd-code").value.trim().toUpperCase() : "";
+    app.querySelector(".diagram-box").innerHTML = chip(typed || code);
     app.querySelector('[data-res="value"]').textContent = formatFarads(state.farads);
     app.querySelector('[data-res="series"]').textContent = seriesLine(state.farads);
     app.querySelector('[data-res="letter"]').textContent = letterText(state.letter);
@@ -5683,7 +5700,7 @@ function renderCapSmdCode(domain, tool, favId) {
     const letterField = app.querySelector("#csmd-letter");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
     if (source !== "value" && document.activeElement !== valueField) {
-      valueField.value = trim(state.farads / CAP_UNITS[state.unit || "µF"]);
+      valueField.value = trim(state.farads / CSMD_UNITS[state.unit || "µF"]);
     }
     if (document.activeElement !== letterField) letterField.value = state.letter;
     app.querySelector('[data-res="err"]').textContent =
@@ -5691,7 +5708,7 @@ function renderCapSmdCode(domain, tool, favId) {
   }
 
   function applyValue(raw) {
-    const v = parseFloat(raw) * CAP_UNITS[state.unit];
+    const v = parseFloat(raw) * CSMD_UNITS[state.unit];
     if (!isFinite(v) || v < 0) return;
     state.farads = v;
     refresh("value");
@@ -5711,7 +5728,7 @@ function renderCapSmdCode(domain, tool, favId) {
       <div class="field">
         <label>Code</label>
         <div class="field-row">
-          <input id="csmd-code" type="text" autocapitalize="characters" spellcheck="false" maxlength="4" value="${code || ""}" />
+          <input id="csmd-code" type="text" autocapitalize="characters" spellcheck="false" maxlength="5" value="${code || ""}" />
         </div>
       </div>
 
@@ -5719,8 +5736,8 @@ function renderCapSmdCode(domain, tool, favId) {
       <div class="field">
         <label>Capacitance</label>
         <div class="field-row">
-          <input id="csmd-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / CAP_UNITS[state.unit])}" />
-          <select id="csmd-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <input id="csmd-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / CSMD_UNITS[state.unit])}" />
+          <select id="csmd-unit">${Object.keys(CSMD_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
         </div>
       </div>
       <div class="field">
@@ -5747,7 +5764,7 @@ function renderCapSmdCode(domain, tool, favId) {
 
       ${formulaSection(
         ["Value = (D1D2) × 10^D3, in pF"],
-        "R replaces the decimal point below 10 pF (4R7 = 4.7 pF). Most small MLCC ceramic chips (0402–0805) carry no marking at all — too small for text; this really applies to tantalum, polymer, and larger chips with room to print. The trailing letter isn't standardized: some parts use the ordinary tolerance letters, others use it for voltage instead (KEMET/AVX's EIA table, shown here) — and G and J mean different things in each, so pick whichever your part's datasheet says before trusting the letter."
+        "Printed SMD capacitors are mostly tantalum: small ceramic chips are too small to mark. The digits are the usual code in picofarads, the last one being how many zeros follow: 106 is 10 µF, 227 is 220 µF. A letter next to them, before or after, is usually the rated voltage: G 4 V, J 6.3 V, A 10 V, C 16 V, D 20 V, E 25 V, V 35 V, T 50 V, so 227A is 220 µF at 10 V. Some parts use a tolerance letter instead (K ±10%, M ±20%), and G and J mean different things in the two tables, so check the datasheet and pick the pill. The band at one end of a tantalum marks the positive side."
       )}
       ${calcFooter()}
     `;
