@@ -39,6 +39,7 @@ will key on, since that is the id the app already holds for each tool.
 - Inductors → [Inductor color code](#inductor-color-code)
 - Inductors → [Inductor SMD code](#inductor-smd-code)
 - Passive filters → [RC filter](#rc-filter)
+- Passive filters → [RL filter](#rl-filter)
 
 ### Digital
 
@@ -1856,6 +1857,86 @@ needs 7.958 nF.
 The review found the frequency to explore opening at 159.2 Hz, a rounded fc,
 which showed −45.01°; it now starts at fc exactly. The units offered were cut
 to those RC filters use: Ω to MΩ, pF to µF, Hz to MHz.
+
+[↑ Index](#index)
+
+---
+
+<a id="rl-filter"></a>
+## RL filter
+
+`calc: rl-filter` · Passive components › Passive filters
+
+### What it computes
+
+The cutoff frequency of a filter made of one resistor and one inductor — or
+the resistor or inductor for a cutoff you want — as a low-pass or a
+high-pass, with up to six identical stages; the frequency response, and the
+attenuation and phase shift at any frequency you pick.
+
+### Source
+
+No standard is needed: the results follow from Ohm's law and the impedance of
+an inductor. The derivation is below.
+
+### What it means
+
+It is the RC filter's counterpart with an inductor in place of the capacitor
+(see that section for what a filter, fc, a decibel, a pole and a phase shift
+are). An inductor's impedance **rises** with frequency, where a capacitor's
+falls, so the two parts swap places:
+
+- **Low-pass** — inductor in series, resistor to ground. The inductor blocks
+  the fast signals. Often the "resistor" is the load itself: a loudspeaker in
+  a crossover, a circuit fed through a choke.
+- **High-pass** — resistor in series, inductor to ground. The inductor shorts
+  the slow signals to ground and lets the fast ones through, as in RF
+  circuits where the series resistance is the 50 Ω of the system.
+
+### Why the formulas are these
+
+An inductor's impedance is Z = 2πfL. The low-pass is a divider of L on top and
+R below, so its output is the part across R:
+
+    Vout / Vin = R / (R + j·2πfL) = 1 / (1 + j·f/fc),     fc = R / (2πL)
+
+This is the same shape as the RC low-pass, so everything that follows from it
+is the same: −3.01 dB and −45° at fc, 20 dB per decade beyond, and for N
+buffered stages a system −3 dB point at fc × √(2^(1/N) − 1). The high-pass
+swaps R and L and turns f/fc upside down. Solving fc = R / (2πL) for R or L
+gives the other two forms.
+
+### Assumptions and limits
+
+- **A real inductor has resistance.** Its winding's DC resistance (DCR, in the
+  datasheet) adds to R in a low-pass and flattens the high-pass at low
+  frequencies. For small R — an 8 Ω speaker — it matters.
+- **Cores saturate.** Past its rated current an inductor with a ferrite or
+  iron core loses much of its inductance, and fc moves up.
+- **Every inductor resonates** with its own winding capacitance at its
+  self-resonant frequency (SRF, in the datasheet); well below it the model
+  holds, near it the part stops behaving as an inductor.
+- **Nothing loads the output**, and several poles mean buffered stages, as
+  for the RC filter.
+
+### What it deliberately does not do
+
+- **RC filters** have their own tool; **LC filters** (both an inductor and a
+  capacitor, 40 dB per decade from one pair) are not covered.
+- **Loudspeaker crossover design** beyond one coil — the speaker's impedance
+  is not a pure 8 Ω across the band — is not covered.
+
+### How it was checked
+
+100 Ω with 100 mH gives 159.2 Hz; at fc −3.01 dB and −45°. An 8 Ω woofer
+crossed over at 2.5 kHz needs 509.3 µH. A 10 µH choke into 10 Ω is a 159.2 kHz
+low-pass, −16.07 dB at 1 MHz. 100 nH to ground in a 50 Ω system is a high-pass
+at 79.58 MHz.
+
+The review made the same corrections as on the RC filter: the frequency to
+explore opens at fc exactly, Low-/High-pass take the mode pills, and the
+resistor units are ohms to megohms. Inductors keep nH to H and frequencies up
+to GHz, which RF inductors and supply chokes really reach.
 
 [↑ Index](#index)
 

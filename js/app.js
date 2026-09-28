@@ -9344,25 +9344,46 @@ function renderRcFilter(domain, tool, favId) {
 const HENRY_UNITS = { nH: 1e-9, "µH": 1e-6, mH: 1e-3, H: 1 };
 
 function renderRlFilter(domain, tool, favId) {
+  const C = "rl-filter";
+  // Resistors of ohms to megohms; inductors from nanohenries (RF) to henries
+  // (supply chokes), so cutoffs run up to gigahertz.
+  const FIELD = {
+    r: { label: "Resistance (R)", units: DIVIDER_R_UNITS },
+    l: { label: "Inductance (L)", units: HENRY_UNITS },
+    fc: { label: "Cutoff frequency (fc)", units: FREQ_UNITS },
+  };
+  const unitPref = (n, def) => pref(C, `unit.${n}`, def, Object.keys(FIELD[n].units));
   const state = {
-    topology: "lowpass",
-    solve: "fc",
-    poles: 1,
+    topology: pref(C, "topology", "lowpass", ["lowpass", "highpass"]),
+    solve: pref(C, "solve", "fc", ["fc", "r", "l"]),
+    poles: pref(C, "poles", 1, [1, 2, 3, 4, 5, 6]),
     values: { r: 100, l: 100, fc: 159.2 },
-    units: { r: "Ω", l: "mH", fc: "Hz" },
+    units: { r: unitPref("r", "Ω"), l: unitPref("l", "mH"), fc: unitPref("fc", "Hz") },
     freqVal: 159.2, freqUnit: "Hz",
   };
+
+  // RL filters met in practice. Each sets the circuit, what is solved for,
+  // and a frequency to look at, with its units.
+  const example = (settings, values, units, freq) => () => {
+    Object.assign(state, settings, { freqVal: freq[0], freqUnit: freq[1] });
+    Object.assign(state.values, values);
+    Object.assign(state.units, units);
+    paint();
+  };
+  useExamples([
+    { title: "Crossover coil for a woofer", note: "The 8 Ω woofer is the R: for 2.5 kHz the coil in series with it is 509 µH, about 0.5 mH.",
+      apply: example({ topology: "lowpass", solve: "l", poles: 1 }, { fc: 2.5, r: 8 }, { fc: "kHz", r: "Ω" }, [5, "kHz"]) },
+    { title: "Choke feeding a 10 Ω load", note: "10 µH: fc 159 kHz, so 1 MHz switching noise is cut only 16 dB; real filters add a capacitor.",
+      apply: example({ topology: "lowpass", solve: "fc", poles: 1 }, { r: 10, l: 10 }, { r: "Ω", l: "µH" }, [1, "MHz"]) },
+    { title: "RF high-pass in 50 Ω", note: "100 nH to ground shorts low frequencies: above 79.6 MHz the signal passes.",
+      apply: example({ topology: "highpass", solve: "fc", poles: 1 }, { r: 50, l: 100 }, { r: "Ω", l: "nH" }, [100, "MHz"]) },
+  ]);
 
   function pickFreqUnit(hz) {
     for (const u of ["GHz", "MHz", "kHz"]) { if (Math.abs(hz) >= FREQ_UNITS[u]) return u; }
     return "Hz";
   }
 
-  const FIELD = {
-    r: { label: "Resistance (R)", units: OHM_UNITS },
-    l: { label: "Inductance (L)", units: HENRY_UNITS },
-    fc: { label: "Cutoff frequency (fc)", units: FREQ_UNITS },
-  };
 
   function inputsFor(solve) {
     if (solve === "fc") return ["r", "l"];
@@ -9537,10 +9558,10 @@ function renderRlFilter(domain, tool, favId) {
       <div class="diagram-box">${diagram()}</div>
       ${state.poles > 1 ? `<div class="result-sub" style="margin:-8px 16px 10px;">× ${state.poles} identical stages, each buffered so it doesn't load the next</div>` : ""}
 
-      <div class="filter-row" id="rlf-topology">
+      <div class="mode-pills" id="rlf-topology">
         ${[["lowpass", "Low-pass"], ["highpass", "High-pass"]].map(([v, l]) => `
-          <button class="filter-btn ${state.topology === v ? "active" : ""}" data-topo="${v}"
-                  style="${state.topology === v ? `background:${domain.bg};color:#8FC1F5;` : ""}">${l}</button>`).join("")}
+          <button class="pill ${state.topology === v ? "active" : ""}" data-topo="${v}"
+                  style="${state.topology === v ? `background:${domain.bg};color:#8FC1F5` : ""}">${l}</button>`).join("")}
       </div>
 
       <div class="section-label" style="color:#8FC1F5">Poles (identical, buffered stages)
@@ -9606,22 +9627,26 @@ function renderRlFilter(domain, tool, favId) {
         ["fc = R / (2π × L)", "R = 2π × fc × L", "L = R / (2π × fc)", "f(−3dB, N poles) = fc × √(2^(1/N) − 1)"],
         state.poles > 1
           ? `Each stage rolls off at 20 dB/decade past its own fc; ${state.poles} identical, buffered stages together give ${state.poles * 20} dB/decade — but the system's own −3 dB point sits below the single stage's fc, not at it.`
-          : "First-order (single-pole) filter — the response rolls off at 20 dB/decade past fc. At fc itself: −3.01 dB, 45° lag (low-pass) or 45° lead (high-pass)."
+          : "A low-pass filter lets slow signals through and weakens fast ones; a high-pass does the reverse. An inductor's impedance rises with frequency, so in series it blocks the highs (low-pass) and to ground it shorts the lows (high-pass). The cutoff fc is where the output has fallen to 70.7% of the input, −3 dB (−20 dB is a tenth). Past fc one pole weakens the signal 20 dB more for every tenfold step in frequency. At fc the output lags the input by 45° (low-pass) or leads it (high-pass)."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.solve = v; setPref(C, "solve", v); paint(); });
 
-    document.getElementById("rlf-topology").addEventListener("click", (e) => {
-      const btn = e.target.closest(".filter-btn");
-      if (!btn) return;
-      state.topology = btn.dataset.topo;
-      paint();
+    // The topology is a mode like the solve-for one, so it takes the same
+    // pills; wireCalc wired every pill to the solve, so these are rewired.
+    app.querySelectorAll("#rlf-topology .pill").forEach((btn) => {
+      btn.onclick = () => {
+        state.topology = btn.dataset.topo;
+        setPref(C, "topology", state.topology);
+        paint();
+      };
     });
 
     document.getElementById("rlf-poles").onchange = (e) => {
       state.poles = parseInt(e.target.value, 10);
+      setPref(C, "poles", state.poles);
       paint();
     };
 
@@ -9632,7 +9657,11 @@ function renderRlFilter(domain, tool, favId) {
       };
     });
     app.querySelectorAll("select[data-unit]").forEach((select) => {
-      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+      select.onchange = () => {
+        state.units[select.dataset.unit] = select.value;
+        setPref(C, `unit.${select.dataset.unit}`, select.value);
+        updateResults();
+      };
     });
     const freqInput = document.getElementById("rlf-freq-input");
     const freqUnitSelect = document.getElementById("rlf-freq-unit");
@@ -9668,6 +9697,11 @@ function renderRlFilter(domain, tool, favId) {
     updateResults();
   }
 
+  // The frequency to explore starts at fc itself, exactly, so the screen opens
+  // on the −3.01 dB, 45° point rather than a rounded neighbour of it.
+  const fc0 = compute().fc;
+  state.freqUnit = pickFreqUnit(fc0);
+  state.freqVal = fc0 / FREQ_UNITS[state.freqUnit];
   paint();
 }
 
