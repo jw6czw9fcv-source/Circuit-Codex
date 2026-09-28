@@ -105,6 +105,14 @@ const CHECK_CASES = {
   ],
   "current-divider": [
     { name: "20 mA into 1 k ∥ 2 k", do: [["set", 'input[data-var="r2"]', "2"]], expect: [['[data-res="solved"]', "13.33 mA"]] },
+    { name: "example: 1 k and 2 k share 20 mA", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="solved"]', "13.33 mA"], ['[data-res="detail"]', "/I2 6.67 mA/"]] },
+    { name: "example: meter shunt is 1.01 Ω", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="solved"]', "1.01 Ω"], ['[data-res="detail"]', "/E96 → 1.02 Ω, I1 1.01 mA/"], [".pill.active", "R2"]] },
+    { name: "example: R1 for 15 of 20 mA", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="solved"]', "333.3 Ω"], ['[data-res="detail"]', "/E96 → 332 Ω/"]] },
+    { name: "the solve, tolerance and units are remembered", do: [["pill", 1], ["set", "#cd-tol", "5"], ["set", 'select[data-unit="iin"]', "A"], ["reopen"]],
+      expect: [[".pill.active", "R1"], ["#cd-tol", "5"], ['select[data-unit="iin"]', "A"]] },
   ],
   "wheatstone-bridge": [
     { name: "1 k, 2 k, 3 k balance with 6 k", do: [["set", 'input[data-var="r2"]', "2"], ["set", 'input[data-var="r3"]', "3"]],

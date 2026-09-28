@@ -2459,12 +2459,36 @@ function renderVoltageDivider(domain, tool, favId) {
 const AMP_UNITS = { "µA": 1e-6, mA: 1e-3, A: 1 };
 
 function renderCurrentDivider(domain, tool, favId) {
+  const C = "current-divider";
   const state = {
-    solve: "i1",
-    tol: 1,
+    solve: pref(C, "solve", "i1", ["i1", "r1", "r2"]),
+    tol: pref(C, "tol", 1, [0.1, 0.5, 1, 2, 5, 10]),
     values: { iin: 20, i1: 10, r1: 1, r2: 1 },
-    units: { iin: "mA", i1: "mA", r1: "kΩ", r2: "kΩ" },
+    // The units last chosen for each field, if any.
+    units: {
+      iin: pref(C, "unit.iin", "mA", Object.keys(AMP_UNITS)),
+      i1: pref(C, "unit.i1", "mA", Object.keys(AMP_UNITS)),
+      r1: pref(C, "unit.r1", "kΩ", Object.keys(DIVIDER_R_UNITS)),
+      r2: pref(C, "unit.r2", "kΩ", Object.keys(DIVIDER_R_UNITS)),
+    },
   };
+
+  // Where current is shared on purpose. Each sets what is solved for, the
+  // tolerance, and the values with their units.
+  const example = (solve, values, units) => () => {
+    Object.assign(state, { solve, tol: 1 });
+    Object.assign(state.values, values);
+    Object.assign(state.units, units);
+    paint();
+  };
+  useExamples([
+    { title: "1 kΩ and 2 kΩ sharing 20 mA", note: "The smaller resistor takes the larger share: 13.33 mA through 1 kΩ, 6.67 mA through 2 kΩ.",
+      apply: example("i1", { iin: 20, r1: 1, r2: 2 }, { iin: "mA", r1: "kΩ", r2: "kΩ" }) },
+    { title: "Shunt for a 1 mA meter to read 100 mA", note: "The 100 Ω meter may carry 1 mA; the shunt takes the other 99 mA: 1.01 Ω. The nearest ±1% part, 1.02 Ω, puts 1.01 mA through the meter.",
+      apply: example("r2", { iin: 100, i1: 1, r1: 100 }, { iin: "mA", i1: "mA", r1: "Ω" }) },
+    { title: "Three quarters through R1", note: "15 mA of 20 mA through R1 with R2 = 1 kΩ: R1 = 333.3 Ω, 332 Ω in ±1% parts.",
+      apply: example("r1", { iin: 20, i1: 15, r2: 1 }, { iin: "mA", i1: "mA", r2: "kΩ" }) },
+  ]);
 
   const FIELD = {
     iin: { label: "Total current (Iin)", units: AMP_UNITS },
@@ -2638,7 +2662,7 @@ function renderCurrentDivider(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.solve = v; setPref(C, "solve", v); paint(); });
 
     app.querySelectorAll("input[data-var]").forEach(input => {
       input.oninput = () => {
@@ -2647,10 +2671,15 @@ function renderCurrentDivider(domain, tool, favId) {
       };
     });
     app.querySelectorAll("select[data-unit]").forEach(select => {
-      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+      select.onchange = () => {
+        state.units[select.dataset.unit] = select.value;
+        setPref(C, `unit.${select.dataset.unit}`, select.value);
+        updateResults();
+      };
     });
     document.getElementById("cd-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);
+      setPref(C, "tol", state.tol);
       updateResults();
     };
     inputsFor(state.solve).filter(name => FIELD[name].units === DIVIDER_R_UNITS).forEach(name => {
