@@ -443,7 +443,7 @@ an Example, then continue the review at tool 18)
       Capacitor SMD code…); merge duplicates (two Zener entries, Circuit
       calculators, RMS under Calculators, the two Wavelength tools renamed);
       split PCB › Trace & impedance in three; English-only search synonyms.
-- [ ] Related tools — links between neighbouring tools, declared in data.js.
+- [x] Related tools — links between neighbouring tools, declared in data.js.
 - [ ] Comfort — copy a result, remember the last units chosen.
 - [ ] Light mode.
 - [ ] TODO priorities — PCB trace width, AC Ohm's law, inductor

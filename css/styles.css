@@ -1119,3 +1119,7 @@ a.icon-btn { text-decoration: none; }
 /* The count of tools still to come in a section, in place of rows that
    would open an empty screen. */
 .coming-row { color: var(--text-muted); font-size: 14px; padding: 4px 4px 2px; }
+
+/* Related tools at the foot of a tool: a line of chips that wraps. */
+.chip-row.related { flex-wrap: wrap; overflow: visible; padding-bottom: 12px; }
+.related-label { padding-top: 4px; }

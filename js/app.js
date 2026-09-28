@@ -124,6 +124,13 @@ app.addEventListener("click", (e) => {
   if (row) selectElementText(row);
 });
 
+// A tool chip (Home rows, Related tools) opens its tool. Delegated on #app,
+// which outlives every paint.
+app.addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip-btn[data-route]");
+  if (chip) location.hash = chip.dataset.route;
+});
+
 // Favourites are keyed by what a tool *is*, not where it sits. Position keys
 // (domain:section:index) silently repoint at a different tool whenever the list
 // is reordered or something is removed, which has already happened once.
@@ -204,9 +211,19 @@ function render() {
 
   renderHome();
 }
-window.addEventListener("hashchange", render);
+// A new screen starts at its top: opened from a link at the foot of another
+// tool, it would otherwise keep that page's scroll and hide its own header.
+window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); });
 
+// A tool screen asks for the tab bar with no active tab; every one does,
+// including the reference tables that skip calcFooter, so the related tools
+// go in here and no tool can miss them.
 function tabbarHTML(activeTab) {
+  if (activeTab === "" && CURRENT_CALC) return relatedHTML() + tabbarHTMLOnly(activeTab);
+  return tabbarHTMLOnly(activeTab);
+}
+
+function tabbarHTMLOnly(activeTab) {
   const tabs = [
     { id: "home", label: "Home", icon: "home" },
     { id: "search", label: "Search", icon: "search" },
@@ -299,7 +316,6 @@ function renderHome() {
     <div style="height:8px"></div>
     ${tabbarHTML("home")}
   `;
-  app.querySelectorAll(".chip-btn").forEach((b) => { b.onclick = () => { location.hash = b.dataset.route; }; });
 }
 
 // One task's tools, gathered from wherever they sit in the domains.
@@ -621,6 +637,21 @@ function calcFooter(note) {
   return `
       ${note ? `<div class="formula-note">${ICONS.info}<span data-res="note">${note}</span></div>` : ""}
       ${tabbarHTML("")}`;
+}
+
+// The tools that go with the one on screen: its own list in RELATED first,
+// then the tools that list it, at most five.
+function relatedTools(calc) {
+  const out = [...(RELATED[calc] || [])];
+  Object.keys(RELATED).forEach((k) => { if (RELATED[k].includes(calc) && !out.includes(k)) out.push(k); });
+  return out.filter((c) => c !== calc && findByCalc(c)).slice(0, 5);
+}
+
+function relatedHTML() {
+  const list = relatedTools(CURRENT_CALC);
+  if (!list.length) return "";
+  return `<div class="section-label related-label">Related tools</div>
+    <div class="chip-row related">${list.map(toolChip).join("")}</div>`;
 }
 
 // The one-liner in calcFooter names only the rearrangement the current

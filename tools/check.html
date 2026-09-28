@@ -76,6 +76,11 @@ async function checkTool(t) {
   const sw = doc.documentElement.scrollWidth, w = win.innerWidth;
   if (sw > w + 1) r.problems.push(`page is ${sw - w} px wider than the screen`);
 
+  // A tool with related tools must show them (a screen that skips
+  // calcFooter would drop the links silently).
+  const hasRelated = typeof win.relatedTools === "function" && win.relatedTools(t.calc).length;
+  if (hasRelated && !doc.querySelector(".chip-row.related")) r.problems.push("related tools not shown");
+
   // Text cut off inside a card: a value wider than its cell.
   const clipped = [...doc.querySelectorAll(".eseries-cell, .result-value, .field-row")]
     .filter((el) => el.getBoundingClientRect().height > 0 && el.scrollWidth > el.clientWidth + 1);
