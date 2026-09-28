@@ -426,7 +426,7 @@ an Example, then continue the review at tool 18)
 
 - [x] Automated check — `python tools/check_app.py` (layout, JS errors,
       reference cases in tools/check_cases.js). Run before every commit.
-- [ ] Input — SI shorthand (4k7, 10u, 2M2) in value fields where a keyboard
+- [x] Input — SI shorthand (4k7, 10u, 2M2) in value fields where a keyboard
       allows; a ± button beside fields that can be negative. The iPhone keeps
       its numeric keypad.
 - [ ] Visual — shared components (primary result large, secondary values
