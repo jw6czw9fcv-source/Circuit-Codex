@@ -747,7 +747,9 @@ function showExampleNote() {
   if (!el) {
     el = document.createElement("div");
     el.className = "example-note";
-    (sub || app.querySelector(".topbar"))?.insertAdjacentElement("afterend", el);
+    const slot = app.querySelector(".head-slot");
+    if (slot) slot.appendChild(el);
+    else app.querySelector(".topbar")?.insertAdjacentElement("afterend", el);
   }
   el.textContent = EXAMPLE_NOTE;
 }
@@ -769,6 +771,9 @@ const EDIT_CONTROLS = ".pill, .filter-btn, .slider-step, .r-drop, .label-btn, .s
   if (e.target.closest(EDIT_CONTROLS)) dropExampleNote();
 }, { capture: true, passive: true }));
 
+// The subtitle and an example's note share one slot under the title. On a
+// tool with examples the slot keeps the height of a two-line note whichever
+// it shows, so picking an example or dropping its note moves nothing below.
 function calcHeader(tool, favId, subtitle) {
   const bulb = TOOL_EXAMPLES && TOOL_EXAMPLES.length;
   // With the bulb there are two buttons on the right, so an invisible one on
@@ -781,8 +786,10 @@ function calcHeader(tool, favId, subtitle) {
       ${bulb ? `<button class="icon-btn example-btn" aria-label="Examples" onclick="openExamples()">${ICONS.bulb}</button>` : ""}
       <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
     </div>
-    ${subtitle ? `<div class="sub"${EXAMPLE_NOTE ? " hidden" : ""}>${subtitle}</div>` : ""}
-    ${EXAMPLE_NOTE ? `<div class="example-note">${EXAMPLE_NOTE}</div>` : ""}`;
+    <div class="head-slot${bulb ? " head-slot--examples" : ""}">
+      ${subtitle ? `<div class="sub"${EXAMPLE_NOTE ? " hidden" : ""}>${subtitle}</div>` : ""}
+      ${EXAMPLE_NOTE ? `<div class="example-note">${EXAMPLE_NOTE}</div>` : ""}
+    </div>`;
 }
 
 // options is [value, label] pairs; the active one is tinted with the domain
@@ -1834,7 +1841,7 @@ function renderSmdCode(domain, tool, favId) {
     { title: "103 on a 0603", note: "10 × 10³ = 10 kΩ, the usual ±5% pull-up; three digits, so ±5% parts.", apply: example("3", "103") },
     { title: "4R7 gate resistor", note: "R is the decimal point: 4.7 Ω, the series resistor in front of a MOSFET gate.", apply: example("3", "4R7") },
     { title: "1002 on a 1% part", note: "Four digits carry three figures: 100 × 10² = 10.0 kΩ ±1%.", apply: example("4", "1002") },
-    { title: "10L0 current shunt", note: "L is the decimal point in milliohms (IEC 60062:2016): 10 mΩ, for measuring amps. Some makers print R010; it reads the same.", apply: example("4", "10L0") },
+    { title: "10L0 current shunt", note: "L is the milliohm decimal point (IEC 60062:2016): 10 mΩ. Some makers print R010.", apply: example("4", "10L0") },
     { title: "01C on a small 1% part", note: "EIA-96: the first E96 value, 100, times C (×100) = 10 kΩ, on parts too small for 1002.", apply: example("96", "01C") },
   ]);
 
@@ -2257,7 +2264,7 @@ function renderVoltageDivider(domain, tool, favId) {
       apply: example("r1", 1, { vin: 12, vout: 3.3, r2: 10 }) },
     { title: "Battery voltage into an ADC", note: "100 kΩ over 33.2 kΩ: a full 12.6 V battery reads 3.14 V, under a 3.3 V ADC's limit, for 95 µA.",
       apply: example("vout", 1, { vin: 12.6, r1: 100, r2: 33.2 }) },
-    { title: "Half-supply bias from 9 V", note: "Two equal resistors give half the supply, 4.5 V: the midpoint an op-amp on a single supply works around.",
+    { title: "Half-supply bias from 9 V", note: "Two equal resistors give half the supply, 4.5 V: the midpoint for a single-supply op-amp.",
       apply: example("vout", 5, { vin: 9, r1: 100, r2: 100 }) },
   ]);
 
@@ -2524,7 +2531,7 @@ function renderCurrentDivider(domain, tool, favId) {
   useExamples([
     { title: "1 kΩ and 2 kΩ sharing 20 mA", note: "The smaller resistor takes the larger share: 13.33 mA through 1 kΩ, 6.67 mA through 2 kΩ.",
       apply: example("i1", { iin: 20, r1: 1, r2: 2 }, { iin: "mA", r1: "kΩ", r2: "kΩ" }) },
-    { title: "Shunt for a 1 mA meter to read 100 mA", note: "The 100 Ω meter may carry 1 mA; the shunt takes the other 99 mA: 1.01 Ω. The nearest ±1% part, 1.02 Ω, puts 1.01 mA through the meter.",
+    { title: "1 mA meter to read 100 mA", note: "1.01 Ω across the 100 Ω meter takes 99 mA; the nearest ±1% part, 1.02 Ω, leaves it 1.01 mA.",
       apply: example("r2", { iin: 100, i1: 1, r1: 100 }, { iin: "mA", i1: "mA", r1: "Ω" }) },
     { title: "Three quarters through R1", note: "15 mA of 20 mA through R1 with R2 = 1 kΩ: R1 = 333.3 Ω, 332 Ω in ±1% parts.",
       apply: example("r1", { iin: 20, i1: 15, r2: 1 }, { iin: "mA", i1: "mA", r2: "kΩ" }) },
@@ -8776,7 +8783,7 @@ function renderCapStoredEnergy(domain, tool, favId) {
     paint();
   };
   useExamples([
-    { title: "Camera flash, 330 µF at 330 V", note: "About 18 J, released in a millisecond: why a flash capacitor can hurt long after the battery is out.",
+    { title: "Camera flash, 330 µF at 330 V", note: "About 18 J: why a flash capacitor can still hurt once the battery is out.",
       apply: example("energy", { c: 330, v: 330 }, { c: "µF", v: "V" }) },
     { title: "Mains bulk capacitor", note: "470 µF charged to 325 V, the peak of 230 V mains: 25 J, still there when the plug is pulled.",
       apply: example("energy", { c: 470, v: 325 }, { c: "µF", v: "V" }) },
@@ -8958,9 +8965,9 @@ function renderRcFilter(domain, tool, favId) {
   useExamples([
     { title: "PWM to a DC voltage", note: "10 kΩ and 1 µF: fc = 15.9 Hz, so a 1 kHz PWM ripple is cut by 36 dB, to 1/63 of its size.",
       apply: example({ topology: "lowpass", solve: "fc", poles: 1 }, { r: 10, c: 1 }, { r: "kΩ", c: "µF" }, [1, "kHz"]) },
-    { title: "Audio coupling capacitor", note: "1 µF into a 10 kΩ input is a high-pass at 15.9 Hz: 20 Hz, the bottom of human hearing, is only 2.1 dB down.",
+    { title: "Audio coupling capacitor", note: "1 µF into 10 kΩ: a high-pass at 15.9 Hz; 20 Hz, the bottom of hearing, is only 2.1 dB down.",
       apply: example({ topology: "highpass", solve: "fc", poles: 1 }, { r: 10, c: 1 }, { r: "kΩ", c: "µF" }, [20, "Hz"]) },
-    { title: "Anti-alias for 44.1 kHz audio", note: "fc 20 kHz with 1 kΩ needs C = 7.96 nF; one pole takes only 3.5 dB off at 22 kHz, so real ones use more poles.",
+    { title: "Anti-alias for 44.1 kHz audio", note: "20 kHz with 1 kΩ needs 7.96 nF; one pole cuts 22 kHz by only 3.5 dB, hence more poles.",
       apply: example({ topology: "lowpass", solve: "c", poles: 1 }, { fc: 20, r: 1 }, { fc: "kHz", r: "kΩ" }, [22.05, "kHz"]) },
   ]);
 
@@ -10453,7 +10460,7 @@ function renderDeltaY(domain, tool, favId) {
       apply: example("d2y", { ab: 300, bc: 300, ca: 300 }) },
     { title: "Delta of 10, 20 and 30 Ω", note: "Each leg is the two sides at its terminal, multiplied, over the 60 Ω sum: 5, 3.33 and 10 Ω.",
       apply: example("d2y", { ab: 10, bc: 20, ca: 30 }) },
-    { title: "6 dB attenuator, T to π", note: "B is ground. The 50 Ω T pad's 16.61 Ω arms and 66.93 Ω shunt become 150.5 Ω shunts and a 37.34 Ω arm.",
+    { title: "6 dB pad, T to π", note: "B is ground: the 16.61 Ω arms and 66.93 Ω shunt become 150.5 Ω shunts and a 37.34 Ω arm.",
       apply: example("y2d", { a: 16.61, b: 66.93, c: 16.61 }) },
   ]);
 

@@ -155,6 +155,8 @@ async function checkTool(t) {
   // under the title and pushes everything down.
   const bulb = doc.querySelector(".example-btn");
   if (bulb && tab) {
+    const slotH = () => Math.round(doc.querySelector(".head-slot").getBoundingClientRect().height);
+    const slot0 = slotH();
     bulb.click();
     await wait(30);
     const n = doc.querySelectorAll(".example-item").length;
@@ -169,6 +171,9 @@ async function checkTool(t) {
       const res2 = firstResult(doc);
       const gap2 = res2 ? doc.querySelector(".tabbar").getBoundingClientRect().top - res2.getBoundingClientRect().bottom : 0;
       if (gap2 < 0) r.problems.push(`example "${title}": first result is ${Math.round(-gap2)} px under the tab bar`);
+      // A note is at most two lines, the slot kept for it: a longer one would
+      // push the screen down when it appears and back up when it goes.
+      if (slotH() !== slot0) r.problems.push(`example "${title}": its note is longer than two lines`);
     }
   }
 

@@ -1156,7 +1156,7 @@ a.icon-btn { text-decoration: none; }
 .example-title { font-size: 16px; font-weight: 600; }
 .example-sub { font-size: 13.5px; color: var(--text-secondary); line-height: 1.35; }
 .example-note {
-  margin: 0 16px 8px; padding: 7px 11px; border-radius: 10px; font-size: 13.5px; line-height: 1.35;
+  margin: 0 16px 6px; padding: 5px 10px; border-radius: 10px; font-size: 13px; line-height: 1.3;
   background: #2A2412; border: 1px solid #4A3F1C; color: #F2D98A;
 }
 
@@ -1167,3 +1167,8 @@ a.icon-btn { text-decoration: none; }
 .result-trio > div { min-width: 0; }
 .trio-label { color: var(--result-text-soft); font-size: 13px; }
 .result-trio .result-value .num { font-size: 21px; white-space: nowrap; }
+
+/* Subtitle and example note share a slot; with examples it is always as tall
+   as a two-line note (2 x 13 px x 1.3 + 10 px padding + 2 px border + 6 px
+   margin), so the screen does not jump when a note comes or goes. */
+.head-slot--examples { min-height: 52px; }
