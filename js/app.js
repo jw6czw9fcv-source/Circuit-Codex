@@ -6693,45 +6693,33 @@ function renderCapSmdCode(domain, tool, favId) {
 }
 
 // ---------- SMD package sizes ----------
-// Imperial and metric are two independent naming systems for the same
-// physical bodies, not a unit conversion of each other — and they collide:
-// imperial 0402 (0.04" × 0.02", 1.0mm × 0.5mm) and metric 0402 (0.4mm ×
-// 0.2mm, imperial 01005) are completely different physical sizes that
-// happen to share a 4-digit string. Same trap with 0603. That's the actual
-// reason this screen shows both codes on every row instead of two separate
-// screens — a bare "0402" is genuinely ambiguous without knowing which
-// system it's from.
+// Imperial and metric are two naming systems for the same bodies, and they
+// collide: imperial 0402 (1.0 × 0.5 mm) and metric 0402 (0.4 × 0.2 mm, which
+// is imperial 01005) are different parts sharing a string. Hence both codes on
+// every row.
 //
-// Checked example of how the two systems relate for a size where they
-// don't collide: imperial 0402 and metric 1005 name the SAME body, and here
-// the metric code is a clean conversion —
-//   0.04in × 25.4 = 1.016mm ≈ 1.0mm  →  "10"
-//   0.02in × 25.4 = 0.508mm ≈ 0.5mm  →  "05"  →  metric code "1005"
-// Imperial 0603 and metric 1608 are also the SAME body, but there the
-// metric code is rounded to a "nicer" number rather than converted exactly —
-//   0.06in × 25.4 = 1.524mm  →  rounded up to 1.6mm  →  "16"
-//   0.03in × 25.4 = 0.762mm  →  rounded up to 0.8mm  →  "08"  →  "1608"
-//   (a strict conversion would land on "1508"/"0715", which nobody uses)
-//
-// Both code columns below are each system's own literal digit reading, not
-// a measured dimension — actual manufactured parts run a touch under the
-// metric code's nominal size the same way. Three imperial codes break their
-// own digit-reading rule outright: 1210, 1812 and 2512 all have an actual
-// nominal width of 0.125" (1/8", the "nicer" fraction), not the
-// 0.10"/0.12"/0.12" their second digit pair would suggest.
+// The sizes are the bodies as makers' datasheets give them, not a reading of
+// the code: Panasonic ERJ thick-film resistors (01005 to 2512), Vishay
+// D/CRCW e3 (1218), KEMET C1002 X7R capacitors (1808, and the inches), Murata
+// LQM2HP inductors (1008). Where makers differ by a few hundredths of a
+// millimetre (2512: Vishay 6.3 × 3.15, Panasonic 6.4 × 3.2) the metric code's
+// nominal is given. Inches are the millimetres converted, as KEMET prints them:
+// the imperial name is only a rounded reading — 1210 is 0.126 × 0.098 in, and
+// 0805 is 1.25 mm wide, not the 1.2 its metric name says.
 const SMD_PACKAGE_SIZES = [
-  { imperial: "01005", metric: "0402", inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine-placement only — below practical hand-soldering size." },
-  { imperial: "0201", metric: "0603", inches: "0.02\" × 0.01\"", mm: "0.6 × 0.3 mm", note: "Hand-soldering needs a fine-tip iron or hot air; easy to tombstone." },
-  { imperial: "0402", metric: "1005", inches: "0.04\" × 0.02\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
-  { imperial: "0603", metric: "1608", inches: "0.06\" × 0.03\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size — easy to hand-solder." },
-  { imperial: "0805", metric: "2012", inches: "0.08\" × 0.05\"", mm: "2.0 × 1.2 mm", note: "The easiest common size to hand-solder; still widely used." },
-  { imperial: "1008", metric: "2520", inches: "0.10\" × 0.08\"", mm: "2.5 × 2.0 mm", note: "Uncommon — mostly seen on some inductors and RF parts." },
-  { imperial: "1206", metric: "3216", inches: "0.12\" × 0.06\"", mm: "3.2 × 1.6 mm", note: "More power dissipation than 0805; still easy to hand-solder." },
-  { imperial: "1210", metric: "3225", inches: "0.12\" × 0.125\"", mm: "3.2 × 2.5 mm", note: "Imperial width is 0.125\", not 0.10\" — see the note above. Higher-power resistors, larger MLCC capacitors." },
-  { imperial: "1806", metric: "4516", inches: "0.18\" × 0.06\"", mm: "4.5 × 1.6 mm", note: "Less common — narrow, high-voltage capacitor bodies." },
-  { imperial: "1812", metric: "4532", inches: "0.18\" × 0.125\"", mm: "4.5 × 3.2 mm", note: "Imperial width is 0.125\", not 0.12\". Power resistors, high-voltage capacitors." },
-  { imperial: "2010", metric: "5025", inches: "0.20\" × 0.10\"", mm: "5.0 × 2.5 mm", note: "Power resistors and higher-current sense resistors." },
-  { imperial: "2512", metric: "6332", inches: "0.25\" × 0.125\"", mm: "6.3 × 3.2 mm", note: "Imperial width is 0.125\", not 0.12\". The common largest standard size — power/fusible resistors, high-voltage caps." },
+  { imperial: "01005", metric: "0402", inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine placement only; too small to solder by hand." },
+  { imperial: "0201", metric: "0603", inches: "0.024\" × 0.012\"", mm: "0.6 × 0.3 mm", note: "Hand-soldering needs a fine tip or hot air; prone to tombstoning." },
+  { imperial: "0402", metric: "1005", inches: "0.040\" × 0.020\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained designs." },
+  { imperial: "0603", metric: "1608", inches: "0.063\" × 0.032\"", mm: "1.6 × 0.8 mm", note: "The usual general-purpose size; can be soldered by hand." },
+  { imperial: "0805", metric: "2012", inches: "0.079\" × 0.049\"", mm: "2.0 × 1.25 mm", note: "The easiest common size to solder by hand." },
+  { imperial: "1008", metric: "2520", inches: "0.098\" × 0.079\"", mm: "2.5 × 2.0 mm", note: "Mostly inductors, such as Murata's LQM2HP." },
+  { imperial: "1206", metric: "3216", inches: "0.126\" × 0.063\"", mm: "3.2 × 1.6 mm", note: "More power than 0805; still easy to solder by hand." },
+  { imperial: "1210", metric: "3225", inches: "0.126\" × 0.098\"", mm: "3.2 × 2.5 mm", note: "Higher-power resistors, larger ceramic capacitors." },
+  { imperial: "1218", metric: "3246", inches: "0.126\" × 0.181\"", mm: "3.2 × 4.6 mm", note: "Wider than long: the terminals run along the long sides, for power resistors." },
+  { imperial: "1808", metric: "4520", inches: "0.185\" × 0.079\"", mm: "4.7 × 2.0 mm", note: "High-voltage ceramic capacitors; KEMET's are 4.7 mm long, over the 4.5 its metric name says." },
+  { imperial: "1812", metric: "4532", inches: "0.177\" × 0.126\"", mm: "4.5 × 3.2 mm", note: "Power resistors, high-voltage and high-value capacitors." },
+  { imperial: "2010", metric: "5025", inches: "0.197\" × 0.098\"", mm: "5.0 × 2.5 mm", note: "Power and current-sense resistors." },
+  { imperial: "2512", metric: "6332", inches: "0.248\" × 0.126\"", mm: "6.3 × 3.2 mm", note: "The largest common chip size: power and current-sense resistors." },
 ];
 
 function renderSmdPackageSizes(domain, tool, favId) {
@@ -6802,14 +6790,14 @@ function renderSmdPackageSizes(domain, tool, favId) {
 // ranges, not a spec to design against.
 const RESISTOR_POWER = [
   { group: "smd", imperial: "01005", metric: "0402", watts: "1/32 W (≈0.031 W)", w: 0.03125, volts: 15, inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine-placement only — below practical hand-soldering size." },
-  { group: "smd", imperial: "0201", metric: "0603", watts: "1/20 W (0.05 W)", w: 0.05, volts: 25, inches: "0.02\" × 0.01\"", mm: "0.6 × 0.3 mm", note: "Rare as a resistor outside very dense boards." },
-  { group: "smd", imperial: "0402", metric: "1005", watts: "1/16 W (0.0625 W)", w: 0.0625, volts: 50, inches: "0.04\" × 0.02\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
-  { group: "smd", imperial: "0603", metric: "1608", watts: "1/10 W (0.1 W)", w: 0.1, volts: 75, inches: "0.06\" × 0.03\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size." },
-  { group: "smd", imperial: "0805", metric: "2012", watts: "1/8 W (0.125 W)", w: 0.125, volts: 150, inches: "0.08\" × 0.05\"", mm: "2.0 × 1.25 mm", note: "The easiest common size to hand-solder." },
-  { group: "smd", imperial: "1206", metric: "3216", watts: "1/4 W (0.25 W)", w: 0.25, volts: 200, inches: "0.12\" × 0.06\"", mm: "3.2 × 1.6 mm", note: "Reach for this over 0805 when a design needs the extra headroom." },
-  { group: "smd", imperial: "1210", metric: "3225", watts: "1/2 W (0.5 W)", w: 0.5, volts: 200, inches: "0.12\" × 0.10\"", mm: "3.2 × 2.5 mm", note: "Getting into current-sense and small power-resistor territory." },
-  { group: "smd", imperial: "2010", metric: "5025", watts: "3/4 W (0.75 W)", w: 0.75, volts: 200, inches: "0.20\" × 0.10\"", mm: "5.0 × 2.5 mm", note: "Less common — mostly current-sense and power applications." },
-  { group: "smd", imperial: "2512", metric: "6332", watts: "1 W (1.0 W)", w: 1, volts: 200, inches: "0.25\" × 0.12\"", mm: "6.3 × 3.2 mm", note: "The common largest standard SMD size before wirewound/thick-film chips take over." },
+  { group: "smd", imperial: "0201", metric: "0603", watts: "1/20 W (0.05 W)", w: 0.05, volts: 25, inches: "0.024\" × 0.012\"", mm: "0.6 × 0.3 mm", note: "Rare as a resistor outside very dense boards." },
+  { group: "smd", imperial: "0402", metric: "1005", watts: "1/16 W (0.0625 W)", w: 0.0625, volts: 50, inches: "0.040\" × 0.020\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
+  { group: "smd", imperial: "0603", metric: "1608", watts: "1/10 W (0.1 W)", w: 0.1, volts: 75, inches: "0.063\" × 0.032\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size." },
+  { group: "smd", imperial: "0805", metric: "2012", watts: "1/8 W (0.125 W)", w: 0.125, volts: 150, inches: "0.079\" × 0.049\"", mm: "2.0 × 1.25 mm", note: "The easiest common size to hand-solder." },
+  { group: "smd", imperial: "1206", metric: "3216", watts: "1/4 W (0.25 W)", w: 0.25, volts: 200, inches: "0.126\" × 0.063\"", mm: "3.2 × 1.6 mm", note: "Reach for this over 0805 when a design needs the extra headroom." },
+  { group: "smd", imperial: "1210", metric: "3225", watts: "1/2 W (0.5 W)", w: 0.5, volts: 200, inches: "0.126\" × 0.098\"", mm: "3.2 × 2.5 mm", note: "Getting into current-sense and small power-resistor territory." },
+  { group: "smd", imperial: "2010", metric: "5025", watts: "3/4 W (0.75 W)", w: 0.75, volts: 200, inches: "0.197\" × 0.098\"", mm: "5.0 × 2.5 mm", note: "Less common — mostly current-sense and power applications." },
+  { group: "smd", imperial: "2512", metric: "6332", watts: "1 W (1.0 W)", w: 1, volts: 200, inches: "0.248\" × 0.126\"", mm: "6.3 × 3.2 mm", note: "The common largest standard SMD size before wirewound/thick-film chips take over." },
   { group: "tht", code: "1/8 W", w: 0.125, watts: "0.125 W", size: "≈3.2–3.6 mm body × 1.6–1.8 mm dia.", note: "Small axial; used in dense hobbyist/prototyping boards where SMD isn't." },
   { group: "tht", code: "1/4 W", w: 0.25, watts: "0.25 W", size: "≈6.0–6.5 mm body × 2.2–2.6 mm dia.", note: "The classic general-purpose through-hole size — what most people picture as \"a resistor\"." },
   { group: "tht", code: "1/2 W", w: 0.5, watts: "0.5 W", size: "≈9.0–9.5 mm body × 3.4–3.6 mm dia.", note: "Reach for this when 1/4W runs too hot — higher-voltage pull-ups, LED strings." },

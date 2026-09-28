@@ -40,6 +40,7 @@ will key on, since that is the id the app already holds for each tool.
 - Inductors → [Inductor SMD code](#inductor-smd-code)
 - Passive filters → [RC filter](#rc-filter)
 - Passive filters → [RL filter](#rl-filter)
+- Reference → [SMD package sizes](#smd-package-sizes)
 
 ### Digital
 
@@ -398,8 +399,9 @@ series share the voltage.
 
 Every SMD power rating, working voltage and the 125 °C / 155 °C limits against
 the Yageo RC_L datasheet. The review corrected the 1210's size in inches, which
-read 0.12″ × 0.125″ against the 0.12″ × 0.10″ its name encodes, and the
-0805's width to 1.25 mm; it also withdrew the claim that SMD ratings are
+read 0.12″ × 0.125″, and the 0805's width to 1.25 mm; the SMD package sizes
+review later aligned all the sizes to makers' datasheets (1210: 0.126″ ×
+0.098″); it also withdrew the claim that SMD ratings are
 standard across manufacturers, which the Vishay datasheet contradicts. The
 maximum working voltages were added then.
 
@@ -1937,6 +1939,87 @@ The review made the same corrections as on the RC filter: the frequency to
 explore opens at fc exactly, Low-/High-pass take the mode pills, and the
 resistor units are ohms to megohms. Inductors keep nH to H and frequencies up
 to GHz, which RF inductors and supply chokes really reach.
+
+[↑ Index](#index)
+
+---
+
+<a id="smd-package-sizes"></a>
+## SMD package sizes
+
+`calc: smd-package-sizes` · Passive components › Reference
+
+### What it computes
+
+A reference table of the common surface-mount chip sizes: each one's imperial
+and metric name, its length and width in inches and millimetres, and what it
+is typically used for. It can be searched by either name or by a dimension.
+
+### Source
+
+The body sizes are those manufacturers' datasheets give:
+
+- **Panasonic ERJ** thick-film chip resistors — 01005 to 2512, e.g. 01005
+  0.40 × 0.20 mm, 0805 2.00 × 1.25 mm, 1210 3.20 × 2.50 mm, 2512
+  6.40 × 3.20 mm.
+- **Vishay D/CRCW e3** (April 2026) — the same sizes, and 1218,
+  3.2 × 4.6 mm; 2512 is 6.3 × 3.15 mm there.
+- **KEMET C1002 X7R** (September 2026) ceramic capacitors — every size in
+  millimetres and in inches (1210: 3.20 mm (0.126″) × 2.50 mm (0.098″)), and
+  1808, 4.70 × 2.00 mm.
+- **Murata LQM2HP** inductors — 1008 (metric 2520), 2.5 × 2.0 mm.
+
+Where makers differ by a few hundredths of a millimetre, the metric name's
+nominal size is given.
+
+### What it means
+
+A surface-mount chip — resistor, capacitor, inductor — is a small block with
+metal ends, soldered flat onto pads on the board. Its **size code** names its
+length and width:
+
+- **Imperial** (the usual one in the US and in most catalogues): four digits,
+  two for the length and two for the width, in hundredths of an inch. 0805 is
+  about 0.08″ × 0.05″.
+- **Metric**: the same idea in tenths of a millimetre. The 0805 body is metric
+  2012, about 2.0 × 1.2 mm.
+
+The two collide: **imperial 0402** is 1.0 × 0.5 mm, but **metric 0402** is
+0.4 × 0.2 mm, the part imperial calls 01005 — a body six times smaller in
+area. A bare "0402" in a drawing or a bill of materials is ambiguous until you
+know which system it is in, which is why every row shows both.
+
+**The names are rounded; the table gives the real size.** 0805's metric name
+says 1.2 mm wide, but the parts are 1.25 mm. 1210's name says 0.12″ × 0.10″;
+the parts are 3.2 × 2.5 mm, 0.126″ × 0.098″. The inches here are the
+millimetres converted, as KEMET prints them.
+
+### Assumptions and limits
+
+- **Sizes are nominal.** Each has a tolerance of ±0.05 mm on the smallest to
+  about ±0.2 mm on the larger ones; the height depends on the part and its
+  value, and is not listed.
+- **Some parts use a size but not its exact body**: power inductors and
+  electrolytic capacitors have their own case codes, not these.
+- The notes on hand-soldering are practical guidance, not a specification.
+
+### What it deliberately does not do
+
+- **Pad (footprint) dimensions** depend on the soldering process and the
+  maker; take them from the part's datasheet or IPC-7351.
+- **Power ratings** by size are in the Resistor power rating tool.
+
+### How it was checked
+
+Every size against the datasheets above. The review found three faults. 1210
+was listed as 0.12″ × 0.125″, where the parts are 0.126″ × 0.098″; the code
+claimed 1210, 1812 and 2512 were 0.125″ wide by exception, which the
+datasheets do not support for 1210. 0805 was listed as 1.2 mm wide, the
+metric name, where the parts are 1.25 mm. And 1806 (4516), found only in
+online size charts and in no maker's datasheet read, was replaced by 1808,
+from KEMET's; 1218, a common power-resistor size, was added from Vishay's. The
+inches in the Resistor power rating table were aligned to the same
+figures.
 
 [↑ Index](#index)
 

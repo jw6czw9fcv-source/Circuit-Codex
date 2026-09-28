@@ -265,6 +265,12 @@ const CHECK_CASES = {
     { name: "topology, solve, poles and units are remembered", do: [["click", '.pill[data-topo="highpass"]'], ["click", '.pill[data-pill="c"]'], ["set", "#rcf-poles", "3"], ["set", 'select[data-unit="r"]', "Ω"], ["reopen"]],
       expect: [['#rcf-topology .pill.active', "High-pass"], ['.pill[data-pill].active', "C"], ["#rcf-poles", "3"], ['select[data-unit="r"]', "Ω"]] },
   ],
+  "smd-package-sizes": [
+    { name: "1210 is 3.2 × 2.5 mm, 0.126 × 0.098 in", do: [["set", "#sps-input", "1210"]],
+      expect: [["#sps-results .breadcrumb", "/^0.126. × 0.098.*3.2 × 2.5 mm$/"]] },
+    { name: "0805 is 1.25 mm wide", do: [["set", "#sps-input", "0805"]], expect: [["#sps-results .breadcrumb", "/2\\.0 × 1\\.25 mm/"]] },
+    { name: "metric 0402 finds imperial 01005", do: [["set", "#sps-input", "01005"]], expect: [["#sps-results .formula-card-title", "/^01005 imperial · 0402 metric/"]] },
+  ],
   "rl-filter": [
     { name: "100 Ω and 100 mH: fc 159.2 Hz", do: [], expect: [['[data-res="solved"]', "159.2 Hz"]] },
     { name: "at fc: −3.01 dB, 45° lag", do: [], expect: [['[data-res="db"]', "/^-3\\.01\\d* dB$/"], ['[data-res="phase"]', "/^-45° phase shift/"]] },
