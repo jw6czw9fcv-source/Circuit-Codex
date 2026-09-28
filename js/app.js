@@ -9447,7 +9447,7 @@ function renderThermistor(domain, tool, favId) {
     resVal: 10, resUnit: "kΩ",
   };
 
-  function r0SI() { return state.values.r0 * OHM_UNITS[state.r0Unit]; }
+  function r0SI() { return state.values.r0 * DIVIDER_R_UNITS[state.r0Unit]; }
   function toK(c) { return c + 273.15; }
 
   function resistanceAtTemp(tempC) {
@@ -9532,7 +9532,7 @@ function renderThermistor(domain, tool, favId) {
   function fromTemp() {
     const R = resistanceAtTemp(state.tempC);
     if (isFinite(R) && R > 0) {
-      state.resVal = R / OHM_UNITS[state.resUnit];
+      state.resVal = R / DIVIDER_R_UNITS[state.resUnit];
       const resField = document.getElementById("th-res");
       if (resField && document.activeElement !== resField) resField.value = trim(state.resVal);
     }
@@ -9540,7 +9540,7 @@ function renderThermistor(domain, tool, favId) {
   }
 
   function fromRes() {
-    const R = state.resVal * OHM_UNITS[state.resUnit];
+    const R = state.resVal * DIVIDER_R_UNITS[state.resUnit];
     const T = tempAtResistance(R);
     if (isFinite(T)) {
       state.tempC = T;
@@ -9574,7 +9574,7 @@ function renderThermistor(domain, tool, favId) {
         <label>R0 (resistance at T0)</label>
         <div class="field-row">
           <input type="number" inputmode="decimal" step="any" id="th-r0" value="${trim(state.values.r0)}" />
-          <select id="th-r0-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r0Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <select id="th-r0-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.r0Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
         </div>
       </div>
       <div class="field-pair">
@@ -9591,13 +9591,13 @@ function renderThermistor(domain, tool, favId) {
       <div class="section-label" style="color:#8FC1F5">Either one — edit whichever you know</div>
       <div class="field">
         <label>Temperature (°C)</label>
-        <div class="field-row"><input type="number" inputmode="decimal" step="any" id="th-temp" value="${trim(state.tempC)}" /></div>
+        <div class="field-row"><input type="text" inputmode="text" autocomplete="off" id="th-temp" value="${trim(state.tempC)}" /></div>
       </div>
       <div class="field">
         <label>Resistance</label>
         <div class="field-row">
           <input type="number" inputmode="decimal" step="any" id="th-res" value="${trim(state.resVal)}" />
-          <select id="th-res-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.resUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <select id="th-res-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.resUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
         </div>
       </div>
       <div class="error-text" data-res="err">${issue}</div>
@@ -9611,16 +9611,15 @@ function renderThermistor(domain, tool, favId) {
 
       <div class="section-label" style="color:#8FC1F5">Typical B-values, for reference</div>
       <div class="truth-table" style="--tt-cols:2">
-        <div class="tt-row"><span>General-purpose 10 kΩ NTC</span><span class="tt-out">≈3950 K</span></div>
-        <div class="tt-row"><span>Common range across families</span><span class="tt-out">≈3000–4500 K</span></div>
-        <div class="tt-row"><span>High-sensitivity / specialty types</span><span class="tt-out">up to ≈5000 K</span></div>
+        <div class="tt-row"><span>Vishay NTCLE100E3, 10 kΩ</span><span class="tt-out">B25/85 3977 K</span></div>
+        <div class="tt-row"><span>Same family, 3.3 Ω to 470 kΩ</span><span class="tt-out">2880–4570 K</span></div>
       </div>
 
       ${formulaSection(
         ["NTC: R = R0 × e^(B×(1/T − 1/T0))", "NTC: T = 1 / (1/T0 + (1/B)×ln(R/R0))", "PTC: R = R0 × (1 + α×(T − T0))", "T, T0 in kelvin = °C + 273.15"],
         isNtc
-          ? "The B-parameter model is a two-point fit, accurate enough for most work near T0 but not as precise across a wide range as the full Steinhart-Hart equation. Sensitivity here means the linear model's alpha — it doesn't cover switching-type PTC (resettable fuses, ceramic PTC heaters), which jump sharply at a trip temperature rather than following one smooth curve."
-          : "This is the linear silicon/RTD-style PTC model (a steady %/°C), not a switching polymer resettable fuse or ceramic PTC heater — those trip sharply at a threshold temperature instead of following one smooth curve, and aren't representable by a single formula."
+          ? "A thermistor is a resistor made to change with temperature. An NTC (negative temperature coefficient) loses resistance as it warms, about 4% per °C. From the datasheet enter R0, its resistance at T0 (usually 10 kΩ at 25 °C), and B, which says how steep the curve is. Then type the temperature to get the resistance, or a measured resistance to get the temperature. Datasheets quote B between two temperatures, B25/85 or B25/50: use the one covering your range. The B model is exact at those two points but drifts away from them: for the Vishay part above it reads 2 °C off at −20 °C. Sensitivity is how much R changes per °C here."
+          : "This is a PTC (positive temperature coefficient) sensor whose resistance rises steadily with temperature, like a silicon KTY sensor (about 0.7%/°C) or a platinum RTD (0.385%/°C for a Pt100). Enter R0 at T0 and α, then either the temperature or the resistance. Switching PTCs, such as resettable fuses and ceramic heaters, jump sharply at a trip temperature instead, and are not modelled."
       )}
       ${calcFooter()}
     `;
@@ -9640,7 +9639,9 @@ function renderThermistor(domain, tool, favId) {
 
     const tempField = document.getElementById("th-temp");
     const resField = document.getElementById("th-res");
-    tempField.oninput = () => { const v = parseFloat(tempField.value); if (isFinite(v)) { state.tempC = v; fromTemp(); } };
+    // Temperatures go below zero, and the iPhone decimal keypad has no minus
+    // key, so this field takes the text keyboard and reads a typographic minus.
+    tempField.oninput = () => { const v = parseFloat(tempField.value.replace("−", "-")); if (isFinite(v)) { state.tempC = v; fromTemp(); } };
     resField.oninput = () => { const v = parseFloat(resField.value); if (isFinite(v)) { state.resVal = v; fromRes(); } };
     document.getElementById("th-res-unit").onchange = (e) => { state.resUnit = e.target.value; fromTemp(); };
 

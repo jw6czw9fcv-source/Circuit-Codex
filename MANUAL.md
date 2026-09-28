@@ -29,6 +29,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Current divider](#current-divider)
 - Resistors → [Wheatstone bridge](#wheatstone-bridge)
 - Resistors → [Delta-Y transform](#delta-y-transform)
+- Resistors → [NTC/PTC thermistor](#ntcptc-thermistor)
 
 ### Digital
 
@@ -838,6 +839,117 @@ parts the Y is a third of the Delta: a 300 Ω triangle is a 100 Ω star.
 By hand: a 300 Ω Delta gives a 100 Ω Y, and back. Rab = 10, Rbc = 20,
 Rca = 30 Ω give Ra = 5, Rb = 3.333, Rc = 10 Ω, and those three converted back
 give 10, 20 and 30 Ω.
+
+[↑ Index](#index)
+
+---
+
+<a id="thermistor"></a>
+## NTC/PTC thermistor
+
+`calc: thermistor` · Passive components › Resistors
+
+### What it computes
+
+For a temperature-sensing resistor, its resistance at a given temperature or
+the temperature for a measured resistance, from the datasheet's reference
+resistance and coefficient; and its sensitivity, in percent per degree, at that
+point. A curve from −20 to 100 °C shows where the point sits.
+
+- **NTC** — the B-parameter model, used for ordinary NTC thermistors.
+- **PTC** — a linear model, for silicon (KTY) sensors and, approximately,
+  platinum RTDs.
+
+### Source
+
+- The B-parameter equation, as NTC datasheets define it. The Vishay NTCLE100E3
+  datasheet defines B as ln(R1/R2) / (1/T1 − 1/T2) and gives B25/85 = 3977 K
+  for its 10 kΩ part, with a full resistance-temperature table, which is what
+  the tool was checked against.
+- The linear PTC model is the definition of a temperature coefficient α.
+
+### What it means
+
+A **thermistor** is a resistor whose resistance changes strongly with
+temperature, made to be used as a temperature sensor. Put it in a voltage
+divider, read the voltage with an ADC, work out the resistance, and from that
+the temperature.
+
+- **NTC** (negative temperature coefficient): resistance falls as temperature
+  rises, steeply — about 4% per °C near room temperature for a typical part. A
+  10 kΩ NTC is 10 kΩ at 25 °C, about 33 kΩ at 0 °C and about 1 kΩ at 85 °C.
+- **PTC** (positive temperature coefficient): resistance rises with
+  temperature. The sensors modelled here rise steadily; a KTY silicon sensor
+  by about 0.7% per °C, a Pt100 platinum RTD by 0.385% per °C.
+
+The datasheet gives two numbers that define the part:
+
+- **R0 at T0** — its resistance at a reference temperature, almost always
+  25 °C. "10 kΩ NTC" means 10 kΩ at 25 °C.
+- **B** (for an NTC), in kelvin — how steep the curve is. A higher B means a
+  larger change per degree. Or **α** (for a linear PTC) in percent per degree.
+
+### The formulas
+
+    NTC:  R = R0 × e^(B × (1/T − 1/T0))
+          T = 1 / (1/T0 + ln(R/R0) / B)
+    PTC:  R = R0 × (1 + α × (T − T0))
+
+T and T0 are in kelvin (°C + 273.15) in the NTC equations. The sensitivity is
+the slope of the curve as a percentage: −B / T² for the NTC, which grows
+steeper the colder it is, and simply α for the linear PTC.
+
+### How good the B model is
+
+B is measured between two temperatures, written as a suffix: **B25/85** is
+worked out from the resistance at 25 °C and at 85 °C, B25/50 from 25 and 50 °C.
+The model then goes exactly through those two points and bends away from the
+real curve outside them. Checked against the Vishay 10 kΩ part's own table,
+with B25/85 = 3977 K:
+
+| Temperature | Datasheet | B model | Difference |
+|---|---|---|---|
+| −40 °C | 332.1 kΩ | 412 kΩ | +24%, about 3.5 °C |
+| −20 °C | 96.4 kΩ | 107 kΩ | +11%, about 2 °C |
+| 0 °C | 32.6 kΩ | 33.9 kΩ | +4%, under 1 °C |
+| 85 °C | 1.07 kΩ | 1.07 kΩ | exact |
+| 100 °C | 677 Ω | 685 Ω | +1% |
+
+So: use the B value whose temperature pair covers the range you measure, and
+for accuracy well below 0 °C use the datasheet's table or the Steinhart-Hart
+equation, which fits three points instead of two.
+
+### Assumptions and limits
+
+- **Self-heating is ignored.** The current used to measure a thermistor also
+  warms it. Datasheets give a dissipation factor (a few mW/°C); keep the
+  measuring current small enough that it adds a fraction of a degree.
+- **The part's own tolerance** — typically ±1 to ±5% on R25 and ±0.5 to ±3% on
+  B — adds to the model error.
+- **Switching PTCs** (resettable polymer fuses, ceramic PTC heaters and motor
+  protectors) jump sharply by orders of magnitude at a trip temperature. No
+  single smooth formula describes them, and they are not modelled.
+- A platinum RTD is not exactly linear; the linear model is within a few
+  tenths of a degree over 0–100 °C, and the full Callendar-Van Dusen equation
+  is needed beyond that.
+
+### What it deliberately does not do
+
+- **Steinhart-Hart** three-coefficient fitting is not offered.
+- **The divider around the sensor** (choosing the fixed resistor for best
+  resolution) is the Voltage divider tool's arithmetic.
+
+### How it was checked
+
+Against the Vishay NTCLE100E3 datasheet table as above. At 85 °C the model
+gives 1.07 kΩ, as the datasheet does, and typing 1.07 kΩ back gives 85.0 °C;
+the sensitivity at 25 °C is −4.47 %/°C. The linear PTC with R0 = 1 kΩ,
+α = 0.7 %/°C gives 1.525 kΩ at 100 °C.
+
+The review made the temperature field accept negative values on an iPhone,
+whose number keypad has no minus key; limited the resistance units to Ω, kΩ
+and MΩ; and replaced the table of "typical" B values, which had no source,
+with the Vishay figures.
 
 [↑ Index](#index)
 
