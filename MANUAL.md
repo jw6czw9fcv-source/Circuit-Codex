@@ -30,7 +30,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Wheatstone bridge](#wheatstone-bridge)
 - Resistors → [Delta-Y transform](#delta-y-transform)
 - Resistors → [NTC/PTC thermistor](#ntcptc-thermistor)
-- Capacitors → [Ceramic capacitor code](#ceramic-capacitor-code)
+- Capacitors → [Ceramic cap code](#ceramic-cap-code)
 - Capacitors → [Film capacitor code](#film-capacitor-code)
 - Capacitors → [SMD capacitor code](#smd-capacitor-code)
 - Capacitors → [Series/parallel (C)](#seriesparallel-c)
@@ -990,7 +990,7 @@ with the Vishay figures.
 ---
 
 <a id="ceramic-code"></a>
-## Ceramic capacitor code
+## Ceramic cap code
 
 `calc: ceramic-code` · Passive components › Capacitors
 

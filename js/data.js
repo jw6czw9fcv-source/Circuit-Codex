@@ -30,7 +30,7 @@ const DOMAINS = [
       {
         title: "Capacitors",
         tools: [
-          { name: "Ceramic capacitor code", was: "Ceramic code", calc: "ceramic-code" },
+          { name: "Ceramic cap code", was: "Ceramic code", calc: "ceramic-code" },
           { name: "Film capacitor code", was: "Film code", calc: "film-code" },
           { name: "Capacitor SMD code", was: "SMD code", calc: "cap-smd-code" },
           { name: "Series/parallel (C)", was: "Series/parallel", calc: "cap-series-parallel" },
@@ -252,7 +252,7 @@ const TOOL_KEYWORDS = {
   "wheatstone-bridge": "bridge balance strain gauge",
   "delta-y": "star delta wye pi tee transform",
   "thermistor": "ntc ptc temperature sensor beta",
-  "ceramic-code": "capacitor marking 104 pf mlcc disc",
+  "ceramic-code": "ceramic capacitor code marking 104 pf mlcc disc",
   "film-code": "capacitor marking 4n7 polyester polypropylene wima",
   "cap-smd-code": "tantalum capacitor marking voltage code",
   "cap-series-parallel": "capacitors in series parallel combine equivalent capacitance",
