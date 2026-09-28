@@ -5,7 +5,8 @@
   --input-border: #2A2F37;
   --text: #FFFFFF;
   --text-secondary: #9A9EA6;
-  --text-muted: #6B7078;
+  /* Raised from #6B7078 (3.9:1 on --bg) to pass WCAG AA's 4.5:1. */
+  --text-muted: #858B93;
   --result-bg: #12201C;
   --result-border: #1F3B33;
   --result-text: #5DCAA5;
@@ -718,7 +719,15 @@ html, body {
    (72px) would otherwise wrap them 5+1. Smaller text gives a long
    single-word label (e.g. "Efficiency") room to fit one line instead of
    an ugly mid-word break. */
-.eseries-grid--tight .eseries-cell { font-size: 11px; padding: 7px 2px; }
+.eseries-grid--tight .eseries-cell { font-size: 11px; padding: 7px 3px; }
+/* In a row of results the value is what the eye looks for: larger, white
+   and bold, under its label in the domain colour. It was 11 px grey, the
+   same weight as the label. An inline colour (a verdict, a warning) still
+   wins over the white. */
+.eseries-grid--tight .eseries-cell > div:last-child {
+  font-size: 14px; font-weight: 600; color: var(--text); margin-top: 2px;
+  overflow-wrap: anywhere;
+}
 .eseries-cell.hit {
   background: var(--result-bg);
   border-color: var(--result-border);

@@ -76,6 +76,11 @@ async function checkTool(t) {
   const sw = doc.documentElement.scrollWidth, w = win.innerWidth;
   if (sw > w + 1) r.problems.push(`page is ${sw - w} px wider than the screen`);
 
+  // Text cut off inside a card: a value wider than its cell.
+  const clipped = [...doc.querySelectorAll(".eseries-cell, .result-value, .field-row")]
+    .filter((el) => el.getBoundingClientRect().height > 0 && el.scrollWidth > el.clientWidth + 1);
+  if (clipped.length) r.problems.push(`${clipped.length} box(es) with text wider than the box: "${clipped[0].textContent.trim().slice(0, 30)}"`);
+
   const tab = doc.querySelector(".tabbar");
   const res = firstResult(doc);
   if (tab && res) {
