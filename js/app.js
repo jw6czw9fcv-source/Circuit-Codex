@@ -3228,14 +3228,32 @@ const CAP_SLIDER_MIN = 1e-12;
 const CAP_SLIDER_MAX = 1e-3;
 
 function renderCapSeriesParallel(domain, tool, favId) {
+  const C = "cap-series-parallel";
   const state = {
-    mode: "parallel",
-    tol: 10,
+    mode: pref(C, "mode", "parallel", ["parallel", "series"]),
+    tol: pref(C, "tol", 10, [1, 2, 5, 10, 20]),
     rows: [
       { value: 100, unit: "nF" },
       { value: 100, unit: "nF" },
     ],
   };
+
+  // Everyday reasons to combine capacitors. Each sets the connection, the
+  // parts' tolerance and the values.
+  const example = (mode, tol, rows) => () => {
+    Object.assign(state, { mode, tol, rows: rows.map(([value, unit]) => ({ value, unit })) });
+    paint();
+  };
+  useExamples([
+    { title: "100 nF beside 10 µF", note: "In parallel they add, 10.1 µF: the small one takes the high frequencies the large one cannot.",
+      apply: example("parallel", 20, [[100, "nF"], [10, "µF"]]) },
+    { title: "Crystal load caps, 22 pF each", note: "Seen by the crystal they are in series: 11 pF, plus the board's stray capacitance.",
+      apply: example("series", 5, [[22, "pF"], [22, "pF"]]) },
+    { title: "150 nF from 100 and 47 nF", note: "In parallel: 147 nF, within 2% of the 150 nF not in the drawer.",
+      apply: example("parallel", 10, [[100, "nF"], [47, "nF"]]) },
+    { title: "Two 2.7 V supercaps in series", note: "Half the capacitance, twice the voltage: 5 F at 5.4 V, with a balancing resistor across each.",
+      apply: example("series", 20, [[10, "F"], [10, "F"]]) },
+  ]);
 
   function faradsOf(row) {
     return row.value * CAP_UNITS[row.unit];
@@ -3394,7 +3412,7 @@ function renderCapSeriesParallel(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
     app.querySelectorAll("input[data-row]").forEach(input => {
       input.oninput = () => {
@@ -3419,6 +3437,7 @@ function renderCapSeriesParallel(domain, tool, favId) {
     };
     document.getElementById("sp-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);
+      setPref(C, "tol", state.tol);
       updateResults();
     };
     state.rows.forEach((row, i) => {

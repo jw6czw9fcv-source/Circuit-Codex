@@ -198,6 +198,16 @@ const CHECK_CASES = {
   "cap-series-parallel": [
     { name: "100 n ∥ 100 n", do: [], expect: [['[data-res="total"]', "200 nF"]] },
     { name: "100 n in series with 100 n", do: [["pill", 1]], expect: [['[data-res="total"]', "50 nF"]] },
+    { name: "example: 100 n ∥ 10 µ", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="total"]', "10.1 µF"]] },
+    { name: "example: crystal load caps in series", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="total"]', "11 pF"], ['[data-res="detail"]', "/one E24 part would do it/"], [".pill.active", "Series"]] },
+    { name: "example: 100 n ∥ 47 n", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="total"]', "147 nF"], ['[data-res="detail"]', "/nearest single E12 150 nF/"]] },
+    { name: "example: supercaps", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="3"]']],
+      expect: [['[data-res="total"]', "5 F"]] },
+    { name: "the mode and tolerance are remembered", do: [["pill", 1], ["set", "#sp-tol", "5"], ["reopen"]],
+      expect: [[".pill.active", "Series"], ["#sp-tol", "5"]] },
   ],
   "rc-charge": [
     { name: "1 τ reaches 63.21%", do: [], expect: [['[data-res="volt"]', "3.161 V"], ['[data-res="pct"]', "63.21%"]] },
