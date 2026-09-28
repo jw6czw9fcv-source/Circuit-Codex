@@ -18,7 +18,7 @@ const DOMAINS = [
           { name: "Resistor color code", was: "Color code", calc: "resistor-color-code" },
           { name: "Resistor SMD code", was: "SMD code", calc: "smd-code" },
           { name: "Resistor power rating", was: "Power rating", calc: "resistor-power-rating" },
-          { name: "E-series standard values", was: "E-series value", calc: "e-series" },
+          { name: "E-series values", was: "E-series value", calc: "e-series" },
           { name: "Resistors in series/parallel", was: "Series/parallel", calc: "series-parallel" },
           { name: "Voltage divider", calc: "voltage-divider" },
           { name: "Current divider", calc: "current-divider" },

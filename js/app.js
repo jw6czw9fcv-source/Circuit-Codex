@@ -2028,7 +2028,7 @@ function renderSmdCode(domain, tool, favId) {
   if (JSON.stringify(out) !== JSON.stringify(stored)) localStorage.setItem("cc_favorites", JSON.stringify(out));
 })();
 
-// ---------- E-series standard values ----------
+// ---------- E-series values ----------
 // Every series is a decade split into equal ratio steps, sized so that parts at
 // the matching tolerance just cover the gaps between neighbours. Both jobs live
 // here: the nearest standard value to something you want, and the whole table

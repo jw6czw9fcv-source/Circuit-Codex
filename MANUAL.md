@@ -23,7 +23,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Resistor color code](#resistor-color-code)
 - Resistors → [SMD resistor code](#smd-resistor-code)
 - Resistors → [Resistor power rating](#resistor-power-rating)
-- Resistors → [E-series standard values](#e-series-standard-values)
+- Resistors → [E-series values](#e-series-values)
 - Resistors → [Resistors in series and parallel](#resistors-in-series-and-parallel)
 - Resistors → [Voltage divider](#voltage-divider)
 - Resistors → [Current divider](#current-divider)
@@ -385,7 +385,7 @@ an 0805 is rated 125 mW.
 ---
 
 <a id="e-series"></a>
-## E-series standard values
+## E-series values
 
 `calc: e-series` · Passive components › Resistors
 
