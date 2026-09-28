@@ -763,6 +763,68 @@ function renderOhmsLaw(domain, tool, favId) {
   paint();
 }
 
+// ---------- Axial part drawing ----------
+// The leaded resistor and inductor as they look in the hand, drawn to the
+// proportions of a real part: every length below is in millimetres from a
+// datasheet, and one scale turns them into pixels, so zooming never changes
+// the shape. Only the leads are cut short. All parts share the same lead
+// metal, shading and outline.
+//
+//   carbon   Yageo CFR-25, 1/4 W carbon film: L 6.3, D 2.4, lead 0.55 mm.
+//            Beige, and a "dog-bone": the end caps are wider than the body.
+//   metal    Yageo MFR-25, 1/4 W metal film: same size, blue, nearly
+//            cylindrical — the precision 5- and 6-band parts.
+//   inductor Vishay IM-2 moulded inductor: L 6.1–6.6, D 2.2–2.7, lead
+//            0.58–0.69 mm; a cylinder with rounded ends.
+// Band widths and spacing are not on any datasheet; they are taken from
+// photographs of real parts, about 0.6–0.7 mm each.
+const AXIAL_PARTS = {
+  carbon: { L: 6.3, D: 2.4, waist: 2.05, cap: 1.15, round: 0.45, lead: 0.55, top: "#EAD7AE", mid: "#D2B785", bottom: "#8E7447" },
+  metal: { L: 6.3, D: 2.4, waist: 2.25, cap: 1.0, round: 0.6, lead: 0.55, top: "#A9D0F2", mid: "#4F8FCB", bottom: "#224C79" },
+  inductor: { L: 6.35, D: 2.4, waist: 2.4, cap: 1.0, round: 1.0, lead: 0.64, top: "#6FB0BD", mid: "#2E6B78", bottom: "#163840" },
+};
+const AXIAL_W = 300, AXIAL_H = 80, AXIAL_BODY_PX = 150;
+
+// The body outline in pixels: rounded ends of diameter D, stepping down to
+// the waist over a short curve where the caps end.
+function axialOutline(p, x0, px) {
+  const cy = AXIAL_H / 2, R = (p.D / 2) * px, w = (p.waist / 2) * px;
+  const L = p.L * px, cap = p.cap * px, r = p.round * px, t = 0.25 * px, x1 = x0 + L;
+  const step = (xa, ya, xb, yb) => ` C${(xa + xb) / 2} ${ya} ${(xa + xb) / 2} ${yb} ${xb} ${yb}`;
+  let d = `M${x0} ${cy - R + r} Q${x0} ${cy - R} ${x0 + r} ${cy - R}`;
+  if (w < R) d += ` H${x0 + cap - t}` + step(x0 + cap - t, cy - R, x0 + cap + t, cy - w) + ` H${x1 - cap - t}` + step(x1 - cap - t, cy - w, x1 - cap + t, cy - R);
+  d += ` H${x1 - r} Q${x1} ${cy - R} ${x1} ${cy - R + r} V${cy + R - r} Q${x1} ${cy + R} ${x1 - r} ${cy + R}`;
+  if (w < R) d += ` H${x1 - cap + t}` + step(x1 - cap + t, cy + R, x1 - cap - t, cy + w) + ` H${x0 + cap + t}` + step(x0 + cap + t, cy + w, x0 + cap - t, cy + R);
+  d += ` H${x0 + r} Q${x0} ${cy + R} ${x0} ${cy + R - r} Z`;
+  return d;
+}
+
+// bands: [{ at, width, hex }] in millimetres from the body's left end.
+function axialPartSVG(kind, bands) {
+  const p = AXIAL_PARTS[kind];
+  const px = AXIAL_BODY_PX / p.L;
+  const x0 = (AXIAL_W - AXIAL_BODY_PX) / 2, cy = AXIAL_H / 2;
+  const lead = p.lead * px, R = (p.D / 2) * px;
+  const id = `ax-${kind}`;
+  const outline = axialOutline(p, x0, px);
+  return `<svg width="${AXIAL_W}" height="${AXIAL_H}" viewBox="0 0 ${AXIAL_W} ${AXIAL_H}" fill="none">
+    <defs>
+      <linearGradient id="${id}-lead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E4E7EB"/><stop offset=".5" stop-color="#9AA0A8"/><stop offset="1" stop-color="#5E646C"/></linearGradient>
+      <linearGradient id="${id}-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.top}"/><stop offset=".35" stop-color="${p.mid}"/><stop offset="1" stop-color="${p.bottom}"/></linearGradient>
+      <linearGradient id="${id}-shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></linearGradient>
+      <clipPath id="${id}-clip"><path d="${outline}"/></clipPath>
+    </defs>
+    <rect x="0" y="${cy - lead / 2}" width="${x0 + 4}" height="${lead}" rx="${lead / 2}" fill="url(#${id}-lead)"/>
+    <rect x="${x0 + AXIAL_BODY_PX - 4}" y="${cy - lead / 2}" width="${x0 + 4}" height="${lead}" rx="${lead / 2}" fill="url(#${id}-lead)"/>
+    <g clip-path="url(#${id}-clip)">
+      <rect x="${x0}" y="${cy - R}" width="${AXIAL_BODY_PX}" height="${2 * R}" fill="url(#${id}-body)"/>
+      ${bands.map((b) => `<rect x="${(x0 + b.at * px).toFixed(1)}" y="${cy - R}" width="${(b.width * px).toFixed(1)}" height="${2 * R}" fill="${b.hex}"/>`).join("")}
+      <rect x="${x0}" y="${cy - R}" width="${AXIAL_BODY_PX}" height="${2 * R}" fill="url(#${id}-shade)"/>
+    </g>
+    <path d="${outline}" stroke="#00000066" stroke-width="1"/>
+  </svg>`;
+}
+
 // ---------- Resistor colour code ----------
 // A band's meaning depends on which position it sits in, so one table carries
 // every reading of a colour and each role picks the property it needs. A colour
@@ -1063,27 +1125,22 @@ function renderResistorColorCode(domain, tool, favId) {
   // for literal illustration. Value bands cluster left, tolerance sits apart on
   // the right the way it does on a real part.
   function resistor() {
+    // Carbon film for 4 bands, metal film (blue) for the precision 5- and
+    // 6-band parts. Value bands from the left end, tolerance and temperature
+    // coefficient standing apart on the right, as on a real part.
     const roles = rolesFor(state.count);
     const valueBands = roles.filter(r => r !== "tol" && r !== "tc");
-    const bars = valueBands.map((r, i) =>
-      `<rect x="${71 + i * 12}" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands[r]].hex}"/>`
-    );
-    if (state.bands.tol !== "none") {
-      bars.push(`<rect x="132" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tol].hex}"/>`);
-    }
-    if (roles.includes("tc")) {
-      bars.push(`<rect x="145" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tc].hex}"/>`);
-    }
-    return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none">
-      <defs>
-        <clipPath id="rc-body"><rect x="62" y="12" width="96" height="40" rx="9"/></clipPath>
-      </defs>
-      <path d="M6 32 H62 M158 32 H214" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
-      <rect x="62" y="12" width="96" height="40" rx="9" fill="#C8AE7D"/>
-      <g clip-path="url(#rc-body)">${bars.join("")}</g>
-      <rect x="62" y="12" width="96" height="40" rx="9" fill="none" stroke="#00000055" stroke-width="1"/>
-    </svg>`;
+    const kind = state.count === 4 ? "carbon" : "metal";
+    const pitch = state.count === 4 ? 1.05 : 0.8, width = state.count === 4 ? 0.7 : 0.55;
+    const first = state.count === 4 ? 1.3 : 1.05;
+    const bands = valueBands.map((r, i) => ({ at: first + i * pitch, width, hex: BAND_COLORS[state.bands[r]].hex }));
+    const tolAt = state.count === 6 ? 4.45 : state.count === 5 ? 4.9 : 4.85;
+    if (state.bands.tol !== "none") bands.push({ at: tolAt, width, hex: BAND_COLORS[state.bands.tol].hex });
+    if (roles.includes("tc")) bands.push({ at: 5.2, width, hex: BAND_COLORS[state.bands.tc].hex });
+    return axialPartSVG(kind, bands);
   }
+
+
 
   function colorWith(prop, value) {
     return Object.keys(BAND_COLORS).find(c => BAND_COLORS[c][prop] === value);
@@ -4861,22 +4918,16 @@ function renderInductorColorCode(domain, tool, favId) {
   // double-width silver band leads the value bands — an identifier, not a
   // digit, so it never shifts what the other bands mean.
   function inductorBody() {
-    const valueStart = state.mil ? 78 : 71;
-    const bars = state.mil ? [`<rect x="63" y="12" width="11" height="40" fill="${BAND_COLORS.silver.hex}"/>`] : [];
-    bars.push(...["d1", "d2", "mult"].map((r, i) =>
-      `<rect x="${valueStart + i * 12}" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands[r]].hex}"/>`
-    ));
-    if (state.bands.tol !== "none") {
-      bars.push(`<rect x="132" y="12" width="8" height="40" fill="${BAND_COLORS[state.bands.tol].hex}"/>`);
-    }
-    return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none">
-      <defs><clipPath id="ic-body"><rect x="62" y="10" width="96" height="44" rx="18"/></clipPath></defs>
-      <path d="M6 32 H62 M158 32 H214" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
-      <rect x="62" y="10" width="96" height="44" rx="18" fill="#2E6B78"/>
-      <g clip-path="url(#ic-body)">${bars.join("")}</g>
-      <rect x="62" y="10" width="96" height="44" rx="18" fill="none" stroke="#00000055" stroke-width="1"/>
-    </svg>`;
+    // In the 5-band form a wide silver identifier band, about twice the
+    // others, leads the value bands; it carries no digit.
+    const bands = state.mil ? [{ at: 0.6, width: 1.1, hex: BAND_COLORS.silver.hex }] : [];
+    const first = state.mil ? 2.1 : 1.3, pitch = state.mil ? 0.95 : 1.0;
+    ["d1", "d2", "mult"].forEach((r, i) => bands.push({ at: first + i * pitch, width: 0.65, hex: BAND_COLORS[state.bands[r]].hex }));
+    if (state.bands.tol !== "none") bands.push({ at: state.mil ? 5.1 : 4.6, width: 0.65, hex: BAND_COLORS[state.bands.tol].hex });
+    return axialPartSVG("inductor", bands);
   }
+
+
 
   function seriesLine(r) {
     if (!isFinite(r.uH) || r.uH <= 0) return "";
