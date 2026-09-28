@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<!-- Driven by tools/check_app.py. Opens every tool of the app in a frame the
+     size of the target phone, checks its layout and console, plays the
+     reference cases in tools/check_cases.js, and writes a JSON report into
+     #report for the script to read. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Circuit Codex — check</title>
+<style>
+  body { margin: 0; background: #0B0D10; color: #ccc; font: 12px monospace; }
+  iframe { border: 0; display: block; }
+</style>
+</head>
+<body>
+<iframe id="app" width="430" height="932" src="../index.html#/home"></iframe>
+<pre id="report"></pre>
+<script src="../js/data.js"></script>
+<script src="check_cases.js"></script>
+<script>
+const frame = document.getElementById("app");
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Every tool that has a calculator, in the app's own order, with its route.
+function tools() {
+  const out = [];
+  DOMAINS.forEach((d) => d.sections.forEach((s, si) => s.tools.forEach((t, ti) => {
+    if (t.calc) out.push({ calc: t.calc, name: t.name, route: `${d.id}:${si}:${ti}` });
+  })));
+  return out;
+}
+
+// The first thing on screen that is an answer. A tool whose screen has none
+// (a pure reference table) is not held to the above-the-tab-bar rule.
+const RESULT_SELECTORS = [".result-field", "[data-res=\"results\"]", ".eseries-grid", "[data-res=\"table\"]", "[data-res=\"summary\"]"];
+
+function firstResult(doc) {
+  const all = RESULT_SELECTORS.flatMap((s) => [...doc.querySelectorAll(s)]);
+  all.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  return all.find((el) => el.getBoundingClientRect().height > 0) || null;
+}
+
+function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
+
+// A step is ["set", selector, value], ["click", selector] or ["pill", index].
+async function play(doc, steps) {
+  for (const [kind, a, b] of steps) {
+    if (kind === "pill") { doc.querySelectorAll(".pill")[a].click(); await wait(30); continue; }
+    const el = doc.querySelector(a);
+    if (!el) throw new Error(`no element ${a}`);
+    if (kind === "click") { el.click(); await wait(30); continue; }
+    el.value = b;
+    fire(el, "input");
+    fire(el, "change");
+    await wait(20);
+  }
+}
+
+function matches(actual, expected) {
+  if (expected.startsWith("/")) return new RegExp(expected.slice(1, -1)).test(actual);
+  return actual === expected;
+}
+
+async function checkTool(t) {
+  const win = frame.contentWindow;
+  const doc = frame.contentDocument;
+  const errors = [];
+  win.__errors = errors;
+  win.location.hash = `#/tool/${encodeURIComponent(t.route)}/${t.calc}`;
+  await wait(120);
+
+  const r = { calc: t.calc, name: t.name, problems: [], cases: 0, failed: [] };
+  const h1 = doc.querySelector(".topbar h1");
+  if (!h1 || h1.textContent.trim() !== t.name) r.problems.push(`did not open (title "${h1 ? h1.textContent.trim() : ""}")`);
+
+  const sw = doc.documentElement.scrollWidth, w = win.innerWidth;
+  if (sw > w + 1) r.problems.push(`page is ${sw - w} px wider than the screen`);
+
+  const tab = doc.querySelector(".tabbar");
+  const res = firstResult(doc);
+  if (tab && res) {
+    const gap = tab.getBoundingClientRect().top - res.getBoundingClientRect().bottom;
+    r.clearance = Math.round(gap);
+    if (gap < 0) r.problems.push(`first result is ${Math.round(-gap)} px under the tab bar`);
+  }
+
+  for (const c of (CHECK_CASES[t.calc] || [])) {
+    r.cases++;
+    try {
+      win.location.hash = "#/home";
+      await wait(40);
+      win.location.hash = `#/tool/${encodeURIComponent(t.route)}/${t.calc}`;
+      await wait(80);
+      await play(doc, c.do || []);
+      for (const [sel, expected] of c.expect) {
+        const el = doc.querySelector(sel);
+        const actual = el ? (el.value !== undefined && el.tagName === "INPUT" ? el.value : el.textContent.trim()) : "(missing)";
+        if (!matches(actual, expected)) r.failed.push(`${c.name}: ${sel} is "${actual}", expected "${expected}"`);
+      }
+    } catch (e) {
+      r.failed.push(`${c.name}: ${e.message}`);
+    }
+  }
+  if (errors.length) r.problems.push(...errors.map((e) => `JS error: ${e}`));
+  return r;
+}
+
+async function main() {
+  // The frame starts as about:blank, which is already "complete"; wait for
+  // the app itself to have drawn its home screen.
+  // (DOMAINS is a top-level const, so it is not on the window to test for.)
+  while (!(frame.contentDocument.URL.includes("index.html") && frame.contentDocument.querySelector(".tabbar"))) await wait(50);
+  const win = frame.contentWindow;
+  win.addEventListener("error", (e) => (win.__errors || []).push(e.message));
+  const origError = win.console.error;
+  win.console.error = (...a) => { (win.__errors || []).push(a.join(" ")); origError.apply(win.console, a); };
+  // Chrome is started with a fresh profile each run, so no service worker
+  // from an earlier session can answer with an old app.
+
+  const report = [];
+  for (const t of tools()) report.push(await checkTool(t));
+  document.getElementById("report").textContent = "REPORT" + JSON.stringify(report) + "END";
+}
+main().catch((e) => { document.getElementById("report").textContent = "REPORT" + JSON.stringify({ fatal: String(e) }) + "END"; });
+</script>
+</body>
+</html>
