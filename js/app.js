@@ -5870,30 +5870,33 @@ function renderInductorSmdCode(domain, tool, favId) {
 }
 
 // ---------- Ceramic capacitor code ----------
-// Same digit/multiplier/R-notation scheme as the resistor and inductor SMD
-// screens, but read in picofarads (pF) per EIA-198 — the standard 3/4-digit
-// ceramic capacitor marking. Unlike those two, the part it's actually printed
-// on is a leaded disc, not an SMD chip — see disc() below. Tolerance is where
-// ceramics genuinely differ:
-// below 10 pF the standard uses an absolute ± in pF (B/C/D/F/G); above 10 pF
-// the same letters F/G, plus J/K/M/Z, switch to a ± percentage instead. Both
-// tables are real EIA-198 letters, not a simplification — F and G legitimately
-// mean two different things depending on which side of 10 pF the value falls.
-// B, C and D are percentages above 10 pF as well, per IEC 60062 (the same
-// letters as a resistor's ±0.1, ±0.25 and ±0.5%); this table once had them as
-// pF only, so a 100 pF "D" part read as ±0.5 pF.
-const CERAMIC_TOL_ABS = { B: 0.1, C: 0.25, D: 0.5, F: 1, G: 2 }; // pF, value ≤ 10 pF
-const CERAMIC_TOL_PCT = { B: 0.1, C: 0.25, D: 0.5, F: 1, G: 2, J: 5, K: 10, M: 20, Z: "+80% / −20%" }; // %, value > 10 pF
+// The digit code in picofarads: 104 is 100 nF (IEC 60062, as Vishay's ceramic
+// catalogue gives it). Below 10 pF the standard writes p for the decimal point,
+// 4p7; 4R7 and the 479 form (9 = ×0.1, 8 = ×0.01, the EIA-198 practice) are
+// seen on parts too and are read as well. The part it is printed on is a
+// leaded disc, not an SMD chip — see disc() below.
+// Tolerance letters, IEC 60062 clause 5 (checked in GOST IEC 60062-2014, the
+// identical text of the 2004 edition): below 10 pF, B/C/D/F/G are an absolute
+// ± in pF (table 8); from 10 pF they are the ordinary percentages (table 6),
+// with J/K/M, and Q/T/S/Z are the asymmetrical tolerances (table 7).
+const CERAMIC_TOL_ABS = { B: 0.1, C: 0.25, D: 0.5, F: 1, G: 2 }; // pF, below 10 pF
+const CERAMIC_TOL_PCT = {
+  B: 0.1, C: 0.25, D: 0.5, F: 1, G: 2, J: 5, K: 10, M: 20,
+  Q: "−10% / +30%", T: "−10% / +50%", S: "−20% / +50%", Z: "−20% / +80%",
+}; // %, 10 pF and above
 const CERAMIC_TOL_LABEL = {
-  B: "±0.1 pF (≤10 pF) / ±0.1%",
-  C: "±0.25 pF (≤10 pF) / ±0.25%",
-  D: "±0.5 pF (≤10 pF) / ±0.5%",
-  F: "±1 pF (≤10 pF) / ±1%",
-  G: "±2 pF (≤10 pF) / ±2%",
+  B: "±0.1 pF (<10 pF) / ±0.1%",
+  C: "±0.25 pF (<10 pF) / ±0.25%",
+  D: "±0.5 pF (<10 pF) / ±0.5%",
+  F: "±1 pF (<10 pF) / ±1%",
+  G: "±2 pF (<10 pF) / ±2%",
   J: "±5%",
   K: "±10%",
   M: "±20%",
-  Z: "+80% / −20%",
+  Q: "−10% / +30%",
+  T: "−10% / +50%",
+  S: "−20% / +50%",
+  Z: "−20% / +80%",
 };
 const CERAMIC_TOL_LETTERS = new Set([...Object.keys(CERAMIC_TOL_ABS), ...Object.keys(CERAMIC_TOL_PCT)]);
 
@@ -5940,13 +5943,14 @@ function renderCeramicCode(domain, tool, favId) {
     const exponent = e - n + 1;
     if (exponent > 9) return null;
     if (exponent >= 0) return d + String(exponent);
-    // Below that, R takes the decimal point's place and the marking keeps its
-    // length: 4R7 on three characters, 4R70 on four.
+    // Below that, p takes the decimal point's place, as IEC 60062 writes it
+    // for capacitors, and the marking keeps its length: 4p7 on three
+    // characters, 4p70 on four.
     const frac = digits - 1 - Math.max(0, e + 1);
     const fixed = pF.toFixed(frac);
     if (Number(fixed) === 0) return null;
     const [whole, part] = fixed.split(".");
-    return `${whole === "0" ? "" : whole}R${part || ""}`;
+    return `${whole === "0" ? "" : whole}p${part || ""}`;
   }
 
   function codeFor(farads) {
@@ -5963,9 +5967,10 @@ function renderCeramicCode(domain, tool, favId) {
     }
     if (!str) return { farads: NaN, tol };
     const digits = Number(state.mode);
-    if (str.includes("R")) {
-      if ((str.match(/R/g) || []).length > 1 || /[^0-9R]/.test(str)) return { farads: NaN, tol };
-      const v = parseFloat(str.replace("R", "."));
+    // p (the standard's form) or R (seen on parts) stands for the decimal point.
+    if (/[RP]/.test(str)) {
+      if ((str.match(/[RP]/g) || []).length > 1 || /[^0-9RP]/.test(str)) return { farads: NaN, tol };
+      const v = parseFloat(str.replace(/[RP]/, "."));
       return { farads: isFinite(v) ? v * 1e-12 : NaN, tol };
     }
     if (!/^[0-9]+$/.test(str) || str.length !== digits) return { farads: NaN, tol };
@@ -5982,11 +5987,11 @@ function renderCeramicCode(domain, tool, favId) {
 
   // One tolerance, one series: J ±5% → E24, K ±10% → E12, M ±20% → E6, and
   // so on. Without a letter, or with Z, E6 — where most ceramics are stocked.
-  // At 10 pF and below the B–G letters are ± pF, which implies no series.
+  // Below 10 pF the B–G letters are ± pF, which implies no series.
   function seriesLine(farads) {
     if (!isFinite(farads) || farads <= 0) return "";
     const pF = farads / 1e-12;
-    if (pF <= 10 && CERAMIC_TOL_ABS[state.tol] !== undefined) return "Tolerance in pF: no E-series implied";
+    if (pF < 10 && CERAMIC_TOL_ABS[state.tol] !== undefined) return "Tolerance in pF: no E-series implied";
     const pct = CERAMIC_TOL_PCT[state.tol];
     return seriesVerdict(farads, typeof pct === "number" ? eSeriesForTolerance(pct) : "E6", formatFarads);
   }
@@ -5994,7 +5999,7 @@ function renderCeramicCode(domain, tool, favId) {
   function tolText(letter, farads) {
     if (!letter) return "No tolerance letter";
     const pF = farads / 1e-12;
-    if (pF > 0 && pF <= 10 && CERAMIC_TOL_ABS[letter] !== undefined) return `±${CERAMIC_TOL_ABS[letter]} pF`;
+    if (pF > 0 && pF < 10 && CERAMIC_TOL_ABS[letter] !== undefined) return `±${CERAMIC_TOL_ABS[letter]} pF`;
     const p = CERAMIC_TOL_PCT[letter];
     if (p !== undefined) return typeof p === "number" ? `±${p}%` : p;
     if (CERAMIC_TOL_ABS[letter] !== undefined) return `±${CERAMIC_TOL_ABS[letter]} pF`;
@@ -6122,7 +6127,7 @@ function renderCeramicCode(domain, tool, favId) {
 
       ${formulaSection(
         [`Value = (${sig() === 2 ? "D1D2" : "D1D2D3"}) × 10^${sig() === 2 ? "D3" : "D4"}, in pF`],
-        "The code gives the capacitance in picofarads. The last digit is how many zeros follow the others: 104 is 10 and four zeros, 100 000 pF = 100 nF; 472 is 4.7 nF. Below 10 pF the last digit 9 means ×0.1 and 8 means ×0.01 (479 = 4.7 pF), or R marks the decimal point (4R7). A trailing letter is the tolerance: J ±5%, K ±10%, M ±20%, Z +80/−20%; at 10 pF and below, B, C, D, F and G are ± in pF instead of %. Another code on the part, such as X7R or C0G, is the dielectric, and a number with V is the voltage rating. Codes follow EIA-198 and IEC 60062."
+        "The code gives the capacitance in picofarads. The last digit is how many zeros follow the others: 104 is 10 and four zeros, 100 000 pF = 100 nF; 472 is 4.7 nF. Below 10 pF, p marks the decimal point (4p7 = 4.7 pF); parts also show 4R7, or 479 where a last digit 9 means ×0.1 and 8 ×0.01. A trailing letter is the tolerance: J ±5%, K ±10%, M ±20%; Q, T, S and Z are uneven, Z being −20/+80%; below 10 pF, B, C, D, F and G are ± in pF instead of %. Another code on the part, such as X7R or C0G, is the dielectric, and a number with V is the voltage rating. Codes follow IEC 60062; 479 is EIA practice."
       )}
       ${calcFooter()}
     `;
@@ -6187,10 +6192,11 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     { title: "4n7 printed directly", note: "The n stands where the decimal point would: 4.7 nF.", apply: example("direct", "4n7") },
     { title: "n33K, below 1 nF", note: "Nothing before the n means zero: 0.33 nF = 330 pF, ±10%.", apply: example("direct", "n33K") },
   ]);
-  // IEC 60062 tolerance letters as film capacitors use them. H, ±2.5%, is
-  // common on polypropylene parts and was missing while this screen borrowed
-  // the inductor table.
-  const FILM_TOL = { F: 1, G: 2, H: 2.5, J: 5, K: 10, M: 20 };
+  // IEC 60062 tolerance letters as film capacitors use them (clause 5,
+  // table 6, read in GOST IEC 60062-2014, the identical text of the 2004
+  // edition). H is ±3% there. WIMA, TDK and KEMET use H for ±2.5% in their
+  // part numbers; Pierre chose the standard's text, and the manual says so.
+  const FILM_TOL = { F: 1, G: 2, H: 3, J: 5, K: 10, M: 20 };
 
   function numericCode(pF) {
     if (pF === 0) return "000";
@@ -6399,7 +6405,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
       ${state.mode === "code"
         ? formulaSection(
             ["Value = (D1D2) × 10^D3, in pF"],
-            "The same code as on ceramics, in picofarads: the last digit is how many zeros follow, so 104 is 100 nF and 473 is 47 nF. A trailing letter is the tolerance: F ±1%, G ±2%, H ±2.5%, J ±5%, K ±10%, M ±20%. Film parts often add a voltage code in front: 2A104J is 100 V, 100 nF, ±5% (1H 50 V, 2A 100 V, 2E 250 V, 2G 400 V, 2J 630 V)."
+            "The same code as on ceramics, in picofarads: the last digit is how many zeros follow, so 104 is 100 nF and 473 is 47 nF. A trailing letter is the tolerance: F ±1%, G ±2%, H ±3%, J ±5%, K ±10%, M ±20%, as IEC 60062 defines them. Film parts often add a voltage code in front: 2A104J is 100 V, 100 nF, ±5% (1H 50 V, 2A 100 V, 2E 250 V, 2G 400 V, 2J 630 V)."
           )
         : formulaSection(
             ["p / n / µ = pF / nF / µF, in place of the decimal point"],

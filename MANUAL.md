@@ -203,12 +203,14 @@ the three-character code (clause 4.2.2), the four-character code (4.2.3), R as
 the decimal point, and in its Annex A a special three-character code for
 values with three figures — what the industry calls EIA-96.
 
-What was read in the standard itself, and what was not: the official preview
-runs to clause 4.2.2, far enough to confirm the three-character code and its
-limit — it "is applicable to values from an E series up to E24", since it
-carries only two figures. The tables of 4.2.3 and Annex A lie beyond the
-preview; the 4-digit and EIA-96 decoding were checked against published
-examples of those codes, not against the standard's own tables.
+What was read in the standard itself, and what was not: the official 2016
+preview runs to clause 4.2.2, far enough to confirm the three-character code
+and its limit — it "is applicable to values from an E series up to E24", since
+it carries only two figures. The three- and four-character tables were read in
+**GOST IEC 60062-2014**, the official Russian edition of IEC 60062:2004, declared identical to it (IDT) and published free by Standartinform; its tables 3 and 4 match the official IEC 2004 preview word for word, and the 2016 versions of both tables in ROHM's application note
+"List of Nominal Resistance Values" (2024), which reproduces them from
+IEC 60062:2016. Annex A (EIA-96) is new in 2016, lies beyond the preview and is
+not in the ROHM note; it was checked against published examples only.
 
 ### What the marking means
 
@@ -1025,11 +1027,12 @@ for a value. It says whether the value is a standard E-series value.
   capacitors (clause 4.3.2) and the tolerance letters (clause 5: relative
   tolerances, asymmetrical ones such as Z, and absolute ones in pF).
 
-Neither text was read in full. EIA-198 is not freely available, and the
-official preview of IEC 60062 stops before clauses 4.3 and 5; it confirms that
-they exist, not their tables. The codes, the 8 and 9 multipliers and the
-tolerance letters were checked against capacitor makers' datasheets and
-published examples.
+What was read: IEC 60062's capacitor letter code (clause 4.3) and all its
+tolerance letters (clause 5, tables 6 to 8) in **GOST IEC 60062-2014**, the official Russian edition of IEC 60062:2004, declared identical to it (IDT) and published free by Standartinform; its tables 3 and 4 match the official IEC 2004 preview word for word. The digit code
+(104 = 100 nF) is given "according to IEC 60062" in Vishay's ceramic capacitor
+catalogue, which also writes values below 10 pF as 1p0 to 9p1. EIA-198 is not
+freely available: the 479 form, with 8 and 9 as ×0.01 and ×0.1, is found on
+parts and in reference guides but was not read in any standard.
 
 ### What the marking means
 
@@ -1041,14 +1044,16 @@ and 1 µF is 1 000 000 pF.
   zeros follow them. 104 is 10 followed by four zeros: 100 000 pF, which is
   100 nF or 0.1 µF — the most common capacitor there is. 472 is 4700 pF, 4.7 nF.
   220 is 22 pF, not 220 pF.
-- **Small values** — below 10 pF there is no zero count small enough, so the
-  last digit 9 means ×0.1 and 8 means ×0.01: 479 is 47 × 0.1 = 4.7 pF, 109 is
-  1.0 pF. Some makers write R for the decimal point instead: 4R7 is 4.7 pF.
+- **Small values** — below 10 pF the standard puts p where the decimal point
+  would be: 4p7 is 4.7 pF, 1p0 is 1 pF. Parts are also seen with R in its
+  place (4R7), or with a last digit 9 meaning ×0.1 and 8 meaning ×0.01, the
+  EIA practice: 479 is 47 × 0.1 = 4.7 pF. The tool reads all three and writes
+  the standard's 4p7.
 - **Four digits** — three figures and a multiplier, for closer values: 1002 is
   10 000 pF, 10 nF.
 - **A letter after the digits** is the tolerance:
 
-| Letter | 10 pF and below | Above 10 pF |
+| Letter | Below 10 pF | 10 pF and above |
 |---|---|---|
 | B | ±0.1 pF | ±0.1% |
 | C | ±0.25 pF | ±0.25% |
@@ -1058,12 +1063,17 @@ and 1 µF is 1 000 000 pF.
 | J | | ±5% |
 | K | | ±10% |
 | M | | ±20% |
-| Z | | +80% / −20% |
+| Q | | −10% / +30% |
+| T | | −10% / +50% |
+| S | | −20% / +50% |
+| Z | | −20% / +80% |
 
   Small capacitors use a tolerance in picofarads because a percentage of a few
-  picofarads would be a fraction of the stray capacitance of the leads. Z is
-  typical of cheap high-capacitance ceramics, whose value is mostly guaranteed
-  not to be too low.
+  picofarads would be a fraction of the stray capacitance of the leads. Q, T,
+  S and Z are uneven tolerances, for parts whose value is mostly guaranteed
+  not to be too low; Z is typical of cheap high-capacitance ceramics. Some
+  makers use letters of their own outside the standard — Vishay prints Y for
+  −20/+50% and P for −0/+100% — which the tool does not read.
 
 So **473K** is 47 nF ±10%, **104M** 100 nF ±20%, **220J** 22 pF ±5%.
 
@@ -1082,13 +1092,13 @@ is the voltage rating. Neither is part of the value code.
 - **SMD ceramic chips are almost never marked**: they are too small, and the
   value is only on the reel. The code is mostly seen on through-hole discs and
   on film capacitors.
-- A value typed in is encoded with R below 10 pF (4R7); the 479 form means the
-  same and is read as well.
+- A value typed in is encoded with p below 10 pF (4p7), as the standard
+  writes it; 4R7 and 479 mean the same and are read as well.
 - **Standard value.** The tolerance letter picks the one series the value is
   checked against: J (±5%) E24, K (±10%) E12, M (±20%) E6, as for resistors.
-  With no letter, or Z, it is E6, the series most ceramics are stocked in. At
-  10 pF and below, B to G give a tolerance in picofarads, which implies no
-  series, and the tool says so.
+  With no letter, or an uneven one (Q, T, S, Z), it is E6, the series most
+  ceramics are stocked in. Below 10 pF, B to G give a tolerance in picofarads,
+  which implies no series, and the tool says so.
 
 ### What it deliberately does not do
 
@@ -1111,6 +1121,12 @@ The re-walk checked the value against the tolerance's own series rather than
 the coarsest one it happened to be in: 182 is "Not in E6 — nearest is 1.5 nF",
 182K an E12 value, 479C "no E-series implied".
 
+A reading of the standard's text (GOST IEC 60062-2014, identical to the 2004
+edition) and Vishay's catalogue then made four changes: the picofarad letters
+apply below 10 pF, not at 10 pF itself (100C is ±0.25%, 8p2C ±0.25 pF); the
+uneven letters Q, T and S were added; values below 10 pF are written 4p7, the
+standard's form; and 4p7 is read.
+
 [↑ Index](#index)
 
 ---
@@ -1132,12 +1148,10 @@ ways film parts are marked — the 3-digit picofarad code or the letter code
 - **IEC 60062:2016** for the letter code (the "RKM" code: p, n, µ in place of
   the decimal point, clause 4.3.1) and the tolerance letters (clause 5).
 
-Neither text was read in full: EIA-198 is not freely available, and the
-official preview of IEC 60062 stops before clauses 4.3 and 5. The preview does
-show the same principle for resistors in full (4k7, R47: the letter is the
-decimal point and the multiplier at once). The capacitor codes and letters
-were checked against film capacitor makers' datasheets and published
-examples.
+The letter code (clause 4.3) and the tolerance letters (clause 5, table 6)
+were read in **GOST IEC 60062-2014**, the official Russian edition of IEC 60062:2004, declared identical to it (IDT) and published free by Standartinform; its tables 3 and 4 match the official IEC 2004 preview word for word. TDK's film capacitor marking guide says its parts
+use "the coded forms specified in IEC 60062:2004". EIA-198 is not freely
+available and was not read.
 
 ### What the marking means
 
@@ -1164,10 +1178,17 @@ or be misread.
 |---|---|
 | F | ±1% |
 | G | ±2% |
-| H | ±2.5% |
+| H | ±3% |
 | J | ±5% |
 | K | ±10% |
 | M | ±20% |
+
+**H is where the sources disagree.** The standard's text gives H = ±3%
+(IEC 60062:2004, table 6, in its official identical GOST edition). WIMA, TDK
+and KEMET use H for ±2.5% in their part numbers and marking guides — TDK while
+stating it follows IEC 60062:2004 — and WIMA also uses F for ±1.5% and E for
+±1%. The tool follows the standard's text, ±3%; on a WIMA, TDK or KEMET part,
+check the datasheet.
 
 **The voltage code.** Many film capacitors add a two-character voltage code in
 front of the value, per the same EIA scheme: 1H = 50 V, 2A = 100 V,
@@ -1195,12 +1216,13 @@ Others print the voltage plainly (63 V, 400 V=).
 
 ### How it was checked
 
-104J → 100 nF ±5%, 473K → 47 nF ±10%, 102H → 1 nF ±2.5%, 4n7 → 4.7 nF,
+104J → 100 nF ±5%, 473K → 47 nF ±10%, 102H → 1 nF ±3%, 4n7 → 4.7 nF,
 4N7J → 4.7 nF ±5%, n33 → 330 pF, u1 and µ1 → 100 nF, 2u2K → 2.2 µF ±10%,
 100p → 100 pF.
 
 The review found the tolerance table borrowed from the inductor tool, which
-had no H (±2.5%), a common film tolerance; added it. It made the unit letter
+had no H, a common film tolerance; added it, first as ±2.5% from WIMA's
+datasheets, then as ±3% once the standard's own table was read. It made the unit letter
 case-blind (4N7 was rejected), applied the 8 and 9 multipliers and the R-code
 length fix from the ceramic tool, limited the units to pF, nF and µF, and made
 the drawing show the marking as typed.
