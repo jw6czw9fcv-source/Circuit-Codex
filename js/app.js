@@ -809,7 +809,7 @@ function axialPartSVG(kind, bands) {
   const outline = axialOutline(p, x0, px);
   return `<svg width="${AXIAL_W}" height="${AXIAL_H}" viewBox="0 0 ${AXIAL_W} ${AXIAL_H}" fill="none">
     <defs>
-      <linearGradient id="${id}-lead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E4E7EB"/><stop offset=".5" stop-color="#9AA0A8"/><stop offset="1" stop-color="#5E646C"/></linearGradient>
+      <linearGradient id="${id}-lead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C4C8CE"/><stop offset=".5" stop-color="#A2A8AF"/><stop offset="1" stop-color="#80868D"/></linearGradient>
       <linearGradient id="${id}-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.top}"/><stop offset=".35" stop-color="${p.mid}"/><stop offset="1" stop-color="${p.bottom}"/></linearGradient>
       <linearGradient id="${id}-shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></linearGradient>
       <clipPath id="${id}-clip"><path d="${outline}"/></clipPath>
@@ -5412,7 +5412,7 @@ function renderCeramicCode(domain, tool, favId) {
     const leadLen = 22;
     return `<svg width="220" height="${Math.ceil(yEnd + leadLen)}" viewBox="0 0 220 ${Math.ceil(yEnd + leadLen)}" fill="none">
       <defs>
-        <linearGradient id="disc-lead" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E4E7EB"/><stop offset=".5" stop-color="#9AA0A8"/><stop offset="1" stop-color="#5E646C"/></linearGradient>
+        <linearGradient id="disc-lead" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#C4C8CE"/><stop offset=".5" stop-color="#A2A8AF"/><stop offset="1" stop-color="#80868D"/></linearGradient>
         <linearGradient id="disc-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2C774"/><stop offset=".4" stop-color="#DDA743"/><stop offset="1" stop-color="#9A6E22"/></linearGradient>
       </defs>
       <rect x="${cx - F / 2 - lead / 2}" y="${bottom - 2}" width="${lead}" height="${run + leadLen + 2}" rx="${lead / 2}" fill="url(#disc-lead)"/>
@@ -5653,13 +5653,25 @@ function renderFilmCapacitorCode(domain, tool, favId) {
   // most film caps (polyester, polypropylene) actually ship in, leads out
   // the bottom like the ceramic disc screen next to it.
   function filmBox(code) {
-    return `<svg width="220" height="108" viewBox="0 0 220 108" fill="none">
-      <path d="M70 66 V100 M150 66 V100" stroke="#8A9099" stroke-width="2.4" stroke-linecap="round"/>
-      <rect x="58" y="8" width="104" height="58" rx="8" fill="#4C8C6B" stroke="#00000055" stroke-width="1"/>
-      <text x="110" y="43" fill="#0D1F17" font-size="17" font-weight="600" text-anchor="middle"
+    // Seen from the front, to the proportions of a WIMA MKS 2 0.1 µF 63 V:
+    // box 7.2 mm long and 6.5 mm high (2.5 mm thick, edge on), leads 0.5 mm
+    // on a 5 mm pitch. WIMA's red case; the same shading and lead metal as
+    // the other parts. 14 px per mm.
+    const k = 14, cx = 110, L = 7.2 * k, H = 6.5 * k, F = 5 * k, lead = 0.5 * k, top = 6;
+    const x0 = cx - L / 2, bottom = top + H, leadLen = 22;
+    return `<svg width="220" height="${Math.ceil(bottom + leadLen)}" viewBox="0 0 220 ${Math.ceil(bottom + leadLen)}" fill="none">
+      <defs>
+        <linearGradient id="film-lead" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#C4C8CE"/><stop offset=".5" stop-color="#A2A8AF"/><stop offset="1" stop-color="#80868D"/></linearGradient>
+        <linearGradient id="film-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E0534F"/><stop offset=".4" stop-color="#C0282B"/><stop offset="1" stop-color="#7E1517"/></linearGradient>
+      </defs>
+      <rect x="${cx - F / 2 - lead / 2}" y="${bottom - 2}" width="${lead}" height="${leadLen + 2}" rx="${lead / 2}" fill="url(#film-lead)"/>
+      <rect x="${cx + F / 2 - lead / 2}" y="${bottom - 2}" width="${lead}" height="${leadLen + 2}" rx="${lead / 2}" fill="url(#film-lead)"/>
+      <rect x="${x0}" y="${top}" width="${L}" height="${H}" rx="${0.6 * k}" fill="url(#film-body)" stroke="#00000066" stroke-width="1"/>
+      <text x="${cx}" y="${top + H / 2 + 6}" fill="#FFFFFF" font-size="18" font-weight="600" text-anchor="middle"
             font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="0.5">${code || "—"}</text>
     </svg>`;
   }
+
 
   // The box shows what is printed on the part: a typed marking stays as typed
   // (n33 stays n33 rather than turning into the equivalent 330p).
