@@ -27,6 +27,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Resistors in series and parallel](#resistors-in-series-and-parallel)
 - Resistors → [Voltage divider](#voltage-divider)
 - Resistors → [Current divider](#current-divider)
+- Resistors → [Wheatstone bridge](#wheatstone-bridge)
 
 ### Digital
 
@@ -680,6 +681,84 @@ and 6.67 mA at 13.3 V, I1 between 13.2 and 13.4 mA at ±1%. R1 for 15 mA of
 R1 = 1 kΩ is 333.3 Ω. I1 above Iin is refused. The review labelled the
 voltage in the result line, which had been a bare "10 V" with nothing to say
 what it was.
+
+[↑ Index](#index)
+
+---
+
+<a id="wheatstone-bridge"></a>
+## Wheatstone bridge
+
+`calc: wheatstone-bridge` · Passive components › Resistors
+
+### What it computes
+
+For a balanced Wheatstone bridge, any one of its four resistors from the other
+three. Solving for the unknown Rx, it also gives the ratio R2 / R1 that
+multiplies R3 into Rx; solving for one of the fixed arms, the nearest standard
+value.
+
+### Source
+
+The balance condition follows from Ohm's law applied to the two dividers that
+make up the bridge. The circuit is Samuel Hunter Christie's (1833),
+popularised by Charles Wheatstone.
+
+### What it means
+
+A Wheatstone bridge measures an unknown resistance by comparing it with known
+ones, instead of measuring a current and a voltage.
+
+Four resistors form a diamond. A supply V is connected across the top and
+bottom corners, so the left side (R1 over R3) and the right side (R2 over Rx)
+are two voltage dividers on the same supply. A sensitive meter — a
+galvanometer, G — joins the midpoints of the two sides.
+
+If the two midpoints are at the same voltage, no current flows through the
+meter and it reads zero. The bridge is then **balanced**, and that happens when
+both dividers have the same ratio:
+
+    R1 / R2 = R3 / Rx      so      Rx = R2 × R3 / R1
+
+The supply voltage and the meter's own characteristics drop out entirely: the
+only thing that matters is whether the meter reads zero, which even a crude
+meter can tell very precisely. That is what made the bridge the standard way to
+measure resistance accurately.
+
+**In use.** R1 and R2 are fixed and set the range: with R2 / R1 = 10, Rx is ten
+times R3. R3 is a calibrated adjustable resistor. Turn R3 until the meter reads
+zero, and Rx = 10 × R3.
+
+The same circuit, left unbalanced, is how strain gauges, pressure sensors and
+many thermometers are read: a small change in one arm produces a small voltage
+across the meter's position, measured by an amplifier.
+
+### Assumptions and limits
+
+- **Balance only.** The tool gives the resistance that balances the bridge; it
+  does not compute the voltage or current through the meter when the bridge is
+  off balance.
+- **The precision is that of the known arms.** Rx can be no more accurate than
+  R1, R2 and R3 combined; with ±0.1% parts, roughly ±0.3% worst case.
+- The arm used as a divisor cannot be zero: R1 when solving Rx, Rx when solving
+  R1, R3 for R2 and R2 for R3.
+
+### What it deliberately does not do
+
+- **Unbalanced output** for sensor bridges (the voltage across G as a function
+  of a changing arm) is a different calculation, not done here.
+- AC bridges for capacitance and inductance (Maxwell, Schering, Wien) are not
+  covered.
+
+### How it was checked
+
+By hand: R1 = 1 k, R2 = 2 k, R3 = 3 k balance with Rx = 6 kΩ, ratio 2; each of
+the other three arms solved from the remaining ones gives back 1 k, 2 k and
+3 k. R1 = 0 is refused. The review replaced the "nearest standard value" once
+shown for Rx, which is the resistance being measured rather than a part to
+buy, with the bridge ratio; dropped "(unknown)" from Rx's label, which stayed
+even when Rx was an input; and made the supply's V label neutral, which had
+taken R1's colour.
 
 [↑ Index](#index)
 

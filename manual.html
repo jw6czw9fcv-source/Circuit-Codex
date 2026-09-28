@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=89352cc2f3" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=cdf0d8de12" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -105,7 +105,7 @@ th { background: var(--card); }
 </div>
 <nav id="index" class="index">
   <h2 class="index-title">Index</h2>
-  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li><li><a href="#voltage-divider"><span class="i-name">Voltage divider</span><span class="i-sec">Resistors</span></a></li><li><a href="#current-divider"><span class="i-name">Current divider</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
+  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li><li><a href="#voltage-divider"><span class="i-name">Voltage divider</span><span class="i-sec">Resistors</span></a></li><li><a href="#current-divider"><span class="i-name">Current divider</span><span class="i-sec">Resistors</span></a></li><li><a href="#wheatstone-bridge"><span class="i-name">Wheatstone bridge</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
 </nav>
 
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
@@ -607,6 +607,68 @@ R1 = 1 kΩ is 333.3 Ω. I1 above Iin is refused. The review labelled the
 voltage in the result line, which had been a bare "10 V" with nothing to say
 what it was.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A6/current-divider">Open the tool</a></p>
+</section>
+<section class="tool" id="wheatstone-bridge" style="--accent:#5B9BE0">
+  <div class="crumb">Passive components › Resistors</div>
+  <h2>Wheatstone bridge</h2>
+  <figure class="shot"><img src="manual/img/wheatstone-bridge.jpg?h=05afa2a787" loading="lazy" alt="Wheatstone bridge as it appears in the app" width="430" height="932"></figure>
+  <h3>What it computes</h3>
+<p>For a balanced Wheatstone bridge, any one of its four resistors from the other
+three. Solving for the unknown Rx, it also gives the ratio R2 / R1 that
+multiplies R3 into Rx; solving for one of the fixed arms, the nearest standard
+value.</p>
+<h3>Source</h3>
+<p>The balance condition follows from Ohm's law applied to the two dividers that
+make up the bridge. The circuit is Samuel Hunter Christie's (1833),
+popularised by Charles Wheatstone.</p>
+<h3>What it means</h3>
+<p>A Wheatstone bridge measures an unknown resistance by comparing it with known
+ones, instead of measuring a current and a voltage.</p>
+<p>Four resistors form a diamond. A supply V is connected across the top and
+bottom corners, so the left side (R1 over R3) and the right side (R2 over Rx)
+are two voltage dividers on the same supply. A sensitive meter — a
+galvanometer, G — joins the midpoints of the two sides.</p>
+<p>If the two midpoints are at the same voltage, no current flows through the
+meter and it reads zero. The bridge is then <strong>balanced</strong>, and that happens when
+both dividers have the same ratio:</p>
+<pre><code>R1 / R2 = R3 / Rx      so      Rx = R2 × R3 / R1
+</code></pre>
+<p>The supply voltage and the meter's own characteristics drop out entirely: the
+only thing that matters is whether the meter reads zero, which even a crude
+meter can tell very precisely. That is what made the bridge the standard way to
+measure resistance accurately.</p>
+<p><strong>In use.</strong> R1 and R2 are fixed and set the range: with R2 / R1 = 10, Rx is ten
+times R3. R3 is a calibrated adjustable resistor. Turn R3 until the meter reads
+zero, and Rx = 10 × R3.</p>
+<p>The same circuit, left unbalanced, is how strain gauges, pressure sensors and
+many thermometers are read: a small change in one arm produces a small voltage
+across the meter's position, measured by an amplifier.</p>
+<h3>Assumptions and limits</h3>
+<ul>
+<li><strong>Balance only.</strong> The tool gives the resistance that balances the bridge; it
+  does not compute the voltage or current through the meter when the bridge is
+  off balance.</li>
+<li><strong>The precision is that of the known arms.</strong> Rx can be no more accurate than
+  R1, R2 and R3 combined; with ±0.1% parts, roughly ±0.3% worst case.</li>
+<li>The arm used as a divisor cannot be zero: R1 when solving Rx, Rx when solving
+  R1, R3 for R2 and R2 for R3.</li>
+</ul>
+<h3>What it deliberately does not do</h3>
+<ul>
+<li><strong>Unbalanced output</strong> for sensor bridges (the voltage across G as a function
+  of a changing arm) is a different calculation, not done here.</li>
+<li>AC bridges for capacitance and inductance (Maxwell, Schering, Wien) are not
+  covered.</li>
+</ul>
+<h3>How it was checked</h3>
+<p>By hand: R1 = 1 k, R2 = 2 k, R3 = 3 k balance with Rx = 6 kΩ, ratio 2; each of
+the other three arms solved from the remaining ones gives back 1 k, 2 k and
+3 k. R1 = 0 is refused. The review replaced the "nearest standard value" once
+shown for Rx, which is the resistance being measured rather than a part to
+buy, with the bridge ratio; dropped "(unknown)" from Rx's label, which stayed
+even when Rx was an input; and made the supply's V label neutral, which had
+taken R1's colour.</p>
+  <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A7/wheatstone-bridge">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Logic gates</div>

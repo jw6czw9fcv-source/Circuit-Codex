@@ -2103,7 +2103,7 @@ function renderWheatstoneBridge(domain, tool, favId) {
     r1: { label: "R1 — top left" },
     r2: { label: "R2 — top right" },
     r3: { label: "R3 — bottom left" },
-    rx: { label: "Rx — bottom right (unknown)" },
+    rx: { label: "Rx — bottom right" },
   };
 
   function inputsFor(solve) {
@@ -2153,8 +2153,12 @@ function renderWheatstoneBridge(domain, tool, favId) {
     return { name, value: near.value, exact: near.exact };
   }
 
+  // Rx is the resistance being measured, not a part to buy, so a nearest
+  // standard value means nothing there. What does is the ratio R2 / R1 that
+  // multiplies R3 into Rx — the bridge's range setting.
   function detailLine(r) {
     if (problem(r)) return "";
+    if (state.solve === "rx") return `Ratio R2 / R1 = ${trim(r.r2 / r.r1)} &nbsp;·&nbsp; Rx = ${trim(r.r2 / r.r1)} × R3`;
     const std = standardPart(r);
     return std.exact ? `${std.name} standard value` : `${std.name} → nearest ${formatOhms(std.value)}`;
   }
@@ -2215,7 +2219,7 @@ function renderWheatstoneBridge(domain, tool, favId) {
       ${Object.entries(labelPos).map(([name, [x, y, anchor]]) =>
         `<text x="${x}" y="${y}" fill="${tone(name)}" font-size="11" font-weight="600" text-anchor="${anchor}">${name === "rx" ? "Rx" : name.toUpperCase()}</text>`
       ).join("")}
-      <text x="${cx}" y="7" fill="${tone("r1")}" font-size="11" font-weight="600" text-anchor="middle" dy="6">V</text>
+      <text x="${cx}" y="7" fill="${wire}" font-size="11" font-weight="600" text-anchor="middle" dy="6">V</text>
       <path d="M103 138 H117 M105.5 141 H114.5 M108 144 H112" stroke="${wire}" stroke-width="1.5" stroke-linecap="round"/>
     </svg>`;
   }
@@ -2272,7 +2276,7 @@ function renderWheatstoneBridge(domain, tool, favId) {
 
       ${formulaSection(
         ["At balance: R1 / R2 = R3 / Rx", "Rx = R2 × R3 / R1", "R1 = R2 × R3 / Rx", "R2 = R1 × Rx / R3", "R3 = R1 × Rx / R2"],
-        "Balance means the galvanometer reads zero — no separate current or voltage measurement is needed, only the ratio."
+        "A Wheatstone bridge measures an unknown resistance Rx against three known ones. It is two voltage dividers side by side on the same supply V. When their midpoints sit at the same voltage, the meter G between them reads zero: the bridge is balanced, and then R1 / R2 = R3 / Rx whatever V is. In use, R3 is adjusted until G reads zero and Rx is read off as R3 × R2 / R1. Any arm can be solved for here."
       )}
       ${calcFooter()}
     `;
