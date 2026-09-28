@@ -24,6 +24,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [SMD resistor code](#smd-resistor-code)
 - Resistors → [Resistor power rating](#resistor-power-rating)
 - Resistors → [E-series standard values](#e-series-standard-values)
+- Resistors → [Resistors in series and parallel](#resistors-in-series-and-parallel)
 
 ### Digital
 
@@ -402,6 +403,11 @@ E24 gives 100 kΩ, not 91 kΩ.
   parts and is not offered.
 - **Exactly between two values** the lower one is given; both are equally far
   off.
+- **One tolerance, one series.** Throughout the app a tolerance picks exactly
+  one series: ±1% means E96, and the sliders and hints step through E96 only.
+  Manufacturers also sell the E24 values at ±1% — Yageo's RC_L datasheet lists
+  "1% (E24/E96)" — so a 1% 4.7 kΩ part is easy to buy even though the app
+  suggests 4.75 kΩ. The simpler rule is kept on purpose.
 - **Capacitors** follow the same series, but in practice ceramic capacitors are
   mostly stocked in E6 or E12 values, and electrolytics in E3 or E6.
 - The table shows the decade of the nearest value, so the value found is always
@@ -421,6 +427,85 @@ The E6, E12 and E24 lists, including the eight values that differ from the
 formula, match the standard. The table also showed the decade of the typed
 value, so a nearest value in the next decade (97 kΩ → 100 kΩ) was not
 highlighted; it now shows the nearest value's decade.
+
+[↑ Index](#index)
+
+---
+
+<a id="series-parallel"></a>
+## Resistors in series and parallel
+
+`calc: series-parallel` · Passive components › Resistors
+
+### What it computes
+
+The total resistance of two to four resistors connected in series or in
+parallel, the range it can take given the parts' tolerance, and the nearest
+single standard part to that total. Each resistor has a slider that steps
+through standard values.
+
+### Source
+
+Ohm's law and Kirchhoff's laws; no standard is needed beyond them. The
+standard values come from IEC 60063, as in the E-series tool.
+
+### What it means
+
+**In series** — resistors connected end to end, so the same current has to pass
+through each of them in turn. Each one drops a voltage, and the drops add up,
+so the resistances add:
+
+    R = R1 + R2 + R3 + …
+
+The total is always more than the largest one.
+
+**In parallel** — resistors connected side by side between the same two points,
+so each sees the same voltage and the current divides between them. Each gives
+the current another path, so the total is always less than the smallest one.
+It is the conductances, 1/R, that add:
+
+    1/R = 1/R1 + 1/R2 + 1/R3 + …
+    R = R1 × R2 / (R1 + R2)       for two
+
+Two equal resistors in parallel give half of one; ten in parallel, a tenth. A
+resistor much larger than another barely changes it: 1 kΩ in parallel with
+1 MΩ is 999 Ω.
+
+**Why combine them.** The common reason is to get a value the E-series does
+not stock from two it does — 1 kΩ in parallel with 4.7 kΩ is 824.6 Ω, within a
+tenth of a percent of the E96 value 825 Ω. Others: to share the power or the
+voltage between several parts, each within its own rating.
+
+### Tolerance of the total
+
+If every resistor is off by the same fraction in the same direction, the series
+sum and the parallel combination are both off by exactly that fraction. So in
+the worst case the total has the same tolerance as the parts, no better and no
+worse, and that is the range the tool shows. In practice the errors of separate
+parts are independent and partly cancel, so the total is usually closer than
+that — but a worst-case design should not count on it.
+
+### Assumptions and limits
+
+- **Up to four resistors**, all in series or all in parallel. Mixed networks
+  (two in series, in parallel with a third) are worked out in steps: combine
+  one group, then use its total as a single resistor.
+- **A zero-ohm resistor in parallel** shorts the group, and the total is 0.
+- Wire and contact resistance are ignored, which matters only for milliohm
+  values.
+
+### What it deliberately does not do
+
+- **Capacitors and inductors** combine the other way round and have their own
+  tools.
+- **Finding the best pair** for a target value automatically is not done; the
+  sliders make trying pairs quick.
+
+### How it was checked
+
+By hand: 1 k + 2.2 k = 3.2 kΩ; 1 k ∥ 1 k = 500 Ω; 1 k ∥ 4.7 k = 824.6 Ω, nearest
+E96 825 Ω; a third 1 kΩ in parallel gives 451.9 Ω; 1 k ∥ 0 = 0 Ω. The tolerance
+ranges are the total × (1 ± t).
 
 [↑ Index](#index)
 

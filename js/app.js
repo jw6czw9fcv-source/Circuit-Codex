@@ -2480,7 +2480,7 @@ function renderSeriesParallel(domain, tool, favId) {
 
       ${formulaSection(
         ["Series: R = R1 + R2 + R3 + …", "Parallel: 1/R = 1/R1 + 1/R2 + 1/R3 + …", "Parallel (2 only): R = R1 × R2 / (R1 + R2)"],
-        "Series always increases total resistance; parallel always decreases it below the smallest single resistor."
+        "In series the same current flows through every resistor and their resistances add. In parallel they all see the same voltage and the current splits between them, so the total is always less than the smallest one: two equal resistors give half of one. Use it to make a value the E-series does not have out of two it does. The total keeps the parts' tolerance, worst case."
       )}
       ${calcFooter()}
     `;

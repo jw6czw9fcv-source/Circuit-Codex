@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=91dc772b1e" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=4a0e009acb" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -105,7 +105,7 @@ th { background: var(--card); }
 </div>
 <nav id="index" class="index">
   <h2 class="index-title">Index</h2>
-  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
+  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
 </nav>
 
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
@@ -385,6 +385,11 @@ E24 gives 100 kΩ, not 91 kΩ.</p>
   parts and is not offered.</li>
 <li><strong>Exactly between two values</strong> the lower one is given; both are equally far
   off.</li>
+<li><strong>One tolerance, one series.</strong> Throughout the app a tolerance picks exactly
+  one series: ±1% means E96, and the sliders and hints step through E96 only.
+  Manufacturers also sell the E24 values at ±1% — Yageo's RC_L datasheet lists
+  "1% (E24/E96)" — so a 1% 4.7 kΩ part is easy to buy even though the app
+  suggests 4.75 kΩ. The simpler rule is kept on purpose.</li>
 <li><strong>Capacitors</strong> follow the same series, but in practice ceramic capacitors are
   mostly stocked in E6 or E12 values, and electrolytics in E3 or E6.</li>
 <li>The table shows the decade of the nearest value, so the value found is always
@@ -404,6 +409,68 @@ formula, match the standard. The table also showed the decade of the typed
 value, so a nearest value in the next decade (97 kΩ → 100 kΩ) was not
 highlighted; it now shows the nearest value's decade.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A3/e-series">Open the tool</a></p>
+</section>
+<section class="tool" id="series-parallel" style="--accent:#5B9BE0">
+  <div class="crumb">Passive components › Resistors</div>
+  <h2>Resistors in series and parallel</h2>
+  <figure class="shot"><img src="manual/img/series-parallel.jpg?h=aeb1b20aae" loading="lazy" alt="Series/parallel as it appears in the app" width="430" height="932"></figure>
+  <h3>What it computes</h3>
+<p>The total resistance of two to four resistors connected in series or in
+parallel, the range it can take given the parts' tolerance, and the nearest
+single standard part to that total. Each resistor has a slider that steps
+through standard values.</p>
+<h3>Source</h3>
+<p>Ohm's law and Kirchhoff's laws; no standard is needed beyond them. The
+standard values come from IEC 60063, as in the E-series tool.</p>
+<h3>What it means</h3>
+<p><strong>In series</strong> — resistors connected end to end, so the same current has to pass
+through each of them in turn. Each one drops a voltage, and the drops add up,
+so the resistances add:</p>
+<pre><code>R = R1 + R2 + R3 + …
+</code></pre>
+<p>The total is always more than the largest one.</p>
+<p><strong>In parallel</strong> — resistors connected side by side between the same two points,
+so each sees the same voltage and the current divides between them. Each gives
+the current another path, so the total is always less than the smallest one.
+It is the conductances, 1/R, that add:</p>
+<pre><code>1/R = 1/R1 + 1/R2 + 1/R3 + …
+R = R1 × R2 / (R1 + R2)       for two
+</code></pre>
+<p>Two equal resistors in parallel give half of one; ten in parallel, a tenth. A
+resistor much larger than another barely changes it: 1 kΩ in parallel with
+1 MΩ is 999 Ω.</p>
+<p><strong>Why combine them.</strong> The common reason is to get a value the E-series does
+not stock from two it does — 1 kΩ in parallel with 4.7 kΩ is 824.6 Ω, within a
+tenth of a percent of the E96 value 825 Ω. Others: to share the power or the
+voltage between several parts, each within its own rating.</p>
+<h3>Tolerance of the total</h3>
+<p>If every resistor is off by the same fraction in the same direction, the series
+sum and the parallel combination are both off by exactly that fraction. So in
+the worst case the total has the same tolerance as the parts, no better and no
+worse, and that is the range the tool shows. In practice the errors of separate
+parts are independent and partly cancel, so the total is usually closer than
+that — but a worst-case design should not count on it.</p>
+<h3>Assumptions and limits</h3>
+<ul>
+<li><strong>Up to four resistors</strong>, all in series or all in parallel. Mixed networks
+  (two in series, in parallel with a third) are worked out in steps: combine
+  one group, then use its total as a single resistor.</li>
+<li><strong>A zero-ohm resistor in parallel</strong> shorts the group, and the total is 0.</li>
+<li>Wire and contact resistance are ignored, which matters only for milliohm
+  values.</li>
+</ul>
+<h3>What it deliberately does not do</h3>
+<ul>
+<li><strong>Capacitors and inductors</strong> combine the other way round and have their own
+  tools.</li>
+<li><strong>Finding the best pair</strong> for a target value automatically is not done; the
+  sliders make trying pairs quick.</li>
+</ul>
+<h3>How it was checked</h3>
+<p>By hand: 1 k + 2.2 k = 3.2 kΩ; 1 k ∥ 1 k = 500 Ω; 1 k ∥ 4.7 k = 824.6 Ω, nearest
+E96 825 Ω; a third 1 kΩ in parallel gives 451.9 Ω; 1 k ∥ 0 = 0 Ω. The tolerance
+ranges are the total × (1 ± t).</p>
+  <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A4/series-parallel">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Logic gates</div>
