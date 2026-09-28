@@ -1783,7 +1783,22 @@ function eia96Encode(ohms) {
 }
 
 function renderSmdCode(domain, tool, favId) {
-  const state = { mode: "3", ohms: 4700, unit: "kΩ" };
+  const state = { mode: "3", ohms: 4700, unit: pref("smd-code", "unit", "kΩ", Object.keys(OHM_UNITS)) };
+
+  // Markings met on real boards. Each picks its scheme, then reads the code.
+  const example = (mode, code) => () => {
+    state.mode = mode;
+    state.ohms = ohmsFor(code);
+    state.unit = naturalOhmUnit(state.ohms);
+    paint();
+  };
+  useExamples([
+    { title: "103 on a 0603", note: "10 × 10³ = 10 kΩ, the usual ±5% pull-up; three digits, so ±5% parts.", apply: example("3", "103") },
+    { title: "4R7 gate resistor", note: "R is the decimal point: 4.7 Ω, the series resistor in front of a MOSFET gate.", apply: example("3", "4R7") },
+    { title: "1002 on a 1% part", note: "Four digits carry three figures: 100 × 10² = 10.0 kΩ ±1%.", apply: example("4", "1002") },
+    { title: "R010 current shunt", note: "10 mΩ in a 2512 or 1206, for measuring amps with a small voltage drop.", apply: example("4", "R010") },
+    { title: "01C on a small 1% part", note: "EIA-96: the first E96 value, 100, times C (×100) = 10 kΩ, on parts too small for 1002.", apply: example("96", "01C") },
+  ]);
 
   // EIA-96 can only express E96 values, so entering that mode has to pull the
   // current value onto the grid. Without it the screen opens showing a code and
@@ -1875,7 +1890,14 @@ function renderSmdCode(domain, tool, favId) {
     const codeField = app.querySelector("#smd-code");
     const valueField = app.querySelector("#smd-value");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    // A value read from a marking shows in the unit it reads best in (R010 as
+    // 10 mΩ, not 0.00001 kΩ); a value typed keeps its unit.
     if (source !== "value" && document.activeElement !== valueField) {
+      if (state.ohms > 0) {
+        state.unit = naturalOhmUnit(state.ohms);
+        const unitSel = app.querySelector("#smd-unit");
+        if (unitSel) unitSel.value = state.unit;
+      }
       valueField.value = trim(state.ohms / OHM_UNITS[state.unit]);
     }
     app.querySelector('[data-res="err"]').textContent =
@@ -1974,6 +1996,7 @@ function renderSmdCode(domain, tool, favId) {
     valueField.oninput = () => applyValue(valueField.value);
     document.getElementById("smd-unit").onchange = (e) => {
       state.unit = e.target.value;
+      setPref("smd-code", "unit", state.unit);
       applyValue(valueField.value);
     };
   }

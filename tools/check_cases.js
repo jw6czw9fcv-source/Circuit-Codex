@@ -33,6 +33,12 @@ const CHECK_CASES = {
     { name: "4992 is 49.9 k", do: [["pill", 1], ["set", "#smd-code", "4992"]], expect: [['[data-res="ohms"]', "49.9 kΩ"]] },
     { name: "10 mΩ marks R010", do: [["pill", 1], ["set", "#smd-unit", "Ω"], ["set", "#smd-value", "0.01"]], expect: [["#smd-code", "R010"]] },
     { name: "EIA-96 01C is 10 k", do: [["pill", 2], ["set", "#smd-code", "01C"]], expect: [['[data-res="ohms"]', "10 kΩ"]] },
+    { name: "a code reads out in its natural unit", do: [["pill", 1], ["set", "#smd-code", "R010"]], expect: [["#smd-value", "10"], ["#smd-unit", "mΩ"]] },
+    { name: "example: R010 shunt", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="3"]']],
+      expect: [['[data-res="ohms"]', "10 mΩ"], ["#smd-code", "R010"], [".pill.active", "4 digit"]] },
+    { name: "example: 01C", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="4"]']],
+      expect: [['[data-res="ohms"]', "10 kΩ"], [".pill.active", "EIA-96"]] },
+    { name: "the chosen unit is remembered", do: [["set", "#smd-unit", "Ω"], ["reopen"]], expect: [["#smd-unit", "Ω"]] },
   ],
   "e-series": [
     { name: "9.2 k is E192 (IEC 60063's 920)", do: [["pill", 5], ["set", "#es-unit", "kΩ"], ["set", "#es-value", "9.2"]],
