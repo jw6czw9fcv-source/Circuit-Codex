@@ -33,6 +33,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [Ceramic capacitor code](#ceramic-capacitor-code)
 - Capacitors → [Film capacitor code](#film-capacitor-code)
 - Capacitors → [SMD capacitor code](#smd-capacitor-code)
+- Capacitors → [Capacitors in series and parallel](#capacitors-in-series-and-parallel)
 
 ### Digital
 
@@ -1216,6 +1217,91 @@ The review made the tool read a voltage letter printed before the digits
 (J106 was rejected), applied the 8 and 9 multipliers and R-code length fix
 from the ceramic tool, limited the units to pF, nF and µF, and made the drawing
 show the marking as typed.
+
+[↑ Index](#index)
+
+---
+
+<a id="cap-series-parallel"></a>
+## Capacitors in series and parallel
+
+`calc: cap-series-parallel` · Passive components › Capacitors
+
+### What it computes
+
+The total capacitance of two to four capacitors in parallel or in series, the
+range it can take given their tolerance, and the nearest single standard value.
+Each capacitor has a slider that steps through standard values.
+
+### Source
+
+The charge relation Q = C × V applied to parts sharing a voltage (parallel) or a
+charge (series); standard values from IEC 60063.
+
+### What it means
+
+Capacitors combine the **opposite way to resistors**.
+
+**In parallel** — side by side between the same two points. Each has the same
+voltage across it and stores its own charge, so the charges add, and so do the
+capacitances — it is as if the plates were one larger plate:
+
+    C = C1 + C2 + C3 + …
+
+A 100 nF and a 10 µF in parallel make 10.1 µF. This is how a board gets both a
+large capacitance for slow supply dips and a small one for fast noise: in
+parallel they add, and each does the part of the job it is good at.
+
+**In series** — end to end. The same charge has to appear on every capacitor
+in turn, and their voltages add up to the total, so it is the reciprocals that
+add:
+
+    1/C = 1/C1 + 1/C2 + 1/C3 + …
+    C = C1 × C2 / (C1 + C2)       for two
+
+The total is always less than the smallest one. Two equal capacitors give half
+of one; 1 µF in series with 10 µF gives 909 nF, a little less than the 1 µF.
+
+### Voltage in series
+
+The reason to put capacitors in series is usually voltage: two 2.7 V
+supercapacitors in series make a part that can be charged to 5.4 V. But the
+voltage does not split evenly on its own. With the same charge on each,
+
+    V1 / V2 = C2 / C1
+
+so the **smaller** capacitor takes the **larger** share of the voltage. Real
+capacitors differ by their tolerance and by their leakage, so one of them can
+be pushed past its rating. Series capacitors that are meant to share a voltage —
+supercapacitors, electrolytics in a high-voltage supply — get a resistor
+across each one, or an active balancing circuit, to hold the split even.
+
+### Tolerance of the total
+
+As for resistors, if every part is off by the same fraction in the same
+direction the total is off by exactly that fraction, so the worst-case range is
+the total × (1 ± t). Many capacitors have wide tolerances — ±10% or ±20% for
+ceramics and electrolytics, and some ceramics +80/−20% — so the range is often
+the more important number.
+
+### Assumptions and limits
+
+- **Up to four capacitors**, all in series or all in parallel.
+- **Nominal values.** Class 2 ceramics lose capacitance with applied DC voltage
+  and with temperature; electrolytics lose it as they age. The total is only as
+  good as the values typed in.
+- Leakage, ESR and inductance are ignored.
+
+### What it deliberately does not do
+
+- **Balancing resistor values** for series capacitors are not calculated.
+- **Resistors** have their own series/parallel tool.
+
+### How it was checked
+
+By hand: 100 nF + 100 nF in parallel is 200 nF, in series 50 nF; 1 µF and
+10 µF in series give 909.1 nF; two 2.7 F supercapacitors in series give 1.35 F.
+The ranges are the total × (1 ± t).
 
 [↑ Index](#index)
 

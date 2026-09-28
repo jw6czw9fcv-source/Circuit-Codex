@@ -2705,7 +2705,7 @@ function renderCapSeriesParallel(domain, tool, favId) {
 
       ${formulaSection(
         ["Parallel: C = C1 + C2 + C3 + …", "Series: 1/C = 1/C1 + 1/C2 + 1/C3 + …", "Series (2 only): C = C1 × C2 / (C1 + C2)"],
-        "The opposite of resistors: parallel always increases total capacitance; series always decreases it below the smallest single capacitor."
+        "Capacitors combine the opposite way to resistors. In parallel their plates add up, so the capacitances add. In series the charge must cross every one in turn, so the total is always less than the smallest: two equal capacitors give half of one. In series the voltage splits in inverse proportion to capacitance, so the smallest capacitor takes the most. Two 2.7 V supercapacitors in series make a 5.4 V part only if a resistor across each one keeps the split even. The total keeps the parts' tolerance, worst case."
       )}
       ${calcFooter()}
     `;
