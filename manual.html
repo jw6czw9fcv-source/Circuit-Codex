@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=f0791bf70b" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=89352cc2f3" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -105,7 +105,7 @@ th { background: var(--card); }
 </div>
 <nav id="index" class="index">
   <h2 class="index-title">Index</h2>
-  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li><li><a href="#voltage-divider"><span class="i-name">Voltage divider</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
+  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li><li><a href="#voltage-divider"><span class="i-name">Voltage divider</span><span class="i-sec">Resistors</span></a></li><li><a href="#current-divider"><span class="i-name">Current divider</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
 </nav>
 
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
@@ -545,6 +545,68 @@ each. 10 k over 4.7 k gives 3.837 V, 3.78–3.89 V (±1.37%). R1 for 12 V to
 5 V to 3.3 V with R1 = 10 kΩ is 19.41 kΩ, E96 19.6 kΩ giving 3.31 V. Vout equal
 to Vin, or below zero, is refused with a reason.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A5/voltage-divider">Open the tool</a></p>
+</section>
+<section class="tool" id="current-divider" style="--accent:#5B9BE0">
+  <div class="crumb">Passive components › Resistors</div>
+  <h2>Current divider</h2>
+  <figure class="shot"><img src="manual/img/current-divider.jpg?h=c99801d752" loading="lazy" alt="Current divider as it appears in the app" width="430" height="932"></figure>
+  <h3>What it computes</h3>
+<p>For a current flowing into two resistors in parallel, any one of the current in
+the first branch I1, R1 or R2, from the other three. It also gives the current
+in the second branch, the voltage across both, the spread of I1 from the
+resistors' tolerance, and when a resistor is solved for, the nearest standard
+value and the current it would give.</p>
+<h3>Source</h3>
+<p>Ohm's law and Kirchhoff's current law; standard values from IEC 60063.</p>
+<h3>What it means</h3>
+<p>When a current reaches two resistors connected in parallel, it splits: part
+goes through each branch and the two parts add back up to the whole
+(Kirchhoff's current law). Both branches have the same voltage across them, so
+by Ohm's law each takes a current inversely proportional to its resistance —
+the easier path takes more:</p>
+<pre><code>I1 = Iin × R2 / (R1 + R2)
+I2 = Iin × R1 / (R1 + R2)
+</code></pre>
+<p>This is the voltage divider turned inside out, and the place people trip: the
+current in branch 1 is set by the <em>other</em> resistor, R2. With 20 mA into 1 kΩ in
+parallel with 2 kΩ, the 1 kΩ branch takes two thirds, 13.3 mA, and the 2 kΩ
+branch one third, 6.7 mA.</p>
+<p>Solved for a resistor:</p>
+<pre><code>R1 = R2 × (Iin − I1) / I1
+R2 = R1 × I1 / (Iin − I1)
+</code></pre>
+<p><strong>Where it is used.</strong> Shunts that extend a meter's range (a small resistor in
+parallel takes most of the current, the meter a known fraction), sharing
+current between parallel parts, and understanding why a low-value resistor
+in parallel with a circuit steals most of its current.</p>
+<h3>Tolerance</h3>
+<p>As with the voltage divider, I1 is furthest off when the two resistors miss in
+opposite directions, so the spread of I1 can exceed the parts' own tolerance.
+When I1 is the larger share, it is less sensitive: 1 k ∥ 2 k at ±1% moves I1 by
+only ±0.66%, because most of the error lands in the smaller branch current.</p>
+<h3>Assumptions and limits</h3>
+<ul>
+<li><strong>The total current is taken as given</strong>, as if from a current source. In a
+  real circuit fed from a voltage, Iin itself depends on R1 ∥ R2.</li>
+<li><strong>Two branches.</strong> For more, combine all but one into a single resistance
+  first with the Series/parallel tool.</li>
+<li>I1 must be between 0 and Iin when solving for a resistor.</li>
+<li>The standard value offered is from the one series the chosen tolerance
+  implies.</li>
+</ul>
+<h3>What it deliberately does not do</h3>
+<ul>
+<li><strong>Power in each branch</strong> is not shown; the voltage across the branches is,
+  and P = V² / R from there.</li>
+</ul>
+<h3>How it was checked</h3>
+<p>By hand: 20 mA into 1 k ∥ 1 k is 10 mA each at 10 V; into 1 k ∥ 2 k, 13.33 mA
+and 6.67 mA at 13.3 V, I1 between 13.2 and 13.4 mA at ±1%. R1 for 15 mA of
+20 mA with R2 = 1 kΩ is 333.3 Ω, E96 332 Ω. R2 for 5 mA of 20 mA with
+R1 = 1 kΩ is 333.3 Ω. I1 above Iin is refused. The review labelled the
+voltage in the result line, which had been a bare "10 V" with nothing to say
+what it was.</p>
+  <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A6/current-divider">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Logic gates</div>

@@ -1967,7 +1967,7 @@ function renderCurrentDivider(domain, tool, favId) {
       const { lo, hi } = branchSpread(r);
       const drift = ((hi - r.i1) / r.i1) * 100;
       return `${siFormat(lo, "A", 3)} – ${siFormat(hi, "A", 3)} (±${Number(drift.toFixed(2))}%)`
-        + ` &nbsp;·&nbsp; I2 ${siFormat(r.i2, "A", 3)} &nbsp;·&nbsp; ${siFormat(r.volts, "V", 3)}`;
+        + ` &nbsp;·&nbsp; I2 ${siFormat(r.i2, "A", 3)} &nbsp;·&nbsp; across ${siFormat(r.volts, "V", 3)}`;
     }
     const std = standardPart(r);
     const suffix = std.exact ? "is standard" : `→ ${formatOhms(std.value)}, I1 ${siFormat(std.i1, "A", 3)}`;
@@ -2051,7 +2051,7 @@ function renderCurrentDivider(domain, tool, favId) {
 
       ${formulaSection(
         ["I1 = Iin × R2 / (R1 + R2)", "I2 = Iin × R1 / (R1 + R2)", "R1 = R2 × (Iin − I1) / I1", "R2 = R1 × I1 / (Iin − I1)"],
-        "The smaller resistor carries the larger share — branches split inversely to their resistance."
+        "Resistors in parallel share one current between them. Each branch takes a share inversely proportional to its resistance, so the smaller resistor carries the larger share: R1 appears in I2's formula, not I1's. Pick which of I1, R1 or R2 to find. The line under the result gives I1's worst-case spread from the tolerance, the other branch's current I2, and the voltage across both branches."
       )}
       ${calcFooter()}
     `;

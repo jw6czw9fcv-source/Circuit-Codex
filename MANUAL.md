@@ -26,6 +26,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [E-series standard values](#e-series-standard-values)
 - Resistors → [Resistors in series and parallel](#resistors-in-series-and-parallel)
 - Resistors → [Voltage divider](#voltage-divider)
+- Resistors → [Current divider](#current-divider)
 
 ### Digital
 
@@ -601,6 +602,84 @@ each. 10 k over 4.7 k gives 3.837 V, 3.78–3.89 V (±1.37%). R1 for 12 V to
 3.3 V with R2 = 10 kΩ is 26.36 kΩ, nearest E96 26.1 kΩ giving 3.32 V. R2 for
 5 V to 3.3 V with R1 = 10 kΩ is 19.41 kΩ, E96 19.6 kΩ giving 3.31 V. Vout equal
 to Vin, or below zero, is refused with a reason.
+
+[↑ Index](#index)
+
+---
+
+<a id="current-divider"></a>
+## Current divider
+
+`calc: current-divider` · Passive components › Resistors
+
+### What it computes
+
+For a current flowing into two resistors in parallel, any one of the current in
+the first branch I1, R1 or R2, from the other three. It also gives the current
+in the second branch, the voltage across both, the spread of I1 from the
+resistors' tolerance, and when a resistor is solved for, the nearest standard
+value and the current it would give.
+
+### Source
+
+Ohm's law and Kirchhoff's current law; standard values from IEC 60063.
+
+### What it means
+
+When a current reaches two resistors connected in parallel, it splits: part
+goes through each branch and the two parts add back up to the whole
+(Kirchhoff's current law). Both branches have the same voltage across them, so
+by Ohm's law each takes a current inversely proportional to its resistance —
+the easier path takes more:
+
+    I1 = Iin × R2 / (R1 + R2)
+    I2 = Iin × R1 / (R1 + R2)
+
+This is the voltage divider turned inside out, and the place people trip: the
+current in branch 1 is set by the *other* resistor, R2. With 20 mA into 1 kΩ in
+parallel with 2 kΩ, the 1 kΩ branch takes two thirds, 13.3 mA, and the 2 kΩ
+branch one third, 6.7 mA.
+
+Solved for a resistor:
+
+    R1 = R2 × (Iin − I1) / I1
+    R2 = R1 × I1 / (Iin − I1)
+
+**Where it is used.** Shunts that extend a meter's range (a small resistor in
+parallel takes most of the current, the meter a known fraction), sharing
+current between parallel parts, and understanding why a low-value resistor
+in parallel with a circuit steals most of its current.
+
+### Tolerance
+
+As with the voltage divider, I1 is furthest off when the two resistors miss in
+opposite directions, so the spread of I1 can exceed the parts' own tolerance.
+When I1 is the larger share, it is less sensitive: 1 k ∥ 2 k at ±1% moves I1 by
+only ±0.66%, because most of the error lands in the smaller branch current.
+
+### Assumptions and limits
+
+- **The total current is taken as given**, as if from a current source. In a
+  real circuit fed from a voltage, Iin itself depends on R1 ∥ R2.
+- **Two branches.** For more, combine all but one into a single resistance
+  first with the Series/parallel tool.
+- I1 must be between 0 and Iin when solving for a resistor.
+- The standard value offered is from the one series the chosen tolerance
+  implies.
+
+### What it deliberately does not do
+
+- **Power in each branch** is not shown; the voltage across the branches is,
+  and P = V² / R from there.
+
+### How it was checked
+
+By hand: 20 mA into 1 k ∥ 1 k is 10 mA each at 10 V; into 1 k ∥ 2 k, 13.33 mA
+and 6.67 mA at 13.3 V, I1 between 13.2 and 13.4 mA at ±1%. R1 for 15 mA of
+20 mA with R2 = 1 kΩ is 333.3 Ω, E96 332 Ω. R2 for 5 mA of 20 mA with
+R1 = 1 kΩ is 333.3 Ω. I1 above Iin is refused. The review labelled the
+voltage in the result line, which had been a bare "10 V" with nothing to say
+what it was.
 
 [↑ Index](#index)
 
