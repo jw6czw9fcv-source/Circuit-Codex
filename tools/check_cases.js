@@ -73,6 +73,16 @@ const CHECK_CASES = {
   "series-parallel": [
     { name: "1 k + 1 k", do: [], expect: [['[data-res="total"]', "2 kΩ"]] },
     { name: "1 k ∥ 1 k", do: [["pill", 1]], expect: [['[data-res="total"]', "500 Ω"]] },
+    { name: "example: 10 k ∥ 10 k is 5 k", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="total"]', "5 kΩ"], [".pill.active", "Parallel"], ["#sp-tol", "5"]] },
+    { name: "example: 1 k + 2.2 k, nearest single 3.3 k", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="total"]', "3.2 kΩ"], ['[data-res="detail"]', "/nearest single E24 3.3 kΩ/"]] },
+    { name: "example: four 470 Ω in parallel", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="total"]', "117.5 Ω"]] },
+    { name: "example: 1 k ∥ 1 M", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="3"]']],
+      expect: [['[data-res="total"]', "999 Ω"]] },
+    { name: "the mode and tolerance are remembered", do: [["pill", 1], ["set", "#sp-tol", "5"], ["reopen"]],
+      expect: [[".pill.active", "Parallel"], ["#sp-tol", "5"]] },
   ],
   "voltage-divider": [
     { name: "12 V, 10 k / 10 k", do: [], expect: [['[data-res="solved"]', "6 V"]] },

@@ -2878,14 +2878,32 @@ function renderWheatstoneBridge(domain, tool, favId) {
 const SP_MAX = 4;
 
 function renderSeriesParallel(domain, tool, favId) {
+  const C = "series-parallel";
   const state = {
-    mode: "series",
-    tol: 1,
+    mode: pref(C, "mode", "series", ["series", "parallel"]),
+    tol: pref(C, "tol", 1, [0.1, 0.5, 1, 2, 5, 10]),
     rows: [
       { value: 1, unit: "kΩ" },
       { value: 1, unit: "kΩ" },
     ],
   };
+
+  // Everyday reasons to combine resistors. Each sets the connection, the
+  // parts' tolerance and the values.
+  const example = (mode, tol, rows) => () => {
+    Object.assign(state, { mode, tol, rows: rows.map(([value, unit]) => ({ value, unit })) });
+    paint();
+  };
+  useExamples([
+    { title: "Two 10 kΩ in parallel", note: "Equal resistors in parallel give half of one: 5 kΩ, a value E24 does not have.",
+      apply: example("parallel", 5, [[10, "kΩ"], [10, "kΩ"]]) },
+    { title: "1 kΩ + 2.2 kΩ in series", note: "In series they add: 3.2 kΩ. The nearest single ±5% part is 3.3 kΩ.",
+      apply: example("series", 5, [[1, "kΩ"], [2.2, "kΩ"]]) },
+    { title: "Four 470 Ω to share the heat", note: "117.5 Ω, and each takes a quarter of the power: four 0.1 W 0603s handle 0.4 W.",
+      apply: example("parallel", 5, [[470, "Ω"], [470, "Ω"], [470, "Ω"], [470, "Ω"]]) },
+    { title: "1 kΩ with 1 MΩ across it", note: "A much larger resistor in parallel barely changes it: 999 Ω.",
+      apply: example("parallel", 5, [[1, "kΩ"], [1, "MΩ"]]) },
+  ]);
 
   function ohmsOf(row) {
     return row.value * DIVIDER_R_UNITS[row.unit];
@@ -3050,7 +3068,7 @@ function renderSeriesParallel(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
     app.querySelectorAll("input[data-row]").forEach(input => {
       input.oninput = () => {
@@ -3075,6 +3093,7 @@ function renderSeriesParallel(domain, tool, favId) {
     };
     document.getElementById("sp-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);
+      setPref(C, "tol", state.tol);
       updateResults();
     };
     state.rows.forEach((row, i) => {
