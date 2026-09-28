@@ -30,6 +30,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Wheatstone bridge](#wheatstone-bridge)
 - Resistors → [Delta-Y transform](#delta-y-transform)
 - Resistors → [NTC/PTC thermistor](#ntcptc-thermistor)
+- Capacitors → [Ceramic capacitor code](#ceramic-capacitor-code)
 
 ### Digital
 
@@ -950,6 +951,98 @@ The review made the temperature field accept negative values on an iPhone,
 whose number keypad has no minus key; limited the resistance units to Ω, kΩ
 and MΩ; and replaced the table of "typical" B values, which had no source,
 with the Vishay figures.
+
+[↑ Index](#index)
+
+---
+
+<a id="ceramic-code"></a>
+## Ceramic capacitor code
+
+`calc: ceramic-code` · Passive components › Capacitors
+
+### What it computes
+
+The capacitance and tolerance printed on a ceramic capacitor as a three- or
+four-digit code with an optional letter, and the other way round: the marking
+for a value. It says whether the value is a standard E-series value.
+
+### Source
+
+- **EIA-198** (RS-198), the code for ceramic capacitors: digits in picofarads,
+  with 8 and 9 as the multipliers ×0.01 and ×0.1 for values under 10 pF.
+- **IEC 60062:2016**, for R as the decimal point and the tolerance letters.
+
+### What the marking means
+
+Ceramic disc and small film capacitors have no room for "100 nF", so the value
+is printed as a code, always counted in **picofarads** (pF). 1 nF is 1000 pF,
+and 1 µF is 1 000 000 pF.
+
+- **Three digits** — the first two are the value's figures, the last is how many
+  zeros follow them. 104 is 10 followed by four zeros: 100 000 pF, which is
+  100 nF or 0.1 µF — the most common capacitor there is. 472 is 4700 pF, 4.7 nF.
+  220 is 22 pF, not 220 pF.
+- **Small values** — below 10 pF there is no zero count small enough, so the
+  last digit 9 means ×0.1 and 8 means ×0.01: 479 is 47 × 0.1 = 4.7 pF, 109 is
+  1.0 pF. Some makers write R for the decimal point instead: 4R7 is 4.7 pF.
+- **Four digits** — three figures and a multiplier, for closer values: 1002 is
+  10 000 pF, 10 nF.
+- **A letter after the digits** is the tolerance:
+
+| Letter | 10 pF and below | Above 10 pF |
+|---|---|---|
+| B | ±0.1 pF | ±0.1% |
+| C | ±0.25 pF | ±0.25% |
+| D | ±0.5 pF | ±0.5% |
+| F | ±1 pF | ±1% |
+| G | ±2 pF | ±2% |
+| J | | ±5% |
+| K | | ±10% |
+| M | | ±20% |
+| Z | | +80% / −20% |
+
+  Small capacitors use a tolerance in picofarads because a percentage of a few
+  picofarads would be a fraction of the stray capacitance of the leads. Z is
+  typical of cheap high-capacitance ceramics, whose value is mostly guaranteed
+  not to be too low.
+
+So **473K** is 47 nF ±10%, **104M** 100 nF ±20%, **220J** 22 pF ±5%.
+
+**Other markings on the part.** A code such as **X7R**, **X5R**, **C0G** or
+**NP0** is the dielectric, which says how the capacitance changes with
+temperature and voltage — C0G/NP0 barely at all, X7R by ±15% over −55 to
++125 °C, Y5V by much more. A number followed by V, or a code such as 1H or 2A,
+is the voltage rating. Neither is part of the value code.
+
+### Assumptions and limits
+
+- **The value is nominal.** Class 2 ceramics (X7R, X5R, Y5V) lose capacitance
+  with DC voltage applied: a 10 µF X5R part can be well under half of that at
+  its rated voltage. The code says nothing about it; the datasheet's DC-bias
+  curve does.
+- **SMD ceramic chips are almost never marked**: they are too small, and the
+  value is only on the reel. The code is mostly seen on through-hole discs and
+  on film capacitors.
+- A value typed in is encoded with R below 10 pF (4R7); the 479 form means the
+  same and is read as well.
+
+### What it deliberately does not do
+
+- **Film capacitor markings** such as 4n7 and the voltage codes have the Film
+  code tool; **SMD capacitor** two-character codes have their own tool.
+
+### How it was checked
+
+104 → 100 nF, 473K → 47 nF ±10%, 220J → 22 pF ±5%, 106M → 10 µF ±20%,
+4R7 → 4.7 pF, 8R2C → 8.2 pF ±0.25 pF.
+
+The review found three faults, now fixed. Codes ending in 8 or 9 were read as
+powers of ten, so 479 came out as 47 mF instead of 4.7 pF; they now follow
+EIA-198. B, C and D above 10 pF were read as picofarads, so 101D showed
+±0.5 pF instead of ±0.5%. And the units offered ran to millifarads and farads,
+which no ceramic capacitor reaches; they are now pF, nF and µF. The drawing now
+shows the marking as typed (479 stays 479 rather than becoming 4R7).
 
 [↑ Index](#index)
 

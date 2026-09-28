@@ -5128,12 +5128,15 @@ function renderInductorSmdCode(domain, tool, favId) {
 // the same letters F/G, plus J/K/M/Z, switch to a ± percentage instead. Both
 // tables are real EIA-198 letters, not a simplification — F and G legitimately
 // mean two different things depending on which side of 10 pF the value falls.
+// B, C and D are percentages above 10 pF as well, per IEC 60062 (the same
+// letters as a resistor's ±0.1, ±0.25 and ±0.5%); this table once had them as
+// pF only, so a 100 pF "D" part read as ±0.5 pF.
 const CERAMIC_TOL_ABS = { B: 0.1, C: 0.25, D: 0.5, F: 1, G: 2 }; // pF, value ≤ 10 pF
-const CERAMIC_TOL_PCT = { F: 1, G: 2, J: 5, K: 10, M: 20, Z: "+80% / −20%" }; // %, value > 10 pF
+const CERAMIC_TOL_PCT = { B: 0.1, C: 0.25, D: 0.5, F: 1, G: 2, J: 5, K: 10, M: 20, Z: "+80% / −20%" }; // %, value > 10 pF
 const CERAMIC_TOL_LABEL = {
-  B: "±0.1 pF (≤10 pF)",
-  C: "±0.25 pF (≤10 pF)",
-  D: "±0.5 pF (≤10 pF)",
+  B: "±0.1 pF (≤10 pF) / ±0.1%",
+  C: "±0.25 pF (≤10 pF) / ±0.25%",
+  D: "±0.5 pF (≤10 pF) / ±0.5%",
   F: "±1 pF (≤10 pF) / ±1%",
   G: "±2 pF (≤10 pF) / ±2%",
   J: "±5%",
@@ -5145,6 +5148,8 @@ const CERAMIC_TOL_LETTERS = new Set([...Object.keys(CERAMIC_TOL_ABS), ...Object.
 
 function renderCeramicCode(domain, tool, favId) {
   const state = { mode: "3", farads: 100e-9, unit: "nF", tol: "" };
+  // Ceramic capacitors run from a fraction of a picofarad to around 100 µF.
+  const CER_UNITS = { pF: 1e-12, nF: 1e-9, "µF": 1e-6 };
 
   function sig() {
     return state.mode === "3" ? 2 : 3;
@@ -5161,8 +5166,13 @@ function renderCeramicCode(domain, tool, favId) {
     const exponent = e - n + 1;
     if (exponent > 9) return null;
     if (exponent >= 0) return d + String(exponent);
-    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
-    return code.length <= digits + 1 ? code : null;
+    // Below that, R takes the decimal point's place and the marking keeps its
+    // length: 4R7 on three characters, 4R70 on four.
+    const frac = digits - 1 - Math.max(0, e + 1);
+    const fixed = pF.toFixed(frac);
+    if (Number(fixed) === 0) return null;
+    const [whole, part] = fixed.split(".");
+    return `${whole === "0" ? "" : whole}R${part || ""}`;
   }
 
   function codeFor(farads) {
@@ -5187,7 +5197,12 @@ function renderCeramicCode(domain, tool, favId) {
     if (!/^[0-9]+$/.test(str) || str.length !== digits) return { farads: NaN, tol };
     if (Number(str) === 0) return { farads: 0, tol };
     const n = sig();
-    const pF = Number(str.slice(0, n)) * Math.pow(10, Number(str.slice(n)));
+    // On a 3-digit capacitor code a last digit of 8 or 9 is not 10^8 or 10^9
+    // but ×0.01 and ×0.1 (EIA-198): 479 is 4.7 pF, 109 is 1.0 pF. Read as
+    // powers of ten they would be tens of millifarads.
+    const last = Number(str.slice(n));
+    const mult = digits === 3 && last === 9 ? 0.1 : digits === 3 && last === 8 ? 0.01 : Math.pow(10, last);
+    const pF = Number(str.slice(0, n)) * mult;
     return { farads: pF * 1e-12, tol };
   }
 
@@ -5224,9 +5239,12 @@ function renderCeramicCode(domain, tool, favId) {
     </svg>`;
   }
 
+  // The disc shows what is printed on the part: when a marking was typed, that
+  // marking — 479 stays 479 rather than turning into the equivalent 4R7.
   function refresh(source, notice) {
     const code = codeFor(state.farads);
-    app.querySelector(".diagram-box").innerHTML = disc(code);
+    const typed = source === "code" ? app.querySelector("#cer-code").value.trim().toUpperCase() : "";
+    app.querySelector(".diagram-box").innerHTML = disc(typed || code);
     app.querySelector('[data-res="value"]').textContent = formatFarads(state.farads);
     app.querySelector('[data-res="series"]').textContent = seriesLine(state.farads);
     app.querySelector('[data-res="tol"]').textContent = tolText(state.tol, state.farads);
@@ -5235,7 +5253,7 @@ function renderCeramicCode(domain, tool, favId) {
     const tolField = app.querySelector("#cer-tol");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
     if (source !== "value" && document.activeElement !== valueField) {
-      valueField.value = trim(state.farads / CAP_UNITS[state.unit]);
+      valueField.value = trim(state.farads / CER_UNITS[state.unit]);
     }
     if (document.activeElement !== tolField) tolField.value = state.tol;
     app.querySelector('[data-res="err"]').textContent =
@@ -5243,7 +5261,7 @@ function renderCeramicCode(domain, tool, favId) {
   }
 
   function applyValue(raw) {
-    const v = parseFloat(raw) * CAP_UNITS[state.unit];
+    const v = parseFloat(raw) * CER_UNITS[state.unit];
     if (!isFinite(v) || v < 0) return;
     state.farads = v;
     refresh("value");
@@ -5270,8 +5288,8 @@ function renderCeramicCode(domain, tool, favId) {
       <div class="field">
         <label>Capacitance</label>
         <div class="field-row">
-          <input id="cer-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / CAP_UNITS[state.unit])}" />
-          <select id="cer-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <input id="cer-value" type="number" inputmode="decimal" step="any" value="${trim(state.farads / CER_UNITS[state.unit])}" />
+          <select id="cer-unit">${Object.keys(CER_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
         </div>
       </div>
       <div class="field">
@@ -5298,7 +5316,7 @@ function renderCeramicCode(domain, tool, favId) {
 
       ${formulaSection(
         [`Value = (${sig() === 2 ? "D1D2" : "D1D2D3"}) × 10^${sig() === 2 ? "D3" : "D4"}, in pF`],
-        "R replaces the decimal point below 10 pF (4R7 = 4.7 pF). The trailing letter sets tolerance — B/C/D/F/G give an absolute ± in pF at or below 10 pF, while F/G/J/K/M/Z switch to a ± percentage above that. This is the same code on SMD ceramic chips, though those are rarely printed with it — too small to carry text, so the reel is marked instead. Parts often also carry a separate temperature-coefficient/dielectric code (C0G/NP0, X7R, X5R, Y5V…) — that's a different marking, not part of this numeric code."
+        "The code gives the capacitance in picofarads. The last digit is how many zeros follow the others: 104 is 10 and four zeros, 100 000 pF = 100 nF; 472 is 4.7 nF. Below 10 pF the last digit 9 means ×0.1 and 8 means ×0.01 (479 = 4.7 pF), or R marks the decimal point (4R7). A trailing letter is the tolerance: J ±5%, K ±10%, M ±20%, Z +80/−20%; at 10 pF and below, B, C, D, F and G are ± in pF instead of %. Another code on the part, such as X7R or C0G, is the dielectric, and a number with V is the voltage rating. Codes follow EIA-198 and IEC 60062."
       )}
       ${calcFooter()}
     `;
