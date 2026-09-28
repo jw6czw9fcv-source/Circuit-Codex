@@ -2036,9 +2036,29 @@ function renderSmdCode(domain, tool, favId) {
 const E_TOLERANCE = { E6: "±20%", E12: "±10%", E24: "±5%", E48: "±2%", E96: "±1%", E192: "±0.5%" };
 
 function renderESeries(domain, tool, favId) {
-  const state = { series: "E24", ohms: 4700, unit: "kΩ" };
+  const C = "e-series";
+  const state = {
+    series: pref(C, "series", "E24", Object.keys(E_TOLERANCE)),
+    ohms: 4700,
+    unit: pref(C, "unit", "kΩ", Object.keys(OHM_UNITS)),
+  };
 
-
+  // Values that come out of a calculation and have to be bought. Each picks
+  // the series of the parts at hand and the value, shown in its own unit.
+  const example = (series, ohms) => () => {
+    Object.assign(state, { series, ohms, unit: naturalOhmUnit(ohms) });
+    paint();
+  };
+  useExamples([
+    { title: "Divider for 3.3 V from 12 V", note: "R1 works out at 26.36 kΩ; in ±1% parts the nearest is 26.1 kΩ, which gives 3.32 V.",
+      apply: example("E96", 26360) },
+    { title: "LED resistor of 158 Ω", note: "(5 V − 2 V) / 19 mA; in ±5% parts that is 160 Ω, 1.3% more, so slightly less current.",
+      apply: example("E24", 158) },
+    { title: "4.7 kΩ in ±1% parts", note: "4.7 is not in E96: the nearest is 4.75 kΩ. (Makers do sell 4.7 kΩ at 1%, as an E24 value.)",
+      apply: example("E96", 4700) },
+    { title: "97 kΩ in E24", note: "The nearest is 100 kΩ, in the next decade; the table below follows it there.",
+      apply: example("E24", 97000) },
+  ]);
 
   // The decade the nearest value sits in, and the factor that puts a table
   // mantissa into it. E6/E12/E24 are listed two-digit, the rest three-digit.
@@ -2125,7 +2145,7 @@ function renderESeries(domain, tool, favId) {
       ${calcFooter(`Table follows the decade of your value &nbsp;·&nbsp; ${E_TOLERANCE[state.series]} parts`)}
     `;
 
-    wireCalc(favId, paint, (v) => { state.series = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.series = v; setPref(C, "series", v); paint(); });
 
     const field = document.getElementById("es-value");
     field.oninput = () => {
@@ -2134,6 +2154,7 @@ function renderESeries(domain, tool, favId) {
     };
     document.getElementById("es-unit").onchange = (e) => {
       state.unit = e.target.value;
+      setPref(C, "unit", state.unit);
       const v = parseFloat(field.value) * OHM_UNITS[state.unit];
       if (isFinite(v) && v > 0) state.ohms = v;
       refresh();
