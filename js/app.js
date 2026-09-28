@@ -259,6 +259,7 @@ const ICONS = {
   chevronLeft: `<svg viewBox="0 0 24 24" fill="none"><path d="M15 5 L8 12 L15 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   chevronRight: `<svg viewBox="0 0 24 24" fill="none"><path d="M9 5 L16 12 L9 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   book: `<svg viewBox="0 0 24 24" fill="none"><path d="M12 6.5 C10 5 7 4.5 3.5 5 V18.5 C7 18 10 18.5 12 20 C14 18.5 17 18 20.5 18.5 V5 C17 4.5 14 5 12 6.5 Z M12 6.5 V20" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+  bulb: `<svg viewBox="0 0 24 24" fill="none"><path d="M9 18 H15 M10 21 H14 M12 3 C8.1 3 5.5 6 5.5 9.3 C5.5 11.6 6.7 13.2 8.2 14.4 C8.9 15 9.2 15.7 9.2 16.5 V17 H14.8 V16.5 C14.8 15.7 15.1 15 15.8 14.4 C17.3 13.2 18.5 11.6 18.5 9.3 C18.5 6 15.9 3 12 3 Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
   info: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11 V16 M12 8 V8.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   bolt2: `<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 L4 14 H11 L9 22 L20 9 H13 L15 2 Z" fill="currentColor"/></svg>`,
   reset: `<svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 4 V9 H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
@@ -460,6 +461,8 @@ let CURRENT_CALC = null;
 
 function renderTool(rawKey, calcId) {
   CURRENT_CALC = calcId;
+  TOOL_EXAMPLES = null;
+  EXAMPLE_NOTE = "";
   noteRecent(calcId);
   const key = decodeURIComponent(rawKey);
   const found = findTool(key);
@@ -656,6 +659,15 @@ function trim(n) {
   return Number(n.toPrecision(4)).toString();
 }
 
+// The unit a resistance reads best in, the one formatOhms would print it
+// with: 0.47 Ω is 470 mΩ, 4990 Ω is 4.99 kΩ.
+function naturalOhmUnit(v) {
+  for (const [scale, unit] of [[1e9, "GΩ"], [1e6, "MΩ"], [1e3, "kΩ"], [1, "Ω"]]) {
+    if (Math.abs(v) >= scale) return unit;
+  }
+  return "mΩ";
+}
+
 function formatOhms(v) {
   if (!isFinite(v)) return "—";
   // A zero-ohm link is a real part; without this it falls through to the
@@ -676,14 +688,72 @@ function formatFarads(v) {
   return `${trim(v / 1e-12)} pF`;
 }
 
+// ---------- Examples ----------
+// A tool can offer worked examples from real circuits: it registers them with
+// useExamples() while setting up, each { title, note, apply }, and the header
+// then shows a bulb that lists them. Picking one runs apply() — which sets
+// the tool's own state and redraws — and shows its note under the title.
+let TOOL_EXAMPLES = null;
+let EXAMPLE_NOTE = "";
+
+function useExamples(list) {
+  TOOL_EXAMPLES = list;
+}
+
+function openExamples() {
+  if (!TOOL_EXAMPLES) return;
+  const sheet = document.createElement("div");
+  sheet.className = "sheet-backdrop";
+  sheet.innerHTML = `<div class="sheet" role="dialog" aria-label="Examples">
+      <div class="sheet-title">Examples</div>
+      ${TOOL_EXAMPLES.map((ex, i) => `<button class="example-item" data-ex="${i}">
+        <span class="example-title">${ex.title}</span>
+        <span class="example-sub">${ex.note}</span>
+      </button>`).join("")}
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.onclick = (e) => {
+    const item = e.target.closest(".example-item");
+    if (item) {
+      const ex = TOOL_EXAMPLES[+item.dataset.ex];
+      EXAMPLE_NOTE = `${ex.title}: ${ex.note}`;
+      sheet.remove();
+      ex.apply();
+      showExampleNote();
+    } else if (e.target === sheet) {
+      sheet.remove();
+    }
+  };
+}
+
+// The note sits under the header; a redraw keeps it (calcHeader prints it),
+// and an apply() that only refreshes gets it placed here.
+function showExampleNote() {
+  let el = app.querySelector(".example-note");
+  if (!EXAMPLE_NOTE) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "example-note";
+    const anchor = app.querySelector(".sub") || app.querySelector(".topbar");
+    if (anchor) anchor.insertAdjacentElement("afterend", el);
+  }
+  el.textContent = EXAMPLE_NOTE;
+}
+
 function calcHeader(tool, favId, subtitle) {
+  const bulb = TOOL_EXAMPLES && TOOL_EXAMPLES.length;
+  // With the bulb there are two buttons on the right, so an invisible one on
+  // the left keeps the title centred.
   return `
     <div class="topbar back-row">
       <button class="icon-btn" onclick="history.back()">${ICONS.chevronLeft}</button>
+      ${bulb ? `<span class="icon-btn" aria-hidden="true" style="visibility:hidden">${ICONS.bulb}</span>` : ""}
       <h1>${tool.name}</h1>
+      ${bulb ? `<button class="icon-btn example-btn" aria-label="Examples" onclick="openExamples()">${ICONS.bulb}</button>` : ""}
       <button class="icon-btn ${isFavorite(favId) ? "active" : ""}" id="fav-btn">${ICONS.star}</button>
     </div>
-    ${subtitle ? `<div class="sub">${subtitle}</div>` : ""}`;
+    ${subtitle ? `<div class="sub">${subtitle}</div>` : ""}
+    ${EXAMPLE_NOTE ? `<div class="example-note">${EXAMPLE_NOTE}</div>` : ""}`;
 }
 
 // options is [value, label] pairs; the active one is tinted with the domain
@@ -1314,9 +1384,28 @@ const OHM_UNITS = { "mΩ": 1e-3, "Ω": 1, "kΩ": 1e3, "MΩ": 1e6, "GΩ": 1e9 };
 function renderResistorColorCode(domain, tool, favId) {
   const state = {
     count: 4,
-    unit: "kΩ",
+    unit: pref("resistor-color-code", "unit", "kΩ", Object.keys(OHM_UNITS)),
     bands: { d1: "brown", d2: "black", d3: "black", mult: "red", tol: "gold", tc: "brown" },
   };
+
+  // Parts met on real boards. Each sets the band count and colours, then
+  // redraws; the value field follows the bands.
+  const example = (count, bands) => () => {
+    state.count = count;
+    Object.assign(state.bands, bands);
+    state.unit = naturalOhmUnit(compute().ohms);
+    paint();
+  };
+  useExamples([
+    { title: "10 kΩ pull-up", note: "brown–black–orange–gold, the pull-up on almost every microcontroller input and I2C line.",
+      apply: example(4, { d1: "brown", d2: "black", mult: "orange", tol: "gold" }) },
+    { title: "330 Ω LED resistor", note: "orange–orange–brown–gold: about 9 mA through a red LED from 5 V.",
+      apply: example(4, { d1: "orange", d2: "orange", mult: "brown", tol: "gold" }) },
+    { title: "4.99 kΩ 1% metal film", note: "yellow–white–white–brown–brown on a blue body: an E96 value in a precision divider.",
+      apply: example(5, { d1: "yellow", d2: "white", d3: "white", mult: "brown", tol: "brown" }) },
+    { title: "0.47 Ω current sense", note: "yellow–violet–silver–gold: silver as multiplier, ×0.01, for a value below 1 Ω.",
+      apply: example(4, { d1: "yellow", d2: "violet", mult: "silver", tol: "gold" }) },
+  ]);
 
   // Digits, then multiplier, then tolerance; the 6th band adds temperature
   // coefficient. The order here is also the order the bands are painted.
@@ -1504,8 +1593,13 @@ function renderResistorColorCode(domain, tool, favId) {
 
     // Mirror the bands back into the value field, unless the user is mid-edit
     // there — overwriting what someone is typing is worse than a stale field.
+    // A value that came from the bands is shown in the unit it reads best in
+    // (0.47 Ω as 470 mΩ, not 0.00047 kΩ); a value typed keeps its unit.
     const typed = app.querySelector("#cc-value");
     if (typed && document.activeElement !== typed) {
+      state.unit = naturalOhmUnit(r.ohms);
+      const unitSel = app.querySelector("#cc-unit");
+      if (unitSel) unitSel.value = state.unit;
       typed.value = trim(r.ohms / OHM_UNITS[state.unit]);
     }
     const tolSel = app.querySelector("#cc-tol");
@@ -1576,6 +1670,7 @@ function renderResistorColorCode(domain, tool, favId) {
     typed.oninput = () => applyTypedValue(typed.value);
     document.getElementById("cc-unit").onchange = (e) => {
       state.unit = e.target.value;
+      setPref("resistor-color-code", "unit", state.unit);
       applyTypedValue(typed.value);
     };
     document.getElementById("cc-tol").onchange = (e) => {
