@@ -1169,9 +1169,9 @@ function tantalumSVG(code) {
 
 // Semi-shielded power inductor, Bourns SRN4018: a 4.0 x 4.0 mm base, the
 // round ferrite core on top at most 3.6 mm across carrying the marking,
-// terminals 1.5 mm wide at two sides. 24 px per mm.
+// terminals 1.5 mm wide at two sides, 4.55 mm across them. 24 px per mm.
 function powerInductorSVG(code) {
-  const k = 24, S = 4 * k, core = 3.6 * k, term = 1.5 * k, lip = 0.2 * k, x0 = 110 - S / 2, y0 = 8, cy = y0 + S / 2;
+  const k = 24, S = 4 * k, core = 3.6 * k, term = 1.5 * k, lip = 0.275 * k, x0 = 110 - S / 2, y0 = 8, cy = y0 + S / 2;
   return `<svg width="220" height="${S + 16}" viewBox="0 0 220 ${S + 16}" fill="none">
     <defs>
       <linearGradient id="pind-metal" x1="0" y1="0" x2="0" y2="1">${SMD_METAL}</linearGradient>
@@ -5696,72 +5696,70 @@ function renderInductorColorCode(domain, tool, favId) {
 }
 
 // ---------- Inductor SMD code ----------
-// Same digit/multiplier/R-notation scheme as the resistor SMD screen
-// (significant digits + a power-of-ten multiplier digit, or R standing in
-// for a decimal point below 10), just read in µH — the same EIA convention,
-// reused, the same way the color-code screen reuses the resistor bands.
-// The one real addition is a trailing tolerance letter (F/G/J/K/M), which
-// the resistor screen skips since resistor packages rarely carry one but
-// SMD inductors commonly do. This is genuinely one of several schemes in
-// use, though, not a universal one — manufacturer-specific codes and
-// unmarked parts (especially very small packages) are common enough that
-// a mismatch against a real part's datasheet isn't this screen being wrong,
-// just a different scheme.
+// No standard covers inductor markings: IEC 60062's scope is resistors and
+// capacitors. Power-inductor makers print a three-character stamp in
+// microhenries built the same way as the resistor code: two figures and the
+// number of zeros (100 = 10 µH, 101 = 100 µH), or R for the decimal point
+// below 10 µH (4R7, R47). Sumida's CDRH74 datasheet lists the stamp of every
+// part — 100, 101, 102 — and Bourns' SRR1260 drawing shows "100" on the body.
+// The tolerance is not printed: it is a letter in the part number
+// (CDRH74NP-100MC, SRR1260-100M), and makers use their own letters for it —
+// Bourns writes Y for ±30% — so it is picked here as a percentage.
 const SMD_IND_TOL_LETTER = { F: 1, G: 2, J: 5, K: 10, M: 20 };
 
+// The tolerances power inductors are sold in (Sumida CDRH74 ±20%; Bourns
+// SRR1260 ±10%, ±20%, ±30%), and the series each implies. When the part number
+// is not known, E12: Bourns' SRR1260 is "available in E12 values".
+const ISMD_TOL = [5, 10, 20, 30];
+
 function renderInductorSmdCode(domain, tool, favId) {
-  const state = { mode: "3", uH: 100, unit: "µH", tol: "" };
+  const C = "inductor-smd-code";
+  const state = {
+    uH: 10,
+    unit: pref(C, "unit", "µH", Object.keys(INDUCTOR_UNITS)),
+    tol: pref(C, "tol", 0, [0, ...ISMD_TOL]), // 0: not known
+  };
 
-  function sig() {
-    return state.mode === "3" ? 2 : 3;
-  }
+  // Stamps from real datasheets. Each is read as if typed.
+  const example = (code, tol) => () => {
+    Object.assign(state, { uH: uHFor(code), tol });
+    state.unit = naturalUnit(state.uH, INDUCTOR_UNITS);
+    paint();
+  };
+  useExamples([
+    { title: "100 on a Sumida CDRH74", note: "10 and no zeros: 10 µH. The part number, CDRH74NP-100MC, carries the tolerance: M, ±20%.", apply: example("100", 20) },
+    { title: "4R7 below 10 µH", note: "R is the decimal point: 4.7 µH. Bourns' SRR1260-4R7Y is ±30%, written Y in its part number.", apply: example("4R7", 30) },
+    { title: "101, 100 µH", note: "10 and one zero: 100 µH, not 101 µH (Sumida CDRH74NP-101MC, ±20%).", apply: example("101", 20) },
+    { title: "R47, under 1 µH", note: "Nothing before the R: 0.47 µH, 470 nH.", apply: example("R47", 0) },
+  ]);
 
-  function numericCode(uH) {
-    const digits = Number(state.mode);
-    if (uH === 0) return "0".repeat(digits);
-    if (!isFinite(uH) || uH < 0) return null;
-    const n = sig();
-    const e = Math.floor(Math.log10(uH));
-    const d = String(Math.round(uH / Math.pow(10, e - n + 1)));
-    if (d.length > n) return numericCode(Math.pow(10, e + 1));
-    const exponent = e - n + 1;
-    if (exponent > 9) return null;
-    if (exponent >= 0) return d + String(exponent);
-    const code = e >= 0 ? `${d.slice(0, e + 1)}R${d.slice(e + 1)}` : `R${"0".repeat(-e - 1)}${d}`;
-    return code.length <= digits + 1 ? code : null;
-  }
-
+  // The stamp for a value: from 10 µH two figures and the number of zeros,
+  // below that R for the decimal point, down to R10 (0.1 µH).
   function codeFor(uH) {
-    const n = numericCode(uH);
-    return n === null ? null : n + state.tol;
+    if (!isFinite(uH) || uH <= 0) return null;
+    const r = Number(uH.toPrecision(2));
+    const e = Math.floor(Math.log10(r) + 1e-9);
+    if (e >= 1) return e - 1 > 9 ? null : String(Math.round(r / Math.pow(10, e - 1))) + String(e - 1);
+    if (e < -1) return null;
+    const [whole, part] = r.toFixed(1 - e).split(".");
+    return `${whole === "0" ? "" : whole}R${part || ""}`;
   }
 
   function uHFor(raw) {
-    let str = String(raw).trim().toUpperCase();
-    let tol = "";
-    if (str.length && SMD_IND_TOL_LETTER[str[str.length - 1]] !== undefined) {
-      tol = str[str.length - 1];
-      str = str.slice(0, -1);
-    }
-    if (!str) return { uH: NaN, tol };
-    const digits = Number(state.mode);
-    if (str.includes("R")) {
-      if ((str.match(/R/g) || []).length > 1 || /[^0-9R]/.test(str)) return { uH: NaN, tol };
-      const v = parseFloat(str.replace("R", "."));
-      return { uH: isFinite(v) ? v : NaN, tol };
-    }
-    if (!/^[0-9]+$/.test(str) || str.length !== digits) return { uH: NaN, tol };
-    if (Number(str) === 0) return { uH: 0, tol };
-    const n = sig();
-    return { uH: Number(str.slice(0, n)) * Math.pow(10, Number(str.slice(n))), tol };
+    const str = String(raw).trim().toUpperCase();
+    if (/^\d?R\d{1,2}$/.test(str) && str.length === 3) return parseFloat(str.replace("R", "."));
+    if (!/^\d{3}$/.test(str)) return NaN;
+    return Number(str.slice(0, 2)) * Math.pow(10, Number(str.slice(2)));
   }
 
-  // The tolerance letter picks the series (K, ±10% → E12); without one, the
-  // code length does, as on resistors: 3 digits E24, 4 digits E96.
+  function tolText() {
+    return state.tol ? `±${state.tol}%` : "Tolerance: see the part number";
+  }
+
+  // The tolerance picks the series (±10% → E12, ±20% or ±30% → E6); not
+  // known, E12.
   function seriesLine(uH) {
-    const grid = state.tol ? eSeriesForTolerance(SMD_IND_TOL_LETTER[state.tol])
-      : state.mode === "3" ? "E24" : "E96";
-    return seriesVerdict(uH, grid, formatInductance);
+    return seriesVerdict(uH, state.tol ? eSeriesForTolerance(state.tol) : "E12", formatInductance);
   }
 
   // The part that carries these markings: a semi-shielded power inductor.
@@ -5769,28 +5767,41 @@ function renderInductorSmdCode(domain, tool, favId) {
     return powerInductorSVG(code);
   }
 
-
   function refresh(source, notice) {
     const code = codeFor(state.uH);
-    app.querySelector(".diagram-box").innerHTML = chip(code);
+    const typed = source === "code" ? app.querySelector("#ismd-code").value.trim().toUpperCase() : "";
+    app.querySelector(".diagram-box").innerHTML = chip(typed || code);
     app.querySelector('[data-res="uh"]').textContent = formatInductance(state.uH);
     app.querySelector('[data-res="series"]').textContent = seriesLine(state.uH);
-    app.querySelector('[data-res="tol"]').textContent = state.tol ? `±${SMD_IND_TOL_LETTER[state.tol]}%` : "No tolerance letter";
+    app.querySelector('[data-res="tol"]').textContent = tolText();
     const codeField = app.querySelector("#ismd-code");
     const valueField = app.querySelector("#ismd-value");
-    const tolField = app.querySelector("#ismd-tol");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    // A value read from a stamp shows in the unit it reads best in (R47 as
+    // 470 nH); a value typed keeps its unit.
     if (source !== "value" && document.activeElement !== valueField) {
+      if (state.uH > 0) {
+        state.unit = naturalUnit(state.uH, INDUCTOR_UNITS);
+        app.querySelector("#ismd-unit").value = state.unit;
+      }
       valueField.value = trim(state.uH / INDUCTOR_UNITS[state.unit]);
     }
-    if (document.activeElement !== tolField) tolField.value = state.tol;
     app.querySelector('[data-res="err"]').textContent =
-      notice || (code === null ? `Out of range for a ${state.mode}-digit code.` : "");
+      notice || (code === null ? "Out of range: the stamp runs from R10, 0.1 µH, upward." : "");
   }
 
+  // A stamp holds two figures, so a value with more is rounded to what the
+  // part could carry, and the screen says so.
   function applyValue(raw) {
     const v = parseFloat(raw) * INDUCTOR_UNITS[state.unit];
-    if (!isFinite(v) || v < 0) return;
+    if (!isFinite(v) || v <= 0) return;
+    const code = codeFor(v);
+    const marked = code === null ? NaN : uHFor(code);
+    if (isFinite(marked) && Math.abs(marked - v) > v * 1e-9) {
+      state.uH = marked;
+      refresh("value", `Rounded to what the stamp can show, ${formatInductance(marked)}.`);
+      return;
+    }
     state.uH = v;
     refresh("value");
   }
@@ -5798,34 +5809,34 @@ function renderInductorSmdCode(domain, tool, favId) {
   function paint() {
     const code = codeFor(state.uH);
     app.innerHTML = `
-      ${calcHeader(tool, favId, `${state.mode} digit codes + tolerance letter`)}
+      ${calcHeader(tool, favId, "3-character stamp, in µH")}
 
       <div class="diagram-box">${chip(code)}</div>
 
-      ${pillRow([["3", "3 digit"], ["4", "4 digit"]], state.mode, domain.bg)}
-
-      <div class="section-label" style="color:#8FC1F5">Marking on the chip</div>
+      <div class="section-label" style="color:#8FC1F5">Stamp on the part</div>
       <div class="field">
         <label>Code</label>
         <div class="field-row">
-          <input id="ismd-code" type="text" autocapitalize="characters" spellcheck="false" maxlength="5" value="${code || ""}" />
+          <input id="ismd-code" type="text" autocapitalize="characters" spellcheck="false" maxlength="3" value="${code || ""}" />
         </div>
       </div>
 
       <div class="section-label" style="color:#8FC1F5">Or enter a value</div>
-      <div class="field">
-        <label>Inductance</label>
-        <div class="field-row">
-          <input id="ismd-value" type="number" inputmode="decimal" step="any" value="${trim(state.uH / INDUCTOR_UNITS[state.unit])}" />
-          <select id="ismd-unit">${Object.keys(INDUCTOR_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+      <div class="field-pair">
+        <div class="field">
+          <label>Inductance</label>
+          <div class="field-row">
+            <input id="ismd-value" type="number" inputmode="decimal" step="any" value="${trim(state.uH / INDUCTOR_UNITS[state.unit])}" />
+            <select id="ismd-unit">${Object.keys(INDUCTOR_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
         </div>
-      </div>
-      <div class="field">
-        <label>Tolerance letter</label>
-        <select id="ismd-tol">
-          <option value="" ${state.tol === "" ? "selected" : ""}>None</option>
-          ${Object.keys(SMD_IND_TOL_LETTER).map((l) => `<option value="${l}" ${state.tol === l ? "selected" : ""}>${l} — ±${SMD_IND_TOL_LETTER[l]}%</option>`).join("")}
-        </select>
+        <div class="field">
+          <label>Tolerance (part no.)</label>
+          <select id="ismd-tol">
+            <option value="0" ${state.tol === 0 ? "selected" : ""}>Not known</option>
+            ${ISMD_TOL.map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}%</option>`).join("")}
+          </select>
+        </div>
       </div>
       <div class="error-text" data-res="err"></div>
 
@@ -5839,33 +5850,39 @@ function renderInductorSmdCode(domain, tool, favId) {
           <span class="num" data-res="uh">${formatInductance(state.uH)}</span>
         </div>
         <div class="result-sub" data-res="series">${seriesLine(state.uH)}</div>
-        <div class="result-sub" data-res="tol">${state.tol ? `±${SMD_IND_TOL_LETTER[state.tol]}%` : "No tolerance letter"}</div>
+        <div class="result-sub" data-res="tol">${tolText()}</div>
       </div>
 
       ${formulaSection(
-        [`Value = (${sig() === 2 ? "D1D2" : "D1D2D3"}) × 10^${sig() === 2 ? "D3" : "D4"}, in µH`],
-        "R replaces the decimal point below 10 µH (4R7 = 4.7 µH); a trailing letter sets tolerance. Not universal: \"100\" has meant 10 µH on one manufacturer's part, 10 nH on another's — confirm against the datasheet."
+        ["Value = (D1D2) × 10^D3, in µH", "R = decimal point: 4R7 = 4.7 µH"],
+        "Power inductors are stamped with three characters giving the inductance in microhenries (µH): two figures, then how many zeros follow. 100 is 10 µH, 101 is 100 µH, 102 is 1 mH. Below 10 µH, R stands for the decimal point: 4R7 is 4.7 µH, R47 is 0.47 µH. The tolerance is not stamped; it is a letter in the part number, and makers use their own letters, so pick it from the datasheet. No standard covers inductor markings; this is the code Sumida and Bourns print."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint);
 
     const codeField = document.getElementById("ismd-code");
     codeField.oninput = () => {
-      const { uH, tol } = uHFor(codeField.value);
-      if (!isNaN(uH)) { state.uH = uH; state.tol = tol; refresh("code"); }
-      else { app.querySelector('[data-res="err"]').textContent = "Not a valid marking."; }
+      const uH = uHFor(codeField.value);
+      if (!isNaN(uH)) { state.uH = uH; refresh("code"); }
+      else {
+        app.querySelector('[data-res="err"]').textContent = /[A-QS-Z]/i.test(codeField.value)
+          ? "The stamp is digits and R only; a tolerance letter is in the part number — pick it below."
+          : "Not a valid stamp.";
+      }
     };
     const valueField = document.getElementById("ismd-value");
     valueField.oninput = () => applyValue(valueField.value);
     document.getElementById("ismd-unit").onchange = (e) => {
       state.unit = e.target.value;
+      setPref(C, "unit", state.unit);
       applyValue(valueField.value);
     };
     document.getElementById("ismd-tol").onchange = (e) => {
-      state.tol = e.target.value;
-      refresh("value");
+      state.tol = Number(e.target.value);
+      setPref(C, "tol", state.tol);
+      refresh("tol");
     };
   }
 

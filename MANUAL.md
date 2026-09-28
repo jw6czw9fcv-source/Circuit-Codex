@@ -37,6 +37,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [RC charge and discharge](#rc-charge-and-discharge)
 - Capacitors → [Capacitor energy](#capacitor-energy)
 - Inductors → [Inductor color code](#inductor-color-code)
+- Inductors → [Inductor SMD code](#inductor-smd-code)
 
 ### Digital
 
@@ -1670,6 +1671,94 @@ silver band marks a part as military-qualified.
 The re-walk checked the value against the tolerance's own series (4.7 µH with
 silver is an E12 value), showed a value from the bands in its natural unit
 (brown–black–red reads 1 mH, not 1000 µH) and dropped H from the units.
+
+[↑ Index](#index)
+
+---
+
+<a id="inductor-smd-code"></a>
+## Inductor SMD code
+
+`calc: inductor-smd-code` · Passive components › Inductors
+
+### What it computes
+
+The inductance that the three-character stamp on a surface-mount power
+inductor stands for — and the other way round, the stamp for a value. With the
+tolerance taken from the part number, it also says whether the value is a
+standard one.
+
+### Source
+
+There is no standard for it. IEC 60062, the marking standard, covers
+resistors and capacitors only; inductor makers borrow its principle and apply
+it in microhenries. What the tool follows is what their datasheets show:
+
+- **Sumida CDRH74** lists a "Stamp" for every part: 100 for 10 µH, 101 for
+  100 µH, 102 for 1.0 mH. The tolerance (M, ±20%) is in the part name,
+  CDRH74NP-100MC, not in the stamp.
+- **Bourns SRR1260** shows "100" on the body in its drawing; its tolerances,
+  in the part number, are Y ±30%, M ±20% and K ±10%. It is "available in E12
+  values".
+- **Bourns SRN4018**, the part drawn, shows "4R7" on its core and is
+  4.0 × 4.0 mm, the core at most 3.6 mm across, 4.55 mm across the terminals.
+
+### What it means
+
+An inductor stores energy in a magnetic field; its inductance, in henries (H),
+says how strongly it opposes a change of current. Power inductors in DC/DC
+converters are a few hundred nanohenries to a few millihenries, so the stamp
+counts in **microhenries** (µH): 1 µH is a millionth of a henry, 1000 nH, and
+1 mH is 1000 µH.
+
+- **Three digits** — the first two are the figures, the last is how many zeros
+  follow. 100 is 10 and no zeros: 10 µH. 101 is 100 µH, 102 is 1000 µH, 1 mH.
+  470 is 47 µH, not 470.
+- **R** — below 10 µH, R stands where the decimal point is: 4R7 is 4.7 µH, 1R0
+  1 µH, R47 0.47 µH (470 nH).
+- **The tolerance is not stamped.** It is a letter in the part number, and
+  makers do not agree on the letters — Bourns uses Y for ±30%, a letter the
+  resistor and capacitor standard does not have — so the tool asks for the
+  percentage.
+
+### How the value is worked out
+
+    Value = D1D2 × 10^D3, in µH        (100 → 10 × 10⁰ = 10 µH)
+    xRy   = x.y µH                      (4R7 → 4.7 µH)
+
+A stamp holds two figures, so a typed value with more is rounded to what the
+part could carry, and the tool says so. The shortest stamp is R10, 0.1 µH.
+
+### Assumptions and limits
+
+- **Not every maker uses this stamp.** Many small chip inductors carry no
+  marking at all, and some makers print a code of their own or a colour dot.
+  When the reading makes no sense for the part, trust its datasheet.
+- **Standard value.** The tolerance picks the one series the value is checked
+  against, as elsewhere in the app: ±5% E24, ±10% E12, ±20% and ±30% E6. With
+  the tolerance not known it is E12, the series Bourns quotes. Power inductors
+  are often sold in E12 values at ±20%, so an E12 value at ±20% can read "Not
+  in E6" and still be a stock part.
+- Inductance alone does not say what current the part can carry before its
+  core saturates; that is in the datasheet, as the saturation current.
+
+### What it deliberately does not do
+
+- **Colour-banded inductors** are the Inductor color code tool.
+- **A 4-digit code** is not offered: no inductor datasheet read shows one.
+
+### How it was checked
+
+Against the stamps in the Sumida CDRH74 datasheet (100 → 10 µH, 101 → 100 µH,
+102 → 1 mH) and the Bourns SRR1260 and SRN4018 drawings (100, 4R7). R47 reads
+470 nH, 4.7 µH is stamped 4R7, and a typed "10M" is refused with a note that
+the tolerance letter belongs to the part number.
+
+The review corrected three things. The tool offered a 4-digit mode, which no
+standard or datasheet shows. It read a tolerance letter as part of the stamp,
+where datasheets put it only in the part number, and it had no ±30%. And its
+note said that "100" means 10 nH on some parts, a claim no source supported;
+it was removed.
 
 [↑ Index](#index)
 
