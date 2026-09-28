@@ -36,6 +36,11 @@ const CHECK_CASES = {
   ],
   "voltage-divider": [
     { name: "12 V, 10 k / 10 k", do: [], expect: [['[data-res="solved"]', "6 V"]] },
+    { name: "shorthand 4k7 in a kΩ field is 4.7", do: [["set", 'input[data-var="r2"]', "4k7"]],
+      expect: [['input[data-var="r2"]', "4.7"], ['[data-res="solved"]', "3.837 V"]] },
+    { name: "a decimal comma is read", do: [["set", 'input[data-var="r2"]', "4,7"]], expect: [['[data-res="solved"]', "3.837 V"]] },
+    { name: "shorthand in an Ω field", do: [["set", 'select[data-unit="r2"]', "Ω"], ["set", 'input[data-var="r2"]', "4k7"]],
+      expect: [['input[data-var="r2"]', "4700"], ['[data-res="solved"]', "3.837 V"]] },
     { name: "12 V, 10 k / 4.7 k", do: [["set", 'input[data-var="r2"]', "4.7"]], expect: [['[data-res="solved"]', "3.837 V"]] },
   ],
   "current-divider": [
@@ -52,6 +57,8 @@ const CHECK_CASES = {
   "thermistor": [
     { name: "Vishay 10 k, B 3977, at 85 °C", do: [["set", "#th-coef", "3977"], ["set", "#th-temp", "85"]], expect: [["#th-res", "1.07"]] },
     { name: "a typographic minus is read", do: [["set", "#th-coef", "3977"], ["set", "#th-temp", "−20"]], expect: [["#th-res", "107.1"]] },
+    { name: "the ± key makes it negative", do: [["set", "#th-coef", "3977"], ["set", "#th-temp", "20"], ["click", "#th-temp + .sign-btn"]],
+      expect: [["#th-temp", "-20"], ["#th-res", "107.1"]] },
   ],
   "ceramic-code": [
     { name: "104 is 100 nF", do: [["set", "#cer-code", "104"]], expect: [['[data-res="value"]', "100 nF"]] },
@@ -73,6 +80,8 @@ const CHECK_CASES = {
   "rc-charge": [
     { name: "1 τ reaches 63.21%", do: [], expect: [['[data-res="volt"]', "3.161 V"], ['[data-res="pct"]', "63.21%"]] },
     { name: "4.5 V of 5 V takes ln 10 τ", do: [["set", "#rc-volt", "4.5"]], expect: [["#rc-time", "2.303"]] },
+    { name: "100u in a µF field", do: [["set", "#rc-c", "100u"]], expect: [["#rc-c", "100"], ['[data-res="tau"]', "1 s"]] },
+    { name: "1m in a µF field is 1000", do: [["set", "#rc-c", "1m"]], expect: [["#rc-c", "1000"], ['[data-res="tau"]', "10 s"]] },
   ],
   "cap-stored-energy": [
     { name: "1000 µF at 12 V", do: [], expect: [['[data-res="solved"]', "72 mJ"], ['[data-res="charge"]', "12 mC"]] },

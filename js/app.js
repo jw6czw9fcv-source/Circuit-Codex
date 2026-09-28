@@ -17,6 +17,96 @@ app.addEventListener("click", (e) => {
   el.select();
 });
 
+// ---------- Value entry ----------
+// Every numeric field in the app is a text field with the decimal keypad
+// (inputmode) rather than type="number", so it can take what an engineer
+// actually types: a comma for the decimal point (an iPhone set to French
+// shows one), a typographic minus, and SI shorthand — 4k7, 4.7k, 10u, 100n,
+// 2M2, 4R7. The keypad on an iPhone is unchanged; shorthand needs a keyboard
+// with letters, a computer's or Android's. Converted here, once, for every
+// tool, by watching #app for fields as each screen paints them.
+const SI_SHORTHAND = { p: 1e-12, n: 1e-9, u: 1e-6, "µ": 1e-6, m: 1e-3, R: 1, k: 1e3, K: 1e3, M: 1e6, G: 1e9 };
+// Units a prefix can sit in front of. "ppm", "min", "mil" and "dBm" start
+// with a prefix letter but are not prefixed units, so they are not in here.
+const SI_BASE_UNITS = new Set(["Ω", "F", "H", "A", "V", "W", "Hz", "s", "J", "C", "SPS", "m", "g", "Wh", "Ah", "VA", "S", "Bd", "bps"]);
+
+// The scale of the unit a field is in, from its unit picker or fixed unit
+// text: kΩ is 1e3, µF 1e-6, V 1, ppm 1.
+function fieldUnitScale(input) {
+  const row = input.closest(".field-row, .r-line");
+  if (!row) return 1;
+  const sel = row.querySelector("select");
+  const text = (sel ? sel.value : (row.querySelector(".unit-fixed") || {}).textContent || "").trim();
+  const prefix = text[0];
+  if (text.length > 1 && SI_SHORTHAND[prefix] && prefix !== "R" && SI_BASE_UNITS.has(text.slice(1))) return SI_SHORTHAND[prefix];
+  return 1;
+}
+
+// "4k7" → 4700, "4.7k" → 4700, "10u" → 1e-5, "4R7" → 4.7; anything else null.
+function parseShorthand(raw) {
+  const m = /^\s*([+-]?)(\d*)(?:\.(\d*))?\s*([pnuµmRkKMG])(\d*)\s*$/.exec(raw);
+  if (!m) return null;
+  const [, sign, whole, frac, prefix, tail] = m;
+  if (frac !== undefined && tail) return null;
+  const digits = `${whole || "0"}.${frac !== undefined ? frac : tail}`;
+  const v = parseFloat(digits) * SI_SHORTHAND[prefix];
+  return isFinite(v) && (whole || frac || tail) ? (sign === "-" ? -v : v) : null;
+}
+
+function enhanceFields(root) {
+  root.querySelectorAll('input[type="number"]').forEach((el) => {
+    el.type = "text";
+    el.setAttribute("inputmode", "decimal");
+    el.setAttribute("autocomplete", "off");
+    el.setAttribute("spellcheck", "false");
+    el.dataset.num = "1";
+  });
+  // A field that can be negative gets a ± key beside it: the iPhone decimal
+  // keypad has no minus.
+  root.querySelectorAll("input[data-signed]:not([data-sign-ready])").forEach((el) => {
+    el.dataset.signReady = "1";
+    el.dataset.num = "1";
+    el.type = "text";
+    el.setAttribute("inputmode", "decimal");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "sign-btn";
+    btn.textContent = "±";
+    btn.setAttribute("aria-label", "Change sign");
+    btn.onclick = () => {
+      const v = el.value.trim();
+      el.value = v.startsWith("-") ? v.slice(1) : v ? `-${v}` : "-";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    el.insertAdjacentElement("afterend", btn);
+  });
+}
+new MutationObserver(() => enhanceFields(app)).observe(app, { childList: true, subtree: true });
+
+// While typing: a comma is a decimal point and a typographic minus a minus,
+// fixed in the field before the tool's own handler reads it.
+app.addEventListener("input", (e) => {
+  const el = e.target;
+  if (!el.dataset || !el.dataset.num) return;
+  const fixed = el.value.replace(",", ".").replace("−", "-");
+  if (fixed !== el.value) {
+    const at = el.selectionStart;
+    el.value = fixed;
+    try { el.setSelectionRange(at, at); } catch (_) {}
+  }
+}, true);
+
+// On leaving the field or pressing Enter: shorthand becomes a plain number in
+// the field's own unit — 4k7 in a kΩ field is 4.7, in an Ω field 4700.
+app.addEventListener("change", (e) => {
+  const el = e.target;
+  if (!el.dataset || !el.dataset.num) return;
+  const v = parseShorthand(el.value);
+  if (v === null) return;
+  el.value = String(+(v / fieldUnitScale(el)).toPrecision(12));
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}, true);
+
 // Reference rows (ASCII table, and any future lookup list) are read-only —
 // there's no field to select() — but the reason to tap one is usually to
 // copy it out, so a click selects the row's whole text instead. Opt in with
@@ -9673,7 +9763,7 @@ function renderThermistor(domain, tool, favId) {
       <div class="section-label" style="color:#8FC1F5">Either one — edit whichever you know</div>
       <div class="field">
         <label>Temperature (°C)</label>
-        <div class="field-row"><input type="text" inputmode="text" autocomplete="off" id="th-temp" value="${trim(state.tempC)}" /></div>
+        <div class="field-row"><input type="number" inputmode="decimal" step="any" data-signed id="th-temp" value="${trim(state.tempC)}" /></div>
       </div>
       <div class="field">
         <label>Resistance</label>
@@ -17042,11 +17132,10 @@ function renderOscStability(domain, tool, favId) {
     app.querySelector('[data-res="chart"]').innerHTML = r.problem ? "" : (state.kind === "khz" ? forkSVG(r) : budgetSVG(r));
   }
 
-  // The iPhone decimal keypad has no minus key, and pulling and the fork's
-  // temperature are as often negative as not, so those fields get the text
-  // keyboard's number row instead.
+  // Pulling and the fork's temperature are as often negative as not, so
+  // those fields are marked signed and get the ± key.
   function field(id, name, label, unit, grow, signedField) {
-    const mode = signedField ? `type="text" inputmode="text" autocomplete="off"` : `type="number" inputmode="decimal" step="any"`;
+    const mode = `type="number" inputmode="decimal" step="any"${signedField ? " data-signed" : ""}`;
     return `
         <div class="field"${grow ? ` style="flex:${grow}"` : ""}>
           <label>${label}</label>
@@ -17574,7 +17663,7 @@ function renderAdc(domain, tool, favId) {
   // as often negative as not, so those two fields get the text keyboard's
   // number row instead.
   function field(id, name, label, unit, signedField) {
-    const mode = signedField && bipolar() ? `type="text" inputmode="text" autocomplete="off"` : `type="number" inputmode="decimal" step="any"`;
+    const mode = `type="number" inputmode="decimal" step="any"${signedField && bipolar() ? " data-signed" : ""}`;
     return `
         <div class="field">
           <label>${label}</label>
@@ -18033,10 +18122,9 @@ function renderSnr(domain, tool, favId) {
     refresh();
   }
 
-  // Level is negative, and the iPhone decimal keypad has no minus key, so it
-  // gets the text keyboard's number row.
+  // Level is negative, so it is marked signed and gets the ± key.
   function field(id, name, label, units, unitKey, signedField) {
-    const mode = signedField ? `type="text" inputmode="text" autocomplete="off"` : `type="number" inputmode="decimal" step="any"`;
+    const mode = `type="number" inputmode="decimal" step="any"${signedField ? " data-signed" : ""}`;
     const unit = typeof units === "string"
       ? (units ? `<span class="unit-fixed">${units}</span>` : "")
       : `<select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[unitKey] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;

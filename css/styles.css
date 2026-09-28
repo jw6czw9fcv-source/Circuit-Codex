@@ -1075,3 +1075,12 @@ html, body {
 }
 .manual-link svg { width: 17px; height: 17px; flex-shrink: 0; }
 a.icon-btn { text-decoration: none; }
+
+/* The ± key beside a field that can be negative (the iPhone decimal keypad
+   has no minus). */
+.sign-btn {
+  flex-shrink: 0; min-width: 30px; height: 28px; margin-left: 4px;
+  border: 1px solid var(--input-border); border-radius: 8px;
+  background: var(--card); color: var(--text); font-size: 16px; font-weight: 600;
+  padding: 0 6px; cursor: pointer;
+}
