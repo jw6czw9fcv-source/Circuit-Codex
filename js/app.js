@@ -127,8 +127,17 @@ app.addEventListener("click", (e) => {
 // Favourites are keyed by what a tool *is*, not where it sits. Position keys
 // (domain:section:index) silently repoint at a different tool whenever the list
 // is reordered or something is removed, which has already happened once.
+// A built tool is known by its calc id, which never changes: names and
+// places do (the review renamed dozens so they read on their own). A tool
+// not built yet has no calc id and keeps the name-based key.
 function favoriteId(domain, section, tool) {
-  return `${domain.id}:${section.title}:${tool.name}`;
+  return tool.calc ? `calc:${tool.calc}` : `${domain.id}:${section.title}:${tool.name}`;
+}
+
+// The key a favourite was stored under before calc ids, from the tool's
+// name and section then (`was`, `wasSection` in data.js where they changed).
+function legacyFavoriteId(domain, section, tool) {
+  return `${domain.id}:${tool.wasSection || section.title}:${tool.was || tool.name}`;
 }
 
 function findByFavoriteId(id) {
@@ -190,6 +199,7 @@ function render() {
   if (parts[0] === "search") return renderSearch();
   if (parts[0] === "favorites") return renderFavorites();
   if (parts[0] === "domain" && parts[1]) return renderDomain(parts[1]);
+  if (parts[0] === "task" && parts[1]) return renderTask(parts[1]);
   if (parts[0] === "tool" && parts[1] !== undefined) return renderTool(parts[1], parts[2]);
 
   renderHome();
@@ -209,9 +219,45 @@ function tabbarHTML(activeTab) {
     </button>`).join("")}</div>`;
 }
 
+// A built tool found by its calc id, with the route key the app opens it by.
+function findByCalc(calc) {
+  for (const d of DOMAINS) {
+    for (let si = 0; si < d.sections.length; si++) {
+      const ti = d.sections[si].tools.findIndex((t) => t.calc === calc);
+      if (ti >= 0) return { domain: d, section: d.sections[si], tool: d.sections[si].tools[ti], key: `${d.id}:${si}:${ti}` };
+    }
+  }
+  return null;
+}
+
+function toolRoute(found) {
+  return `/tool/${encodeURIComponent(found.key)}/${found.tool.calc}`;
+}
+
+// The last tools opened, newest first, by calc id.
+function recentTools() {
+  try { return JSON.parse(localStorage.getItem("cc_recent") || "[]"); } catch (_) { return []; }
+}
+function noteRecent(calc) {
+  if (!calc) return;
+  try {
+    const list = [calc, ...recentTools().filter((c) => c !== calc)].slice(0, 6);
+    localStorage.setItem("cc_recent", JSON.stringify(list));
+  } catch (_) {}
+}
+
+function toolChip(calc) {
+  const f = findByCalc(calc);
+  return f ? `<button class="chip-btn" data-route="${toolRoute(f)}">${f.tool.name}</button>` : "";
+}
+
+// Home leads with ways in for someone who knows what they want — search,
+// the most used tools, the last ones opened, tasks — and keeps the domains,
+// the way in for someone browsing, below.
 function renderHome() {
   const domains = DOMAINS.filter(d => d.id !== "tools");
   const toolsDomain = DOMAINS.find(d => d.id === "tools");
+  const recent = recentTools().filter((c) => findByCalc(c));
   app.innerHTML = `
     <div class="topbar back-row">
       <span class="icon-btn" style="visibility:hidden">${ICONS.book}</span>
@@ -219,6 +265,22 @@ function renderHome() {
       <a class="icon-btn" href="manual.html" aria-label="Manual">${ICONS.book}</a>
     </div>
     <div class="sub">Electronics reference and tools</div>
+    <button class="search-box search-launch" onclick="location.hash='/search'">${ICONS.search}<span>Search tools</span></button>
+
+    <div class="section-label">Most used</div>
+    <div class="chip-row">${MOST_USED.map(toolChip).join("")}</div>
+    ${recent.length ? `<div class="section-label">Recent</div><div class="chip-row">${recent.map(toolChip).join("")}</div>` : ""}
+
+    <div class="section-label">By task</div>
+    <div class="domain-grid task-grid">
+      ${TASKS.map((t) => `
+        <button class="domain-card task-card" onclick="location.hash='/task/${t.id}'">
+          <div class="card-title">${t.title}</div>
+          <div class="card-sub">${t.subtitle}</div>
+        </button>`).join("")}
+    </div>
+
+    <div class="section-label">By domain</div>
     <div class="domain-grid">
       ${domains.map(d => `
         <button class="domain-card" onclick="location.hash='/domain/${d.id}'">
@@ -234,8 +296,35 @@ function renderHome() {
         <div class="card-sub">${toolsDomain.subtitle}</div>
       </div>
     </button>
+    <div style="height:8px"></div>
     ${tabbarHTML("home")}
   `;
+  app.querySelectorAll(".chip-btn").forEach((b) => { b.onclick = () => { location.hash = b.dataset.route; }; });
+}
+
+// One task's tools, gathered from wherever they sit in the domains.
+function renderTask(id) {
+  const task = TASKS.find((t) => t.id === id);
+  if (!task) return renderHome();
+  const found = task.calcs.map(findByCalc).filter(Boolean);
+  app.innerHTML = `
+    <div class="topbar back-row">
+      <button class="icon-btn" onclick="location.hash='/home'">${ICONS.chevronLeft}</button>
+      <h1>${task.title}</h1>
+      <span class="icon-btn" aria-hidden="true" style="visibility:hidden">${ICONS.chevronLeft}</span>
+    </div>
+    <div class="sub">${task.subtitle}</div>
+    <div class="tool-list" style="margin-top:6px">
+      ${found.map((f) => `
+        <button class="tool-row" style="flex-direction:column;align-items:flex-start;" data-route="${toolRoute(f)}">
+          <span>${f.tool.name}</span>
+          <span class="breadcrumb">${f.domain.title} · ${f.section.title}</span>
+        </button>`).join("")}
+    </div>
+    <div style="height:8px"></div>
+    ${tabbarHTML("home")}
+  `;
+  app.querySelectorAll("[data-route]").forEach((b) => { b.onclick = () => { location.hash = b.dataset.route; }; });
 }
 
 function renderDomain(domainId) {
@@ -248,17 +337,24 @@ function renderDomain(domainId) {
       <span class="icon-btn" aria-hidden="true" style="visibility:hidden">${ICONS.chevronLeft}</span>
     </div>
     <div class="sub">${d.subtitle}</div>
-    ${d.sections.map((sec, si) => `
+    ${d.sections.map((sec, si) => {
+      // Only tools that work are listed; the rest are counted, so the list
+      // never leads to an empty screen.
+      const built = sec.tools.map((t, ti) => ({ t, ti })).filter(({ t }) => t.calc);
+      const coming = sec.tools.length - built.length;
+      return `
       <div class="section-label" style="color:${d.color}">${sec.title}</div>
       <div class="tool-list">
-        ${sec.tools.map((t, ti) => {
+        ${built.map(({ t, ti }) => {
           const key = `${d.id}:${si}:${ti}`;
-          return `<button class="tool-row" onclick="location.hash='/tool/${encodeURIComponent(key)}/${t.calc || ""}'">
+          return `<button class="tool-row" onclick="location.hash='/tool/${encodeURIComponent(key)}/${t.calc}'">
             <span>${t.name}</span>
             <span class="chev">${ICONS.chevronRight}</span>
           </button>`;
         }).join("")}
-      </div>`).join("")}
+        ${coming ? `<div class="coming-row">${built.length ? `${coming} more coming` : `${coming} tool${coming > 1 ? "s" : ""} coming`}</div>` : ""}
+      </div>`;
+    }).join("")}
     <div style="height:8px"></div>
     ${tabbarHTML(domainId === "tools" ? "tools" : "home")}
   `;
@@ -281,6 +377,7 @@ let CURRENT_CALC = null;
 
 function renderTool(rawKey, calcId) {
   CURRENT_CALC = calcId;
+  noteRecent(calcId);
   const key = decodeURIComponent(rawKey);
   const found = findTool(key);
   if (!found) return renderHome();
@@ -407,16 +504,23 @@ function renderSearch() {
     const q = input.value.trim().toLowerCase();
     results.innerHTML = "";
     if (!q) return;
+    // Built tools only. A match on the name ranks first, then one on the
+    // former name, the keywords, the section or the domain; every word of
+    // the query has to be found somewhere.
+    const words = q.split(/\s+/);
     const matches = [];
     DOMAINS.forEach(d => {
       d.sections.forEach((sec, si) => {
         sec.tools.forEach((t, ti) => {
-          if (t.name.toLowerCase().includes(q)) {
-            matches.push({ d, sec, t, key: `${d.id}:${si}:${ti}` });
-          }
+          if (!t.calc) return;
+          const name = t.name.toLowerCase();
+          const hay = [name, (t.was || "").toLowerCase(), TOOL_KEYWORDS[t.calc] || "", sec.title.toLowerCase(), d.title.toLowerCase()].join(" ");
+          if (!words.every((w) => hay.includes(w))) return;
+          matches.push({ d, sec, t, key: `${d.id}:${si}:${ti}`, rank: name.includes(q) ? 0 : 1 });
         });
       });
     });
+    matches.sort((a, b) => a.rank - b.rank);
     if (!matches.length) {
       results.innerHTML = `<div class="placeholder">${ICONS.search}<div>No matches for "${q}"</div></div>`;
       return;
@@ -1689,14 +1793,26 @@ function renderSmdCode(domain, tool, favId) {
 // A key whose tool no longer exists is dropped rather than left dangling.
 (function migrateFavorites() {
   const stored = favorites();
-  if (!stored.some(k => POSITION_KEY.test(k))) return;
+  if (!stored.length) return;
+  // Old name-based keys of built tools, mapped to their calc ids.
+  const legacy = new Map();
+  DOMAINS.forEach((d) => d.sections.forEach((sec) => sec.tools.forEach((t) => {
+    if (t.calc) {
+      legacy.set(legacyFavoriteId(d, sec, t), favoriteId(d, sec, t));
+      legacy.set(`${d.id}:${sec.title}:${t.name}`, favoriteId(d, sec, t));
+    }
+  })));
   const migrated = [];
   for (const entry of stored) {
-    if (!POSITION_KEY.test(entry)) { migrated.push(entry); continue; }
-    const found = findTool(entry);
-    if (found) migrated.push(favoriteId(found.domain, found.section, found.tool));
+    if (POSITION_KEY.test(entry)) {
+      const found = findTool(entry);
+      if (found) migrated.push(favoriteId(found.domain, found.section, found.tool));
+    } else {
+      migrated.push(legacy.get(entry) || entry);
+    }
   }
-  localStorage.setItem("cc_favorites", JSON.stringify([...new Set(migrated)]));
+  const out = [...new Set(migrated)];
+  if (JSON.stringify(out) !== JSON.stringify(stored)) localStorage.setItem("cc_favorites", JSON.stringify(out));
 })();
 
 // ---------- E-series standard values ----------

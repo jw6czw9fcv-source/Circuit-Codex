@@ -1102,3 +1102,20 @@ a.icon-btn { text-decoration: none; }
 .diagram-box svg text[font-size="8"],
 .diagram-box svg text[font-size="9"],
 .diagram-box svg text[font-size="10"] { font-size: 11px; }
+
+/* Home: search launcher, rows of tool chips, task cards. */
+.search-launch { width: calc(100% - 32px); color: var(--text-secondary); font-size: 15.5px; cursor: pointer; text-align: left; }
+.chip-row {
+  display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 4px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+.chip-btn {
+  flex-shrink: 0; white-space: nowrap; background: var(--card);
+  border: 1px solid var(--card-border); border-radius: 18px; color: var(--text);
+  padding: 8px 13px; font-size: 14.5px; cursor: pointer;
+}
+.task-card { min-height: 0; }
+/* The count of tools still to come in a section, in place of rows that
+   would open an empty screen. */
+.coming-row { color: var(--text-muted); font-size: 14px; padding: 4px 4px 2px; }

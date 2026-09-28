@@ -72,8 +72,10 @@ def app_tools():
         events.append((m.start(), "domain", m.group(1), m.group(2)))
     for m in re.finditer(r'\btitle: "([^"]+)",\s*(?:\n\s*)?tools:', src):
         events.append((m.start(), "section", m.group(1), None))
-    for m in re.finditer(r'\{ name: "([^"]+)"(?:, calc: "([^"]+)")?', src):
-        events.append((m.start(), "tool", m.group(1), m.group(2)))
+    # A tool entry is { name, then optional fields (was, wasSection, calc) }.
+    for m in re.finditer(r'\{ name: "([^"]+)"([^}]*)\}', src):
+        calc = re.search(r'calc: "([^"]+)"', m.group(2))
+        events.append((m.start(), "tool", m.group(1), calc.group(1) if calc else None))
     events.sort()
 
     tools, order = {}, []

@@ -436,7 +436,7 @@ an Example, then continue the review at tool 18)
       schematic text ≥ 11 px, one stroke width, drawings that fill their box,
       parts close and symmetric; muted text contrast raised to WCAG 4.5:1;
       blue = input, green = result, everywhere.
-- [ ] Navigation — hide tools not yet built ("N more coming" per section);
+- [x] Navigation — hide tools not yet built ("N more coming" per section);
       Home gets search, a Most used row (Ohm's law, LED resistor, voltage
       divider, resistor color code, 555, E-series), recent tools and task
       shortcuts (Identify a part…); unique full names (Resistor color code,
