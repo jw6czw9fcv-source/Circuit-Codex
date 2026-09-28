@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=651ebbbee1" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=21cae82757" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -1125,7 +1125,7 @@ from a marking now shows in its own unit, n33 as 330 pF.</p>
 <section class="tool" id="cap-smd-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>SMD capacitor code</h2>
-  <figure class="shot"><img src="manual/img/cap-smd-code.jpg?h=2eeb648167" loading="lazy" alt="Capacitor SMD code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/cap-smd-code.jpg?h=70bd5696d2" loading="lazy" alt="Capacitor SMD code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The capacitance printed on a surface-mount capacitor, usually a tantalum part,
 with the letter printed next to it read either as the rated voltage or as the
@@ -1210,6 +1210,10 @@ burn.</p>
   are not read.</li>
 <li>A value typed in is encoded with R below 10 pF; tantalum parts never go that
   low.</li>
+<li><strong>Standard value.</strong> A tolerance letter picks the one series the value is
+  checked against (K, ±10%, E12; M, ±20%, E6). A voltage letter says nothing
+  about tolerance, so the value is checked against E6, the series tantalum and
+  polymer capacitors are stocked in.</li>
 </ul>
 <h3>What it deliberately does not do</h3>
 <ul>
@@ -1225,6 +1229,9 @@ J 106 read 10 µF at 6.3 V. Also 475V → 4.7 µF at 35 V, 106K → 10 µF ±10%
 (J106 was rejected), applied the 8 and 9 multipliers and R-code length fix
 from the ceramic tool, limited the units to pF, nF and µF, and made the drawing
 show the marking as typed.</p>
+<p>The re-walk checked the value against the tolerance's own series (156A is an
+E6 value, 825K an E12 one), showed a value read from a code in its own unit
+(471 as 470 pF) and put a space in "10 V".</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A1%3A2/cap-smd-code">Open the tool</a></p>
 </section>
 <section class="tool" id="cap-series-parallel" style="--accent:#5B9BE0">

@@ -185,8 +185,15 @@ const CHECK_CASES = {
       expect: [[".pill.active", "Direct (p/n/µ)"], ["#film-unit", "µF"]] },
   ],
   "cap-smd-code": [
-    { name: "227A (AVX TAJ)", do: [["set", "#csmd-code", "227A"]], expect: [['[data-res="value"]', "220 µF"], ['[data-res="letter"]', "Rated 10V"]] },
-    { name: "J106, letter first", do: [["set", "#csmd-code", "J106"]], expect: [['[data-res="value"]', "10 µF"], ['[data-res="letter"]', "Rated 6.3V"]] },
+    { name: "227A (AVX TAJ)", do: [["set", "#csmd-code", "227A"]], expect: [['[data-res="value"]', "220 µF"], ['[data-res="letter"]', "Rated 10 V"]] },
+    { name: "J106, letter first", do: [["set", "#csmd-code", "J106"]], expect: [['[data-res="value"]', "10 µF"], ['[data-res="letter"]', "Rated 6.3 V"]] },
+    { name: "a voltage letter is checked against E6", do: [["set", "#csmd-code", "156A"]], expect: [['[data-res="series"]', "E6 standard value"]] },
+    { name: "a tolerance letter picks the series", do: [["pill", 1], ["set", "#csmd-code", "825K"]], expect: [['[data-res="series"]', "E12 standard value"]] },
+    { name: "a code reads out in its natural unit", do: [["set", "#csmd-code", "471"]], expect: [["#csmd-value", "470"], ["#csmd-unit", "pF"]] },
+    { name: "example: 475K", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="value"]', "4.7 µF"], ['[data-res="letter"]', "±10%"], [".pill.active", "Tolerance letter"], ["#csmd-code", "475K"]] },
+    { name: "the mode and unit are remembered", do: [["pill", 1], ["set", "#csmd-unit", "nF"], ["reopen"]],
+      expect: [[".pill.active", "Tolerance letter"], ["#csmd-unit", "nF"]] },
   ],
   "cap-series-parallel": [
     { name: "100 n ∥ 100 n", do: [], expect: [['[data-res="total"]', "200 nF"]] },

@@ -6384,10 +6384,32 @@ function renderFilmCapacitorCode(domain, tool, favId) {
 const SMD_CAP_VOLTAGE_LETTER = { G: 4, J: 6.3, A: 10, C: 16, D: 20, E: 25, V: 35, T: 50 };
 
 function renderCapSmdCode(domain, tool, favId) {
-  const state = { farads: 10e-6, mode: "voltage", letter: "" };
+  const C = "cap-smd-code";
   // Marked SMD capacitors, mostly tantalum, run from picofarads to a few
   // thousand microfarads.
   const CSMD_UNITS = { pF: 1e-12, nF: 1e-9, "µF": 1e-6 };
+  const state = {
+    farads: 10e-6,
+    mode: pref(C, "mode", "voltage", ["voltage", "tolerance"]),
+    letter: "",
+    unit: pref(C, "unit", "µF", Object.keys(CSMD_UNITS)),
+  };
+
+  // Markings on real tantalum chips. Each is read as if typed, so the chip
+  // shows it as printed.
+  const example = (mode, code) => () => {
+    state.mode = mode;
+    const r = faradsFor(code);
+    Object.assign(state, { farads: r.farads, letter: r.letter, unit: naturalFaradUnit(r.farads, CSMD_UNITS) });
+    paint();
+    app.querySelector("#csmd-code").value = code;
+    refresh("code");
+  };
+  useExamples([
+    { title: "227A on a tantalum", note: "22 and seven zeros in pF: 220 µF; A after the digits is the voltage, 10 V (AVX TAJ).", apply: example("voltage", "227A") },
+    { title: "J106 on a small case", note: "The letter can come first: J is 6.3 V, 106 is 10 µF.", apply: example("voltage", "J106") },
+    { title: "475K, a tolerance letter", note: "Some makers print the tolerance instead: 4.7 µF, K = ±10%.", apply: example("tolerance", "475K") },
+  ]);
 
   function letterTable() {
     return state.mode === "voltage" ? SMD_CAP_VOLTAGE_LETTER : SMD_IND_TOL_LETTER;
@@ -6443,18 +6465,18 @@ function renderCapSmdCode(domain, tool, favId) {
     return { farads: pF * 1e-12, letter };
   }
 
+  // One tolerance, one series: a tolerance letter picks it (K ±10% → E12).
+  // A voltage letter says nothing about tolerance, so E6, the series tantalum
+  // and polymer capacitors are stocked in.
   function seriesLine(farads) {
-    if (!isFinite(farads) || farads <= 0) return "";
-    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
-      if (nearestESeries(farads, name).exact) return `${name} standard value`;
-    }
-    return `Not standard — nearest E24 is ${formatFarads(nearestESeries(farads, "E24").value)}`;
+    const grid = state.mode === "tolerance" && state.letter ? eSeriesForTolerance(SMD_IND_TOL_LETTER[state.letter]) : "E6";
+    return seriesVerdict(farads, grid, formatFarads);
   }
 
   function letterText(letter) {
     if (!letter) return state.mode === "voltage" ? "No voltage letter" : "No tolerance letter";
     const v = letterTable()[letter];
-    return state.mode === "voltage" ? `Rated ${v}V` : `±${v}%`;
+    return state.mode === "voltage" ? `Rated ${v} V` : `±${v}%`;
   }
 
   // The part that carries these markings: a moulded tantalum capacitor.
@@ -6475,8 +6497,14 @@ function renderCapSmdCode(domain, tool, favId) {
     const valueField = app.querySelector("#csmd-value");
     const letterField = app.querySelector("#csmd-letter");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    // A value read from a marking shows in the unit it reads best in; a value
+    // typed keeps its unit.
     if (source !== "value" && document.activeElement !== valueField) {
-      valueField.value = trim(state.farads / CSMD_UNITS[state.unit || "µF"]);
+      if (state.farads > 0) {
+        state.unit = naturalFaradUnit(state.farads, CSMD_UNITS);
+        app.querySelector("#csmd-unit").value = state.unit;
+      }
+      valueField.value = trim(state.farads / CSMD_UNITS[state.unit]);
     }
     if (document.activeElement !== letterField) letterField.value = state.letter;
     app.querySelector('[data-res="err"]').textContent =
@@ -6491,7 +6519,6 @@ function renderCapSmdCode(domain, tool, favId) {
   }
 
   function paint() {
-    state.unit = state.unit || "µF";
     const code = codeFor(state.farads);
     app.innerHTML = `
       ${calcHeader(tool, favId, "3 digit code + voltage or tolerance letter")}
@@ -6520,7 +6547,7 @@ function renderCapSmdCode(domain, tool, favId) {
         <label>${state.mode === "voltage" ? "Voltage letter" : "Tolerance letter"}</label>
         <select id="csmd-letter">
           <option value="" ${state.letter === "" ? "selected" : ""}>None</option>
-          ${Object.keys(letterTable()).map((l) => `<option value="${l}" ${state.letter === l ? "selected" : ""}>${l} — ${state.mode === "voltage" ? `${letterTable()[l]}V` : `±${letterTable()[l]}%`}</option>`).join("")}
+          ${Object.keys(letterTable()).map((l) => `<option value="${l}" ${state.letter === l ? "selected" : ""}>${l} — ${state.mode === "voltage" ? `${letterTable()[l]} V` : `±${letterTable()[l]}%`}</option>`).join("")}
         </select>
       </div>
       <div class="error-text" data-res="err"></div>
@@ -6545,7 +6572,7 @@ function renderCapSmdCode(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; state.letter = ""; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; state.letter = ""; setPref(C, "mode", v); paint(); });
 
     const codeField = document.getElementById("csmd-code");
     codeField.oninput = () => {
@@ -6557,6 +6584,7 @@ function renderCapSmdCode(domain, tool, favId) {
     valueField.oninput = () => applyValue(valueField.value);
     document.getElementById("csmd-unit").onchange = (e) => {
       state.unit = e.target.value;
+      setPref(C, "unit", state.unit);
       applyValue(valueField.value);
     };
     document.getElementById("csmd-letter").onchange = (e) => {

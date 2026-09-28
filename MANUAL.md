@@ -1247,6 +1247,10 @@ burn.
   are not read.
 - A value typed in is encoded with R below 10 pF; tantalum parts never go that
   low.
+- **Standard value.** A tolerance letter picks the one series the value is
+  checked against (K, ±10%, E12; M, ±20%, E6). A voltage letter says nothing
+  about tolerance, so the value is checked against E6, the series tantalum and
+  polymer capacitors are stocked in.
 
 ### What it deliberately does not do
 
@@ -1264,6 +1268,10 @@ The review made the tool read a voltage letter printed before the digits
 (J106 was rejected), applied the 8 and 9 multipliers and R-code length fix
 from the ceramic tool, limited the units to pF, nF and µF, and made the drawing
 show the marking as typed.
+
+The re-walk checked the value against the tolerance's own series (156A is an
+E6 value, 825K an E12 one), showed a value read from a code in its own unit
+(471 as 470 pF) and put a space in "10 V".
 
 [↑ Index](#index)
 
