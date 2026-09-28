@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=75e7fb7d02" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=d771b7d010" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -198,7 +198,7 @@ yellow–violet–red; 0.22 Ω gives red–red–silver.</p>
 <section class="tool" id="smd-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>SMD resistor code</h2>
-  <figure class="shot"><img src="manual/img/smd-code.jpg?h=47cc38084a" loading="lazy" alt="Resistor SMD code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/smd-code.jpg?h=a7737beba9" loading="lazy" alt="Resistor SMD code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The resistance printed on a surface-mount (chip) resistor, from its marking —
 3-digit, 4-digit or EIA-96 — and the other way round: the marking a value would
@@ -226,9 +226,12 @@ characters, three or four of them.</p>
 <li><strong>4-digit code</strong> — usual on ±1% parts, which need a third figure. The first
   three are the figures, the last the number of zeros. 1001 is 1.00 kΩ, 4992 is
   49.9 kΩ.</li>
-<li><strong>R</strong> — below 10 Ω (3-digit) or 100 Ω (4-digit) there is no zero count small
-  enough, so R stands where the decimal point is. 4R7 is 4.7 Ω, R47 0.47 Ω,
-  47R0 47.0 Ω, R010 10 mΩ — the last one a current-sense resistor.</li>
+<li><strong>R and L</strong> — below 10 Ω (3-digit) or 100 Ω (4-digit) there is no zero count
+  small enough, so a letter stands where the decimal point is: R in ohms,
+  down to 0.1 Ω, then L in milliohms. 4R7 is 4.7 Ω, R47 0.47 Ω, 47R0 47.0 Ω;
+  47L is 47 mΩ, 1L0 1 mΩ, 10L0 10 mΩ, 12L7 12.7 mΩ — the milliohm values are
+  current-sense resistors. Some makers print R010 for 10 mΩ instead of 10L0;
+  it reads the same, and the tool reads it.</li>
 <li><strong>0, 000 or 0000</strong> — a zero-ohm link, used as a jumper that a pick-and-place
   machine can fit.</li>
 <li><strong>EIA-96</strong> — on small 1% parts (0603 and below) even four characters do not
@@ -258,9 +261,9 @@ value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.</p>
   E24 value, and 4701 reads "Not in E96 — nearest is 4.75 kΩ": E96 has no 4.7.
   A 3-digit code carries two figures, enough for every E6 to E24 value; the
   three figures of E48 to E192 need 4 digits or EIA-96.</li>
-<li><strong>Which scheme a part uses</strong> shows in the marking: a letter other than R
-  means EIA-96, and digits only are the 3- or 4-digit code, told apart by how
-  many there are. Pick the pill that matches.</li>
+<li><strong>Which scheme a part uses</strong> shows in the marking: a letter other than R or
+  L at the end means EIA-96, and digits only are the 3- or 4-digit code, told
+  apart by how many there are. Pick the pill that matches.</li>
 <li><strong>Small parts may not be marked at all.</strong> 0402 and smaller usually carry no
   marking; the value is only on the reel.</li>
 <li>Some makers use their own schemes for current-sense resistors (such as a
@@ -277,11 +280,15 @@ value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.</p>
 is 2.2 kΩ, 1001 is 1.00 kΩ, 4992 is 49.9 kΩ, R300 is 0.30 Ω, 01C is 10 kΩ; also
 68X is 49.9 Ω and 66B 4.75 kΩ.</p>
 <p>The review found four faults, now fixed. 47 mΩ on the 3-digit pill printed
-"R047", four characters, where the marking is R05; 10 mΩ on the 4-digit pill
-printed "R0100", five characters, instead of R010, and typing R010 showed
-R0100 on the chip. A marking of just "0" for a zero-ohm link was rejected. And
-12 345 Ω showed the code 1232 beside a resistance of 12.35 kΩ, with nothing to
-say the code means 12.3 kΩ.</p>
+"R047", four characters; 10 mΩ on the 4-digit pill printed "R0100", five
+characters, and typing R010 showed R0100 on the chip. A marking of just "0"
+for a zero-ohm link was rejected. And 12 345 Ω showed the code 1232 beside a
+resistance of 12.35 kΩ, with nothing to say the code means 12.3 kΩ.</p>
+<p>Reading the standard's tables (in ROHM's note) then showed that the first fix
+was itself wrong: milliohms take the letter L, not R. The tool had printed
+47 mΩ as R05, rounding it to 50 mΩ, and 12.7 mΩ as R013; the standard writes
+47L and 12L7, exactly. It now writes the L forms — 47L, 1L0, L12, 10L0,
+12L7 — and still reads R010.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A1/smd-code">Open the tool</a></p>
 </section>
 <section class="tool" id="resistor-power-rating" style="--accent:#5B9BE0">

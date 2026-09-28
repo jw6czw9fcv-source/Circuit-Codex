@@ -1834,7 +1834,7 @@ function renderSmdCode(domain, tool, favId) {
     { title: "103 on a 0603", note: "10 × 10³ = 10 kΩ, the usual ±5% pull-up; three digits, so ±5% parts.", apply: example("3", "103") },
     { title: "4R7 gate resistor", note: "R is the decimal point: 4.7 Ω, the series resistor in front of a MOSFET gate.", apply: example("3", "4R7") },
     { title: "1002 on a 1% part", note: "Four digits carry three figures: 100 × 10² = 10.0 kΩ ±1%.", apply: example("4", "1002") },
-    { title: "R010 current shunt", note: "10 mΩ in a 2512 or 1206, for measuring amps with a small voltage drop.", apply: example("4", "R010") },
+    { title: "10L0 current shunt", note: "L is the decimal point in milliohms (IEC 60062:2016): 10 mΩ, for measuring amps. Some makers print R010; it reads the same.", apply: example("4", "10L0") },
     { title: "01C on a small 1% part", note: "EIA-96: the first E96 value, 100, times C (×100) = 10 kΩ, on parts too small for 1002.", apply: example("96", "01C") },
   ]);
 
@@ -1853,7 +1853,13 @@ function renderSmdCode(domain, tool, favId) {
 
 
 
-  // R sits where the decimal point would: 4R7 is 4.7, R47 is 0.47, 47R0 is 47.
+  // The IEC 60062:2016 three- and four-character codes, as ROHM's application
+  // note tabulates them. From 10 Ω (3 characters) or 100 Ω (4) the figures
+  // are followed by the number of zeros: 472, 1002. Below that a letter
+  // stands where the decimal point would, and the code keeps its length: R in
+  // ohms down to 0.1 Ω (4R7, R47; 47R0, R470), then L in milliohms (47L, 1L0,
+  // L12; 10L0, 12L7, L127). Using R for milliohms, as this once did, printed
+  // 47 mΩ as R05 and had to round it to 50 mΩ.
   function codeFor(ohms) {
     if (state.mode === "96") {
       const e = eia96Encode(ohms);
@@ -1863,21 +1869,16 @@ function renderSmdCode(domain, tool, favId) {
     if (ohms === 0) return "0".repeat(digits);
     if (!isFinite(ohms) || ohms < 0) return null;
     const n = sig();
-    const e = Math.floor(Math.log10(ohms));
-    const d = String(Math.round(ohms / Math.pow(10, e - n + 1)));
-    if (d.length > n) return codeFor(Math.pow(10, e + 1));
+    const r = Number(ohms.toPrecision(n)); // what the marking can carry
+    const e = Math.floor(Math.log10(r) + 1e-9);
     const exponent = e - n + 1;
     if (exponent > 9) return null;
-    if (exponent >= 0) return d + String(exponent);
-    // Below that, R takes the decimal point's place and the marking keeps its
-    // length: two numerals on a 3-digit part (4R7, R47), three on a 4-digit
-    // one (4R70, R470, R010). Counting significant digits instead, as this
-    // once did, printed 10 mΩ as "R0100", five characters no part carries.
-    const frac = digits - 1 - Math.max(0, e + 1);
-    const fixed = ohms.toFixed(frac);
-    if (Number(fixed) === 0) return null;
-    const [whole, part] = fixed.split(".");
-    return `${whole === "0" ? "" : whole}R${part || ""}`;
+    if (exponent >= 0) return String(Math.round(r / Math.pow(10, exponent))) + String(exponent);
+    const [v, letter] = r >= 0.1 ? [r, "R"] : [r * 1000, "L"];
+    const ev = Math.floor(Math.log10(v) + 1e-9);
+    if (ev < -1) return null; // below 0.1 mΩ
+    const [whole, part] = v.toFixed(n - 1 - ev).split(".");
+    return `${whole === "0" ? "" : whole}${letter}${part || ""}`;
   }
 
   function ohmsFor(code) {
@@ -1885,9 +1886,11 @@ function renderSmdCode(domain, tool, favId) {
     if (!raw) return NaN;
     if (state.mode === "96") return eia96Decode(raw);
     const digits = Number(state.mode);
-    if (raw.includes("R")) {
-      if ((raw.match(/R/g) || []).length > 1 || /[^0-9R]/.test(raw)) return NaN;
-      const v = parseFloat(raw.replace("R", "."));
+    // R is the decimal point in ohms, L in milliohms: 4R7 is 4.7 Ω, 47L 47 mΩ.
+    // R010, a maker's form for 10 mΩ, reads correctly as well.
+    if (/[RL]/.test(raw)) {
+      if ((raw.match(/[RL]/g) || []).length > 1 || /[^0-9RL]/.test(raw)) return NaN;
+      const v = parseFloat(raw.replace(/[RL]/, ".")) * (raw.includes("L") ? 1e-3 : 1);
       return isFinite(v) ? v : NaN;
     }
     // Zero-ohm links are marked 0, 000 or 0000.
@@ -2010,7 +2013,7 @@ function renderSmdCode(domain, tool, favId) {
           : [`Value = (${sig() === 2 ? "D1D2" : "D1D2D3"}) × 10^${sig() === 2 ? "D3" : "D4"}`],
         state.mode === "96"
           ? "EIA-96 is for small ±1% parts where four digits do not fit. The two digits are not the value but its place among the 96 standard E96 values, 01 = 100 up to 96 = 976, and the letter is the multiplier: X ×0.1, A ×1, B ×10, C ×100, D ×1000. So 01C is 100 × 100 = 10 kΩ. Codes follow IEC 60062:2016."
-          : "Chip resistors are too small for colour bands, so the value is printed as digits. The last digit is how many zeros follow the others: 472 is 47 and two zeros, 4.7 kΩ. 4-digit codes, used on ±1% parts, carry three figures: 4992 is 49.9 kΩ. R stands for the decimal point: 4R7 is 4.7 Ω, R010 is 10 mΩ. 0 or 000 is a zero-ohm link. Codes follow IEC 60062:2016."
+          : "Chip resistors are too small for colour bands, so the value is printed as digits. The last digit is how many zeros follow the others: 472 is 47 and two zeros, 4.7 kΩ. 4-digit codes, used on ±1% parts, carry three figures: 4992 is 49.9 kΩ. Below that a letter is the decimal point: R in ohms (4R7 is 4.7 Ω, R47 0.47 Ω), L in milliohms (47L is 47 mΩ, 10L0 is 10 mΩ). 0 or 000 is a zero-ohm link. Codes follow IEC 60062:2016."
       )}
       ${calcFooter()}
     `;

@@ -223,9 +223,12 @@ characters, three or four of them.
 - **4-digit code** — usual on ±1% parts, which need a third figure. The first
   three are the figures, the last the number of zeros. 1001 is 1.00 kΩ, 4992 is
   49.9 kΩ.
-- **R** — below 10 Ω (3-digit) or 100 Ω (4-digit) there is no zero count small
-  enough, so R stands where the decimal point is. 4R7 is 4.7 Ω, R47 0.47 Ω,
-  47R0 47.0 Ω, R010 10 mΩ — the last one a current-sense resistor.
+- **R and L** — below 10 Ω (3-digit) or 100 Ω (4-digit) there is no zero count
+  small enough, so a letter stands where the decimal point is: R in ohms,
+  down to 0.1 Ω, then L in milliohms. 4R7 is 4.7 Ω, R47 0.47 Ω, 47R0 47.0 Ω;
+  47L is 47 mΩ, 1L0 1 mΩ, 10L0 10 mΩ, 12L7 12.7 mΩ — the milliohm values are
+  current-sense resistors. Some makers print R010 for 10 mΩ instead of 10L0;
+  it reads the same, and the tool reads it.
 - **0, 000 or 0000** — a zero-ohm link, used as a jumper that a pick-and-place
   machine can fit.
 - **EIA-96** — on small 1% parts (0603 and below) even four characters do not
@@ -258,9 +261,9 @@ value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.
   E24 value, and 4701 reads "Not in E96 — nearest is 4.75 kΩ": E96 has no 4.7.
   A 3-digit code carries two figures, enough for every E6 to E24 value; the
   three figures of E48 to E192 need 4 digits or EIA-96.
-- **Which scheme a part uses** shows in the marking: a letter other than R
-  means EIA-96, and digits only are the 3- or 4-digit code, told apart by how
-  many there are. Pick the pill that matches.
+- **Which scheme a part uses** shows in the marking: a letter other than R or
+  L at the end means EIA-96, and digits only are the 3- or 4-digit code, told
+  apart by how many there are. Pick the pill that matches.
 - **Small parts may not be marked at all.** 0402 and smaller usually carry no
   marking; the value is only on the reel.
 - Some makers use their own schemes for current-sense resistors (such as a
@@ -279,11 +282,16 @@ is 2.2 kΩ, 1001 is 1.00 kΩ, 4992 is 49.9 kΩ, R300 is 0.30 Ω, 01C is 10 kΩ; 
 68X is 49.9 Ω and 66B 4.75 kΩ.
 
 The review found four faults, now fixed. 47 mΩ on the 3-digit pill printed
-"R047", four characters, where the marking is R05; 10 mΩ on the 4-digit pill
-printed "R0100", five characters, instead of R010, and typing R010 showed
-R0100 on the chip. A marking of just "0" for a zero-ohm link was rejected. And
-12 345 Ω showed the code 1232 beside a resistance of 12.35 kΩ, with nothing to
-say the code means 12.3 kΩ.
+"R047", four characters; 10 mΩ on the 4-digit pill printed "R0100", five
+characters, and typing R010 showed R0100 on the chip. A marking of just "0"
+for a zero-ohm link was rejected. And 12 345 Ω showed the code 1232 beside a
+resistance of 12.35 kΩ, with nothing to say the code means 12.3 kΩ.
+
+Reading the standard's tables (in ROHM's note) then showed that the first fix
+was itself wrong: milliohms take the letter L, not R. The tool had printed
+47 mΩ as R05, rounding it to 50 mΩ, and 12.7 mΩ as R013; the standard writes
+47L and 12L7, exactly. It now writes the L forms — 47L, 1L0, L12, 10L0,
+12L7 — and still reads R010.
 
 [↑ Index](#index)
 
