@@ -2188,9 +2188,10 @@ function siFormat(v, unit, digits = 4) {
 }
 
 function renderVoltageDivider(domain, tool, favId) {
+  const C = "voltage-divider";
   const state = {
-    solve: "vout",
-    tol: 1,
+    solve: pref(C, "solve", "vout", ["vout", "r1", "r2"]),
+    tol: pref(C, "tol", 1, [0.1, 0.5, 1, 2, 5, 10]),
     values: { vin: 12, vout: 6, r1: 10, r2: 10 },
     // The units last chosen for each field, if any.
     units: {
@@ -2200,6 +2201,25 @@ function renderVoltageDivider(domain, tool, favId) {
       r2: pref("voltage-divider", "unit.r2", "kΩ", Object.keys(DIVIDER_R_UNITS)),
     },
   };
+
+  // Dividers met on real boards. Each sets what is solved for, the tolerance
+  // and the values, in volts and kilohms.
+  const example = (solve, tol, values) => () => {
+    Object.assign(state, { solve, tol });
+    Object.assign(state.values, values);
+    Object.assign(state.units, { vin: "V", vout: "V", r1: "kΩ", r2: "kΩ" });
+    paint();
+  };
+  useExamples([
+    { title: "5 V signal into a 3.3 V input", note: "With R1 = 10 kΩ, R2 works out at 19.41 kΩ; the nearest ±1% part, 19.6 kΩ, gives 3.31 V.",
+      apply: example("r2", 1, { vin: 5, vout: 3.3, r1: 10 }) },
+    { title: "Regulator feedback, 12 V to 3.3 V", note: "With R2 = 10 kΩ, R1 is 26.36 kΩ; in E96 that is 26.1 kΩ, giving 3.32 V.",
+      apply: example("r1", 1, { vin: 12, vout: 3.3, r2: 10 }) },
+    { title: "Battery voltage into an ADC", note: "100 kΩ over 33.2 kΩ: a full 12.6 V battery reads 3.14 V, under a 3.3 V ADC's limit, for 95 µA.",
+      apply: example("vout", 1, { vin: 12.6, r1: 100, r2: 33.2 }) },
+    { title: "Half-supply bias from 9 V", note: "Two equal resistors give half the supply, 4.5 V: the midpoint an op-amp on a single supply works around.",
+      apply: example("vout", 5, { vin: 9, r1: 100, r2: 100 }) },
+  ]);
 
   const FIELD = {
     vin: { label: "Input voltage (Vin)", units: VOLT_UNITS },
@@ -2398,7 +2418,7 @@ function renderVoltageDivider(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.solve = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.solve = v; setPref(C, "solve", v); paint(); });
 
     app.querySelectorAll("input[data-var]").forEach(input => {
       input.oninput = () => {
@@ -2415,6 +2435,7 @@ function renderVoltageDivider(domain, tool, favId) {
     });
     document.getElementById("vd-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);
+      setPref(C, "tol", state.tol);
       updateResults();
     };
     inputsFor(state.solve).filter(name => FIELD[name].units === DIVIDER_R_UNITS).forEach(name => {
