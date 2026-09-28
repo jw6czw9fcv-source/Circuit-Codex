@@ -1213,6 +1213,10 @@ const BAND_COLORS = {
   white:  { hex: "#F2F2F2", digit: 9, mult: 1e9 },
   gold:   { hex: "#C9A227",           mult: 0.1,  tol: 5 },
   silver: { hex: "#C0C4C8",           mult: 0.01, tol: 10 },
+  // Pink, ×0.001, came in with IEC 60062:2016 (Table 1), for milliohm values:
+  // yellow–violet–pink is 47 mΩ. A multiplier only. The standard covers
+  // resistors, so the inductor screen leaves it out.
+  pink:   { hex: "#F0A0B8",           mult: 0.001 },
   // IEC 60062 marks ±20% by leaving the tolerance band off the part, so this
   // entry is the absence of a band rather than a colour. It is legal on the
   // tolerance role only, and draws nothing on the resistor.
@@ -1443,6 +1447,8 @@ function renderResistorColorCode(domain, tool, favId) {
       apply: example(5, { d1: "yellow", d2: "white", d3: "white", mult: "brown", tol: "brown" }) },
     { title: "0.47 Ω current sense", note: "yellow–violet–silver–gold: silver as multiplier, ×0.01, for a value below 1 Ω.",
       apply: example(4, { d1: "yellow", d2: "violet", mult: "silver", tol: "gold" }) },
+    { title: "47 mΩ shunt, pink band", note: "yellow–violet–pink–gold: pink is ×0.001 (IEC 60062:2016), for milliohm values.",
+      apply: example(4, { d1: "yellow", d2: "violet", mult: "pink", tol: "gold" }) },
   ]);
 
   // Digits, then multiplier, then tolerance; the 6th band adds temperature
@@ -1522,9 +1528,11 @@ function renderResistorColorCode(domain, tool, favId) {
     const pitch = state.count === 4 ? 1.05 : 0.8, width = state.count === 4 ? 0.7 : 0.55;
     const first = state.count === 4 ? 1.3 : 1.05;
     const bands = valueBands.map((r, i) => ({ at: first + i * pitch, width, hex: BAND_COLORS[state.bands[r]].hex }));
-    const tolAt = state.count === 6 ? 4.45 : state.count === 5 ? 4.9 : 4.85;
-    if (state.bands.tol !== "none") bands.push({ at: tolAt, width, hex: BAND_COLORS[state.bands.tol].hex });
-    if (roles.includes("tc")) bands.push({ at: 5.2, width, hex: BAND_COLORS[state.bands.tc].hex });
+    // IEC 60062:2016 (3.1, 3.3): the tolerance band is at least 1.5 times as
+    // wide as the others, and it alone is wider — the 6th, TCR, band is not.
+    const tolAt = state.count === 6 ? 4.35 : state.count === 5 ? 4.75 : 4.7;
+    if (state.bands.tol !== "none") bands.push({ at: tolAt, width: 1.5 * width, hex: BAND_COLORS[state.bands.tol].hex });
+    if (roles.includes("tc")) bands.push({ at: 5.4, width, hex: BAND_COLORS[state.bands.tc].hex });
     return axialPartSVG(kind, bands);
   }
 
@@ -1690,7 +1698,7 @@ function renderResistorColorCode(domain, tool, favId) {
         [roles.filter(x => x[0] === "d").length === 2
           ? "Value = (10 × D1 + D2) × Multiplier"
           : "Value = (100 × D1 + 10 × D2 + D3) × Multiplier"],
-        "The first two or three bands are digits and the next is the multiplier, how many zeros follow. Then comes the tolerance: how far the real part may be from the marked value. On 6-band parts the last band is the temperature coefficient, the drift in ppm per degree. Read from the end away from the gap: tolerance stands apart on the right, and gold or silver is never first. Type a value to get its bands. Colours follow IEC 60062:2016."
+        "The first two or three bands are digits and the next is the multiplier, how many zeros follow; gold ×0.1, silver ×0.01 and pink ×0.001 give values below 10 Ω. Then comes the tolerance: how far the real part may be from the marked value. On 6-band parts the last band is the temperature coefficient, the drift in ppm per degree. Read from the end away from the gap: the tolerance band stands apart on the right and is the wide one, and gold or silver is never first. Type a value to get its bands. Colours follow IEC 60062:2016."
       )}
       ${calcFooter()}
     `;
@@ -5434,7 +5442,7 @@ function renderInductorColorCode(domain, tool, favId) {
   // (yellow–gold–violet is 4.7 µH), so the digit rollers offer it last.
   function optionsFor(role) {
     if (role === "tol") return INDUCTOR_TOL_ORDER;
-    if (role === "mult") return Object.keys(BAND_COLORS).filter((c) => BAND_COLORS[c].mult !== undefined);
+    if (role === "mult") return Object.keys(BAND_COLORS).filter((c) => BAND_COLORS[c].mult !== undefined && c !== "pink");
     return [...Object.keys(BAND_COLORS).filter((c) => BAND_COLORS[c].digit !== undefined), "gold"];
   }
 
@@ -5485,7 +5493,7 @@ function renderInductorColorCode(domain, tool, favId) {
     if (digits >= 100) { digits = Math.round(digits / 10); e += 1; }
     const mult = Math.pow(10, e);
     const multColor = Object.keys(BAND_COLORS)
-      .find((c) => BAND_COLORS[c].mult !== undefined && Math.abs(BAND_COLORS[c].mult - mult) <= mult * 1e-9);
+      .find((c) => BAND_COLORS[c].mult !== undefined && c !== "pink" && Math.abs(BAND_COLORS[c].mult - mult) <= mult * 1e-9);
     if (!multColor) return false;
     const c1 = colorWith("digit", Math.floor(digits / 10));
     const c2 = colorWith("digit", digits % 10);
@@ -5505,7 +5513,8 @@ function renderInductorColorCode(domain, tool, favId) {
     const bands = state.mil ? [{ at: 0.6, width: 1.1, hex: BAND_COLORS.silver.hex }] : [];
     const first = state.mil ? 2.1 : 1.3, pitch = state.mil ? 0.95 : 1.0;
     ["d1", "d2", "mult"].forEach((r, i) => bands.push({ at: first + i * pitch, width: 0.65, hex: BAND_COLORS[state.bands[r]].hex }));
-    if (state.bands.tol !== "none") bands.push({ at: state.mil ? 5.1 : 4.6, width: 0.65, hex: BAND_COLORS[state.bands.tol].hex });
+    // The tolerance band 1.5 times as wide, as on resistors (IEC 60062).
+    if (state.bands.tol !== "none") bands.push({ at: state.mil ? 5.05 : 4.5, width: 0.975, hex: BAND_COLORS[state.bands.tol].hex });
     return axialPartSVG("inductor", bands);
   }
 

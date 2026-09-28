@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=df13f518a8" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=43ce19006a" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -111,16 +111,18 @@ th { background: var(--card); }
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>Resistor color code</h2>
-  <figure class="shot"><img src="manual/img/resistor-color-code.jpg?h=b4e4949d26" loading="lazy" alt="Resistor color code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/resistor-color-code.jpg?h=bd1f13d1c7" loading="lazy" alt="Resistor color code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The resistance, tolerance and, on 6-band parts, temperature coefficient that a
 resistor's colour bands stand for — and the other way round: type a value and
 it shows the bands. It also says whether the value is a standard E-series value
 and, if not, the nearest one.</p>
 <h3>Source</h3>
-<p><strong>IEC 60062:2016</strong>, <em>Marking codes for resistors and capacitors</em>. Its table
+<p><strong>IEC 60062:2016</strong>, <em>Marking codes for resistors and capacitors</em>. Its Table 1
 gives each colour a digit, a multiplier, a tolerance and a temperature
-coefficient.</p>
+coefficient; clause 3 says how the bands are laid out. Both were read in the
+official preview of the standard, which runs to clause 4.2.2 — all this tool
+needs.</p>
 <h3>What the bands mean</h3>
 <p>A resistor is too small to print a number on, so the value is painted as rings
 of colour, one digit per ring. Each colour stands for a digit from 0 to 9:
@@ -130,8 +132,8 @@ grey 8, white 9.</p>
 <li><strong>Digit bands</strong> — the first two (4-band parts) or three (5- and 6-band parts)
   give the significant figures.</li>
 <li><strong>Multiplier</strong> — the next band says how many zeros follow, as a power of ten:
-  red is ×100, orange ×1000. Gold (×0.1) and silver (×0.01) make values below
-  10 Ω.</li>
+  red is ×100, orange ×1000. Gold (×0.1), silver (×0.01) and pink (×0.001,
+  new in the 2016 edition) make values below 10 Ω: yellow–violet–pink is 47 mΩ.</li>
 <li><strong>Tolerance</strong> — how far the actual resistance may be from the marked value:
   gold ±5% means a 1 kΩ part measures somewhere from 950 Ω to 1050 Ω. Leaving
   the band off means ±20%.</li>
@@ -140,9 +142,13 @@ grey 8, white 9.</p>
   100 ppm/K, so 0.01% per degree.</li>
 </ul>
 <p>Brown–black–red–gold is therefore 1, 0, ×100, ±5%: 1 kΩ ±5%.</p>
-<p><strong>Which end to start from.</strong> The tolerance band usually stands apart from the
-others, on the right; the digits are bunched on the left. Gold and silver are
-never digits, so a part with gold at one end is read from the other.</p>
+<p><strong>Which end to start from.</strong> The tolerance band stands apart from the others,
+on the right, and the standard makes it at least 1.5 times as wide as the
+others; the digits are bunched on the left, starting as near the end as
+possible. Gold and silver are never digits, so a part with gold at one end is
+read from the other. On 6-band parts the temperature band comes last but is
+not the wide one: the 2016 edition changed that, because a wide sixth band
+was mistaken for the tolerance.</p>
 <p><strong>Standard values.</strong> Resistors are made only in preferred values, the
 E-series, spaced so that neighbouring values just overlap within their
 tolerance. The tolerance band picks the one series the value is checked
@@ -155,8 +161,8 @@ reads "Not in E96", though makers do sell it (see the E-series tool).</p>
 </code></pre>
 <p>Typing a value runs it backwards: the value is split into as many significant
 digits as the band count allows, rounded, and the remaining power of ten picks
-the multiplier colour. The smallest value a code can show is 0.1 Ω on 4 bands
-(brown–black–silver) and 1 Ω on 5 or 6; the largest is 99 GΩ and 999 GΩ.
+the multiplier colour. The smallest value a code can show is 10 mΩ on 4 bands
+(brown–black–pink) and 0.1 Ω on 5 or 6; the largest is 99 GΩ and 999 GΩ.
 Outside that there is no band for it, and the tool says so.</p>
 <h3>Assumptions and limits</h3>
 <ul>
@@ -179,8 +185,11 @@ Outside that there is no band for it, and the tool says so.</p>
 <p>Against the IEC 60062:2016 table: digits, multipliers, tolerances and
 temperature coefficients for every colour. This check found the app had grey
 as ±0.05%, the pre-2016 non-standard value, and no tolerance for orange or
-yellow; all three now follow the standard.</p>
-<p>Brown–black–red–gold reads 1 kΩ ±5%, 950 Ω to 1.05 kΩ, E6. At grey's ±0.01% the
+yellow; all three now follow the standard. A second reading of the official
+text found two more gaps, now fixed: the pink ×0.001 multiplier was missing,
+and the drawing made the tolerance band no wider than the others.</p>
+<p>Brown–black–red–gold reads 1 kΩ ±5%, 950 Ω to 1.05 kΩ, an E24 value. 47 mΩ gives
+yellow–violet–pink. At grey's ±0.01% the
 range reads 999.9 Ω to 1.0001 kΩ — at four figures it had printed as
 "1 kΩ", which the range now shows to enough figures to see. Typing 4.7 k gives
 yellow–violet–red; 0.22 Ω gives red–red–silver.</p>
@@ -196,8 +205,15 @@ yellow–violet–red; 0.22 Ω gives red–red–silver.</p>
 carry. It says whether the value is a standard E-series value.</p>
 <h3>Source</h3>
 <p><strong>IEC 60062:2016</strong>, <em>Marking codes for resistors and capacitors</em>, which defines
-the 3- and 4-character numerical codes, R as the decimal point, and the
-three-character code for E96 values that the industry calls EIA-96.</p>
+the three-character code (clause 4.2.2), the four-character code (4.2.3), R as
+the decimal point, and in its Annex A a special three-character code for
+values with three figures — what the industry calls EIA-96.</p>
+<p>What was read in the standard itself, and what was not: the official preview
+runs to clause 4.2.2, far enough to confirm the three-character code and its
+limit — it "is applicable to values from an E series up to E24", since it
+carries only two figures. The tables of 4.2.3 and Annex A lie beyond the
+preview; the 4-digit and EIA-96 decoding were checked against published
+examples of those codes, not against the standard's own tables.</p>
 <h3>What the marking means</h3>
 <p>A chip resistor is far too small for colour bands, so the value is printed as
 characters, three or four of them.</p>
@@ -255,7 +271,7 @@ value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.</p>
   characters mean picofarads or microhenries there.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>Against the examples given with the IEC 60062:2016 codes: 334 is 330 kΩ, 222
+<p>Against published examples of the codes: 334 is 330 kΩ, 222
 is 2.2 kΩ, 1001 is 1.00 kΩ, 4992 is 49.9 kΩ, R300 is 0.30 Ω, 01C is 10 kΩ; also
 68X is 49.9 Ω and 66B 4.75 kΩ.</p>
 <p>The review found four faults, now fixed. 47 mΩ on the 3-digit pill printed
@@ -901,8 +917,15 @@ for a value. It says whether the value is a standard E-series value.</p>
 <ul>
 <li><strong>EIA-198</strong> (RS-198), the code for ceramic capacitors: digits in picofarads,
   with 8 and 9 as the multipliers ×0.01 and ×0.1 for values under 10 pF.</li>
-<li><strong>IEC 60062:2016</strong>, for R as the decimal point and the tolerance letters.</li>
+<li><strong>IEC 60062:2016</strong>, for R as the decimal point, its three-character code for
+  capacitors (clause 4.3.2) and the tolerance letters (clause 5: relative
+  tolerances, asymmetrical ones such as Z, and absolute ones in pF).</li>
 </ul>
+<p>Neither text was read in full. EIA-198 is not freely available, and the
+official preview of IEC 60062 stops before clauses 4.3 and 5; it confirms that
+they exist, not their tables. The codes, the 8 and 9 multipliers and the
+tolerance letters were checked against capacitor makers' datasheets and
+published examples.</p>
 <h3>What the marking means</h3>
 <p>Ceramic disc and small film capacitors have no room for "100 nF", so the value
 is printed as a code, always counted in <strong>picofarads</strong> (pF). 1 nF is 1000 pF,
@@ -1033,8 +1056,14 @@ ways film parts are marked — the 3-digit picofarad code or the letter code
 <ul>
 <li><strong>EIA-198</strong> for the 3-digit code, the same as on ceramic capacitors.</li>
 <li><strong>IEC 60062:2016</strong> for the letter code (the "RKM" code: p, n, µ in place of
-  the decimal point) and the tolerance letters.</li>
+  the decimal point, clause 4.3.1) and the tolerance letters (clause 5).</li>
 </ul>
+<p>Neither text was read in full: EIA-198 is not freely available, and the
+official preview of IEC 60062 stops before clauses 4.3 and 5. The preview does
+show the same principle for resistors in full (4k7, R47: the letter is the
+decimal point and the multiplier at once). The capacitor codes and letters
+were checked against film capacitor makers' datasheets and published
+examples.</p>
 <h3>What the marking means</h3>
 <p>Film capacitors — polyester (PET), polypropylene (PP) and similar, usually a
 small rectangular box with two leads — carry their value in one of two ways.</p>
@@ -1136,7 +1165,8 @@ tolerance; and the other way round, the marking for a value.</p>
 <li>The marking layout and voltage letters from the <strong>Kyocera-AVX TAJ</strong> tantalum
   datasheet: "227 A" is 220 µF at 10 V (A = 10 V) on its larger cases; on its
   small cases the letter sits above the digits, "J" over "106" for 10 µF at
-  6.3 V. The rest of the voltage letters are the EIA tantalum code.</li>
+  6.3 V. The rest of the voltage letters are the EIA tantalum code as the
+  makers print it; the EIA document itself was not read.</li>
 <li>The <strong>KEMET T491</strong> datasheet lists what its marking holds: polarity band,
   picofarad code, rated voltage and a date code.</li>
 </ul>
@@ -1457,7 +1487,7 @@ storing 1 J in 100 µF needs 141.4 V; storing 10 J at 400 V needs 125 µF.</p>
 <section class="tool" id="inductor-color-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Inductors</div>
   <h2>Inductor color code</h2>
-  <figure class="shot"><img src="manual/img/inductor-color-code.jpg?h=2cd0d2929d" loading="lazy" alt="Inductor color code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/inductor-color-code.jpg?h=7a4dc15ed0" loading="lazy" alt="Inductor color code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The inductance and tolerance that the colour bands on an axial (leaded)
 inductor stand for, and the other way round: the bands for a value. A second

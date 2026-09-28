@@ -96,9 +96,11 @@ and, if not, the nearest one.
 
 ### Source
 
-**IEC 60062:2016**, *Marking codes for resistors and capacitors*. Its table
+**IEC 60062:2016**, *Marking codes for resistors and capacitors*. Its Table 1
 gives each colour a digit, a multiplier, a tolerance and a temperature
-coefficient.
+coefficient; clause 3 says how the bands are laid out. Both were read in the
+official preview of the standard, which runs to clause 4.2.2 — all this tool
+needs.
 
 ### What the bands mean
 
@@ -110,8 +112,8 @@ grey 8, white 9.
 - **Digit bands** — the first two (4-band parts) or three (5- and 6-band parts)
   give the significant figures.
 - **Multiplier** — the next band says how many zeros follow, as a power of ten:
-  red is ×100, orange ×1000. Gold (×0.1) and silver (×0.01) make values below
-  10 Ω.
+  red is ×100, orange ×1000. Gold (×0.1), silver (×0.01) and pink (×0.001,
+  new in the 2016 edition) make values below 10 Ω: yellow–violet–pink is 47 mΩ.
 - **Tolerance** — how far the actual resistance may be from the marked value:
   gold ±5% means a 1 kΩ part measures somewhere from 950 Ω to 1050 Ω. Leaving
   the band off means ±20%.
@@ -121,9 +123,13 @@ grey 8, white 9.
 
 Brown–black–red–gold is therefore 1, 0, ×100, ±5%: 1 kΩ ±5%.
 
-**Which end to start from.** The tolerance band usually stands apart from the
-others, on the right; the digits are bunched on the left. Gold and silver are
-never digits, so a part with gold at one end is read from the other.
+**Which end to start from.** The tolerance band stands apart from the others,
+on the right, and the standard makes it at least 1.5 times as wide as the
+others; the digits are bunched on the left, starting as near the end as
+possible. Gold and silver are never digits, so a part with gold at one end is
+read from the other. On 6-band parts the temperature band comes last but is
+not the wide one: the 2016 edition changed that, because a wide sixth band
+was mistaken for the tolerance.
 
 **Standard values.** Resistors are made only in preferred values, the
 E-series, spaced so that neighbouring values just overlap within their
@@ -139,8 +145,8 @@ reads "Not in E96", though makers do sell it (see the E-series tool).
 
 Typing a value runs it backwards: the value is split into as many significant
 digits as the band count allows, rounded, and the remaining power of ten picks
-the multiplier colour. The smallest value a code can show is 0.1 Ω on 4 bands
-(brown–black–silver) and 1 Ω on 5 or 6; the largest is 99 GΩ and 999 GΩ.
+the multiplier colour. The smallest value a code can show is 10 mΩ on 4 bands
+(brown–black–pink) and 0.1 Ω on 5 or 6; the largest is 99 GΩ and 999 GΩ.
 Outside that there is no band for it, and the tool says so.
 
 ### Assumptions and limits
@@ -165,9 +171,12 @@ Outside that there is no band for it, and the tool says so.
 Against the IEC 60062:2016 table: digits, multipliers, tolerances and
 temperature coefficients for every colour. This check found the app had grey
 as ±0.05%, the pre-2016 non-standard value, and no tolerance for orange or
-yellow; all three now follow the standard.
+yellow; all three now follow the standard. A second reading of the official
+text found two more gaps, now fixed: the pink ×0.001 multiplier was missing,
+and the drawing made the tolerance band no wider than the others.
 
-Brown–black–red–gold reads 1 kΩ ±5%, 950 Ω to 1.05 kΩ, E6. At grey's ±0.01% the
+Brown–black–red–gold reads 1 kΩ ±5%, 950 Ω to 1.05 kΩ, an E24 value. 47 mΩ gives
+yellow–violet–pink. At grey's ±0.01% the
 range reads 999.9 Ω to 1.0001 kΩ — at four figures it had printed as
 "1 kΩ", which the range now shows to enough figures to see. Typing 4.7 k gives
 yellow–violet–red; 0.22 Ω gives red–red–silver.
@@ -190,8 +199,16 @@ carry. It says whether the value is a standard E-series value.
 ### Source
 
 **IEC 60062:2016**, *Marking codes for resistors and capacitors*, which defines
-the 3- and 4-character numerical codes, R as the decimal point, and the
-three-character code for E96 values that the industry calls EIA-96.
+the three-character code (clause 4.2.2), the four-character code (4.2.3), R as
+the decimal point, and in its Annex A a special three-character code for
+values with three figures — what the industry calls EIA-96.
+
+What was read in the standard itself, and what was not: the official preview
+runs to clause 4.2.2, far enough to confirm the three-character code and its
+limit — it "is applicable to values from an E series up to E24", since it
+carries only two figures. The tables of 4.2.3 and Annex A lie beyond the
+preview; the 4-digit and EIA-96 decoding were checked against published
+examples of those codes, not against the standard's own tables.
 
 ### What the marking means
 
@@ -255,7 +272,7 @@ value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.
 
 ### How it was checked
 
-Against the examples given with the IEC 60062:2016 codes: 334 is 330 kΩ, 222
+Against published examples of the codes: 334 is 330 kΩ, 222
 is 2.2 kΩ, 1001 is 1.00 kΩ, 4992 is 49.9 kΩ, R300 is 0.30 Ω, 01C is 10 kΩ; also
 68X is 49.9 Ω and 66B 4.75 kΩ.
 
@@ -1004,7 +1021,15 @@ for a value. It says whether the value is a standard E-series value.
 
 - **EIA-198** (RS-198), the code for ceramic capacitors: digits in picofarads,
   with 8 and 9 as the multipliers ×0.01 and ×0.1 for values under 10 pF.
-- **IEC 60062:2016**, for R as the decimal point and the tolerance letters.
+- **IEC 60062:2016**, for R as the decimal point, its three-character code for
+  capacitors (clause 4.3.2) and the tolerance letters (clause 5: relative
+  tolerances, asymmetrical ones such as Z, and absolute ones in pF).
+
+Neither text was read in full. EIA-198 is not freely available, and the
+official preview of IEC 60062 stops before clauses 4.3 and 5; it confirms that
+they exist, not their tables. The codes, the 8 and 9 multipliers and the
+tolerance letters were checked against capacitor makers' datasheets and
+published examples.
 
 ### What the marking means
 
@@ -1105,7 +1130,14 @@ ways film parts are marked — the 3-digit picofarad code or the letter code
 
 - **EIA-198** for the 3-digit code, the same as on ceramic capacitors.
 - **IEC 60062:2016** for the letter code (the "RKM" code: p, n, µ in place of
-  the decimal point) and the tolerance letters.
+  the decimal point, clause 4.3.1) and the tolerance letters (clause 5).
+
+Neither text was read in full: EIA-198 is not freely available, and the
+official preview of IEC 60062 stops before clauses 4.3 and 5. The preview does
+show the same principle for resistors in full (4k7, R47: the letter is the
+decimal point and the multiplier at once). The capacitor codes and letters
+were checked against film capacitor makers' datasheets and published
+examples.
 
 ### What the marking means
 
@@ -1198,7 +1230,8 @@ tolerance; and the other way round, the marking for a value.
 - The marking layout and voltage letters from the **Kyocera-AVX TAJ** tantalum
   datasheet: "227 A" is 220 µF at 10 V (A = 10 V) on its larger cases; on its
   small cases the letter sits above the digits, "J" over "106" for 10 µF at
-  6.3 V. The rest of the voltage letters are the EIA tantalum code.
+  6.3 V. The rest of the voltage letters are the EIA tantalum code as the
+  makers print it; the EIA document itself was not read.
 - The **KEMET T491** datasheet lists what its marking holds: polarity band,
   picofarad code, rated voltage and a date code.
 
