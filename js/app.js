@@ -10138,13 +10138,33 @@ function renderWavelength(domain, tool, favId) {
 // symmetric case (300ohm delta <-> 100ohm star) is the textbook example
 // of both directions at once.
 function renderDeltaY(domain, tool, favId) {
+  const C = "delta-y";
+  const unit = (n) => pref(C, `unit.${n}`, "Ω", Object.keys(OHM_UNITS));
   const state = {
-    mode: "d2y",
+    mode: pref(C, "mode", "d2y", ["d2y", "y2d"]),
     d: { ab: 300, bc: 300, ca: 300 },
-    dUnit: { ab: "Ω", bc: "Ω", ca: "Ω" },
+    // The units last chosen for each field, if any.
+    dUnit: { ab: unit("ab"), bc: unit("bc"), ca: unit("ca") },
     y: { a: 100, b: 100, c: 100 },
-    yUnit: { a: "Ω", b: "Ω", c: "Ω" },
+    yUnit: { a: unit("a"), b: unit("b"), c: unit("c") },
   };
+
+  // Each sets the direction and the three known resistances, in ohms.
+  const example = (mode, values) => () => {
+    state.mode = mode;
+    const [group, units] = mode === "d2y" ? ["d", "dUnit"] : ["y", "yUnit"];
+    Object.assign(state[group], values);
+    Object.keys(values).forEach((k) => { state[units][k] = "Ω"; });
+    paint();
+  };
+  useExamples([
+    { title: "Three equal 300 Ω", note: "A balanced Delta turns into a Y of a third its value: 100 Ω per leg.",
+      apply: example("d2y", { ab: 300, bc: 300, ca: 300 }) },
+    { title: "Delta of 10, 20 and 30 Ω", note: "Each leg is the two sides at its terminal, multiplied, over the 60 Ω sum: 5, 3.33 and 10 Ω.",
+      apply: example("d2y", { ab: 10, bc: 20, ca: 30 }) },
+    { title: "6 dB attenuator, T to π", note: "B is ground. The 50 Ω T pad's 16.61 Ω arms and 66.93 Ω shunt become 150.5 Ω shunts and a 37.34 Ω arm.",
+      apply: example("y2d", { a: 16.61, b: 66.93, c: 16.61 }) },
+  ]);
 
   function si(group, name) {
     return state[group][name] * OHM_UNITS[state[group + "Unit"][name]];
@@ -10276,15 +10296,20 @@ function renderDeltaY(domain, tool, favId) {
         </div>`).join("")}
       <div class="error-text" data-res="err">${issue}</div>
 
-      <div class="section-label" style="color:#5DCAA5">Results — the ${isD2Y ? "Y" : "Delta"}</div>
-      ${outputFields.map(([name, label]) => `
-        <div class="result-field">
-          <div class="result-head">
-            <span class="label">${label}</span>
-            <span class="badge-calc">${ICONS.bolt2}Calculated</span>
-          </div>
-          <div class="result-value"><span class="num" data-res="${name}">${issue ? "—" : formatOhms(r[name])}</span></div>
-        </div>`).join("")}
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">The equivalent ${isD2Y ? "Y" : "Delta"}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-trio">
+          ${outputFields.map(([name, label]) => `
+            <div>
+              <div class="trio-label">${label}</div>
+              <div class="result-value"><span class="num" data-res="${name}">${issue ? "—" : formatOhms(r[name])}</span></div>
+            </div>`).join("")}
+        </div>
+      </div>
 
       ${formulaSection(
         ["Ra = Rab·Rca / (Rab+Rbc+Rca)",
@@ -10298,7 +10323,7 @@ function renderDeltaY(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
     app.querySelectorAll("input[data-var]").forEach((input) => {
       input.oninput = () => {
@@ -10307,7 +10332,11 @@ function renderDeltaY(domain, tool, favId) {
       };
     });
     app.querySelectorAll("select[data-unit]").forEach((select) => {
-      select.onchange = () => { state[inputUnitGroup][select.dataset.unit] = select.value; updateResults(); };
+      select.onchange = () => {
+        state[inputUnitGroup][select.dataset.unit] = select.value;
+        setPref(C, `unit.${select.dataset.unit}`, select.value);
+        updateResults();
+      };
     });
 
     updateResults();

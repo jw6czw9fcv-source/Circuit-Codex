@@ -129,6 +129,12 @@ const CHECK_CASES = {
   "delta-y": [
     { name: "10, 20, 30 Ω delta", do: [["set", 'input[data-var="ab"]', "10"], ["set", 'input[data-var="bc"]', "20"], ["set", 'input[data-var="ca"]', "30"]],
       expect: [['[data-res="a"]', "5 Ω"], ['[data-res="b"]', "3.333 Ω"], ['[data-res="c"]', "10 Ω"]] },
+    { name: "example: equal 300 Ω is 100 Ω a leg", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="a"]', "100 Ω"], ['[data-res="b"]', "100 Ω"], ['[data-res="c"]', "100 Ω"]] },
+    { name: "example: 6 dB T pad to π", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="ab"]', "150.5 Ω"], ['[data-res="bc"]', "150.5 Ω"], ['[data-res="ca"]', "37.34 Ω"], [".pill.active", "Y → Δ"]] },
+    { name: "the direction and units are remembered", do: [["pill", 1], ["set", 'select[data-unit="a"]', "kΩ"], ["reopen"]],
+      expect: [[".pill.active", "Y → Δ"], ['select[data-unit="a"]', "kΩ"]] },
   ],
   "thermistor": [
     { name: "Vishay 10 k, B 3977, at 85 °C", do: [["set", "#th-coef", "3977"], ["set", "#th-temp", "85"]], expect: [["#th-res", "1.07"]] },

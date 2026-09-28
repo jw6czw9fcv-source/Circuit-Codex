@@ -1159,3 +1159,11 @@ a.icon-btn { text-decoration: none; }
   margin: 0 16px 8px; padding: 7px 11px; border-radius: 10px; font-size: 13.5px; line-height: 1.35;
   background: #2A2412; border: 1px solid #4A3F1C; color: #F2D98A;
 }
+
+/* Three results of equal weight in one card, side by side: the three legs
+   of a Y or sides of a Delta. Stacked as three cards they ran under the tab
+   bar. Each value is still a .result-value, so a tap copies it. */
+.result-trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.result-trio > div { min-width: 0; }
+.trio-label { color: var(--result-text-soft); font-size: 13px; }
+.result-trio .result-value .num { font-size: 21px; white-space: nowrap; }
