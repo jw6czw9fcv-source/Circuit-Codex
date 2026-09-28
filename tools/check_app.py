@@ -59,6 +59,13 @@ def main():
             print(f"✗ {r['name']} ({r['calc']})")
             for i in issues:
                 print(f"    {i}")
+    if "--drawings" in sys.argv:
+        noted = [r for r in report if r.get("notes")]
+        for r in noted:
+            print(f"· {r['name']} ({r['calc']})")
+            for n in r["notes"]:
+                print(f"    {n}")
+        print(f"{len(noted)} of {len(report)} tools have drawing notes")
     tight = sorted((r for r in report if "clearance" in r and 0 <= r["clearance"] < 20), key=lambda r: r["clearance"])
     for r in tight:
         print(f"  note: {r['name']} ({r['calc']}) has only {r['clearance']} px above the tab bar")

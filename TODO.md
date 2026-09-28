@@ -429,7 +429,8 @@ an Example, then continue the review at tool 18)
 - [x] Input — SI shorthand (4k7, 10u, 2M2) in value fields where a keyboard
       allows; a ± button beside fields that can be negative. The iPhone keeps
       its numeric keypad.
-- [ ] Visual — shared components (primary result large, secondary values
+- [x] Visual (done 2026-09-27; the primary result made large per tool is
+      part of the re-walk) — shared components (primary result large, secondary values
       ≥ 13 px, one result style everywhere); realistic component drawings
       (dog-bone resistor with shading, ceramic, film, SMD chip, inductor);
       schematic text ≥ 11 px, one stroke width, drawings that fill their box,

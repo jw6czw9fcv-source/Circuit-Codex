@@ -8186,7 +8186,9 @@ function renderRcFilter(domain, tool, favId) {
   // topology changes — but the dot tracking "Explore a frequency" moves on
   // every input edit, so its position is recomputed separately in
   // updateResults() using these same coordinate functions.
-  const CHART = { l: 26, r: 208, t: 14, b: 86 };
+  // Left margin wide enough for "−50dB" at 11 px; the frequency labels sit a
+  // line lower so the two corner labels never meet.
+  const CHART = { l: 40, r: 208, t: 14, b: 86 };
   function chartX(ratio) {
     const clamped = Math.max(0.01, Math.min(100, ratio));
     return CHART.l + (Math.log10(clamped) + 2) * ((CHART.r - CHART.l) / 4);
@@ -8208,7 +8210,7 @@ function renderRcFilter(domain, tool, favId) {
     }
     const sysRatio = systemCutoffRatio();
     const showSysLine = state.poles > 1;
-    return `<svg width="220" height="102" viewBox="0 0 220 102" fill="none">
+    return `<svg width="220" height="108" viewBox="0 0 220 108" fill="none">
       ${dbTicks.map((db) => `<path d="M${CHART.l},${chartY(db)} H${CHART.r}" stroke="#22262D" stroke-width="1"/>`).join("")}
       ${decades.map((t) => `<path d="M${chartX(Math.pow(10, t))},${CHART.t} V${CHART.b}" stroke="#22262D" stroke-width="1"/>`).join("")}
       <path d="M${CHART.l},${chartY(-3)} H${CHART.r}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
@@ -8218,7 +8220,7 @@ function renderRcFilter(domain, tool, favId) {
       <circle cx="${chartX(1)}" cy="${chartY(-3)}" r="2.5" fill="${state.poles > 1 ? "#5A6169" : domain.color}"/>
       ${showSysLine ? `<circle cx="${chartX(sysRatio)}" cy="${chartY(-3)}" r="2.5" fill="#5DCAA5"/>` : ""}
       <circle data-res="freqdot" cx="${chartX(1)}" cy="${chartY(-3)}" r="4" fill="#5DCAA5" stroke="#0E1013" stroke-width="1.5"/>
-      ${decades.map((t) => `<text x="${chartX(Math.pow(10, t))}" y="97" fill="#8A9099" font-size="8" text-anchor="middle">${decadeLabel[t]}</text>`).join("")}
+      ${decades.map((t) => `<text x="${t === 2 ? 218 : chartX(Math.pow(10, t))}" y="103" fill="#8A9099" font-size="8" text-anchor="${t === 2 ? "end" : "middle"}">${decadeLabel[t]}</text>`).join("")}
       <text x="${CHART.l - 4}" y="${CHART.t + 3}" fill="#8A9099" font-size="8" text-anchor="end">0dB</text>
       <text x="${CHART.l - 4}" y="${CHART.b + 3}" fill="#8A9099" font-size="8" text-anchor="end">−50dB</text>
     </svg>`;
@@ -8541,7 +8543,9 @@ function renderRlFilter(domain, tool, favId) {
     return state.topology === "lowpass" ? shrink : 1 / shrink;
   }
 
-  const CHART = { l: 26, r: 208, t: 14, b: 86 };
+  // Left margin wide enough for "−50dB" at 11 px; the frequency labels sit a
+  // line lower so the two corner labels never meet.
+  const CHART = { l: 40, r: 208, t: 14, b: 86 };
   function chartX(ratio) {
     const clamped = Math.max(0.01, Math.min(100, ratio));
     return CHART.l + (Math.log10(clamped) + 2) * ((CHART.r - CHART.l) / 4);
@@ -8563,7 +8567,7 @@ function renderRlFilter(domain, tool, favId) {
     }
     const sysRatio = systemCutoffRatio();
     const showSysLine = state.poles > 1;
-    return `<svg width="220" height="102" viewBox="0 0 220 102" fill="none">
+    return `<svg width="220" height="108" viewBox="0 0 220 108" fill="none">
       ${dbTicks.map((db) => `<path d="M${CHART.l},${chartY(db)} H${CHART.r}" stroke="#22262D" stroke-width="1"/>`).join("")}
       ${decades.map((t) => `<path d="M${chartX(Math.pow(10, t))},${CHART.t} V${CHART.b}" stroke="#22262D" stroke-width="1"/>`).join("")}
       <path d="M${CHART.l},${chartY(-3)} H${CHART.r}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
@@ -8573,7 +8577,7 @@ function renderRlFilter(domain, tool, favId) {
       <circle cx="${chartX(1)}" cy="${chartY(-3)}" r="2.5" fill="${state.poles > 1 ? "#5A6169" : domain.color}"/>
       ${showSysLine ? `<circle cx="${chartX(sysRatio)}" cy="${chartY(-3)}" r="2.5" fill="#5DCAA5"/>` : ""}
       <circle data-res="freqdot" cx="${chartX(1)}" cy="${chartY(-3)}" r="4" fill="#5DCAA5" stroke="#0E1013" stroke-width="1.5"/>
-      ${decades.map((t) => `<text x="${chartX(Math.pow(10, t))}" y="97" fill="#8A9099" font-size="8" text-anchor="middle">${decadeLabel[t]}</text>`).join("")}
+      ${decades.map((t) => `<text x="${t === 2 ? 218 : chartX(Math.pow(10, t))}" y="103" fill="#8A9099" font-size="8" text-anchor="${t === 2 ? "end" : "middle"}">${decadeLabel[t]}</text>`).join("")}
       <text x="${CHART.l - 4}" y="${CHART.t + 3}" fill="#8A9099" font-size="8" text-anchor="end">0dB</text>
       <text x="${CHART.l - 4}" y="${CHART.b + 3}" fill="#8A9099" font-size="8" text-anchor="end">−50dB</text>
     </svg>`;
@@ -9621,7 +9625,7 @@ function renderDeltaY(domain, tool, favId) {
     const yTone = state.mode === "d2y" ? result : known;
     const A = [70, 12], B = [18, 92], C = [122, 92];
     const A2 = [210, 12], B2 = [150, 98], C2 = [270, 98], N = [210, 68];
-    return `<svg width="280" height="118" viewBox="0 0 280 118" fill="none">
+    return `<svg width="286" height="124" viewBox="0 -4 286 124" fill="none">
       <path d="${edgeZigzag(A[0], A[1], B[0], B[1])}" stroke="${dTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <path d="${edgeZigzag(B[0], B[1], C[0], C[1])}" stroke="${dTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <path d="${edgeZigzag(C[0], C[1], A[0], A[1])}" stroke="${dTone}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
@@ -10332,7 +10336,7 @@ function renderTransistorBias(domain, tool, favId) {
     // stub — so the node and the collector lead's tip land at the same
     // height (76); the base bar's overhang is sized so its top edge sits
     // at that same 76, letting the horizontal base wire reach it flat.
-    return `<svg width="210" height="196" viewBox="0 -10 210 196" fill="none">
+    return `<svg width="210" height="200" viewBox="0 -14 210 200" fill="none">
       <path d="M62 8 H114" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M88 8 V2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="88" cy="8" r="2.6" fill="${wire}"/>
@@ -10617,7 +10621,7 @@ function renderTransistorSwitch(domain, tool, favId) {
          ${resistorBranch(barBot + 12, "Rload", barBot + 32)}
          <path d="M114 ${barBot + 48} V${groundY}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`
       : `<path d="M114 ${barBot} V${groundY}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
-    return `<svg width="180" height="${groundY + 20}" viewBox="0 -10 180 ${groundY + 20}" fill="none">
+    return `<svg width="180" height="${groundY + 24}" viewBox="0 -14 180 ${groundY + 24}" fill="none">
       <path d="M114 8 V2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <text x="114" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vcc</text>
 
@@ -11572,16 +11576,21 @@ function renderRectifierHalfwave(domain, tool, favId) {
       outPts.push(`${x.toFixed(1)},${toY(Math.max(0, vin - vf)).toFixed(1)}`);
     }
     const zeroY = toY(0), dcY = toY(vdc);
-    return `<svg width="220" height="74" viewBox="0 0 220 74" fill="none">
+    // Vdc sits just above 0 V when the output is small, so the two labels
+    // are kept at least a line apart; Vac and Vout are named in a legend
+    // under the plot rather than crowding its top corner.
+    const vdcLabelY = Math.min(dcY + 4, zeroY - 9), zeroLabelY = Math.max(zeroY + 4, vdcLabelY + 14);
+    return `<svg width="226" height="86" viewBox="0 0 226 86" fill="none">
       <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="204" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
-      <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
-      <text x="81" y="70" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
-      <text x="10" y="${Math.max(10, toY(vp - vf) - 4)}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+      <text x="204" y="${zeroLabelY}" fill="#8A9099" font-size="11" font-weight="600">0V</text>
+      <text x="204" y="${vdcLabelY}" fill="#5DCAA5" font-size="11" font-weight="600">Vdc</text>
+      <path d="M10,79 H22" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="26" y="83" fill="#8A9099" font-size="11" font-weight="600">Vac</text>
+      <path d="M58,79 H70" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="74" y="83" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -11822,16 +11831,21 @@ function renderRectifierBridge(domain, tool, favId) {
       outPts.push(`${x.toFixed(1)},${toY(Math.max(0, Math.abs(vin) - 2 * vf)).toFixed(1)}`);
     }
     const zeroY = toY(0), dcY = toY(vdc);
-    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
+    // Vdc sits just above 0 V when the output is small, so the two labels
+    // are kept at least a line apart; Vac and Vout are named in a legend
+    // under the plot rather than crowding its top corner.
+    const vdcLabelY = Math.min(dcY + 4, zeroY - 9), zeroLabelY = Math.max(zeroY + 4, vdcLabelY + 14);
+    return `<svg width="226" height="92" viewBox="0 0 226 92" fill="none">
       <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="204" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
-      <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
-      <text x="81" y="74" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
-      <text x="10" y="${toY(vp - 2 * vf) - 4}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+      <text x="204" y="${zeroLabelY}" fill="#8A9099" font-size="11" font-weight="600">0V</text>
+      <text x="204" y="${vdcLabelY}" fill="#5DCAA5" font-size="11" font-weight="600">Vdc</text>
+      <path d="M10,85 H22" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="26" y="89" fill="#8A9099" font-size="11" font-weight="600">Vac</text>
+      <path d="M58,85 H70" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="74" y="89" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -12043,16 +12057,21 @@ function renderRectifierCenterTap(domain, tool, favId) {
       outPts.push(`${x.toFixed(1)},${toY(Math.max(0, Math.abs(vin) - vf)).toFixed(1)}`);
     }
     const zeroY = toY(0), dcY = toY(vdc);
-    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
+    // Vdc sits just above 0 V when the output is small, so the two labels
+    // are kept at least a line apart; Vac and Vout are named in a legend
+    // under the plot rather than crowding its top corner.
+    const vdcLabelY = Math.min(dcY + 4, zeroY - 9), zeroLabelY = Math.max(zeroY + 4, vdcLabelY + 14);
+    return `<svg width="226" height="92" viewBox="0 0 226 92" fill="none">
       <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="204" y="${zeroY + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
-      <text x="10" y="10" fill="#5A6169" font-size="9" font-weight="600">Vac</text>
-      <text x="81" y="74" fill="#5A6169" font-size="9" font-weight="600" text-anchor="middle">Vac</text>
-      <text x="10" y="${Math.max(10, toY(vp - vf) - 4)}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
+      <text x="204" y="${zeroLabelY}" fill="#8A9099" font-size="11" font-weight="600">0V</text>
+      <text x="204" y="${vdcLabelY}" fill="#5DCAA5" font-size="11" font-weight="600">Vdc</text>
+      <path d="M10,85 H22" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="26" y="89" fill="#8A9099" font-size="11" font-weight="600">Vac</text>
+      <path d="M58,85 H70" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="74" y="89" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -12285,7 +12304,7 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
     const toY = (v) => pxBottom - ((v - worldMin) / (worldMax - worldMin)) * (pxBottom - pxTop);
     const outPts = outRaw.map((v, idx) => `${(10 + (idx / shownSamples) * 190).toFixed(1)},${toY(v).toFixed(1)}`);
     const dcY = toY(vdc), peakY = toY(bandTop);
-    return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none">
+    return `<svg width="226" height="64" viewBox="0 0 226 64" fill="none">
       <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
@@ -12555,8 +12574,8 @@ function renderThyristorFiring(domain, tool, favId) {
       <text x="${((10 + markX) / 2).toFixed(1)}" y="${(zeroY - 10).toFixed(1)}" fill="#5DCAA5" font-size="9" font-weight="600" text-anchor="middle">α</text>
       <line x1="150" y1="14" x2="161" y2="14" stroke="#5A6169" stroke-width="1.4"/>
       <text x="164" y="17" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
-      <line x1="150" y1="26" x2="161" y2="26" stroke="#8FC1F5" stroke-width="2"/>
-      <text x="164" y="29" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
+      <line x1="150" y1="30" x2="161" y2="30" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="164" y="33" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -13512,7 +13531,7 @@ function renderOpampComparator(domain, tool, favId) {
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="196" y="14" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
-      <text x="196" y="${(yIn(banded ? r.vtHigh : centre) + 3).toFixed(1)}" fill="#E08585" font-size="8" font-weight="600">${banded ? "VT" : "Vref"}</text>
+      <text x="196" y="${Math.min(40, Math.max(28, yIn(banded ? r.vtHigh : centre) + 3)).toFixed(1)}" fill="#E08585" font-size="8" font-weight="600">${banded ? "VT" : "Vref"}</text>
       <text x="196" y="54" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
     </svg>`;
   }
@@ -13788,7 +13807,7 @@ function renderOpampIntegrator(domain, tool, favId) {
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
       <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin (${r.square ? "square" : "sine"})</text>
-      <text x="${r.square ? 66 : 62}" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (${r.square ? "triangle" : "cosine"})</text>
+      <text x="${10 + `Vin (${r.square ? "square" : "sine"})`.length * 6.6 + 10}" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (${r.square ? "triangle" : "cosine"})</text>
     </svg>`;
   }
 
@@ -14032,7 +14051,7 @@ function renderOpampDifferentiator(domain, tool, favId) {
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
       <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin (${r.tri ? "triangle" : "sine"})</text>
-      <text x="${r.tri ? 70 : 62}" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (${r.tri ? "square" : "cosine"})</text>
+      <text x="${10 + `Vin (${r.tri ? "triangle" : "sine"})`.length * 6.6 + 10}" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (${r.tri ? "square" : "cosine"})</text>
     </svg>`;
   }
 
@@ -14653,7 +14672,7 @@ function renderPhotocellLDR(domain, tool, favId) {
     }
     const mx = xf(c).toFixed(1), my = yf(r.vout).toFixed(1);
     const fmt = (l) => { const v = Math.pow(10, l); return v >= 1000 ? `${trim(v / 1000)}k` : trim(v); };
-    return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none">
+    return `<svg width="220" height="84" viewBox="0 0 220 84" fill="none">
       <path d="M${x0},${yBot} H${x1}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
       <path d="M${mx},${yTop} V${yBot}" stroke="#5A6169" stroke-width="1" stroke-dasharray="2 3"/>
       <polyline points="${pts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
@@ -14662,7 +14681,7 @@ function renderPhotocellLDR(domain, tool, favId) {
       <text x="22" y="${yBot + 3}" fill="#8A9099" font-size="8" font-weight="600" text-anchor="end">0</text>
       <text x="${x0}" y="62" fill="#5A6169" font-size="8" font-weight="600">${fmt(lo)} lx</text>
       <text x="${x1}" y="62" fill="#5A6169" font-size="8" font-weight="600" text-anchor="end">${fmt(hi)} lx</text>
-      <text x="${(x0 + x1) / 2}" y="70" fill="#8FC1F5" font-size="8" font-weight="600" text-anchor="middle">Vout vs illuminance (log)</text>
+      <text x="${(x0 + x1) / 2}" y="80" fill="#8FC1F5" font-size="8" font-weight="600" text-anchor="middle">Vout vs illuminance (log)</text>
     </svg>`;
   }
 
@@ -16301,7 +16320,7 @@ function renderKarnaugh(domain, tool, favId) {
         cells.push(`
           <rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" fill="#1B1F24" stroke="${wire}" stroke-width="1.2" data-km="${idx}" style="cursor:pointer"/>
           <text x="${x + CELL / 2}" y="${y + CELL / 2 + 6}" fill="${fill}" font-size="17" font-weight="700" text-anchor="middle" pointer-events="none">${val === 2 ? "X" : val}</text>
-          <text x="${x + 4}" y="${y + 12}" fill="#4A5058" font-size="9" pointer-events="none">${idx}</text>`);
+          <text x="${x + 4}" y="${y + 12}" fill="#858B93" font-size="9" pointer-events="none">${idx}</text>`);
       }
     }
 
@@ -17446,7 +17465,7 @@ function renderPll(domain, tool, favId) {
       ${box(240, Y - 38, 34, `\u00f7${s0.q}`)}
       ${w(`M274 ${Y - 26} H290`)}${tag(292, Y - 22, `${trim(s0.usb)} USB`, "start")}` : "";
     return `<svg width="340" height="118" viewBox="0 -2 340 118" fill="none">
-      ${tag(14, Y + 16, "ref", "middle")}${tag(14, Y + 30, mhz(state.fref), "middle")}
+      ${tag(20, Y + 16, "ref", "middle")}${tag(20, Y + 30, mhz(state.fref), "middle")}
       ${w(`M30 ${Y + 12} H44`)}${arrow(44, Y + 12)}
       ${box(44, Y, 34, `\u00f7${s0.m}`)}
       ${w(`M78 ${Y + 12} H96`)}${arrow(96, Y + 12)}${tag(87, Y + 38, mhz(s0.pfd))}
@@ -17672,11 +17691,11 @@ function renderAdc(domain, tool, favId) {
   // curve is 4096 steps and looks like a straight line; zoomed in, each step
   // is one LSB wide and the input sits somewhere along one of them.
   function stairSVG(r) {
-    const W = 340, H = 132;
+    const W = 340, H = 160;
     if (r.problem) return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none"></svg>`;
     const n = Math.min(8, codeMax() - codeMin() + 1);
     const k0 = Math.max(codeMin(), Math.min(codeMax() - n + 1, r.code - Math.floor((n - 1) / 2)));
-    const x0 = 56, x1 = 324, y0 = 112, y1 = 14;
+    const x0 = 56, x1 = 324, y0 = 136, y1 = 22;
     const sx = (x1 - x0) / n, sy = (y0 - y1) / n;
     // Code k is centred at k LSB and its step runs from k - 1/2 to k + 1/2.
     const X = (lsbs) => x0 + (lsbs - (k0 - 0.5)) * sx;
@@ -17712,7 +17731,7 @@ function renderAdc(domain, tool, favId) {
 
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none">
       <path d="M${x0} ${y1 - 4} V${y0} H${x1 + 4}" stroke="${wire}" stroke-width="1.2"/>
-      <text x="4" y="${y1 + 2}" fill="${wire}" font-size="9" font-weight="600">Code</text>
+      <text x="4" y="${y1 - 10}" fill="${wire}" font-size="9" font-weight="600">Code</text>
       ${labels.join("")}
       <path d="${ideal}" stroke="${wire}" stroke-width="1" stroke-dasharray="3 3"/>
       <path d="${d}" stroke="${comp}" stroke-width="2" fill="none" stroke-linejoin="round"/>
@@ -18165,7 +18184,7 @@ function renderSnr(domain, tool, favId) {
   // noise floor as a line. The gap from the signal down to the total floor is
   // the SNR, and whichever line sits highest is the one worth fixing.
   function levelsSVG(r) {
-    const W = 340, H = 140;
+    const W = 340, H = 150;
     if (r.problem) return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none"></svg>`;
     const lines = est()
       ? [["Quantization", r.qFloor, comp], ...(isFinite(r.jFloor) ? [["Jitter", r.jFloor, warn]] : []), ["Total noise", r.floor, total]]
@@ -18180,7 +18199,7 @@ function renderSnr(domain, tool, favId) {
     const all = [["Full scale", 0, wire], ...(state.level < 0 ? [["Signal", state.level, hit]] : []), ...lines]
       .map(([name, d, c]) => ({ name, d, c, y: Y(d), ly: Y(d) + 3 }))
       .sort((a, b) => a.y - b.y);
-    for (let i = 1; i < all.length; i++) all[i].ly = Math.max(all[i].ly, all[i - 1].ly + 11);
+    for (let i = 1; i < all.length; i++) all[i].ly = Math.max(all[i].ly, all[i - 1].ly + 14);
 
     const drawn = all.map((l) => `
       <path d="M${x0} ${l.y.toFixed(1)} H${x1}" stroke="${l.c}" stroke-width="${l.name === "Total noise" || l.name === "Noise + dist." ? 2 : 1.4}"${l.name === "Full scale" ? ` stroke-dasharray="3 3"` : ""}/>
@@ -18190,8 +18209,8 @@ function renderSnr(domain, tool, favId) {
     const gap = est() ? r.snr : state.sinad;
     const arrow = `<path d="M292 ${(ys + 1).toFixed(1)} V${(yn - 1).toFixed(1)}" stroke="${hit}" stroke-width="1.4"/>
       <path d="M288 ${(ys + 6).toFixed(1)} L292 ${ys.toFixed(1)} L296 ${(ys + 6).toFixed(1)} M288 ${(yn - 6).toFixed(1)} L292 ${yn.toFixed(1)} L296 ${(yn - 6).toFixed(1)}" stroke="${hit}" stroke-width="1.4" fill="none"/>
-      <text x="300" y="${((ys + yn) / 2 - 2).toFixed(1)}" fill="${hit}" font-size="9" font-weight="600">${est() ? "SNR" : "SINAD"}</text>
-      <text x="300" y="${((ys + yn) / 2 + 9).toFixed(1)}" fill="${hit}" font-size="9" font-weight="600">${trim(gap)}</text>`;
+      <text x="300" y="${((ys + yn) / 2 - 4).toFixed(1)}" fill="${hit}" font-size="9" font-weight="600">${est() ? "SNR" : "SINAD"}</text>
+      <text x="300" y="${((ys + yn) / 2 + 10).toFixed(1)}" fill="${hit}" font-size="9" font-weight="600">${trim(gap)}</text>`;
 
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none">
       <text x="${x1}" y="${y1 + 10}" fill="${wire}" font-size="8" font-weight="600" text-anchor="end">dBFS</text>

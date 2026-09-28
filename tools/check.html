@@ -81,6 +81,54 @@ async function checkTool(t) {
     .filter((el) => el.getBoundingClientRect().height > 0 && el.scrollWidth > el.clientWidth + 1);
   if (clipped.length) r.problems.push(`${clipped.length} box(es) with text wider than the box: "${clipped[0].textContent.trim().slice(0, 30)}"`);
 
+  // Drawing text, as rendered: size after the SVG's own scaling, contrast
+  // against the drawing box, labels that overlap each other, and text cut by
+  // the drawing's edge. All four fail the check.
+  r.notes = r.problems;
+  const lum = (c) => {
+    const rgb = /rgb\((\d+), (\d+), (\d+)\)/.exec(c || "");
+    const m = rgb ? null : /^#?([0-9a-f]{6})$/i.exec(c || "");
+    if (!rgb && !m) return null;
+    const v = (rgb ? [1, 2, 3].map((i) => +rgb[i] / 255) : [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255))
+      .map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  };
+  const BOX = lum("#15181D");
+  const texts = [...doc.querySelectorAll(".diagram-box svg text")].filter((t) => t.getBoundingClientRect().width > 0 && t.textContent.trim());
+  const small = new Set(), faint = new Set();
+  texts.forEach((t) => {
+    const size = parseFloat(win.getComputedStyle(t).fontSize) * (t.getScreenCTM() ? t.getScreenCTM().a : 1);
+    if (size > 1 && size < 10.95) small.add(`${t.textContent.trim().slice(0, 12)}@${size.toFixed(1)}`);
+    // The colour actually shown (a stylesheet rule can override the
+    // attribute). Text darker than the box sits on a light fill of its own —
+    // a marking on a part, a value in a bar — so it is not measured here.
+    const fill = win.getComputedStyle(t).fill;
+    const L = lum(fill);
+    if (L !== null && L > 0.03 && (L + 0.05) / (BOX + 0.05) < 4.5) faint.add(`${t.textContent.trim().slice(0, 12)}(${fill})`);
+  });
+  const boxes = texts.map((t) => ({ t, b: t.getBoundingClientRect() }));
+  const overlaps = [];
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i].b, c = boxes[j].b;
+    const ox = Math.min(a.right, c.right) - Math.max(a.left, c.left), oy = Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top);
+    if (ox > 1.5 && oy > 1.5) overlaps.push(`"${boxes[i].t.textContent.trim().slice(0, 10)}"/"${boxes[j].t.textContent.trim().slice(0, 10)}"`);
+  }
+  // Text running past the edge of its own drawing is cut off on screen.
+  // The box of a line of text includes room above the capitals and below
+  // the baseline that the glyphs rarely fill, so top and bottom get 3 px of
+  // slack; the sides get none.
+  const cut = texts.map((t) => {
+    const svg = t.ownerSVGElement, vb = svg && svg.viewBox.baseVal;
+    if (!vb || !vb.width) return null;
+    const b = t.getBBox();
+    const over = Math.max(vb.x - b.x, b.x + b.width - (vb.x + vb.width), vb.y - b.y - 3, b.y + b.height - (vb.y + vb.height) - 3);
+    return over > 0.5 ? `${t.textContent.trim().slice(0, 12)}+${over.toFixed(1)}px` : null;
+  }).filter(Boolean);
+  if (cut.length) r.notes.push(`${cut.length} drawing text(s) cut by the drawing's edge: ${cut.slice(0, 4).join(", ")}`);
+  if (small.size) r.notes.push(`${small.size} drawing text(s) under 11 px: ${[...small].slice(0, 4).join(", ")}`);
+  if (faint.size) r.notes.push(`${faint.size} drawing text(s) under 4.5:1 contrast: ${[...faint].slice(0, 3).join(", ")}`);
+  if (overlaps.length) r.notes.push(`${overlaps.length} overlapping label pair(s): ${overlaps.slice(0, 2).join(", ")}`);
+
   const tab = doc.querySelector(".tabbar");
   const res = firstResult(doc);
   if (tab && res) {

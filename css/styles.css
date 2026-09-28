@@ -1093,3 +1093,12 @@ a.icon-btn { text-decoration: none; }
   background: var(--card); color: var(--text); font-size: 16px; font-weight: 600;
   padding: 0 6px; cursor: pointer;
 }
+
+/* Drawing labels, everywhere at once. Many drawings wrote their labels in
+   the wire colour (#5A6169, 3.1:1 on the box) and at 8-10 px; CSS beats an
+   SVG presentation attribute, so these lift every such label to a readable
+   grey (5.5:1) and 11 px without touching the wires themselves. */
+.diagram-box svg text[fill="#5A6169"] { fill: #8A9099; }
+.diagram-box svg text[font-size="8"],
+.diagram-box svg text[font-size="9"],
+.diagram-box svg text[font-size="10"] { font-size: 11px; }
