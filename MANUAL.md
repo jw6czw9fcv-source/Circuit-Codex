@@ -277,8 +277,14 @@ say the code means 12.3 kΩ.
 
 ### What it computes
 
-A reference table: how much power each common resistor size can dissipate, with
-its dimensions. Surface-mount parts are listed by package code, with their
+Which size a resistor needs. Enter its resistance and the voltage across it, or
+the current through it, and the tool gives the power it dissipates, the
+smallest chip size that takes it, the smallest at half its rating — the usual
+design margin — and the through-hole wattage class at half its rating. A chip
+must also be rated for the voltage across it.
+
+Below that is the reference table: how much power each common resistor size can
+dissipate, with its dimensions. Surface-mount parts are listed by package code, with their
 maximum working voltage; through-hole parts by their wattage class, with a
 typical body size. It can be filtered to SMD or through-hole and searched by
 package or wattage.
@@ -307,8 +313,8 @@ through it:
     P = V² / R = I² × R
 
 A 1 kΩ resistor with 5 V across it dissipates 25 / 1000 = 25 mW, well inside an
-0603's 100 mW. The same resistor at 12 V dissipates 144 mW, and needs an 0805
-at least, or better a 1206.
+0603's 100 mW. The same resistor at 12 V dissipates 144 mW: more than an 0805's
+125 mW, so a 1206 at least, and a 1210 with the half-rating rule below.
 
 **Temperature.** The rating holds only while the air around the part is at
 70 °C or cooler. Above that the part can shed less heat, and the allowed power
@@ -342,6 +348,14 @@ series share the voltage.
   part, not for a footprint.
 - Pulses are a separate question: a short pulse can exceed the continuous
   rating, within limits the datasheet gives as a pulse curve.
+- **The size check uses the table's figures**: the Yageo ratings for chips,
+  each with its maximum working voltage, and the wattage class for leaded
+  parts, whose voltage rating is not in the table and depends on the part.
+  "Half its rating" is the usual margin for a warm enclosure and hot
+  neighbours; the full rating holds only up to 70 °C around the part, on the
+  maker's pad layout.
+- Above 200 V no chip in the table will do; several in series share the
+  voltage, each taking its part.
 
 ### What it deliberately does not do
 
@@ -358,6 +372,13 @@ read 0.12″ × 0.125″ against the 0.12″ × 0.10″ its name encodes, and th
 0805's width to 1.25 mm; it also withdrew the claim that SMD ratings are
 standard across manufacturers, which the Vishay datasheet contradicts. The
 maximum working voltages were added then.
+
+The size check was added in the re-walk. Its reference cases: 1 kΩ at 12 V is
+144 mW, a 1206 at full rating, a 1210 or a 1/2 W leaded part at half; a 0.1 Ω
+shunt at 2 A is 0.4 W, a 1210 or at half a 2512; 1 MΩ at 100 V is only 10 mW
+but needs an 0805, the first chip rated over 75 V. The re-walk also corrected
+this section's own example, which had said 144 mW fits "an 0805 at least" when
+an 0805 is rated 125 mW.
 
 [↑ Index](#index)
 

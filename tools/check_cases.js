@@ -44,6 +44,18 @@ const CHECK_CASES = {
       expect: [['[data-res="ohms"]', "10 kΩ"], [".pill.active", "EIA-96"]] },
     { name: "the chosen unit is remembered", do: [["set", "#smd-unit", "Ω"], ["reopen"]], expect: [["#smd-unit", "Ω"]] },
   ],
+  "resistor-power-rating": [
+    { name: "1 k across 12 V is 144 mW, a 1206 or 1210 at half", do: [],
+      expect: [['[data-res="p"]', "144 mW"], ['[data-res="sub"]', "12 mA through it"], ['[data-res="min"]', "1206"], ['[data-res="half"]', "1210"], ['[data-res="tht"]', "1/2 W"]] },
+    { name: "example: 0.1 Ω shunt at 2 A", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="p"]', "400 mW"], ['[data-res="sub"]', "200 mV across it"], ['[data-res="min"]', "1210"], ['[data-res="half"]', "2512"], ['[data-res="tht"]', "1 W"]] },
+    { name: "example: 1 MΩ at 100 V is sized by voltage", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="3"]']],
+      expect: [['[data-res="p"]', "10 mW"], ['[data-res="min"]', "0805"], ['[data-res="half"]', "0805"]] },
+    { name: "above every chip's voltage", do: [["set", "#rpr-r-unit", "MΩ"], ["set", "#rpr-r", "1"], ["set", "#rpr-x", "300"]],
+      expect: [['[data-res="min"]', "Over 200 V"], ['[data-res="err"]', "/series to share it/"]] },
+    { name: "the filter and mode are remembered", do: [["click", '.filter-btn[data-filter="smd"]'], ["pill", 1], ["reopen"]],
+      expect: [[".filter-btn.active", "SMD"], [".pill.active", "Current through"]] },
+  ],
   "e-series": [
     { name: "9.2 k is E192 (IEC 60063's 920)", do: [["pill", 5], ["set", "#es-unit", "kΩ"], ["set", "#es-value", "9.2"]],
       expect: [['[data-res="drift"]', "E192 standard value, exactly"]] },

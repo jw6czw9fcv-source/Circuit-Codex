@@ -6473,25 +6473,95 @@ function renderSmdPackageSizes(domain, tool, favId) {
 // sizes as the SMD package sizes screen; the THT figures are typical
 // ranges, not a spec to design against.
 const RESISTOR_POWER = [
-  { group: "smd", imperial: "01005", metric: "0402", watts: "1/32 W (≈0.031 W)", volts: 15, inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine-placement only — below practical hand-soldering size." },
-  { group: "smd", imperial: "0201", metric: "0603", watts: "1/20 W (0.05 W)", volts: 25, inches: "0.02\" × 0.01\"", mm: "0.6 × 0.3 mm", note: "Rare as a resistor outside very dense boards." },
-  { group: "smd", imperial: "0402", metric: "1005", watts: "1/16 W (0.0625 W)", volts: 50, inches: "0.04\" × 0.02\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
-  { group: "smd", imperial: "0603", metric: "1608", watts: "1/10 W (0.1 W)", volts: 75, inches: "0.06\" × 0.03\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size." },
-  { group: "smd", imperial: "0805", metric: "2012", watts: "1/8 W (0.125 W)", volts: 150, inches: "0.08\" × 0.05\"", mm: "2.0 × 1.25 mm", note: "The easiest common size to hand-solder." },
-  { group: "smd", imperial: "1206", metric: "3216", watts: "1/4 W (0.25 W)", volts: 200, inches: "0.12\" × 0.06\"", mm: "3.2 × 1.6 mm", note: "Reach for this over 0805 when a design needs the extra headroom." },
-  { group: "smd", imperial: "1210", metric: "3225", watts: "1/2 W (0.5 W)", volts: 200, inches: "0.12\" × 0.10\"", mm: "3.2 × 2.5 mm", note: "Getting into current-sense and small power-resistor territory." },
-  { group: "smd", imperial: "2010", metric: "5025", watts: "3/4 W (0.75 W)", volts: 200, inches: "0.20\" × 0.10\"", mm: "5.0 × 2.5 mm", note: "Less common — mostly current-sense and power applications." },
-  { group: "smd", imperial: "2512", metric: "6332", watts: "1 W (1.0 W)", volts: 200, inches: "0.25\" × 0.12\"", mm: "6.3 × 3.2 mm", note: "The common largest standard SMD size before wirewound/thick-film chips take over." },
-  { group: "tht", code: "1/8 W", watts: "0.125 W", size: "≈3.2–3.6 mm body × 1.6–1.8 mm dia.", note: "Small axial; used in dense hobbyist/prototyping boards where SMD isn't." },
-  { group: "tht", code: "1/4 W", watts: "0.25 W", size: "≈6.0–6.5 mm body × 2.2–2.6 mm dia.", note: "The classic general-purpose through-hole size — what most people picture as \"a resistor\"." },
-  { group: "tht", code: "1/2 W", watts: "0.5 W", size: "≈9.0–9.5 mm body × 3.4–3.6 mm dia.", note: "Reach for this when 1/4W runs too hot — higher-voltage pull-ups, LED strings." },
-  { group: "tht", code: "1 W", watts: "1 W", size: "≈10–11.5 mm body × 4.2–5.0 mm dia.", note: "Current-sense, snubber, and bleeder resistors." },
-  { group: "tht", code: "2 W", watts: "2 W", size: "≈14–15.5 mm body × 5.5–6.5 mm dia.", note: "Small power-resistor territory — wirewound/ceramic often takes over from here." },
+  { group: "smd", imperial: "01005", metric: "0402", watts: "1/32 W (≈0.031 W)", w: 0.03125, volts: 15, inches: "0.016\" × 0.008\"", mm: "0.4 × 0.2 mm", note: "Machine-placement only — below practical hand-soldering size." },
+  { group: "smd", imperial: "0201", metric: "0603", watts: "1/20 W (0.05 W)", w: 0.05, volts: 25, inches: "0.02\" × 0.01\"", mm: "0.6 × 0.3 mm", note: "Rare as a resistor outside very dense boards." },
+  { group: "smd", imperial: "0402", metric: "1005", watts: "1/16 W (0.0625 W)", w: 0.0625, volts: 50, inches: "0.04\" × 0.02\"", mm: "1.0 × 0.5 mm", note: "Common in space-constrained modern designs." },
+  { group: "smd", imperial: "0603", metric: "1608", watts: "1/10 W (0.1 W)", w: 0.1, volts: 75, inches: "0.06\" × 0.03\"", mm: "1.6 × 0.8 mm", note: "The de facto default general-purpose size." },
+  { group: "smd", imperial: "0805", metric: "2012", watts: "1/8 W (0.125 W)", w: 0.125, volts: 150, inches: "0.08\" × 0.05\"", mm: "2.0 × 1.25 mm", note: "The easiest common size to hand-solder." },
+  { group: "smd", imperial: "1206", metric: "3216", watts: "1/4 W (0.25 W)", w: 0.25, volts: 200, inches: "0.12\" × 0.06\"", mm: "3.2 × 1.6 mm", note: "Reach for this over 0805 when a design needs the extra headroom." },
+  { group: "smd", imperial: "1210", metric: "3225", watts: "1/2 W (0.5 W)", w: 0.5, volts: 200, inches: "0.12\" × 0.10\"", mm: "3.2 × 2.5 mm", note: "Getting into current-sense and small power-resistor territory." },
+  { group: "smd", imperial: "2010", metric: "5025", watts: "3/4 W (0.75 W)", w: 0.75, volts: 200, inches: "0.20\" × 0.10\"", mm: "5.0 × 2.5 mm", note: "Less common — mostly current-sense and power applications." },
+  { group: "smd", imperial: "2512", metric: "6332", watts: "1 W (1.0 W)", w: 1, volts: 200, inches: "0.25\" × 0.12\"", mm: "6.3 × 3.2 mm", note: "The common largest standard SMD size before wirewound/thick-film chips take over." },
+  { group: "tht", code: "1/8 W", w: 0.125, watts: "0.125 W", size: "≈3.2–3.6 mm body × 1.6–1.8 mm dia.", note: "Small axial; used in dense hobbyist/prototyping boards where SMD isn't." },
+  { group: "tht", code: "1/4 W", w: 0.25, watts: "0.25 W", size: "≈6.0–6.5 mm body × 2.2–2.6 mm dia.", note: "The classic general-purpose through-hole size — what most people picture as \"a resistor\"." },
+  { group: "tht", code: "1/2 W", w: 0.5, watts: "0.5 W", size: "≈9.0–9.5 mm body × 3.4–3.6 mm dia.", note: "Reach for this when 1/4W runs too hot — higher-voltage pull-ups, LED strings." },
+  { group: "tht", code: "1 W", w: 1, watts: "1 W", size: "≈10–11.5 mm body × 4.2–5.0 mm dia.", note: "Current-sense, snubber, and bleeder resistors." },
+  { group: "tht", code: "2 W", w: 2, watts: "2 W", size: "≈14–15.5 mm body × 5.5–6.5 mm dia.", note: "Small power-resistor territory — wirewound/ceramic often takes over from here." },
 ];
 const RESISTOR_POWER_FILTERS = [["all", "All"], ["smd", "SMD"], ["tht", "Through-hole"]];
 
+// Resistances run from milliohm shunts to megohm dividers; gigaohms are not
+// something a power question comes up for.
+const RPR_R_UNITS = { "mΩ": 1e-3, "Ω": 1, "kΩ": 1e3, "MΩ": 1e6 };
+
 function renderResistorPowerRating(domain, tool, favId) {
-  const state = { filter: "all", query: "" };
+  const C = "resistor-power-rating";
+  const state = {
+    filter: pref(C, "filter", "all", RESISTOR_POWER_FILTERS.map(([v]) => v)),
+    query: "",
+    mode: pref(C, "mode", "v", ["v", "i"]),
+    r: 1, rUnit: pref(C, "rUnit", "kΩ", Object.keys(RPR_R_UNITS)),
+    v: 12, vUnit: pref(C, "vUnit", "V", Object.keys(VOLT_UNITS)),
+    i: 10, iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
+  };
+
+  // Circuits met every day. Each sets R and what is across or through it.
+  const example = (mode, r, rUnit, x, xUnit) => () => {
+    Object.assign(state, { mode, r, rUnit });
+    if (mode === "v") Object.assign(state, { v: x, vUnit: xUnit });
+    else Object.assign(state, { i: x, iUnit: xUnit });
+    paint();
+  };
+  useExamples([
+    { title: "LED resistor from 5 V", note: "150 Ω drops 3 V for a red LED: 60 mW, so an 0805 with half its rating to spare.",
+      apply: example("v", 150, "Ω", 3, "V") },
+    { title: "1 kΩ across 12 V", note: "144 mW is more than an 0805's 125 mW: a 1206 at least, a 1210 at half rating.",
+      apply: example("v", 1, "kΩ", 12, "V") },
+    { title: "0.1 Ω shunt at 2 A", note: "I² × R = 0.4 W: sense resistors get hot, so a 2512 at half its 1 W.",
+      apply: example("i", 100, "mΩ", 2, "A") },
+    { title: "1 MΩ with 100 V across it", note: "Only 10 mW, but an 0603 is rated 75 V: the voltage, not the power, calls for an 0805.",
+      apply: example("v", 1, "MΩ", 100, "V") },
+  ]);
+
+  // Power, and the voltage across the part, from what was entered.
+  function compute() {
+    const R = state.r * RPR_R_UNITS[state.rUnit];
+    if (!(R > 0)) return null;
+    if (state.mode === "v") {
+      const V = Math.abs(state.v * VOLT_UNITS[state.vUnit]);
+      return isFinite(V) ? { R, V, I: V / R, P: V * V / R } : null;
+    }
+    const I = Math.abs(state.i * AMP_UNITS[state.iUnit]);
+    return isFinite(I) ? { R, V: I * R, I, P: I * I * R } : null;
+  }
+
+  // The smallest size that takes P within share of its rating and, for chips,
+  // V within its maximum working voltage. The table is in size order.
+  function smallest(group, r, share) {
+    const rows = RESISTOR_POWER.filter((p) => p.group === group);
+    const hit = rows.find((p) => r.P <= p.w * share && (!p.volts || r.V <= p.volts));
+    if (hit) return group === "smd" ? hit.imperial : hit.code;
+    const last = rows[rows.length - 1];
+    return last.volts && r.V > last.volts && r.P <= last.w * share ? `Over ${last.volts} V` : `Over ${trim(last.w)} W`;
+  }
+
+  function refreshCheck() {
+    const r = compute();
+    const set = (k, t) => { app.querySelector(`[data-res="${k}"]`).textContent = t; };
+    if (!r) {
+      ["p", "min", "half", "tht"].forEach((k) => set(k, "—"));
+      set("sub", "");
+      set("err", "");
+      return;
+    }
+    set("p", siFormat(r.P, "W"));
+    set("sub", state.mode === "v" ? `${siFormat(r.I, "A")} through it` : `${siFormat(r.V, "V")} across it`);
+    set("min", smallest("smd", r, 1));
+    set("half", smallest("smd", r, 0.5));
+    set("tht", smallest("tht", r, 0.5));
+    const chipsOver = RESISTOR_POWER.filter((p) => p.group === "smd").every((p) => r.V > p.volts);
+    set("err", chipsOver ? `No chip in the table takes ${siFormat(r.V, "V")}: put several in series to share it.` : "");
+  }
 
   function card(p) {
     const title = p.group === "smd"
@@ -6541,10 +6611,52 @@ function renderResistorPowerRating(domain, tool, favId) {
       : `<div class="placeholder">${ICONS.search}<div>No match${state.query ? ` for "${state.query}"` : ""}.</div></div>`;
   }
 
-  function paint() {
-    app.innerHTML = `
-      ${calcHeader(tool, favId, "Max power dissipation by package or body size")}
+  function unitSelect(id, units, active) {
+    return `<select id="${id}">${Object.keys(units).map((u) => `<option ${active === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+  }
 
+  function paint() {
+    const byV = state.mode === "v";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Which size a resistor needs")}
+
+      ${pillRow([["v", "Voltage across"], ["i", "Current through"]], state.mode, domain.bg)}
+
+      <div class="section-label" style="color:#8FC1F5">Your resistor</div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Resistance R</label>
+          <div class="field-row">
+            <input id="rpr-r" type="number" inputmode="decimal" step="any" value="${trim(state.r)}" />
+            ${unitSelect("rpr-r-unit", RPR_R_UNITS, state.rUnit)}
+          </div>
+        </div>
+        <div class="field">
+          <label>${byV ? "Voltage V" : "Current I"}</label>
+          <div class="field-row">
+            <input id="rpr-x" type="number" inputmode="decimal" step="any" value="${trim(byV ? state.v : state.i)}" />
+            ${byV ? unitSelect("rpr-x-unit", VOLT_UNITS, state.vUnit) : unitSelect("rpr-x-unit", AMP_UNITS, state.iUnit)}
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Power</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="p"></span></div>
+        <div class="result-sub" data-res="sub"></div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">Smallest chip</div><div data-res="min"></div></div>
+        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">Chip at ½ rating</div><div data-res="half"></div></div>
+        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">Leaded at ½</div><div data-res="tht"></div></div>
+      </div>
+      <div class="error-text" data-res="err"></div>
+
+      <div class="section-label" style="color:#8FC1F5">Ratings by size</div>
       <div class="filter-row" id="rpr-chips">
         ${RESISTOR_POWER_FILTERS.map(([value, label]) => `
           <button class="filter-btn ${state.filter === value ? "active" : ""}" data-filter="${value}"
@@ -6558,22 +6670,42 @@ function renderResistorPowerRating(domain, tool, favId) {
       <div id="rpr-results"></div>
       ${formulaSection(
         ["P = V² / R = I² × R", "Vmax = √(P × R), or the V max if lower"],
-        "A resistor turns current into heat, and its power rating is the most it can shed continuously without damage. The rating holds up to 70 °C around the part and falls off above that, to nothing at 155 °C (125 °C for 0201 and smaller), so design to about half of it. On high values the voltage limit comes first: a 0603 at 75 V can only dissipate 75² / 1 MΩ = 5.6 mW. Other series rate the same size higher — Vishay CRCW e3 gives 0.125 W for 0603 — so the part's datasheet has the last word."
+        "A resistor turns current into heat, and its power rating is the most it can shed continuously without damage. Enter the resistor and the voltage across it, or the current through it: you get the power and the smallest size that takes it, both at full rating and at half, the usual margin. The rating holds up to 70 °C around the part and falls off above that, to nothing at 155 °C (125 °C for 0201 and smaller), which is why half is the safe choice. On high values the voltage limit comes first: a 0603 at 75 V can only dissipate 75² / 1 MΩ = 5.6 mW. Other series rate the same size higher — Vishay CRCW e3 gives 0.125 W for 0603 — so the part's datasheet has the last word."
       )}
       ${tabbarHTML("")}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+
+    const rField = document.getElementById("rpr-r");
+    rField.oninput = () => { state.r = parseFloat(rField.value); refreshCheck(); };
+    document.getElementById("rpr-r-unit").onchange = (e) => {
+      state.rUnit = e.target.value;
+      setPref(C, "rUnit", state.rUnit);
+      refreshCheck();
+    };
+    const xField = document.getElementById("rpr-x");
+    xField.oninput = () => {
+      if (byV) state.v = parseFloat(xField.value); else state.i = parseFloat(xField.value);
+      refreshCheck();
+    };
+    document.getElementById("rpr-x-unit").onchange = (e) => {
+      if (byV) { state.vUnit = e.target.value; setPref(C, "vUnit", state.vUnit); }
+      else { state.iUnit = e.target.value; setPref(C, "iUnit", state.iUnit); }
+      refreshCheck();
+    };
 
     document.getElementById("rpr-chips").addEventListener("click", (e) => {
       const btn = e.target.closest(".filter-btn");
       if (!btn) return;
       state.filter = btn.dataset.filter;
+      setPref(C, "filter", state.filter);
       paint();
     });
 
     const input = document.getElementById("rpr-input");
     refreshResults();
+    refreshCheck();
     input.oninput = () => {
       state.query = input.value.trim().toLowerCase();
       refreshResults();

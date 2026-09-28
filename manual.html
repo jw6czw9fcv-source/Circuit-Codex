@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=43ff9960aa" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=3995dbb495" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -111,7 +111,7 @@ th { background: var(--card); }
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>Resistor color code</h2>
-  <figure class="shot"><img src="manual/img/resistor-color-code.jpg?h=a9c3605b5a" loading="lazy" alt="Resistor color code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/resistor-color-code.jpg?h=b4e4949d26" loading="lazy" alt="Resistor color code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The resistance, tolerance and, on 6-band parts, temperature coefficient that a
 resistor's colour bands stand for — and the other way round: type a value and
@@ -145,9 +145,10 @@ others, on the right; the digits are bunched on the left. Gold and silver are
 never digits, so a part with gold at one end is read from the other.</p>
 <p><strong>Standard values.</strong> Resistors are made only in preferred values, the
 E-series, spaced so that neighbouring values just overlap within their
-tolerance. The tool reports the coarsest series the value belongs to — 4.7 kΩ
-is an E6 value even when bought at 1% — and when the value is in none, the
-nearest one in the series its tolerance implies.</p>
+tolerance. The tolerance band picks the one series the value is checked
+against — gold, ±5%, means E24; brown, ±1%, means E96 — and when the value is
+not in it, the tool gives the nearest one that is. A 1% 4.7 kΩ part therefore
+reads "Not in E96", though makers do sell it (see the E-series tool).</p>
 <h3>How the value is worked out</h3>
 <pre><code>4 bands:  Value = (10 × D1 + D2) × Multiplier
 5, 6:     Value = (100 × D1 + 10 × D2 + D3) × Multiplier
@@ -188,7 +189,7 @@ yellow–violet–red; 0.22 Ω gives red–red–silver.</p>
 <section class="tool" id="smd-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>SMD resistor code</h2>
-  <figure class="shot"><img src="manual/img/smd-code.jpg?h=e86265cb92" loading="lazy" alt="Resistor SMD code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/smd-code.jpg?h=5c96e3a4e1" loading="lazy" alt="Resistor SMD code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The resistance printed on a surface-mount (chip) resistor, from its marking —
 3-digit, 4-digit or EIA-96 — and the other way round: the marking a value would
@@ -234,6 +235,11 @@ value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.</p>
 <ul>
 <li><strong>The marking does not say the tolerance.</strong> A 3-digit code is usually ±5% and
   a 4-digit or EIA-96 code ±1%, but only the datasheet or the reel label says.</li>
+<li><strong>Standard value.</strong> The value is checked against the series of that usual
+  tolerance: E24 for a 3-digit code, E96 for 4-digit and EIA-96. So 472 is an
+  E24 value, and 4701 reads "Not in E96 — nearest is 4.75 kΩ": E96 has no 4.7.
+  A 3-digit code carries two figures, enough for every E6 to E24 value; the
+  three figures of E48 to E192 need 4 digits or EIA-96.</li>
 <li><strong>Which scheme a part uses</strong> shows in the marking: a letter other than R
   means EIA-96, and digits only are the 3- or 4-digit code, told apart by how
   many there are. Pick the pill that matches.</li>
@@ -263,10 +269,15 @@ say the code means 12.3 kΩ.</p>
 <section class="tool" id="resistor-power-rating" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>Resistor power rating</h2>
-  <figure class="shot"><img src="manual/img/resistor-power-rating.jpg?h=998195f1a2" loading="lazy" alt="Resistor power rating as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/resistor-power-rating.jpg?h=6b4544fa91" loading="lazy" alt="Resistor power rating as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
-<p>A reference table: how much power each common resistor size can dissipate, with
-its dimensions. Surface-mount parts are listed by package code, with their
+<p>Which size a resistor needs. Enter its resistance and the voltage across it, or
+the current through it, and the tool gives the power it dissipates, the
+smallest chip size that takes it, the smallest at half its rating — the usual
+design margin — and the through-hole wattage class at half its rating. A chip
+must also be rated for the voltage across it.</p>
+<p>Below that is the reference table: how much power each common resistor size can
+dissipate, with its dimensions. Surface-mount parts are listed by package code, with their
 maximum working voltage; through-hole parts by their wattage class, with a
 typical body size. It can be filtered to SMD or through-hole and searched by
 package or wattage.</p>
@@ -291,8 +302,8 @@ through it:</p>
 <pre><code>P = V² / R = I² × R
 </code></pre>
 <p>A 1 kΩ resistor with 5 V across it dissipates 25 / 1000 = 25 mW, well inside an
-0603's 100 mW. The same resistor at 12 V dissipates 144 mW, and needs an 0805
-at least, or better a 1206.</p>
+0603's 100 mW. The same resistor at 12 V dissipates 144 mW: more than an 0805's
+125 mW, so a 1206 at least, and a 1210 with the half-rating rule below.</p>
 <p><strong>Temperature.</strong> The rating holds only while the air around the part is at
 70 °C or cooler. Above that the part can shed less heat, and the allowed power
 falls in a straight line to nothing at 155 °C, the maximum film temperature —
@@ -322,6 +333,14 @@ series share the voltage.</p>
   part, not for a footprint.</li>
 <li>Pulses are a separate question: a short pulse can exceed the continuous
   rating, within limits the datasheet gives as a pulse curve.</li>
+<li><strong>The size check uses the table's figures</strong>: the Yageo ratings for chips,
+  each with its maximum working voltage, and the wattage class for leaded
+  parts, whose voltage rating is not in the table and depends on the part.
+  "Half its rating" is the usual margin for a warm enclosure and hot
+  neighbours; the full rating holds only up to 70 °C around the part, on the
+  maker's pad layout.</li>
+<li>Above 200 V no chip in the table will do; several in series share the
+  voltage, each taking its part.</li>
 </ul>
 <h3>What it deliberately does not do</h3>
 <ul>
@@ -337,12 +356,18 @@ read 0.12″ × 0.125″ against the 0.12″ × 0.10″ its name encodes, and th
 0805's width to 1.25 mm; it also withdrew the claim that SMD ratings are
 standard across manufacturers, which the Vishay datasheet contradicts. The
 maximum working voltages were added then.</p>
+<p>The size check was added in the re-walk. Its reference cases: 1 kΩ at 12 V is
+144 mW, a 1206 at full rating, a 1210 or a 1/2 W leaded part at half; a 0.1 Ω
+shunt at 2 A is 0.4 W, a 1210 or at half a 2512; 1 MΩ at 100 V is only 10 mW
+but needs an 0805, the first chip rated over 75 V. The re-walk also corrected
+this section's own example, which had said 144 mW fits "an 0805 at least" when
+an 0805 is rated 125 mW.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A2/resistor-power-rating">Open the tool</a></p>
 </section>
 <section class="tool" id="e-series" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>E-series standard values</h2>
-  <figure class="shot"><img src="manual/img/e-series.jpg?h=aa0dd1608c" loading="lazy" alt="E-series standard values as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/e-series.jpg?h=80ac2a8cd6" loading="lazy" alt="E-series standard values as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The standard value nearest to the one you want, in the series you choose (E6 to
 E192), how far off it is in percent, and the whole series across the decade of
@@ -413,7 +438,7 @@ highlighted; it now shows the nearest value's decade.</p>
 <section class="tool" id="series-parallel" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>Resistors in series and parallel</h2>
-  <figure class="shot"><img src="manual/img/series-parallel.jpg?h=19efc85ad8" loading="lazy" alt="Resistors in series/parallel as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/series-parallel.jpg?h=e8851f2cbc" loading="lazy" alt="Resistors in series/parallel as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The total resistance of two to four resistors connected in series or in
 parallel, the range it can take given the parts' tolerance, and the nearest
@@ -867,7 +892,7 @@ with the Vishay figures.</p>
 <section class="tool" id="ceramic-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>Ceramic capacitor code</h2>
-  <figure class="shot"><img src="manual/img/ceramic-code.jpg?h=85d0b610c2" loading="lazy" alt="Ceramic capacitor code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/ceramic-code.jpg?h=03daff37bf" loading="lazy" alt="Ceramic capacitor code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The capacitance and tolerance printed on a ceramic capacitor as a three- or
 four-digit code with an optional letter, and the other way round: the marking
@@ -991,7 +1016,7 @@ shows the marking as typed (479 stays 479 rather than becoming 4R7).</p>
 <section class="tool" id="film-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>Film capacitor code</h2>
-  <figure class="shot"><img src="manual/img/film-code.jpg?h=76817192a0" loading="lazy" alt="Film capacitor code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/film-code.jpg?h=2ba89e6497" loading="lazy" alt="Film capacitor code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The capacitance and tolerance printed on a film capacitor, in either of the two
 ways film parts are marked — the 3-digit picofarad code or the letter code
@@ -1085,7 +1110,7 @@ the drawing show the marking as typed.</p>
 <section class="tool" id="cap-smd-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>SMD capacitor code</h2>
-  <figure class="shot"><img src="manual/img/cap-smd-code.jpg?h=0696930a91" loading="lazy" alt="Capacitor SMD code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/cap-smd-code.jpg?h=2eeb648167" loading="lazy" alt="Capacitor SMD code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The capacitance printed on a surface-mount capacitor, usually a tantalum part,
 with the letter printed next to it read either as the rated voltage or as the
@@ -1190,7 +1215,7 @@ show the marking as typed.</p>
 <section class="tool" id="cap-series-parallel" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>Capacitors in series and parallel</h2>
-  <figure class="shot"><img src="manual/img/cap-series-parallel.jpg?h=8387ebad8e" loading="lazy" alt="Capacitors in series/parallel as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/cap-series-parallel.jpg?h=3af1ebe318" loading="lazy" alt="Capacitors in series/parallel as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The total capacitance of two to four capacitors in parallel or in series, the
 range it can take given their tolerance, and the nearest single standard value.
@@ -1255,7 +1280,7 @@ The ranges are the total × (1 ± t).</p>
 <section class="tool" id="rc-charge" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>RC charge and discharge</h2>
-  <figure class="shot"><img src="manual/img/rc-charge.jpg?h=f95f8f4ab9" loading="lazy" alt="RC charge/discharge as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/rc-charge.jpg?h=70a759949f" loading="lazy" alt="RC charge/discharge as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>For a capacitor charging from a supply through a resistor, or discharging
 through one: the time constant τ, the voltage after a given time, or the time it
@@ -1352,7 +1377,7 @@ supply when discharging, and the resistance units are Ω, kΩ and MΩ.</p>
 <section class="tool" id="cap-stored-energy" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>Capacitor stored energy</h2>
-  <figure class="shot"><img src="manual/img/cap-stored-energy.jpg?h=6445ef0424" loading="lazy" alt="Capacitor stored energy as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/cap-stored-energy.jpg?h=a50a0acc37" loading="lazy" alt="Capacitor stored energy as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The energy stored in a charged capacitor from its capacitance and voltage, or
 either of those from the other two; and the charge it holds.</p>
@@ -1410,7 +1435,7 @@ storing 1 J in 100 µF needs 141.4 V; storing 10 J at 400 V needs 125 µF.</p>
 <section class="tool" id="inductor-color-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Inductors</div>
   <h2>Inductor color code</h2>
-  <figure class="shot"><img src="manual/img/inductor-color-code.jpg?h=150738b1ba" loading="lazy" alt="Inductor color code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/inductor-color-code.jpg?h=54de48781c" loading="lazy" alt="Inductor color code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The inductance and tolerance that the colour bands on an axial (leaded)
 inductor stand for, and the other way round: the bands for a value. A second
@@ -1477,7 +1502,7 @@ silver band marks a part as military-qualified.</p>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Logic gates</div>
   <h2>Karnaugh map simplification</h2>
-  <figure class="shot"><img src="manual/img/karnaugh.jpg?h=2962571348" loading="lazy" alt="Karnaugh map simplification as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/karnaugh.jpg?h=4e2c288dc2" loading="lazy" alt="Karnaugh map simplification as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>Takes a truth table for 2, 3 or 4 variables — each cell either 0, 1 or a
 don't-care — and returns the minimum sum-of-products expression, with each
@@ -1570,7 +1595,7 @@ its complement), and each one's exclusive-OR form reproduces its truth table.</p
 <section class="tool" id="i2c-pullup" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Timing &amp; interfaces</div>
   <h2>I2C pull-up resistor</h2>
-  <figure class="shot"><img src="manual/img/i2c-pullup.jpg?h=996f865fb7" loading="lazy" alt="I2C pull-up resistor as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/i2c-pullup.jpg?h=78a285c609" loading="lazy" alt="I2C pull-up resistor as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The window of pull-up resistances that work on an I²C bus, given the supply, the
 bus capacitance and the speed mode — and a suggested value inside it, snapped to
@@ -2044,7 +2069,7 @@ default settings. The full RP2040 search takes about 3 ms.</p>
 <section class="tool" id="adc" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Data conversion</div>
   <h2>ADC resolution / quantization</h2>
-  <figure class="shot"><img src="manual/img/adc.jpg?h=fbfbc609e4" loading="lazy" alt="ADC resolution / quantization as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/adc.jpg?h=22da260f6c" loading="lazy" alt="ADC resolution / quantization as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>For an ideal N-bit converter and its reference: the size of one step (the LSB),
 the code a given input produces, the voltage that code stands for, and the
@@ -2143,7 +2168,7 @@ to tell neighbouring codes apart, and the hex fits its cell.</p>
 <section class="tool" id="dac" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Data conversion</div>
   <h2>DAC resolution</h2>
-  <figure class="shot"><img src="manual/img/dac.jpg?h=04cd233c57" loading="lazy" alt="DAC resolution as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/dac.jpg?h=06bb6a073d" loading="lazy" alt="DAC resolution as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>For an N-bit DAC, its reference and its output gain: the step between
 neighbouring output levels (the LSB), the code to write for a target voltage,
