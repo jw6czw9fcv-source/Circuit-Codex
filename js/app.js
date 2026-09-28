@@ -6098,9 +6098,32 @@ function renderCeramicCode(domain, tool, favId) {
 // absolute-pF tolerance letters (B/C/D), so this tool skips that table
 // entirely rather than reuse it where it wouldn't apply.
 function renderFilmCapacitorCode(domain, tool, favId) {
-  const state = { mode: "code", farads: 100e-9, unit: "nF", tol: "" };
+  const C = "film-code";
   // Film capacitors run from tens of picofarads to tens of microfarads.
   const FILM_UNITS = { pF: 1e-12, nF: 1e-9, "µF": 1e-6 };
+  const state = {
+    mode: pref(C, "mode", "code", ["code", "direct"]),
+    farads: 100e-9,
+    unit: pref(C, "unit", "nF", Object.keys(FILM_UNITS)),
+    tol: "",
+  };
+
+  // Markings found on real film boxes. Each is read as if typed, so the box
+  // shows it as printed.
+  const example = (mode, code) => () => {
+    state.mode = mode;
+    const r = valueFor(code);
+    Object.assign(state, { farads: r.farads, tol: r.tol, unit: naturalFaradUnit(r.farads, FILM_UNITS) });
+    paint();
+    app.querySelector("#film-code").value = code;
+    refresh("code");
+  };
+  useExamples([
+    { title: "104J on a red box", note: "100 nF ±5%, the WIMA MKS polyester part in countless audio and timing circuits.", apply: example("code", "104J") },
+    { title: "474K mains filter", note: "470 nF ±10%: the X2 capacitor across the line in a mains filter.", apply: example("code", "474K") },
+    { title: "4n7 printed directly", note: "The n stands where the decimal point would: 4.7 nF.", apply: example("direct", "4n7") },
+    { title: "n33K, below 1 nF", note: "Nothing before the n means zero: 0.33 nF = 330 pF, ±10%.", apply: example("direct", "n33K") },
+  ]);
   // IEC 60062 tolerance letters as film capacitors use them. H, ±2.5%, is
   // common on polypropylene parts and was missing while this screen borrowed
   // the inductor table.
@@ -6191,12 +6214,10 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     return { farads, tol };
   }
 
+  // One tolerance, one series: J ±5% → E24, K ±10% → E12, and so on. With no
+  // letter, E12: film parts are mostly ±10%, stocked in E12 values.
   function seriesLine(farads) {
-    if (!isFinite(farads) || farads <= 0) return "";
-    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
-      if (nearestESeries(farads, name).exact) return `${name} standard value`;
-    }
-    return `Not standard — nearest E24 is ${formatFarads(nearestESeries(farads, "E24").value)}`;
+    return seriesVerdict(farads, state.tol ? eSeriesForTolerance(FILM_TOL[state.tol]) : "E12", formatFarads);
   }
 
   function tolText(letter) {
@@ -6244,7 +6265,13 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     const valueField = app.querySelector("#film-value");
     const tolField = app.querySelector("#film-tol");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    // A value read from a marking shows in the unit it reads best in (n33 as
+    // 330 pF); a value typed keeps its unit.
     if (source !== "value" && document.activeElement !== valueField) {
+      if (state.farads > 0) {
+        state.unit = naturalFaradUnit(state.farads, FILM_UNITS);
+        app.querySelector("#film-unit").value = state.unit;
+      }
       valueField.value = trim(state.farads / FILM_UNITS[state.unit]);
     }
     if (document.activeElement !== tolField) tolField.value = state.tol;
@@ -6318,7 +6345,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
     const codeField = document.getElementById("film-code");
     codeField.oninput = () => {
@@ -6330,6 +6357,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     valueField.oninput = () => applyValue(valueField.value);
     document.getElementById("film-unit").onchange = (e) => {
       state.unit = e.target.value;
+      setPref(C, "unit", state.unit);
       applyValue(valueField.value);
     };
     document.getElementById("film-tol").onchange = (e) => {

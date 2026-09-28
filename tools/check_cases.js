@@ -174,6 +174,15 @@ const CHECK_CASES = {
   "film-code": [
     { name: "102H is ±2.5%", do: [["set", "#film-code", "102H"]], expect: [['[data-res="value"]', "1 nF"], ['[data-res="tol"]', "±2.5%"]] },
     { name: "4N7J reads case-blind", do: [["pill", 1], ["set", "#film-code", "4N7J"]], expect: [['[data-res="value"]', "4.7 nF"], ['[data-res="tol"]', "±5%"]] },
+    { name: "no letter is checked against E12", do: [["set", "#film-code", "562"]], expect: [['[data-res="series"]', "E12 standard value"]] },
+    { name: "J is checked against E24", do: [["set", "#film-code", "912J"]], expect: [['[data-res="series"]', "E24 standard value"]] },
+    { name: "M is checked against E6", do: [["set", "#film-code", "562M"]], expect: [['[data-res="series"]', "Not in E6 — nearest is 4.7 nF"]] },
+    { name: "example: n33K is 330 pF", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="3"]']],
+      expect: [['[data-res="value"]', "330 pF"], ["#film-code", "n33K"], ["#film-value", "330"], ["#film-unit", "pF"], [".pill.active", "Direct (p/n/µ)"]] },
+    { name: "example: 104J", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="value"]', "100 nF"], ['[data-res="series"]', "E24 standard value"]] },
+    { name: "the mode and unit are remembered", do: [["pill", 1], ["set", "#film-unit", "µF"], ["reopen"]],
+      expect: [[".pill.active", "Direct (p/n/µ)"], ["#film-unit", "µF"]] },
   ],
   "cap-smd-code": [
     { name: "227A (AVX TAJ)", do: [["set", "#csmd-code", "227A"]], expect: [['[data-res="value"]', "220 µF"], ['[data-res="letter"]', "Rated 10V"]] },

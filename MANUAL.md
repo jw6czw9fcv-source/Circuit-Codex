@@ -1150,6 +1150,10 @@ Others print the voltage plainly (63 V, 400 V=).
   marking that follows it.
 - A value typed in is encoded with the unit that gives the shortest marking;
   n33 and 330p mean the same.
+- **Standard value.** The tolerance letter picks the one series the value is
+  checked against: J (±5%) E24, K (±10%) E12, M (±20%) E6, G and H E48, F E96.
+  With no letter it is E12, since film parts are mostly ±10% and stocked in
+  E12 values.
 
 ### What it deliberately does not do
 
@@ -1168,6 +1172,10 @@ had no H (±2.5%), a common film tolerance; added it. It made the unit letter
 case-blind (4N7 was rejected), applied the 8 and 9 multipliers and the R-code
 length fix from the ceramic tool, limited the units to pF, nF and µF, and made
 the drawing show the marking as typed.
+
+The re-walk checked the value against the tolerance's own series: 562 is an
+E12 value, 912J an E24 one, 562M "Not in E6 — nearest is 4.7 nF". A value read
+from a marking now shows in its own unit, n33 as 330 pF.
 
 [↑ Index](#index)
 
