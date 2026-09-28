@@ -825,6 +825,65 @@ function axialPartSVG(kind, bands) {
   </svg>`;
 }
 
+// ---------- SMD part drawings ----------
+// Seen from above, each to the proportions of the part that really carries
+// the marking, and in the same style as the leaded parts: shaded bodies,
+// matte tinned terminals, one outline. The code is printed as on the part.
+const SMD_METAL = '<stop offset="0" stop-color="#D5D9DE"/><stop offset=".5" stop-color="#B3B8BF"/><stop offset="1" stop-color="#868C93"/>';
+const smdMark = (x, y, code, fill, size) => `<text x="${x}" y="${y}" fill="${fill}" font-size="${size}" font-weight="600" text-anchor="middle"
+    font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1">${code || "—"}</text>`;
+
+// Thick-film chip resistor, Yageo RC1206: 3.10 x 1.60 mm, tinned
+// terminations 0.45 mm long on the top face, black overcoat. 40 px per mm.
+function smdResistorSVG(code) {
+  const k = 40, L = 3.1 * k, W = 1.6 * k, t = 0.45 * k, x0 = 110 - L / 2, y0 = 8;
+  return `<svg width="220" height="${W + 16}" viewBox="0 0 220 ${W + 16}" fill="none">
+    <defs>
+      <linearGradient id="smdr-metal" x1="0" y1="0" x2="0" y2="1">${SMD_METAL}</linearGradient>
+      <linearGradient id="smdr-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3D42"/><stop offset=".4" stop-color="#1A1C1F"/><stop offset="1" stop-color="#0B0C0E"/></linearGradient>
+    </defs>
+    <rect x="${x0}" y="${y0}" width="${L}" height="${W}" rx="4" fill="url(#smdr-metal)"/>
+    <rect x="${x0 + t}" y="${y0}" width="${L - 2 * t}" height="${W}" fill="url(#smdr-body)"/>
+    <rect x="${x0}" y="${y0}" width="${L}" height="${W}" rx="4" stroke="#00000066" stroke-width="1"/>
+    ${smdMark(110, y0 + W / 2 + 7, code, "#FFFFFF", 20)}
+  </svg>`;
+}
+
+// Moulded tantalum capacitor, AVX TAJ case A (EIA 3216-18): 3.2 x 1.6 mm,
+// terminations 1.2 mm wide folded round the ends, a polarity band at the
+// positive end. 40 px per mm.
+function tantalumSVG(code) {
+  const k = 40, L = 3.2 * k, W = 1.6 * k, tab = 1.2 * k, lip = 0.15 * k, x0 = 110 - L / 2, y0 = 8;
+  return `<svg width="220" height="${W + 16}" viewBox="0 0 220 ${W + 16}" fill="none">
+    <defs>
+      <linearGradient id="tan-metal" x1="0" y1="0" x2="0" y2="1">${SMD_METAL}</linearGradient>
+      <linearGradient id="tan-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2D06A"/><stop offset=".4" stop-color="#D9A93A"/><stop offset="1" stop-color="#946B1C"/></linearGradient>
+    </defs>
+    <rect x="${x0}" y="${y0 + (W - tab) / 2}" width="${L}" height="${tab}" rx="3" fill="url(#tan-metal)"/>
+    <rect x="${x0 + lip}" y="${y0}" width="${L - 2 * lip}" height="${W}" rx="3" fill="url(#tan-body)" stroke="#00000066" stroke-width="1"/>
+    <rect x="${x0 + lip + 0.1 * k}" y="${y0 + 1}" width="${0.4 * k}" height="${W - 2}" fill="#5A3A14"/>
+    ${smdMark(110 + 0.25 * k, y0 + W / 2 + 6, code, "#3A2608", 18)}
+  </svg>`;
+}
+
+// Semi-shielded power inductor, Bourns SRN4018: a 4.0 x 4.0 mm base, the
+// round ferrite core on top at most 3.6 mm across carrying the marking,
+// terminals 1.5 mm wide at two sides. 24 px per mm.
+function powerInductorSVG(code) {
+  const k = 24, S = 4 * k, core = 3.6 * k, term = 1.5 * k, lip = 0.2 * k, x0 = 110 - S / 2, y0 = 8, cy = y0 + S / 2;
+  return `<svg width="220" height="${S + 16}" viewBox="0 0 220 ${S + 16}" fill="none">
+    <defs>
+      <linearGradient id="pind-metal" x1="0" y1="0" x2="0" y2="1">${SMD_METAL}</linearGradient>
+      <linearGradient id="pind-base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#555A62"/><stop offset=".4" stop-color="#34383E"/><stop offset="1" stop-color="#1B1D21"/></linearGradient>
+      <linearGradient id="pind-core" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3C4046"/><stop offset=".5" stop-color="#1E2024"/><stop offset="1" stop-color="#0E0F11"/></linearGradient>
+    </defs>
+    <rect x="${x0 - lip}" y="${cy - term / 2}" width="${S + 2 * lip}" height="${term}" rx="3" fill="url(#pind-metal)"/>
+    <rect x="${x0}" y="${y0}" width="${S}" height="${S}" rx="${0.3 * k}" fill="url(#pind-base)" stroke="#00000066" stroke-width="1"/>
+    <circle cx="110" cy="${cy}" r="${core / 2}" fill="url(#pind-core)" stroke="#00000066" stroke-width="1"/>
+    ${smdMark(110, cy + 7, code, "#FFFFFF", 20)}
+  </svg>`;
+}
+
 // ---------- Resistor colour code ----------
 // A band's meaning depends on which position it sits in, so one table carries
 // every reading of a colour and each role picks the property it needs. A colour
@@ -1505,14 +1564,9 @@ function renderSmdCode(domain, tool, favId) {
   // Literal part, like the colour code's resistor: a black chip with metallised
   // ends and the marking in white, which is what you are holding.
   function chip(code) {
-    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
-      <rect x="44" y="16" width="132" height="48" rx="5" fill="#141619" stroke="#3A3F47" stroke-width="1"/>
-      <rect x="44" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
-      <rect x="156" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
-      <text x="110" y="48" fill="#FFFFFF" font-size="21" font-weight="600" text-anchor="middle"
-            font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1.5">${code || "—"}</text>
-    </svg>`;
+    return smdResistorSVG(code);
   }
+
 
   // Update in place rather than repainting, so the field being typed in keeps
   // its caret — same reason as the colour code.
@@ -5166,17 +5220,11 @@ function renderInductorSmdCode(domain, tool, favId) {
     return `Not standard — nearest ${grid} is ${formatInductance(nearestESeries(uH, grid).value)}`;
   }
 
-  // Same physical marking as the resistor SMD chip — a black body with
-  // metallised ends, code printed in white.
+  // The part that carries these markings: a semi-shielded power inductor.
   function chip(code) {
-    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
-      <rect x="44" y="16" width="132" height="48" rx="5" fill="#141619" stroke="#3A3F47" stroke-width="1"/>
-      <rect x="44" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
-      <rect x="156" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
-      <text x="110" y="48" fill="#FFFFFF" font-size="21" font-weight="600" text-anchor="middle"
-            font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1.5">${code || "—"}</text>
-    </svg>`;
+    return powerInductorSVG(code);
   }
+
 
   function refresh(source, notice) {
     const code = codeFor(state.uH);
@@ -5871,19 +5919,11 @@ function renderCapSmdCode(domain, tool, favId) {
     return state.mode === "voltage" ? `Rated ${v}V` : `±${v}%`;
   }
 
-  // Same physical marking as the resistor/inductor SMD screens — a black
-  // body with metallised ends, code printed in white. Unlike the ceramic
-  // disc and film box, this one really is what a tantalum or larger MLCC
-  // chip looks like.
+  // The part that carries these markings: a moulded tantalum capacitor.
   function chip(code) {
-    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
-      <rect x="44" y="16" width="132" height="48" rx="5" fill="#141619" stroke="#3A3F47" stroke-width="1"/>
-      <rect x="44" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
-      <rect x="156" y="16" width="20" height="48" rx="4" fill="#C6CBD2"/>
-      <text x="110" y="48" fill="#FFFFFF" font-size="21" font-weight="600" text-anchor="middle"
-            font-family="ui-monospace, SFMono-Regular, Menlo, monospace" letter-spacing="1.5">${code || "—"}</text>
-    </svg>`;
+    return tantalumSVG(code);
   }
+
 
   // The chip shows the marking as typed, J106 stays J106.
   function refresh(source, notice) {
