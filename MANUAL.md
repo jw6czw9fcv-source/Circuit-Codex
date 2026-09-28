@@ -34,6 +34,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [Film capacitor code](#film-capacitor-code)
 - Capacitors → [SMD capacitor code](#smd-capacitor-code)
 - Capacitors → [Capacitors in series and parallel](#capacitors-in-series-and-parallel)
+- Capacitors → [RC charge and discharge](#rc-charge-and-discharge)
 
 ### Digital
 
@@ -1302,6 +1303,93 @@ the more important number.
 By hand: 100 nF + 100 nF in parallel is 200 nF, in series 50 nF; 1 µF and
 10 µF in series give 909.1 nF; two 2.7 F supercapacitors in series give 1.35 F.
 The ranges are the total × (1 ± t).
+
+[↑ Index](#index)
+
+---
+
+<a id="rc-charge"></a>
+## RC charge and discharge
+
+`calc: rc-charge` · Passive components › Capacitors
+
+### What it computes
+
+For a capacitor charging from a supply through a resistor, or discharging
+through one: the time constant τ, the voltage after a given time, or the time it
+takes to reach a given voltage. A table gives the percentage reached after
+one to five time constants.
+
+### Source
+
+The solution of the circuit's differential equation, from Ohm's law and the
+capacitor law I = C × dV/dt. No standard is involved.
+
+### What it means
+
+A capacitor stores charge, and its voltage rises as the charge builds up. When
+it charges through a resistor, the current is largest at the start, when the
+capacitor is empty and the whole supply voltage is across the resistor. As the
+capacitor fills, less voltage is left across the resistor, the current falls,
+and the charging slows. So the voltage does not climb in a straight line but
+bends over, approaching the supply ever more slowly.
+
+The pace is set by one number, the **time constant**:
+
+    τ = R × C
+
+10 kΩ and 100 µF make τ = 1 second. In each time constant the capacitor covers
+63% of the distance that is still left:
+
+| After | Charging, % of Vs | Discharging, % of V0 left |
+|---|---|---|
+| 1 τ | 63.2% | 36.8% |
+| 2 τ | 86.5% | 13.5% |
+| 3 τ | 95.0% | 5.0% |
+| 4 τ | 98.2% | 1.8% |
+| 5 τ | 99.3% | 0.7% |
+
+It never quite arrives: mathematically the curve only approaches Vs. In
+practice **5τ** counts as fully charged or discharged.
+
+**Discharging** is the same curve upside down: a charged capacitor connected
+across a resistor, with no supply, loses 63% of what is left in each τ.
+
+### The formulas
+
+    Charging:     V(t) = Vs × (1 − e^(−t/τ))       t = −τ × ln(1 − V/Vs)
+    Discharging:  V(t) = V0 × e^(−t/τ)             t = −τ × ln(V/V0)
+
+The second form of each answers the practical question — how long until the
+capacitor reaches a threshold. For example, how long a power-on reset holds, or
+when a slowly rising input crosses a logic level: charging to 2/3 of Vs takes
+τ × ln 3 = 1.1 τ, which is where the 555 timer's 1.1 R C comes from.
+
+### Assumptions and limits
+
+- **An ideal source and capacitor.** The supply is taken as having no internal
+  resistance, and the capacitor as having no leakage. A leaky capacitor, such as
+  an electrolytic, levels off below Vs.
+- **Nominal R and C.** With a ±20% capacitor the times are ±20% too.
+- The target voltage must lie between 0 and Vs: a charging capacitor never
+  reaches Vs, so asking for exactly Vs has no finite answer.
+
+### What it deliberately does not do
+
+- **Switch debouncing and RC timing for logic inputs** have the Debounce / RC
+  timing tool, which adds input thresholds.
+- **Energy** stored in the capacitor is the Stored energy tool.
+
+### How it was checked
+
+By hand: 10 kΩ and 100 µF give τ = 1 s; at 1 s a 5 V charge reaches 3.161 V
+(63.21%); 4.5 V is reached at 2.303 s (ln 10 × τ); discharging from 5 V, 1.839 V
+is left at 1 s, and 0.5 V is reached at 2.303 s.
+
+The review fixed the layout, which put the voltage result 24 px under the tab
+bar on the target phone; R and C now share a line, the voltage and time fields
+share the next, and the results sit in one row. The schematic no longer shows a
+supply when discharging, and the resistance units are Ω, kΩ and MΩ.
 
 [↑ Index](#index)
 

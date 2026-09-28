@@ -7523,7 +7523,7 @@ function renderRcCharge(domain, tool, favId) {
   };
 
   function tau() {
-    return state.r * OHM_UNITS[state.rUnit] * state.c * CAP_UNITS[state.cUnit];
+    return state.r * DIVIDER_R_UNITS[state.rUnit] * state.c * CAP_UNITS[state.cUnit];
   }
 
   function vAtT(t) {
@@ -7552,16 +7552,22 @@ function renderRcCharge(domain, tool, favId) {
     });
   }
 
+  // Charging draws the source; discharging does not have one — the charged
+  // capacitor empties through R on its own, so the left side is plain wire.
   function diagram() {
     const wire = "#5A6169";
-    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
-      <path d="M30,20 H70 M110,20 H190 M190,20 V44 M190,58 V80 M190,80 H30 M30,80 V56 M30,32 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+    const charging = state.mode === "charging";
+    // Symmetric about R: each side sits 40 from the resistor's ends, and the
+    // viewBox is trimmed so the loop, not the empty width, is what centres.
+    return `<svg width="190" height="100" viewBox="-5 0 190 100" fill="none">
+      <path d="M30,20 H70 M110,20 H150 M150,20 V44 M150,58 V80 M150,80 H30 ${charging ? "M30,80 V56 M30,32 V20" : "M30,80 V20"}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${charging ? `<path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>` : ""}
       <path d="M70,20 L73,13 L79,27 L85,13 L91,27 L97,13 L103,27 L110,20" stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="M180,47 H200 M180,53 H200" stroke="${domain.color}" stroke-width="2" stroke-linecap="round"/>
+      <path d="M140,47 H160 M140,53 H160" stroke="${domain.color}" stroke-width="2" stroke-linecap="round"/>
       <text x="90" y="12" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
-      <text x="207" y="53" fill="${domain.color}" font-size="12" font-weight="600">C</text>
-      <text x="12" y="51" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Vs</text>
+      <text x="167" y="53" fill="${domain.color}" font-size="12" font-weight="600">C</text>
+      ${charging ? `<text x="12" y="51" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Vs</text>`
+        : `<text x="136" y="40" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="end">V0</text>`}
     </svg>`;
   }
 
@@ -7581,9 +7587,8 @@ function renderRcCharge(domain, tool, favId) {
     if (source !== "voltage" && document.activeElement !== voltField) voltField.value = isFinite(v) ? trim(v) : "";
     app.querySelector('[data-res="tau"]').textContent = isFinite(T) ? siFormat(T, "s") : "—";
     app.querySelector('[data-res="volt"]').textContent = isFinite(v) ? siFormat(v, "V") : "—";
-    app.querySelector('[data-res="pct"]').textContent = isFinite(v) && state.vs > 0
-      ? `${trim((v / state.vs) * 100)}% of ${state.mode === "charging" ? "the way to Vs" : "Vs remaining"}`
-      : "";
+    app.querySelector('[data-res="pct"]').textContent = isFinite(v) && state.vs > 0 ? `${trim((v / state.vs) * 100)}%` : "—";
+    app.querySelector('[data-res="five"]').textContent = isFinite(T) ? siFormat(5 * T, "s") : "—";
     app.querySelector('[data-res="err"]').textContent = (!isFinite(t) || !isFinite(v))
       ? (state.mode === "charging" ? "Target voltage must be between 0 and Vs (charging only approaches Vs, never reaches it)." : "Target voltage must be between 0 and Vs (discharging only approaches 0, never reaches it).")
       : "";
@@ -7600,48 +7605,49 @@ function renderRcCharge(domain, tool, favId) {
 
       ${pillRow([["charging", "Charging"], ["discharging", "Discharging"]], state.mode, domain.bg)}
 
-      <div class="field">
-        <label>Resistance (R)</label>
-        <div class="field-row">
-          <input id="rc-r" type="number" inputmode="decimal" step="any" value="${trim(state.r)}" />
-          <select id="rc-r-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+      <div class="field-pair">
+        <div class="field">
+          <label>Resistance R</label>
+          <div class="field-row">
+            <input id="rc-r" type="number" inputmode="decimal" step="any" value="${trim(state.r)}" />
+            <select id="rc-r-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.rUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
         </div>
-      </div>
-      <div class="field">
-        <label>Capacitance (C)</label>
-        <div class="field-row">
-          <input id="rc-c" type="number" inputmode="decimal" step="any" value="${trim(state.c)}" />
-          <select id="rc-c-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.cUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        <div class="field">
+          <label>Capacitance C</label>
+          <div class="field-row">
+            <input id="rc-c" type="number" inputmode="decimal" step="any" value="${trim(state.c)}" />
+            <select id="rc-c-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.cUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
         </div>
-      </div>
-      <div class="field">
-        <label>${state.mode === "charging" ? "Supply voltage (Vs)" : "Initial voltage (V0)"}</label>
-        <div class="field-row"><input id="rc-vs" type="number" inputmode="decimal" step="any" value="${trim(state.vs)}" /></div>
       </div>
 
-      <div class="section-label" style="color:#8FC1F5">Time ↔ voltage — enter either one</div>
-      <div class="field">
-        <label>Time</label>
-        <div class="field-row">
-          <input id="rc-time" type="number" inputmode="decimal" step="any" value="${trim(state.time)}" />
-          <select id="rc-time-unit">${Object.keys(RC_TIME_UNITS).map((u) => `<option ${state.timeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+      <div class="section-label" style="color:#8FC1F5">Enter the time or the voltage</div>
+      <div class="field-pair">
+        <div class="field">
+          <label>${state.mode === "charging" ? "Supply Vs" : "Start V0"}</label>
+          <div class="field-row"><input id="rc-vs" type="number" inputmode="decimal" step="any" value="${trim(state.vs)}" /><span class="unit-fixed">V</span></div>
         </div>
-      </div>
-      <div class="field">
-        <label>Voltage at that time</label>
-        <div class="field-row"><input id="rc-volt" type="number" inputmode="decimal" step="any" /></div>
+        <div class="field">
+          <label>Time t</label>
+          <div class="field-row">
+            <input id="rc-time" type="number" inputmode="decimal" step="any" value="${trim(state.time)}" />
+            <select id="rc-time-unit">${Object.keys(RC_TIME_UNITS).map((u) => `<option ${state.timeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>
+        <div class="field">
+          <label>V at t</label>
+          <div class="field-row"><input id="rc-volt" type="number" inputmode="decimal" step="any" /><span class="unit-fixed">V</span></div>
+        </div>
       </div>
       <div class="error-text" data-res="err"></div>
 
       <div class="section-label" style="color:#5DCAA5">Results</div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">Time constant (τ = R × C)</span></div>
-        <div class="result-value"><span class="num" data-res="tau"></span></div>
-      </div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">Voltage</span></div>
-        <div class="result-value"><span class="num" data-res="volt"></span></div>
-        <div class="result-sub" data-res="pct"></div>
+      <div class="eseries-grid eseries-grid--tight">
+        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">τ = R × C</div><div data-res="tau"></div></div>
+        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">V at t</div><div data-res="volt"></div></div>
+        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${state.mode === "charging" ? "Of Vs" : "Left of V0"}</div><div data-res="pct"></div></div>
+        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">5τ</div><div data-res="five"></div></div>
       </div>
 
       <div class="section-label" style="color:#8FC1F5">Quick reference — % after n time constants</div>
@@ -7649,7 +7655,7 @@ function renderRcCharge(domain, tool, favId) {
 
       ${formulaSection(
         ["τ = R × C", "Charging: V(t) = Vs · (1 − e^(−t/τ))", "Discharging: V(t) = V0 · e^(−t/τ)"],
-        "Neither curve ever actually reaches Vs or 0 — they only approach it. \"Fully charged/discharged\" in practice means 5τ (≈99.3%), the conventional cutoff, not a hard endpoint the math itself defines."
+        "A capacitor charging through a resistor does not fill at a steady rate: it moves fast at first and slower and slower as it nears the supply. The time constant τ = R × C sets the pace. After one τ it is 63% of the way, after five 99.3%, which counts as full in practice; it never gets there exactly. Discharging is the mirror image: after one τ, 37% is left. Enter a time to get the voltage, or a voltage to get the time it takes."
       )}
       ${calcFooter()}
     `;
