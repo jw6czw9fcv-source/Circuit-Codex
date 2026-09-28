@@ -679,6 +679,14 @@ function formatOhms(v) {
   return `${trim(v * 1e3)} mΩ`;
 }
 
+// The unit among those offered that a capacitance reads best in: 4.7 pF,
+// 100 nF, 10 µF — what formatFarads would print it with.
+function naturalFaradUnit(v, units) {
+  const order = Object.entries(units).sort((a, b) => b[1] - a[1]);
+  const hit = order.find(([, scale]) => Math.abs(v) >= scale);
+  return hit ? hit[0] : order[order.length - 1][0];
+}
+
 function formatFarads(v) {
   if (!isFinite(v)) return "—";
   if (v === 0) return "0 F";
@@ -5827,9 +5835,32 @@ const CERAMIC_TOL_LABEL = {
 const CERAMIC_TOL_LETTERS = new Set([...Object.keys(CERAMIC_TOL_ABS), ...Object.keys(CERAMIC_TOL_PCT)]);
 
 function renderCeramicCode(domain, tool, favId) {
-  const state = { mode: "3", farads: 100e-9, unit: "nF", tol: "" };
+  const C = "ceramic-code";
   // Ceramic capacitors run from a fraction of a picofarad to around 100 µF.
   const CER_UNITS = { pF: 1e-12, nF: 1e-9, "µF": 1e-6 };
+  const state = {
+    mode: pref(C, "mode", "3", ["3", "4"]),
+    farads: 100e-9,
+    unit: pref(C, "unit", "nF", Object.keys(CER_UNITS)),
+    tol: "",
+  };
+
+  // Markings found on real discs. Each is read as if typed into the code
+  // field, so the disc shows it as printed.
+  const example = (code) => () => {
+    state.mode = "3";
+    const r = faradsFor(code);
+    Object.assign(state, { farads: r.farads, tol: r.tol, unit: naturalFaradUnit(r.farads, CER_UNITS) });
+    paint();
+    app.querySelector("#cer-code").value = code;
+    refresh("code");
+  };
+  useExamples([
+    { title: "104 beside every IC", note: "10 and four zeros: 100 000 pF = 100 nF, the decoupling capacitor on each supply pin.", apply: example("104") },
+    { title: "220J crystal load", note: "22 pF, J = ±5%: the pair of caps either side of a crystal, in C0G.", apply: example("220J") },
+    { title: "479, a small RF value", note: "A last digit of 9 means ×0.1: 47 × 0.1 = 4.7 pF.", apply: example("479") },
+    { title: "103Z cheap decoupling", note: "10 nF, Z = +80 / −20%: a Y5V disc where only \"enough\" matters.", apply: example("103Z") },
+  ]);
 
   function sig() {
     return state.mode === "3" ? 2 : 3;
@@ -5886,13 +5917,15 @@ function renderCeramicCode(domain, tool, favId) {
     return { farads: pF * 1e-12, tol };
   }
 
+  // One tolerance, one series: J ±5% → E24, K ±10% → E12, M ±20% → E6, and
+  // so on. Without a letter, or with Z, E6 — where most ceramics are stocked.
+  // At 10 pF and below the B–G letters are ± pF, which implies no series.
   function seriesLine(farads) {
     if (!isFinite(farads) || farads <= 0) return "";
-    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
-      if (nearestESeries(farads, name).exact) return `${name} standard value`;
-    }
-    const grid = state.mode === "3" ? "E24" : "E96";
-    return `Not standard — nearest ${grid} is ${formatFarads(nearestESeries(farads, grid).value)}`;
+    const pF = farads / 1e-12;
+    if (pF <= 10 && CERAMIC_TOL_ABS[state.tol] !== undefined) return "Tolerance in pF: no E-series implied";
+    const pct = CERAMIC_TOL_PCT[state.tol];
+    return seriesVerdict(farads, typeof pct === "number" ? eSeriesForTolerance(pct) : "E6", formatFarads);
   }
 
   function tolText(letter, farads) {
@@ -5956,7 +5989,13 @@ function renderCeramicCode(domain, tool, favId) {
     const valueField = app.querySelector("#cer-value");
     const tolField = app.querySelector("#cer-tol");
     if (source !== "code" && document.activeElement !== codeField) codeField.value = code || "";
+    // A value read from a marking shows in the unit it reads best in (479 as
+    // 4.7 pF, not 0.0047 nF); a value typed keeps its unit.
     if (source !== "value" && document.activeElement !== valueField) {
+      if (state.farads > 0) {
+        state.unit = naturalFaradUnit(state.farads, CER_UNITS);
+        app.querySelector("#cer-unit").value = state.unit;
+      }
       valueField.value = trim(state.farads / CER_UNITS[state.unit]);
     }
     if (document.activeElement !== tolField) tolField.value = state.tol;
@@ -6025,7 +6064,7 @@ function renderCeramicCode(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
     const codeField = document.getElementById("cer-code");
     codeField.oninput = () => {
@@ -6037,6 +6076,7 @@ function renderCeramicCode(domain, tool, favId) {
     valueField.oninput = () => applyValue(valueField.value);
     document.getElementById("cer-unit").onchange = (e) => {
       state.unit = e.target.value;
+      setPref(C, "unit", state.unit);
       applyValue(valueField.value);
     };
     document.getElementById("cer-tol").onchange = (e) => {

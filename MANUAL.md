@@ -1059,6 +1059,11 @@ is the voltage rating. Neither is part of the value code.
   on film capacitors.
 - A value typed in is encoded with R below 10 pF (4R7); the 479 form means the
   same and is read as well.
+- **Standard value.** The tolerance letter picks the one series the value is
+  checked against: J (±5%) E24, K (±10%) E12, M (±20%) E6, as for resistors.
+  With no letter, or Z, it is E6, the series most ceramics are stocked in. At
+  10 pF and below, B to G give a tolerance in picofarads, which implies no
+  series, and the tool says so.
 
 ### What it deliberately does not do
 
@@ -1076,6 +1081,10 @@ EIA-198. B, C and D above 10 pF were read as picofarads, so 101D showed
 ±0.5 pF instead of ±0.5%. And the units offered ran to millifarads and farads,
 which no ceramic capacitor reaches; they are now pF, nF and µF. The drawing now
 shows the marking as typed (479 stays 479 rather than becoming 4R7).
+
+The re-walk checked the value against the tolerance's own series rather than
+the coarsest one it happened to be in: 182 is "Not in E6 — nearest is 1.5 nF",
+182K an E12 value, 479C "no E-series implied".
 
 [↑ Index](#index)
 
