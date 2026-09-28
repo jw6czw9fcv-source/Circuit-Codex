@@ -35,7 +35,7 @@ const DOMAINS = [
           { name: "Capacitor SMD code", was: "SMD code", calc: "cap-smd-code" },
           { name: "Series/parallel (C)", was: "Series/parallel", calc: "cap-series-parallel" },
           { name: "RC charge/discharge", was: "Charge/discharge (RC)", calc: "rc-charge" },
-          { name: "Capacitor stored energy", was: "Stored energy", calc: "cap-stored-energy" },
+          { name: "Capacitor energy", was: "Stored energy", calc: "cap-stored-energy" },
         ],
       },
       {
@@ -257,7 +257,7 @@ const TOOL_KEYWORDS = {
   "cap-smd-code": "tantalum capacitor marking voltage code",
   "cap-series-parallel": "capacitors in series parallel combine equivalent capacitance",
   "rc-charge": "time constant tau capacitor charge discharge",
-  "cap-stored-energy": "joules capacitor energy charge coulomb",
+  "cap-stored-energy": "capacitor stored energy joules charge coulomb",
   "inductor-color-code": "coil choke bands microhenry",
   "inductor-smd-code": "power inductor marking 4r7",
   "rc-filter": "low pass high pass cutoff bode",

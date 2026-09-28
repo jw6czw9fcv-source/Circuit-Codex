@@ -35,7 +35,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [SMD capacitor code](#smd-capacitor-code)
 - Capacitors → [Series/parallel (C)](#seriesparallel-c)
 - Capacitors → [RC charge and discharge](#rc-charge-and-discharge)
-- Capacitors → [Capacitor stored energy](#capacitor-stored-energy)
+- Capacitors → [Capacitor energy](#capacitor-energy)
 - Inductors → [Inductor color code](#inductor-color-code)
 
 ### Digital
@@ -1450,7 +1450,7 @@ supply when discharging, and the resistance units are Ω, kΩ and MΩ.
 ---
 
 <a id="cap-stored-energy"></a>
-## Capacitor stored energy
+## Capacitor energy
 
 `calc: cap-stored-energy` · Passive components › Capacitors
 
