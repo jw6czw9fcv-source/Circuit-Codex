@@ -1123,3 +1123,14 @@ a.icon-btn { text-decoration: none; }
 /* Related tools at the foot of a tool: a line of chips that wraps. */
 .chip-row.related { flex-wrap: wrap; overflow: visible; padding-bottom: 12px; }
 .related-label { padding-top: 4px; }
+
+/* Results can be tapped to copy them. */
+.result-value, .eseries-grid--tight .eseries-cell { cursor: copy; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 84px);
+  transform: translate(-50%, 12px); opacity: 0; pointer-events: none;
+  background: #2A2F37; color: var(--text); border: 1px solid #3A3F47;
+  padding: 8px 14px; border-radius: 10px; font-size: 14px; white-space: nowrap;
+  transition: opacity .18s, transform .18s; z-index: 50;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }

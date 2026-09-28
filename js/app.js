@@ -124,6 +124,73 @@ app.addEventListener("click", (e) => {
   if (row) selectElementText(row);
 });
 
+// ---------- Copying a result ----------
+// Tapping a result copies it: the main value with its unit, or a value in a
+// row of result cells. A short note confirms it. One delegated handler, so
+// every tool has it.
+function showToast(text) {
+  let t = document.getElementById("toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "toast";
+    t.className = "toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => t.classList.remove("show"), 1400);
+}
+
+// The Clipboard API first; where it is missing or refused (some embedded
+// browsers), the older copy of a selected hidden text area.
+function copyText(text) {
+  const done = () => showToast(`Copied ${text}`);
+  const fallback = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) {}
+    ta.remove();
+    showToast(ok ? `Copied ${text}` : "Could not copy");
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+  else fallback();
+}
+
+app.addEventListener("click", (e) => {
+  const main = e.target.closest(".result-value");
+  const cell = e.target.closest(".eseries-grid--tight .eseries-cell");
+  let text = "";
+  if (main) text = main.textContent.replace(/\s+/g, " ").trim();
+  else if (cell && cell.lastElementChild) text = cell.lastElementChild.textContent.trim();
+  if (text && text !== "—") copyText(text);
+});
+
+// ---------- Remembered choices ----------
+// A tool's last choice of unit (or other setting), per tool, per field. Each
+// tool reads it where it sets up its state, so a remembered unit is applied
+// before any value is shown in it — restoring units after the screen is
+// drawn would change values in tools where a new unit re-reads the number.
+function pref(calc, key, fallback, allowed) {
+  try {
+    const v = JSON.parse(localStorage.getItem("cc_prefs") || "{}")[`${calc}.${key}`];
+    return v !== undefined && (!allowed || allowed.includes(v)) ? v : fallback;
+  } catch (_) { return fallback; }
+}
+function setPref(calc, key, value) {
+  try {
+    const all = JSON.parse(localStorage.getItem("cc_prefs") || "{}");
+    all[`${calc}.${key}`] = value;
+    localStorage.setItem("cc_prefs", JSON.stringify(all));
+  } catch (_) {}
+}
+
 // A tool chip (Home rows, Related tools) opens its tool. Delegated on #app,
 // which outlives every paint.
 app.addEventListener("click", (e) => {
@@ -1989,7 +2056,13 @@ function renderVoltageDivider(domain, tool, favId) {
     solve: "vout",
     tol: 1,
     values: { vin: 12, vout: 6, r1: 10, r2: 10 },
-    units: { vin: "V", vout: "V", r1: "kΩ", r2: "kΩ" },
+    // The units last chosen for each field, if any.
+    units: {
+      vin: pref("voltage-divider", "unit.vin", "V", Object.keys(VOLT_UNITS)),
+      vout: pref("voltage-divider", "unit.vout", "V", Object.keys(VOLT_UNITS)),
+      r1: pref("voltage-divider", "unit.r1", "kΩ", Object.keys(DIVIDER_R_UNITS)),
+      r2: pref("voltage-divider", "unit.r2", "kΩ", Object.keys(DIVIDER_R_UNITS)),
+    },
   };
 
   const FIELD = {
@@ -2198,7 +2271,11 @@ function renderVoltageDivider(domain, tool, favId) {
       };
     });
     app.querySelectorAll("select[data-unit]").forEach(select => {
-      select.onchange = () => { state.units[select.dataset.unit] = select.value; updateResults(); };
+      select.onchange = () => {
+        state.units[select.dataset.unit] = select.value;
+        setPref("voltage-divider", `unit.${select.dataset.unit}`, select.value);
+        updateResults();
+      };
     });
     document.getElementById("vd-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);

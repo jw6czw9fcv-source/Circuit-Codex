@@ -6,8 +6,9 @@
 //   steps:  ["set", selector, value]  types into a field or picks a <select>
 //           ["click", selector]       clicks (a roller colour, a button)
 //           ["pill", index]           picks a mode pill
-//   expect: the element's text (an <input>'s value) must equal the text, or
-//           match it when written as "/regex/".
+//   expect: a field's or picker's value, or an element's text, must equal
+//           the text, or match it when written as "/regex/"; "options:..."
+//           compares a picker's whole list of options.
 const CHECK_CASES = {
   "resistor-color-code": [
     { name: "4.7 k is yellow violet red", do: [["set", "#cc-unit", "kΩ"], ["set", "#cc-value", "4.7"]],
@@ -41,6 +42,8 @@ const CHECK_CASES = {
     { name: "a decimal comma is read", do: [["set", 'input[data-var="r2"]', "4,7"]], expect: [['[data-res="solved"]', "3.837 V"]] },
     { name: "shorthand in an Ω field", do: [["set", 'select[data-unit="r2"]', "Ω"], ["set", 'input[data-var="r2"]', "4k7"]],
       expect: [['input[data-var="r2"]', "4700"], ['[data-res="solved"]', "3.837 V"]] },
+    { name: "a chosen unit is remembered", do: [["set", 'select[data-unit="r2"]', "Ω"], ["reopen"]],
+      expect: [['select[data-unit="r2"]', "Ω"]] },
     { name: "12 V, 10 k / 4.7 k", do: [["set", 'input[data-var="r2"]', "4.7"]], expect: [['[data-res="solved"]', "3.837 V"]] },
   ],
   "current-divider": [
@@ -90,6 +93,6 @@ const CHECK_CASES = {
     { name: "gold as decimal point: 4.7 µH",
       do: [["click", '.roller-track[data-role="d1"] [data-color="yellow"]'], ["click", '.roller-track[data-role="d2"] [data-color="gold"]'], ["click", '.roller-track[data-role="mult"] [data-color="violet"]']],
       expect: [['[data-res="uh"]', "4.7 µH"]] },
-    { name: "only inductor tolerances offered", do: [], expect: [["#ic-tol", "±5%±10%±20%±20%"]] },
+    { name: "only inductor tolerances offered", do: [], expect: [["#ic-tol", "options:±5%±10%±20%±20%"]] },
   ],
 };

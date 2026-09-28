@@ -46,6 +46,14 @@ function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); 
 async function play(doc, steps) {
   for (const [kind, a, b] of steps) {
     if (kind === "pill") { doc.querySelectorAll(".pill")[a].click(); await wait(30); continue; }
+    if (kind === "reopen") {
+      const h = frame.contentWindow.location.hash;
+      frame.contentWindow.location.hash = "#/home";
+      await wait(40);
+      frame.contentWindow.location.hash = h;
+      await wait(80);
+      continue;
+    }
     const el = doc.querySelector(a);
     if (!el) throw new Error(`no element ${a}`);
     if (kind === "click") { el.click(); await wait(30); continue; }
@@ -66,6 +74,7 @@ async function checkTool(t) {
   const doc = frame.contentDocument;
   const errors = [];
   win.__errors = errors;
+  win.localStorage.removeItem("cc_prefs");
   win.location.hash = `#/tool/${encodeURIComponent(t.route)}/${t.calc}`;
   await wait(120);
 
@@ -145,14 +154,22 @@ async function checkTool(t) {
   for (const c of (CHECK_CASES[t.calc] || [])) {
     r.cases++;
     try {
+      // Each case starts from the tool's own defaults: no unit remembered
+      // from an earlier case.
+      win.localStorage.removeItem("cc_prefs");
       win.location.hash = "#/home";
       await wait(40);
       win.location.hash = `#/tool/${encodeURIComponent(t.route)}/${t.calc}`;
       await wait(80);
       await play(doc, c.do || []);
-      for (const [sel, expected] of c.expect) {
+      for (let [sel, expected] of c.expect) {
         const el = doc.querySelector(sel);
-        const actual = el ? (el.value !== undefined && el.tagName === "INPUT" ? el.value : el.textContent.trim()) : "(missing)";
+        // A field or picker is read by its value; "options:" compares a
+        // picker's list of options instead; anything else by its text.
+        const opts = expected.startsWith("options:");
+        const actual = !el ? "(missing)" : opts ? el.textContent.trim()
+          : el.tagName === "INPUT" || el.tagName === "SELECT" ? el.value : el.textContent.trim();
+        if (opts) expected = expected.slice(8);
         if (!matches(actual, expected)) r.failed.push(`${c.name}: ${sel} is "${actual}", expected "${expected}"`);
       }
     } catch (e) {

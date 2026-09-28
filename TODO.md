@@ -444,7 +444,9 @@ an Example, then continue the review at tool 18)
       calculators, RMS under Calculators, the two Wavelength tools renamed);
       split PCB › Trace & impedance in three; English-only search synonyms.
 - [x] Related tools — links between neighbouring tools, declared in data.js.
-- [ ] Comfort — copy a result, remember the last units chosen.
+- [x] Comfort — copy a result (tap it), remember the last units chosen
+      (pref()/setPref(); applied per tool during the re-walk — done so far
+      on the voltage divider).
 - [ ] Light mode.
 - [ ] TODO priorities — PCB trace width, AC Ohm's law, inductor
       series/parallel, battery internal resistance first.
