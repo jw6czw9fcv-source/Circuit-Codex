@@ -679,9 +679,9 @@ function formatOhms(v) {
   return `${trim(v * 1e3)} mΩ`;
 }
 
-// The unit among those offered that a capacitance reads best in: 4.7 pF,
-// 100 nF, 10 µF — what formatFarads would print it with.
-function naturalFaradUnit(v, units) {
+// The unit among those offered that a value reads best in, given the units
+// as { name: scale }: 4.7 pF, 100 nF, 10 µF; 470 nH, 1 mH.
+function naturalUnit(v, units) {
   const order = Object.entries(units).sort((a, b) => b[1] - a[1]);
   const hit = order.find(([, scale]) => Math.abs(v) >= scale);
   return hit ? hit[0] : order[order.length - 1][0];
@@ -5383,7 +5383,9 @@ function renderIpRatings(domain, tool, favId) {
 // than sharing it — both are tightly closed over their own local state, and
 // extracting a shared helper would mean touching that already-shipped,
 // working code for a second consumer that doesn't exist yet beyond this one.
-const INDUCTOR_UNITS = { nH: 1e-3, "µH": 1, mH: 1e3, H: 1e6 };
+// Colour-coded and chip inductors run from nanohenries to a few millihenries;
+// none reaches a henry.
+const INDUCTOR_UNITS = { nH: 1e-3, "µH": 1, mH: 1e3 };
 // The tolerance colours inductor makers use: gold ±5%, silver ±10%, black or
 // no band ±20% (Inductors Inc.'s colour band guide). The resistor's precision
 // colours — brown ±1% down to grey ±0.01% — were offered here until the
@@ -5402,7 +5404,31 @@ function formatInductance(uH) {
 function renderInductorColorCode(domain, tool, favId) {
   const ROLES = ["d1", "d2", "mult", "tol"];
   const ITEM_H = 30;
-  const state = { unit: "µH", mil: false, bands: { d1: "brown", d2: "black", mult: "black", tol: "gold" } };
+  const C = "inductor-color-code";
+  const state = {
+    unit: pref(C, "unit", "µH", Object.keys(INDUCTOR_UNITS)),
+    mil: pref(C, "mil", false, [true, false]),
+    bands: { d1: "brown", d2: "black", mult: "black", tol: "gold" },
+  };
+
+  // Parts met on real boards. Each sets the form and the four value bands;
+  // the value field follows in the unit it reads best in.
+  const example = (mil, d1, d2, mult, tol) => () => {
+    Object.assign(state, { mil });
+    Object.assign(state.bands, { d1, d2, mult, tol });
+    state.unit = naturalUnit(compute().uH, INDUCTOR_UNITS);
+    paint();
+  };
+  useExamples([
+    { title: "10 µH choke", note: "brown–black–black–gold: 10 × 1 = 10 µH ±5%, a supply filter choke.",
+      apply: example(false, "brown", "black", "black", "gold") },
+    { title: "4.7 µH, gold as decimal point", note: "yellow–gold–violet–silver: gold in second place is the point, 4.7 µH ±10%.",
+      apply: example(false, "yellow", "gold", "violet", "silver") },
+    { title: "1 mH filter choke", note: "brown–black–red–silver: 10 × 100 = 1000 µH = 1 mH ±10%.",
+      apply: example(false, "brown", "black", "red", "silver") },
+    { title: "5-band MIL-style part", note: "The wide silver band is an identifier, not a digit: orange–gold–orange–silver is 3.3 µH ±10%.",
+      apply: example(true, "orange", "gold", "orange", "silver") },
+  ]);
 
   // Gold among the first two bands is the decimal point, not a digit
   // (yellow–gold–violet is 4.7 µH), so the digit rollers offer it last.
@@ -5528,8 +5554,17 @@ function renderInductorColorCode(domain, tool, favId) {
     if (!isFinite(r.uH)) err.textContent = "Gold marks the decimal point in band 1 or 2, and only once; the band after it is then a digit, not gold or silver.";
     else if (err.textContent.startsWith("Gold marks")) err.textContent = "";
 
+    // A value that came from the bands is shown in the unit it reads best in
+    // (1000 µH as 1 mH, 0.47 µH as 470 nH); a value typed keeps its unit.
     const typed = app.querySelector("#ic-value");
-    if (typed && document.activeElement !== typed) typed.value = trim(r.uH / INDUCTOR_UNITS[state.unit]);
+    if (typed && document.activeElement !== typed) {
+      if (r.uH > 0) {
+        state.unit = naturalUnit(r.uH, INDUCTOR_UNITS);
+        const unitSel = app.querySelector("#ic-unit");
+        if (unitSel) unitSel.value = state.unit;
+      }
+      typed.value = trim(r.uH / INDUCTOR_UNITS[state.unit]);
+    }
     const tolSel = app.querySelector("#ic-tol");
     if (tolSel) tolSel.value = state.bands.tol;
   }
@@ -5593,10 +5628,10 @@ function renderInductorColorCode(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mil = +v === 5; paint(); });
+    wireCalc(favId, paint, (v) => { state.mil = +v === 5; setPref(C, "mil", state.mil); paint(); });
     const typed = document.getElementById("ic-value");
     typed.oninput = () => applyTypedValue(typed.value);
-    document.getElementById("ic-unit").onchange = (e) => { state.unit = e.target.value; applyTypedValue(typed.value); };
+    document.getElementById("ic-unit").onchange = (e) => { state.unit = e.target.value; setPref(C, "unit", state.unit); applyTypedValue(typed.value); };
     document.getElementById("ic-tol").onchange = (e) => { state.bands.tol = e.target.value; syncRollers(); };
 
     app.querySelectorAll(".roller-track").forEach((track) => {
@@ -5869,7 +5904,7 @@ function renderCeramicCode(domain, tool, favId) {
   const example = (code) => () => {
     state.mode = "3";
     const r = faradsFor(code);
-    Object.assign(state, { farads: r.farads, tol: r.tol, unit: naturalFaradUnit(r.farads, CER_UNITS) });
+    Object.assign(state, { farads: r.farads, tol: r.tol, unit: naturalUnit(r.farads, CER_UNITS) });
     paint();
     app.querySelector("#cer-code").value = code;
     refresh("code");
@@ -6012,7 +6047,7 @@ function renderCeramicCode(domain, tool, favId) {
     // 4.7 pF, not 0.0047 nF); a value typed keeps its unit.
     if (source !== "value" && document.activeElement !== valueField) {
       if (state.farads > 0) {
-        state.unit = naturalFaradUnit(state.farads, CER_UNITS);
+        state.unit = naturalUnit(state.farads, CER_UNITS);
         app.querySelector("#cer-unit").value = state.unit;
       }
       valueField.value = trim(state.farads / CER_UNITS[state.unit]);
@@ -6132,7 +6167,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
   const example = (mode, code) => () => {
     state.mode = mode;
     const r = valueFor(code);
-    Object.assign(state, { farads: r.farads, tol: r.tol, unit: naturalFaradUnit(r.farads, FILM_UNITS) });
+    Object.assign(state, { farads: r.farads, tol: r.tol, unit: naturalUnit(r.farads, FILM_UNITS) });
     paint();
     app.querySelector("#film-code").value = code;
     refresh("code");
@@ -6288,7 +6323,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
     // 330 pF); a value typed keeps its unit.
     if (source !== "value" && document.activeElement !== valueField) {
       if (state.farads > 0) {
-        state.unit = naturalFaradUnit(state.farads, FILM_UNITS);
+        state.unit = naturalUnit(state.farads, FILM_UNITS);
         app.querySelector("#film-unit").value = state.unit;
       }
       valueField.value = trim(state.farads / FILM_UNITS[state.unit]);
@@ -6419,7 +6454,7 @@ function renderCapSmdCode(domain, tool, favId) {
   const example = (mode, code) => () => {
     state.mode = mode;
     const r = faradsFor(code);
-    Object.assign(state, { farads: r.farads, letter: r.letter, unit: naturalFaradUnit(r.farads, CSMD_UNITS) });
+    Object.assign(state, { farads: r.farads, letter: r.letter, unit: naturalUnit(r.farads, CSMD_UNITS) });
     paint();
     app.querySelector("#csmd-code").value = code;
     refresh("code");
@@ -6520,7 +6555,7 @@ function renderCapSmdCode(domain, tool, favId) {
     // typed keeps its unit.
     if (source !== "value" && document.activeElement !== valueField) {
       if (state.farads > 0) {
-        state.unit = naturalFaradUnit(state.farads, CSMD_UNITS);
+        state.unit = naturalUnit(state.farads, CSMD_UNITS);
         app.querySelector("#csmd-unit").value = state.unit;
       }
       valueField.value = trim(state.farads / CSMD_UNITS[state.unit]);

@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=bd285a4b67" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=df13f518a8" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -1457,7 +1457,7 @@ storing 1 J in 100 µF needs 141.4 V; storing 10 J at 400 V needs 125 µF.</p>
 <section class="tool" id="inductor-color-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Inductors</div>
   <h2>Inductor color code</h2>
-  <figure class="shot"><img src="manual/img/inductor-color-code.jpg?h=54de48781c" loading="lazy" alt="Inductor color code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/inductor-color-code.jpg?h=2cd0d2929d" loading="lazy" alt="Inductor color code as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The inductance and tolerance that the colour bands on an axial (leaded)
 inductor stand for, and the other way round: the bands for a value. A second
@@ -1503,6 +1503,11 @@ read as above. It does not by itself mean the part is military-qualified.</p>
   implausible for the part's size, measure it.</li>
 <li>Inductance alone does not say what current the part can carry; that is on
   its datasheet.</li>
+<li><strong>Standard value.</strong> The tolerance band picks the one series the value is
+  checked against: gold (±5%) E24, silver (±10%) E12, black or none (±20%) E6.</li>
+<li><strong>Units.</strong> The value is shown in nH, µH or mH, whichever reads best: 1000 µH
+  is shown as 1 mH. No colour-coded inductor reaches a henry, so H is not
+  offered.</li>
 </ul>
 <h3>What it deliberately does not do</h3>
 <ul>
@@ -1519,6 +1524,9 @@ brown ±1% down to grey ±0.01%, which no colour-coded inductor uses; it is now
 gold, silver, black and none. It added gold as a decimal point in the digit
 bands, which the tool could not read, and corrected the note's claim that the
 silver band marks a part as military-qualified.</p>
+<p>The re-walk checked the value against the tolerance's own series (4.7 µH with
+silver is an E12 value), showed a value from the bands in its natural unit
+(brown–black–red reads 1 mH, not 1000 µH) and dropped H from the units.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A2%3A0/inductor-color-code">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">

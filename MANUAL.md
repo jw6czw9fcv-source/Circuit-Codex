@@ -1580,6 +1580,11 @@ read as above. It does not by itself mean the part is military-qualified.
   implausible for the part's size, measure it.
 - Inductance alone does not say what current the part can carry; that is on
   its datasheet.
+- **Standard value.** The tolerance band picks the one series the value is
+  checked against: gold (±5%) E24, silver (±10%) E12, black or none (±20%) E6.
+- **Units.** The value is shown in nH, µH or mH, whichever reads best: 1000 µH
+  is shown as 1 mH. No colour-coded inductor reaches a henry, so H is not
+  offered.
 
 ### What it deliberately does not do
 
@@ -1598,6 +1603,10 @@ brown ±1% down to grey ±0.01%, which no colour-coded inductor uses; it is now
 gold, silver, black and none. It added gold as a decimal point in the digit
 bands, which the tool could not read, and corrected the note's claim that the
 silver band marks a part as military-qualified.
+
+The re-walk checked the value against the tolerance's own series (4.7 µH with
+silver is an E12 value), showed a value from the bands in its natural unit
+(brown–black–red reads 1 mH, not 1000 µH) and dropped H from the units.
 
 [↑ Index](#index)
 
