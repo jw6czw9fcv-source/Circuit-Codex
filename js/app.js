@@ -1229,6 +1229,15 @@ function eSeriesForTolerance(tol) {
   return "E192";
 }
 
+// One tolerance, one series: a code or band set is checked against the series
+// its tolerance implies, and against no other. A 1% part reading 4.7 kΩ is
+// "not in E96", though makers sell it; the manual says so.
+function seriesVerdict(v, grid, format) {
+  if (!isFinite(v) || v <= 0) return "";
+  const near = nearestESeries(v, grid);
+  return near.exact ? `${grid} standard value` : `Not in ${grid} — nearest is ${format(near.value)}`;
+}
+
 function nearestESeries(ohms, name) {
   const values = eSeriesValues(name);
   const places = values[0] >= 100 ? 3 : 2;
@@ -1559,17 +1568,9 @@ function renderResistorColorCode(domain, tool, favId) {
     return siFormat(v, "Ω", tol < 0.1 ? 6 : tol < 1 ? 5 : 4);
   }
 
-  // Report the coarsest series the value belongs to, not the one its tolerance
-  // implies: 4.7k is a stock E6 value even when bought at 2%, and calling that
-  // "not E48" would be true of the grid but misleading about the part. The
-  // tolerance only decides which grid to measure the distance against when the
-  // value is not standard at all.
+  // Checked against the series the tolerance band implies: ±5% → E24.
   function seriesLine(r) {
-    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
-      if (nearestESeries(r.ohms, name).exact) return `${name} standard value`;
-    }
-    const grid = eSeriesForTolerance(r.tol);
-    return `Not standard — nearest ${grid} is ${formatOhms(nearestESeries(r.ohms, grid).value)}`;
+    return seriesVerdict(r.ohms, eSeriesForTolerance(r.tol), formatOhms);
   }
 
   // Height of one roller slot, shared by the CSS and the scroll maths.
@@ -1859,13 +1860,9 @@ function renderSmdCode(domain, tool, favId) {
     return Number(raw.slice(0, n)) * Math.pow(10, Number(raw.slice(n)));
   }
 
+  // A 3-digit code marks ±5% parts, so E24; 4-digit and EIA-96 mark ±1%, E96.
   function seriesLine(ohms) {
-    if (!isFinite(ohms) || ohms <= 0) return "";
-    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
-      if (nearestESeries(ohms, name).exact) return `${name} standard value`;
-    }
-    const grid = state.mode === "3" ? "E24" : "E96";
-    return `Not standard — nearest ${grid} is ${formatOhms(nearestESeries(ohms, grid).value)}`;
+    return seriesVerdict(ohms, state.mode === "3" ? "E24" : "E96", formatOhms);
   }
 
   function subtitle() {
@@ -5325,13 +5322,9 @@ function renderInductorColorCode(domain, tool, favId) {
 
 
 
+  // Checked against the series the tolerance band implies: ±10% → E12.
   function seriesLine(r) {
-    if (!isFinite(r.uH) || r.uH <= 0) return "";
-    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
-      if (nearestESeries(r.uH, name).exact) return `${name} standard value`;
-    }
-    const grid = eSeriesForTolerance(r.tol);
-    return `Not standard — nearest ${grid} is ${formatInductance(nearestESeries(r.uH, grid).value)}`;
+    return seriesVerdict(r.uH, eSeriesForTolerance(r.tol), formatInductance);
   }
 
   function applyTypedValue(raw) {
@@ -5553,13 +5546,12 @@ function renderInductorSmdCode(domain, tool, favId) {
     return { uH: Number(str.slice(0, n)) * Math.pow(10, Number(str.slice(n))), tol };
   }
 
+  // The tolerance letter picks the series (K, ±10% → E12); without one, the
+  // code length does, as on resistors: 3 digits E24, 4 digits E96.
   function seriesLine(uH) {
-    if (!isFinite(uH) || uH <= 0) return "";
-    for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
-      if (nearestESeries(uH, name).exact) return `${name} standard value`;
-    }
-    const grid = state.mode === "3" ? "E24" : "E96";
-    return `Not standard — nearest ${grid} is ${formatInductance(nearestESeries(uH, grid).value)}`;
+    const grid = state.tol ? eSeriesForTolerance(SMD_IND_TOL_LETTER[state.tol])
+      : state.mode === "3" ? "E24" : "E96";
+    return seriesVerdict(uH, grid, formatInductance);
   }
 
   // The part that carries these markings: a semi-shielded power inductor.

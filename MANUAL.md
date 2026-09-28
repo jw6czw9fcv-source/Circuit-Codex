@@ -127,9 +127,10 @@ never digits, so a part with gold at one end is read from the other.
 
 **Standard values.** Resistors are made only in preferred values, the
 E-series, spaced so that neighbouring values just overlap within their
-tolerance. The tool reports the coarsest series the value belongs to — 4.7 kΩ
-is an E6 value even when bought at 1% — and when the value is in none, the
-nearest one in the series its tolerance implies.
+tolerance. The tolerance band picks the one series the value is checked
+against — gold, ±5%, means E24; brown, ±1%, means E96 — and when the value is
+not in it, the tool gives the nearest one that is. A 1% 4.7 kΩ part therefore
+reads "Not in E96", though makers do sell it (see the E-series tool).
 
 ### How the value is worked out
 
@@ -233,6 +234,11 @@ value is moved to the nearest one: 4.7 kΩ becomes 66B, 4.75 kΩ.
 
 - **The marking does not say the tolerance.** A 3-digit code is usually ±5% and
   a 4-digit or EIA-96 code ±1%, but only the datasheet or the reel label says.
+- **Standard value.** The value is checked against the series of that usual
+  tolerance: E24 for a 3-digit code, E96 for 4-digit and EIA-96. So 472 is an
+  E24 value, and 4701 reads "Not in E96 — nearest is 4.75 kΩ": E96 has no 4.7.
+  A 3-digit code carries two figures, enough for every E6 to E24 value; the
+  three figures of E48 to E192 need 4 digits or EIA-96.
 - **Which scheme a part uses** shows in the marking: a letter other than R
   means EIA-96, and digits only are the 3- or 4-digit code, told apart by how
   many there are. Pick the pill that matches.
