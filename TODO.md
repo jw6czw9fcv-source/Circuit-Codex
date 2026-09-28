@@ -420,6 +420,34 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 - [ ] Saved links
 - [ ] Personal notes
 
+**Improvement programme** (approved by Pierre, 2026-09-27; do in this order,
+then re-walk every tool from tool 1 adding reference cases, related links and
+an Example, then continue the review at tool 18)
+
+- [x] Automated check — `python tools/check_app.py` (layout, JS errors,
+      reference cases in tools/check_cases.js). Run before every commit.
+- [ ] Input — SI shorthand (4k7, 10u, 2M2) in value fields where a keyboard
+      allows; a ± button beside fields that can be negative. The iPhone keeps
+      its numeric keypad.
+- [ ] Visual — shared components (primary result large, secondary values
+      ≥ 13 px, one result style everywhere); realistic component drawings
+      (dog-bone resistor with shading, ceramic, film, SMD chip, inductor);
+      schematic text ≥ 11 px, one stroke width, drawings that fill their box,
+      parts close and symmetric; muted text contrast raised to WCAG 4.5:1;
+      blue = input, green = result, everywhere.
+- [ ] Navigation — hide tools not yet built ("N more coming" per section);
+      Home gets search, a Most used row (Ohm's law, LED resistor, voltage
+      divider, resistor color code, 555, E-series), recent tools and task
+      shortcuts (Identify a part…); unique full names (Resistor color code,
+      Capacitor SMD code…); merge duplicates (two Zener entries, Circuit
+      calculators, RMS under Calculators, the two Wavelength tools renamed);
+      split PCB › Trace & impedance in three; English-only search synonyms.
+- [ ] Related tools — links between neighbouring tools, declared in data.js.
+- [ ] Comfort — copy a result, remember the last units chosen.
+- [ ] Light mode.
+- [ ] TODO priorities — PCB trace width, AC Ohm's law, inductor
+      series/parallel, battery internal resistance first.
+
 **Before release**
 
 - [ ] MANUAL.md completeness pass — every built tool has a section.
