@@ -4681,12 +4681,11 @@ function renderIpRatings(domain, tool, favId) {
 // extracting a shared helper would mean touching that already-shipped,
 // working code for a second consumer that doesn't exist yet beyond this one.
 const INDUCTOR_UNITS = { nH: 1e-3, "µH": 1, mH: 1e3, H: 1e6 };
-// Inductor-only: adds "black" (±20%, an alternate to leaving the band off)
-// ahead of "none". Spelled out rather than derived from TOL_ORDER, so the
-// resistor's precision bands (orange, yellow: ±0.05%, ±0.02%) stay off it —
-// no inductor is made to those. Grey's meaning on inductors is to be checked
-// when this screen is reviewed.
-const INDUCTOR_TOL_ORDER = ["brown", "red", "green", "blue", "violet", "grey", "gold", "silver", "black", "none"];
+// The tolerance colours inductor makers use: gold ±5%, silver ±10%, black or
+// no band ±20% (Inductors Inc.'s colour band guide). The resistor's precision
+// colours — brown ±1% down to grey ±0.01% — were offered here until the
+// review; no colour-coded inductor is made to them.
+const INDUCTOR_TOL_ORDER = ["gold", "silver", "black", "none"];
 
 function formatInductance(uH) {
   if (!isFinite(uH)) return "—";
@@ -4702,10 +4701,18 @@ function renderInductorColorCode(domain, tool, favId) {
   const ITEM_H = 30;
   const state = { unit: "µH", mil: false, bands: { d1: "brown", d2: "black", mult: "black", tol: "gold" } };
 
+  // Gold among the first two bands is the decimal point, not a digit
+  // (yellow–gold–violet is 4.7 µH), so the digit rollers offer it last.
   function optionsFor(role) {
     if (role === "tol") return INDUCTOR_TOL_ORDER;
-    const prop = role === "mult" ? "mult" : "digit";
-    return Object.keys(BAND_COLORS).filter((c) => BAND_COLORS[c][prop] !== undefined);
+    if (role === "mult") return Object.keys(BAND_COLORS).filter((c) => BAND_COLORS[c].mult !== undefined);
+    return [...Object.keys(BAND_COLORS).filter((c) => BAND_COLORS[c].digit !== undefined), "gold"];
+  }
+
+  // With a decimal point in band 1 or 2 there is no multiplier: the third
+  // band is the last digit instead.
+  function decimalMode() {
+    return state.bands.d1 === "gold" || state.bands.d2 === "gold";
   }
 
   function multLabel(v) {
@@ -4716,15 +4723,24 @@ function renderInductorColorCode(domain, tool, favId) {
   }
 
   function valueLabel(role, color) {
+    if (role !== "tol" && role !== "mult" && color === "gold") return ".";
+    if (role === "mult" && decimalMode()) {
+      const d = BAND_COLORS[color].digit;
+      return d === undefined ? "?" : String(d);
+    }
     if (role === "mult") return multLabel(BAND_COLORS[color].mult);
     if (role === "tol") return `±${BAND_COLORS[color].tol}%`;
     return String(BAND_COLORS[color].digit);
   }
 
   function compute() {
-    const d1 = BAND_COLORS[state.bands.d1].digit;
-    const d2 = BAND_COLORS[state.bands.d2].digit;
-    const uH = (d1 * 10 + d2) * BAND_COLORS[state.bands.mult].mult;
+    const b = state.bands;
+    const dg = (c) => BAND_COLORS[c].digit;
+    let uH;
+    if (b.d1 === "gold" && b.d2 === "gold") uH = NaN;
+    else if (b.d1 === "gold") uH = dg(b.mult) === undefined ? NaN : dg(b.d2) / 10 + dg(b.mult) / 100;
+    else if (b.d2 === "gold") uH = dg(b.mult) === undefined ? NaN : dg(b.d1) + dg(b.mult) / 10;
+    else uH = (dg(b.d1) * 10 + dg(b.d2)) * BAND_COLORS[b.mult].mult;
     const tol = BAND_COLORS[state.bands.tol].tol;
     return { uH, tol, min: uH * (1 - tol / 100), max: uH * (1 + tol / 100) };
   }
@@ -4773,6 +4789,7 @@ function renderInductorColorCode(domain, tool, favId) {
   }
 
   function seriesLine(r) {
+    if (!isFinite(r.uH) || r.uH <= 0) return "";
     for (const name of ["E6", "E12", "E24", "E48", "E96", "E192"]) {
       if (nearestESeries(r.uH, name).exact) return `${name} standard value`;
     }
@@ -4814,6 +4831,9 @@ function renderInductorColorCode(domain, tool, favId) {
     app.querySelector('[data-res="tol"]').textContent = `±${r.tol}%`;
     app.querySelector('[data-res="sub"]').textContent = `${formatInductance(r.min)} – ${formatInductance(r.max)}`;
     app.querySelector('[data-res="series"]').textContent = seriesLine(r);
+    const err = app.querySelector('[data-res="err"]');
+    if (!isFinite(r.uH)) err.textContent = "Gold marks the decimal point in band 1 or 2, and only once; the band after it is then a digit, not gold or silver.";
+    else if (err.textContent.startsWith("Gold marks")) err.textContent = "";
 
     const typed = app.querySelector("#ic-value");
     if (typed && document.activeElement !== typed) typed.value = trim(r.uH / INDUCTOR_UNITS[state.unit]);
@@ -4872,9 +4892,10 @@ function renderInductorColorCode(domain, tool, favId) {
 
       ${formulaSection(
         ["Value = (10 × D1 + D2) × Multiplier, in µH"],
-        state.mil
-          ? "The leading double-width silver band only marks the part as MIL-PRF-15305 (military-spec) — it carries no digit and doesn't change the value. IEC 60062 doesn't define an inductor code at all; this whole scheme is the resistor code, reused."
-          : "Same digit and multiplier colours as the resistor code — IEC 60062 doesn't actually define an inductor code of its own, so this is the resistor scheme, reused and read in µH."
+        (state.mil
+          ? "The wide silver band at the start is a military-style identifier: it carries no digit, and does not by itself mean the part is military-qualified. "
+          : "")
+        + "Axial inductors use the resistor colours, read in microhenries (µH): two digit bands, then a multiplier, so brown–black–black is 10 µH. A gold band in first or second place is the decimal point: yellow–gold–violet is 4.7 µH, and the third band is then a digit. The last band is the tolerance: gold ±5%, silver ±10%, black or none ±20%."
       )}
       ${calcFooter()}
     `;

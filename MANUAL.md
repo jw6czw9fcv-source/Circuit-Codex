@@ -36,6 +36,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [Capacitors in series and parallel](#capacitors-in-series-and-parallel)
 - Capacitors → [RC charge and discharge](#rc-charge-and-discharge)
 - Capacitors → [Capacitor stored energy](#capacitor-stored-energy)
+- Inductors → [Inductor color code](#inductor-color-code)
 
 ### Digital
 
@@ -1466,6 +1467,85 @@ voltages, and subtract.
 
 By hand: 1000 µF at 12 V holds 72 mJ and 12 mC; 1 F at 2.7 V holds 3.645 J;
 storing 1 J in 100 µF needs 141.4 V; storing 10 J at 400 V needs 125 µF.
+
+[↑ Index](#index)
+
+---
+
+<a id="inductor-color-code"></a>
+## Inductor color code
+
+`calc: inductor-color-code` · Passive components › Inductors
+
+### What it computes
+
+The inductance and tolerance that the colour bands on an axial (leaded)
+inductor stand for, and the other way round: the bands for a value. A second
+pill handles the 5-band form with the wide silver identifier band.
+
+### Source
+
+- **Inductors Inc., colour band guide**: the colours carry the same digits and
+  multipliers as the resistor code, read in microhenries; gold among the digit
+  bands is the decimal point; the tolerance colours are gold ±5%, silver ±10%
+  and black ±20%; the wide silver band is a "military identifier" that does not
+  imply military qualification.
+- **Vishay IM series** (MIL-PRF-15305 molded inductors): inductance tolerances
+  of ±1, ±3, ±5, ±10 and ±20%, of which only the last three have a colour.
+- IEC 60062, the standard for resistor and capacitor codes, does not cover
+  inductors; the inductor code borrows its colours.
+
+### What the bands mean
+
+Small axial inductors look like fat resistors, and use the same colours — but
+the value is in **microhenries (µH)**, not ohms.
+
+- **Band 1 and 2** — the two digits (black 0, brown 1, red 2 … white 9).
+- **Band 3** — the multiplier, how many zeros follow: black ×1, brown ×10,
+  red ×100; gold ×0.1 and silver ×0.01 for small values.
+- **Band 4** — the tolerance: gold ±5%, silver ±10%, black or no band ±20%.
+
+So brown–black–black–gold is 10 × 1 = 10 µH ±5%, and red–red–brown–silver is
+22 × 10 = 220 µH ±10%.
+
+**Gold as the decimal point.** A gold band in first or second place is not a
+digit but the decimal point, and the band after it is then a digit too:
+yellow–gold–violet is 4.7 µH, gold–yellow–violet is 0.47 µH. The same 4.7 µH
+can also be written yellow–violet–gold, with gold as a ×0.1 multiplier; both
+forms are read.
+
+**The 5-band form.** Some parts start with a wide silver band. It is an
+identifier in the military style and carries no digit; the four bands after it
+read as above. It does not by itself mean the part is military-qualified.
+
+### Assumptions and limits
+
+- **Tolerance colours are only three.** Precision inductors (±1%, ±2%, ±3%) are
+  not marked with a tolerance colour; their tolerance is on the datasheet or
+  in the part number.
+- **Makers vary.** Colour-coded inductors are old enough, and made by enough
+  small makers, that some use their own scheme. When the result looks
+  implausible for the part's size, measure it.
+- Inductance alone does not say what current the part can carry; that is on
+  its datasheet.
+
+### What it deliberately does not do
+
+- **SMD inductor markings** are the SMD code tool.
+- **Resistor bands** are the resistor Color code tool, which uses the full
+  IEC 60062 tolerance colours.
+
+### How it was checked
+
+Brown–black–black–gold reads 10 µH ±5%; red–red–brown–silver reads 220 µH
+±10%; yellow–gold–violet 4.7 µH; gold–yellow–violet 0.47 µH; typing 4.7 µH gives
+yellow–violet–gold.
+
+The review found the tolerance list offering the resistor's precision colours,
+brown ±1% down to grey ±0.01%, which no colour-coded inductor uses; it is now
+gold, silver, black and none. It added gold as a decimal point in the digit
+bands, which the tool could not read, and corrected the note's claim that the
+silver band marks a part as military-qualified.
 
 [↑ Index](#index)
 
