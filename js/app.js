@@ -10355,13 +10355,41 @@ function renderDeltaY(domain, tool, favId) {
 // by one formula, which the caveat below says outright rather than
 // pretending this covers them.
 function renderThermistor(domain, tool, favId) {
+  const C = "thermistor";
   const state = {
-    mode: "ntc",
+    mode: pref(C, "mode", "ntc", ["ntc", "ptc"]),
     values: { r0: 10, t0: 25, b: 3950, alpha: 0.7 },
-    r0Unit: "kΩ",
+    r0Unit: pref(C, "r0Unit", "kΩ", Object.keys(DIVIDER_R_UNITS)),
     tempC: 25,
-    resVal: 10, resUnit: "kΩ",
+    resVal: 10, resUnit: pref(C, "resUnit", "kΩ", Object.keys(DIVIDER_R_UNITS)),
+    // Which of the two linked fields was typed in last: the result shows
+    // the other one.
+    from: "temp",
   };
+
+  // Sensors met in practice. Each sets the model and the part, then either
+  // a temperature or a measured resistance.
+  const example = (mode, values, unit, reading) => () => {
+    Object.assign(state, { mode, r0Unit: unit, resUnit: unit });
+    Object.assign(state.values, values);
+    paint();
+    if (reading.temp !== undefined) { state.tempC = reading.temp; fromTemp(); }
+    else { state.resVal = reading.res; fromRes(); }
+    app.querySelector("#th-temp").value = degrees(state.tempC, 2);
+    app.querySelector("#th-res").value = trim(state.resVal);
+  };
+  useExamples([
+    { title: "10 kΩ NTC at body temperature", note: "Vishay NTCLE100E3, B25/85 = 3977 K: at 37 °C it has fallen to 5.97 kΩ.",
+      apply: example("ntc", { r0: 10, t0: 25, b: 3977 }, "kΩ", { temp: 37 }) },
+    { title: "The same NTC reads 33.9 kΩ", note: "Typing the resistance runs the model backwards: 33.9 kΩ is freezing, 0 °C.",
+      apply: example("ntc", { r0: 10, t0: 25, b: 3977 }, "kΩ", { res: 33.9 }) },
+    { title: "Pt100 at 100 °C", note: "100 Ω at 0 °C, α = 0.385 %/°C: 138.5 Ω, as in IEC 60751's table (138.51 Ω).",
+      apply: example("ptc", { r0: 100, t0: 0, alpha: 0.385 }, "Ω", { temp: 100 }) },
+  ]);
+
+  // A computed temperature to a tenth of a degree, or a hundredth in its
+  // field; the model is not better than that.
+  const degrees = (t, places = 1) => Number(t.toFixed(places)).toString();
 
   function r0SI() { return state.values.r0 * DIVIDER_R_UNITS[state.r0Unit]; }
   function toK(c) { return c + 273.15; }
@@ -10446,6 +10474,7 @@ function renderThermistor(domain, tool, favId) {
   }
 
   function fromTemp() {
+    state.from = "temp";
     const R = resistanceAtTemp(state.tempC);
     if (isFinite(R) && R > 0) {
       state.resVal = R / DIVIDER_R_UNITS[state.resUnit];
@@ -10456,12 +10485,13 @@ function renderThermistor(domain, tool, favId) {
   }
 
   function fromRes() {
+    state.from = "res";
     const R = state.resVal * DIVIDER_R_UNITS[state.resUnit];
     const T = tempAtResistance(R);
     if (isFinite(T)) {
       state.tempC = T;
       const tempField = document.getElementById("th-temp");
-      if (tempField && document.activeElement !== tempField) tempField.value = trim(state.tempC);
+      if (tempField && document.activeElement !== tempField) tempField.value = degrees(state.tempC, 2);
     }
     updateResults();
   }
@@ -10471,8 +10501,13 @@ function renderThermistor(domain, tool, favId) {
     app.querySelector('[data-res="err"]').textContent = issue;
     app.querySelector(".diagram-box").innerHTML = diagram();
     const sens = sensitivityAt(state.tempC);
-    const sensEl = app.querySelector('[data-res="sens"]');
-    if (sensEl) sensEl.textContent = issue || !isFinite(sens) ? "—" : `${trim(sens)} %/°C`;
+    const byTemp = state.from === "temp";
+    const R = state.resVal * DIVIDER_R_UNITS[state.resUnit];
+    app.querySelector('[data-res="label"]').textContent = byTemp
+      ? `Resistance at ${degrees(state.tempC)} °C` : `Temperature at ${formatOhms(R)}`;
+    app.querySelector('[data-res="main"]').textContent = issue ? "—" : byTemp ? formatOhms(R) : `${degrees(state.tempC)} °C`;
+    app.querySelector('[data-res="sens"]').textContent = issue || !isFinite(sens) ? "" : `Sensitivity ${trim(sens)} %/°C here`
+      + (state.mode === "ntc" ? " — steepest when cold" : " — the same at every temperature");
   }
 
   function paint() {
@@ -10520,9 +10555,12 @@ function renderThermistor(domain, tool, favId) {
 
       <div class="section-label" style="color:#5DCAA5">Results</div>
       <div class="result-field">
-        <div class="result-head"><span class="label">Sensitivity at this temperature</span></div>
-        <div class="result-value"><span class="num" data-res="sens"></span></div>
-        <div class="result-sub">${isNtc ? "Changes with temperature — NTC is steepest when cold, unlike a fixed α." : "Constant by definition for this linear model."}</div>
+        <div class="result-head">
+          <span class="label" data-res="label"></span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main"></span></div>
+        <div class="result-sub" data-res="sens"></div>
       </div>
 
       <div class="section-label" style="color:#8FC1F5">Typical B-values, for reference</div>
@@ -10540,11 +10578,11 @@ function renderThermistor(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
     const r0Field = document.getElementById("th-r0");
     r0Field.oninput = () => { const v = parseFloat(r0Field.value); if (isFinite(v)) { state.values.r0 = v; fromTemp(); } };
-    document.getElementById("th-r0-unit").onchange = (e) => { state.r0Unit = e.target.value; fromTemp(); };
+    document.getElementById("th-r0-unit").onchange = (e) => { state.r0Unit = e.target.value; setPref(C, "r0Unit", state.r0Unit); fromTemp(); };
     const t0Field = document.getElementById("th-t0");
     t0Field.oninput = () => { const v = parseFloat(t0Field.value); if (isFinite(v)) { state.values.t0 = v; fromTemp(); } };
     const coefField = document.getElementById("th-coef");
@@ -10559,7 +10597,7 @@ function renderThermistor(domain, tool, favId) {
     // key, so this field takes the text keyboard and reads a typographic minus.
     tempField.oninput = () => { const v = parseFloat(tempField.value.replace("−", "-")); if (isFinite(v)) { state.tempC = v; fromTemp(); } };
     resField.oninput = () => { const v = parseFloat(resField.value); if (isFinite(v)) { state.resVal = v; fromRes(); } };
-    document.getElementById("th-res-unit").onchange = (e) => { state.resUnit = e.target.value; fromTemp(); };
+    document.getElementById("th-res-unit").onchange = (e) => { state.resUnit = e.target.value; setPref(C, "resUnit", state.resUnit); fromTemp(); };
 
     updateResults();
   }
