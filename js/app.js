@@ -9406,7 +9406,7 @@ function renderDeltaY(domain, tool, favId) {
          "Rab = (Ra·Rb + Rb·Rc + Rc·Ra) / Rc",
          "Rbc = (Ra·Rb + Rb·Rc + Rc·Ra) / Ra",
          "Rca = (Ra·Rb + Rb·Rc + Rc·Ra) / Rb"],
-        "A symmetric Delta (all three sides equal) always converts to a Y a third the value, and back again at three times — the classic worked example, and the tool's own defaults. The transform is purely topological — it holds for any impedance (add reactance from an L or C, not just plain resistance), but this calculator only works in real ohms, matching where it lives under Resistors."
+        "Three resistors can be joined as a triangle, the Delta (Δ), or as a star meeting in the middle, the Y. For every Delta there is a Y that behaves identically between the three terminals A, B and C, and the reverse. Swapping one for the other untangles networks that are neither series nor parallel, such as a bridge. Δ → Y: each leg is the two sides touching its terminal, multiplied, over the sum of all three. Y → Δ: each side is the sum of the leg products over the opposite leg. Three equal parts: the Y is a third of the Delta."
       )}
       ${calcFooter()}
     `;

@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=cdf0d8de12" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=498f847efe" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -105,7 +105,7 @@ th { background: var(--card); }
 </div>
 <nav id="index" class="index">
   <h2 class="index-title">Index</h2>
-  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li><li><a href="#voltage-divider"><span class="i-name">Voltage divider</span><span class="i-sec">Resistors</span></a></li><li><a href="#current-divider"><span class="i-name">Current divider</span><span class="i-sec">Resistors</span></a></li><li><a href="#wheatstone-bridge"><span class="i-name">Wheatstone bridge</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
+  <div class="i-domain" style="--accent:#5B9BE0"><h3>Passive components</h3><ul><li><a href="#resistor-color-code"><span class="i-name">Resistor color code</span><span class="i-sec">Resistors</span></a></li><li><a href="#smd-code"><span class="i-name">SMD resistor code</span><span class="i-sec">Resistors</span></a></li><li><a href="#resistor-power-rating"><span class="i-name">Resistor power rating</span><span class="i-sec">Resistors</span></a></li><li><a href="#e-series"><span class="i-name">E-series standard values</span><span class="i-sec">Resistors</span></a></li><li><a href="#series-parallel"><span class="i-name">Resistors in series and parallel</span><span class="i-sec">Resistors</span></a></li><li><a href="#voltage-divider"><span class="i-name">Voltage divider</span><span class="i-sec">Resistors</span></a></li><li><a href="#current-divider"><span class="i-name">Current divider</span><span class="i-sec">Resistors</span></a></li><li><a href="#wheatstone-bridge"><span class="i-name">Wheatstone bridge</span><span class="i-sec">Resistors</span></a></li><li><a href="#delta-y"><span class="i-name">Delta-Y transform</span><span class="i-sec">Resistors</span></a></li></ul></div><div class="i-domain" style="--accent:#5DCAA5"><h3>Digital &amp; logic circuits</h3><ul><li><a href="#karnaugh"><span class="i-name">Karnaugh map simplification</span><span class="i-sec">Logic gates</span></a></li><li><a href="#i2c-pullup"><span class="i-name">I2C pull-up resistor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#uart-baud"><span class="i-name">UART baud rate</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#crystal-load"><span class="i-name">Crystal load capacitance</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#osc-stability"><span class="i-name">Oscillator stability</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#pll"><span class="i-name">PLL multiplication factor</span><span class="i-sec">Timing &amp; interfaces</span></a></li><li><a href="#adc"><span class="i-name">ADC resolution / quantization</span><span class="i-sec">Data conversion</span></a></li><li><a href="#dac"><span class="i-name">DAC resolution</span><span class="i-sec">Data conversion</span></a></li><li><a href="#snr"><span class="i-name">SNR estimation</span><span class="i-sec">Data conversion</span></a></li></ul></div>
 </nav>
 
 <section class="tool" id="resistor-color-code" style="--accent:#5B9BE0">
@@ -669,6 +669,68 @@ buy, with the bridge ratio; dropped "(unknown)" from Rx's label, which stayed
 even when Rx was an input; and made the supply's V label neutral, which had
 taken R1's colour.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A7/wheatstone-bridge">Open the tool</a></p>
+</section>
+<section class="tool" id="delta-y" style="--accent:#5B9BE0">
+  <div class="crumb">Passive components › Resistors</div>
+  <h2>Delta-Y transform</h2>
+  <figure class="shot"><img src="manual/img/delta-y.jpg?h=d5137f9ab6" loading="lazy" alt="Delta-Y transform as it appears in the app" width="430" height="932"></figure>
+  <h3>What it computes</h3>
+<p>Converts three resistors connected as a triangle (Delta, Δ) into the three of
+an equivalent star (Y), or the reverse, so that the two behave identically
+between their three terminals.</p>
+<h3>Source</h3>
+<p>Arthur Edwin Kennelly's transform (1899), derived from requiring the resistance
+between each pair of terminals to be the same in both networks.</p>
+<h3>What it means</h3>
+<p>Three resistors can be connected to three terminals A, B and C in two ways:</p>
+<ul>
+<li><strong>Delta (Δ)</strong> — a triangle. One resistor between each pair of terminals:
+  Rab, Rbc, Rca.</li>
+<li><strong>Y (star, also called T)</strong> — three resistors meeting at a common centre
+  point, one leg to each terminal: Ra, Rb, Rc.</li>
+</ul>
+<p>Seen only from the three terminals, a Delta and a suitably chosen Y cannot be
+told apart: the resistance between any two terminals is the same, whatever else
+is connected. So one can always be replaced by the other.</p>
+<p><strong>Why that is useful.</strong> Many networks are neither series nor parallel anywhere
+— the classic case is a bridge, five resistors in a diamond with one across the
+middle. Replacing one of its triangles by the equivalent star turns it into
+ordinary series and parallel combinations that can be simplified step by step.
+The same transform turns up in three-phase power, where loads are wired in
+delta or in star.</p>
+<h3>The formulas</h3>
+<p><strong>Delta to Y</strong> — each leg of the star is the product of the two Delta sides that
+touch its terminal, divided by the sum of all three:</p>
+<pre><code>Ra = Rab × Rca / (Rab + Rbc + Rca)
+Rb = Rab × Rbc / (Rab + Rbc + Rca)
+Rc = Rbc × Rca / (Rab + Rbc + Rca)
+</code></pre>
+<p><strong>Y to Delta</strong> — each side of the triangle is the sum of the products of the
+legs taken in pairs, divided by the leg <em>opposite</em> that side:</p>
+<pre><code>Rab = (Ra·Rb + Rb·Rc + Rc·Ra) / Rc
+Rbc = (Ra·Rb + Rb·Rc + Rc·Ra) / Ra
+Rca = (Ra·Rb + Rb·Rc + Rc·Ra) / Rb
+</code></pre>
+<p>A way to remember them: Delta to Y divides, so the star's legs are smaller;
+Y to Delta multiplies, so the triangle's sides are larger. With three equal
+parts the Y is a third of the Delta: a 300 Ω triangle is a 100 Ω star.</p>
+<h3>Assumptions and limits</h3>
+<ul>
+<li><strong>All three must be greater than zero.</strong> A zero-ohm side or leg joins two
+  terminals directly, and the network is no longer a true three-terminal one.</li>
+<li><strong>Resistance only.</strong> The transform holds just as well for impedances
+  (capacitors and inductors, in AC circuits), but this tool works in ohms.</li>
+</ul>
+<h3>What it deliberately does not do</h3>
+<ul>
+<li><strong>Solving a whole network</strong> (such as the full bridge) is not automated; the
+  tool does the one step that makes the rest ordinary.</li>
+</ul>
+<h3>How it was checked</h3>
+<p>By hand: a 300 Ω Delta gives a 100 Ω Y, and back. Rab = 10, Rbc = 20,
+Rca = 30 Ω give Ra = 5, Rb = 3.333, Rc = 10 Ω, and those three converted back
+give 10, 20 and 30 Ω.</p>
+  <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/passive%3A0%3A8/delta-y">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Logic gates</div>

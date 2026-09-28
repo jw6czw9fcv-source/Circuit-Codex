@@ -28,6 +28,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [Voltage divider](#voltage-divider)
 - Resistors → [Current divider](#current-divider)
 - Resistors → [Wheatstone bridge](#wheatstone-bridge)
+- Resistors → [Delta-Y transform](#delta-y-transform)
 
 ### Digital
 
@@ -759,6 +760,84 @@ shown for Rx, which is the resistance being measured rather than a part to
 buy, with the bridge ratio; dropped "(unknown)" from Rx's label, which stayed
 even when Rx was an input; and made the supply's V label neutral, which had
 taken R1's colour.
+
+[↑ Index](#index)
+
+---
+
+<a id="delta-y"></a>
+## Delta-Y transform
+
+`calc: delta-y` · Passive components › Resistors
+
+### What it computes
+
+Converts three resistors connected as a triangle (Delta, Δ) into the three of
+an equivalent star (Y), or the reverse, so that the two behave identically
+between their three terminals.
+
+### Source
+
+Arthur Edwin Kennelly's transform (1899), derived from requiring the resistance
+between each pair of terminals to be the same in both networks.
+
+### What it means
+
+Three resistors can be connected to three terminals A, B and C in two ways:
+
+- **Delta (Δ)** — a triangle. One resistor between each pair of terminals:
+  Rab, Rbc, Rca.
+- **Y (star, also called T)** — three resistors meeting at a common centre
+  point, one leg to each terminal: Ra, Rb, Rc.
+
+Seen only from the three terminals, a Delta and a suitably chosen Y cannot be
+told apart: the resistance between any two terminals is the same, whatever else
+is connected. So one can always be replaced by the other.
+
+**Why that is useful.** Many networks are neither series nor parallel anywhere
+— the classic case is a bridge, five resistors in a diamond with one across the
+middle. Replacing one of its triangles by the equivalent star turns it into
+ordinary series and parallel combinations that can be simplified step by step.
+The same transform turns up in three-phase power, where loads are wired in
+delta or in star.
+
+### The formulas
+
+**Delta to Y** — each leg of the star is the product of the two Delta sides that
+touch its terminal, divided by the sum of all three:
+
+    Ra = Rab × Rca / (Rab + Rbc + Rca)
+    Rb = Rab × Rbc / (Rab + Rbc + Rca)
+    Rc = Rbc × Rca / (Rab + Rbc + Rca)
+
+**Y to Delta** — each side of the triangle is the sum of the products of the
+legs taken in pairs, divided by the leg *opposite* that side:
+
+    Rab = (Ra·Rb + Rb·Rc + Rc·Ra) / Rc
+    Rbc = (Ra·Rb + Rb·Rc + Rc·Ra) / Ra
+    Rca = (Ra·Rb + Rb·Rc + Rc·Ra) / Rb
+
+A way to remember them: Delta to Y divides, so the star's legs are smaller;
+Y to Delta multiplies, so the triangle's sides are larger. With three equal
+parts the Y is a third of the Delta: a 300 Ω triangle is a 100 Ω star.
+
+### Assumptions and limits
+
+- **All three must be greater than zero.** A zero-ohm side or leg joins two
+  terminals directly, and the network is no longer a true three-terminal one.
+- **Resistance only.** The transform holds just as well for impedances
+  (capacitors and inductors, in AC circuits), but this tool works in ohms.
+
+### What it deliberately does not do
+
+- **Solving a whole network** (such as the full bridge) is not automated; the
+  tool does the one step that makes the rest ordinary.
+
+### How it was checked
+
+By hand: a 300 Ω Delta gives a 100 Ω Y, and back. Rab = 10, Rbc = 20,
+Rca = 30 Ω give Ra = 5, Rb = 3.333, Rc = 10 Ω, and those three converted back
+give 10, 20 and 30 Ω.
 
 [↑ Index](#index)
 
