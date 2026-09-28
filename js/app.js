@@ -8469,13 +8469,29 @@ const RC_TIME_UNITS = { µs: 1e-6, ms: 1e-3, s: 1, min: 60 };
 const RC_TAU_REFERENCE = [0, 1, 2, 3, 4, 5];
 
 function renderRcCharge(domain, tool, favId) {
+  const C = "rc-charge";
   const state = {
-    mode: "charging",
-    r: 10, rUnit: "kΩ",
-    c: 100, cUnit: "µF",
+    mode: pref(C, "mode", "charging", ["charging", "discharging"]),
+    r: 10, rUnit: pref(C, "rUnit", "kΩ", Object.keys(DIVIDER_R_UNITS)),
+    c: 100, cUnit: pref(C, "cUnit", "µF", Object.keys(CAP_UNITS)),
     vs: 5,
-    known: "time", time: 1, timeUnit: "s", voltage: null,
+    known: "time", time: 1, timeUnit: pref(C, "timeUnit", "s", Object.keys(RC_TIME_UNITS)), voltage: null,
   };
+
+  // RC timing met on real boards. Each sets the circuit and either the time
+  // or the voltage it asks about.
+  const example = (settings) => () => {
+    Object.assign(state, settings);
+    paint();
+  };
+  useExamples([
+    { title: "Power-on reset delay", note: "10 kΩ and 10 µF from 3.3 V: the reset pin reaches its 2 V threshold after 93 ms.",
+      apply: example({ mode: "charging", r: 10, rUnit: "kΩ", c: 10, cUnit: "µF", vs: 3.3, known: "voltage", voltage: 2, timeUnit: "ms" }) },
+    { title: "Switch debounce, 10 kΩ and 100 nF", note: "τ = 1 ms; after 5 ms, five τ, the input has settled to 99.3% of 5 V.",
+      apply: example({ mode: "charging", r: 10, rUnit: "kΩ", c: 100, cUnit: "nF", vs: 5, known: "time", time: 5, timeUnit: "ms" }) },
+    { title: "Bleeder on a 400 V capacitor", note: "100 kΩ across 470 µF: 98 s, over a minute and a half, before it is below 50 V.",
+      apply: example({ mode: "discharging", r: 100, rUnit: "kΩ", c: 470, cUnit: "µF", vs: 400, known: "voltage", voltage: 50, timeUnit: "s" }) },
+  ]);
 
   function tau() {
     return state.r * DIVIDER_R_UNITS[state.rUnit] * state.c * CAP_UNITS[state.cUnit];
@@ -8540,8 +8556,15 @@ function renderRcCharge(domain, tool, favId) {
     }
     if (source !== "time" && document.activeElement !== timeField) timeField.value = isFinite(t) ? trim(t / RC_TIME_UNITS[state.timeUnit]) : "";
     if (source !== "voltage" && document.activeElement !== voltField) voltField.value = isFinite(v) ? trim(v) : "";
+    // The main result is whichever of the two was not typed: the voltage at
+    // a time, or the time to a voltage.
+    const byVolt = state.known === "voltage";
+    app.querySelector('[data-res="label"]').textContent = byVolt
+      ? `Time to ${state.mode === "charging" ? "reach" : "fall to"} ${isFinite(state.voltage) ? trim(state.voltage) : "—"} V`
+      : `Voltage after ${isFinite(t) ? siFormat(t, "s") : "—"}`;
+    app.querySelector('[data-res="main"]').textContent = byVolt
+      ? (isFinite(t) ? siFormat(t, "s") : "—") : (isFinite(v) ? siFormat(v, "V") : "—");
     app.querySelector('[data-res="tau"]').textContent = isFinite(T) ? siFormat(T, "s") : "—";
-    app.querySelector('[data-res="volt"]').textContent = isFinite(v) ? siFormat(v, "V") : "—";
     app.querySelector('[data-res="pct"]').textContent = isFinite(v) && state.vs > 0 ? `${trim((v / state.vs) * 100)}%` : "—";
     app.querySelector('[data-res="five"]').textContent = isFinite(T) ? siFormat(5 * T, "s") : "—";
     app.querySelector('[data-res="err"]').textContent = (!isFinite(t) || !isFinite(v))
@@ -8597,12 +8620,15 @@ function renderRcCharge(domain, tool, favId) {
       </div>
       <div class="error-text" data-res="err"></div>
 
-      <div class="section-label" style="color:#5DCAA5">Results</div>
-      <div class="eseries-grid eseries-grid--tight">
-        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">τ = R × C</div><div data-res="tau"></div></div>
-        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">V at t</div><div data-res="volt"></div></div>
-        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${state.mode === "charging" ? "Of Vs" : "Left of V0"}</div><div data-res="pct"></div></div>
-        <div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">5τ</div><div data-res="five"></div></div>
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label" data-res="label"></span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main"></span></div>
+        <div class="result-sub"><span data-res="pct"></span> ${state.mode === "charging" ? "of Vs" : "of V0 left"}
+          &nbsp;·&nbsp; τ = R × C = <span data-res="tau"></span> &nbsp;·&nbsp; 5τ = <span data-res="five"></span></div>
       </div>
 
       <div class="section-label" style="color:#8FC1F5">Quick reference — % after n time constants</div>
@@ -8615,7 +8641,7 @@ function renderRcCharge(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
     const rField = document.getElementById("rc-r");
     const cField = document.getElementById("rc-c");
@@ -8626,10 +8652,11 @@ function renderRcCharge(domain, tool, favId) {
     rField.oninput = () => { const v = parseFloat(rField.value); if (isFinite(v)) { state.r = v; refresh(); } };
     cField.oninput = () => { const v = parseFloat(cField.value); if (isFinite(v)) { state.c = v; refresh(); } };
     vsField.oninput = () => { const v = parseFloat(vsField.value); if (isFinite(v)) { state.vs = v; refresh(); } };
-    document.getElementById("rc-r-unit").onchange = (e) => { state.rUnit = e.target.value; refresh(); };
-    document.getElementById("rc-c-unit").onchange = (e) => { state.cUnit = e.target.value; refresh(); };
+    document.getElementById("rc-r-unit").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); refresh(); };
+    document.getElementById("rc-c-unit").onchange = (e) => { state.cUnit = e.target.value; setPref(C, "cUnit", state.cUnit); refresh(); };
     document.getElementById("rc-time-unit").onchange = (e) => {
       state.timeUnit = e.target.value;
+      setPref(C, "timeUnit", state.timeUnit);
       state.known = "time";
       refresh();
     };
