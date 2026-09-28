@@ -24,7 +24,7 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [SMD resistor code](#smd-resistor-code)
 - Resistors → [Resistor power rating](#resistor-power-rating)
 - Resistors → [E-series values](#e-series-values)
-- Resistors → [Resistors in series and parallel](#resistors-in-series-and-parallel)
+- Resistors → [Series/parallel (R)](#seriesparallel-r)
 - Resistors → [Voltage divider](#voltage-divider)
 - Resistors → [Current divider](#current-divider)
 - Resistors → [Wheatstone bridge](#wheatstone-bridge)
@@ -33,7 +33,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [Ceramic capacitor code](#ceramic-capacitor-code)
 - Capacitors → [Film capacitor code](#film-capacitor-code)
 - Capacitors → [SMD capacitor code](#smd-capacitor-code)
-- Capacitors → [Capacitors in series and parallel](#capacitors-in-series-and-parallel)
+- Capacitors → [Series/parallel (C)](#seriesparallel-c)
 - Capacitors → [RC charge and discharge](#rc-charge-and-discharge)
 - Capacitors → [Capacitor stored energy](#capacitor-stored-energy)
 - Inductors → [Inductor color code](#inductor-color-code)
@@ -472,7 +472,7 @@ highlighted; it now shows the nearest value's decade.
 ---
 
 <a id="series-parallel"></a>
-## Resistors in series and parallel
+## Series/parallel (R)
 
 `calc: series-parallel` · Passive components › Resistors
 
@@ -1253,7 +1253,7 @@ show the marking as typed.
 ---
 
 <a id="cap-series-parallel"></a>
-## Capacitors in series and parallel
+## Series/parallel (C)
 
 `calc: cap-series-parallel` · Passive components › Capacitors
 
