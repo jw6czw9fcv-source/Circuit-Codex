@@ -76,7 +76,7 @@ const DOMAINS = [
       { title: "Diodes", tools: [{ name: "Diode forward voltage", was: "Forward voltage / biasing", calc: "diode-biasing" }, { name: "Zener regulation" }, { name: "LED series resistor", calc: "led-series-resistor" }] },
       { title: "Transistors (BJT)", tools: [{ name: "BJT biasing (voltage divider)", was: "Biasing (voltage divider bias)", calc: "transistor-bias" }, { name: "BJT as a switch", was: "NPN/PNP as a switch", calc: "transistor-switch" }, { name: "BJT currents (hFE, IC)", was: "Example calculation (hFE, IC)", calc: "transistor-example" }] },
       { title: "MOSFET / IGBT", tools: [{ name: "MOSFET biasing", was: "Biasing", calc: "mosfet-bias" }, { name: "MOSFET switching", was: "Switching calculation", calc: "mosfet-switch" }] },
-      { title: "Rectifiers", tools: [{ name: "Half-wave rectifier", was: "Half-wave", calc: "rectifier-halfwave" }, { name: "Bridge rectifier", was: "Full-wave (bridge)", calc: "rectifier-bridge" }, { name: "Center-tap rectifier", was: "Full-wave with center tap", calc: "rectifier-centertap" }, { name: "Rectifier ripple (with capacitor)", was: "Half-wave with capacitor (ripple)", calc: "rectifier-halfwave-cap" }] },
+      { title: "Rectifiers", tools: [{ name: "Half-wave rectifier", was: "Half-wave", calc: "rectifier-halfwave" }, { name: "Bridge rectifier", was: "Full-wave (bridge)", calc: "rectifier-bridge" }, { name: "Center-tap rectifier", was: "Full-wave with center tap", calc: "rectifier-centertap" }, { name: "Rectifier ripple", was: "Half-wave with capacitor (ripple)", calc: "rectifier-halfwave-cap" }] },
       { title: "Thyristors & TRIAC", tools: [{ name: "Thyristor firing angle", was: "Firing angle basics", calc: "thyristor-firing" }] },
       {
         title: "Op-amps",

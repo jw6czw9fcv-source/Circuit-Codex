@@ -49,6 +49,7 @@ will key on, since that is the id the app already holds for each tool.
 - Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
+- Rectifiers → [Rectifier ripple](#rectifier-ripple)
 
 ### Digital
 
@@ -2447,6 +2448,101 @@ closed forms were checked against a numerical average.
 The review replaced the 2(Vp − Vf)/π shortcut with the exact averages, put
 Vdc first and large, limited the units, and added plain definitions and
 examples. The PIV, 2Vp − Vf, was already right.
+
+[↑ Index](#index)
+
+---
+
+<a id="rectifier-halfwave-cap"></a>
+## Rectifier ripple
+
+`calc: rectifier-halfwave-cap` · Active & semiconductor devices › Rectifiers
+
+### What it computes
+
+For a half-wave, bridge or centre-tap rectifier with a smoothing capacitor
+across a resistive load: the DC output voltage, current and power, the
+ripple's peak-to-peak voltage and frequency, the ripple factor, the diodes'
+peak inverse voltage, and the classic design estimate of the ripple for
+comparison, with the output waveform.
+
+### Source
+
+No standard is needed. The figures come from simulating the circuit drawn
+over a steady cycle; the design estimate is the usual textbook rule. Both
+are explained below.
+
+### What it means
+
+A rectifier alone gives pulses (see the Half-wave and Bridge rectifier
+sections). A **smoothing capacitor** across the load charges to the peak at
+each pulse and, between pulses, feeds the load on its own, its voltage
+sagging as it discharges until the next peak tops it up. The output is then
+DC with a small sawtooth on top: the **ripple**.
+
+- **Ripple frequency, fr** — how often the capacitor is topped up: the mains
+  frequency for a half-wave, twice it for a bridge or centre tap. That is why
+  full-wave rectification halves the ripple for the same capacitor.
+- **Ripple (p-p)** — the height of the sawtooth, from peak to trough.
+- **Vdc** — the average output, a little below the peak.
+- **Ripple factor** — the ripple's RMS value as a percentage of Vdc.
+- **PIV** — with the capacitor holding the output near the peak, a half-wave
+  or centre-tap diode sees nearly twice the peak when off (2Vp − Vf); a bridge
+  diode sees Vp.
+
+More capacitance, or less load current (a larger Rload), gives less ripple.
+
+### Why the formulas are these
+
+**The simulation.** Over each short time step the capacitor either follows
+the rectified input, while that is higher (the diodes conduct), or decays
+through the load, v → v·e^(−dt/RC). After a few cycles to settle, one cycle
+gives the maximum, the minimum, the average (Vdc) and the RMS of the ripple.
+It models an ideal source and diodes with a constant drop, so it is exact for
+the circuit drawn.
+
+**The design rule.** Assuming the capacitor discharges at the full load
+current for the whole period 1/fr gives
+
+    Vr(p-p) ≈ Vpk / (fr × R × C),   Vdc ≈ Vpk − Vr / 2
+
+with Vpk = Vac × √2 less one diode drop (two for a bridge). The capacitor is
+really recharged before the period ends, so the rule overstates the ripple —
+by little at light load, by a lot at heavy load: at 1 A from 2200 µF it
+gives 4.9 V where the circuit gives 3.4 V. That makes it a safe bound for
+choosing a capacitor.
+
+### Assumptions and limits
+
+- **An ideal source.** A real transformer's winding resistance and leakage
+  inductance stop the capacitor charging fully to the peak and widen the
+  diodes' conduction: Vdc comes out lower and the ripple somewhat larger than
+  simulated. Keep margin, or use the design rule.
+- **Diode current.** The diodes conduct in short pulses much larger than the
+  average current; their peak and surge ratings matter, and are not
+  calculated.
+- The load is a resistor; a regulator after the capacitor draws a roughly
+  constant current instead, for which the design rule is Vr ≈ I / (fr·C).
+
+### What it deliberately does not do
+
+- **Choosing C** for a target ripple is done by trying values; the rule
+  above solves for it directly: C ≈ I / (fr × Vr).
+- **Transformer and diode surge ratings** are not covered.
+
+### How it was checked
+
+Bridge, 12 V AC, 220 Ω, 1000 µF, 60 Hz: Vdc 15.31 V, ripple 532 mV p-p,
+design rule 590 mV. 12 Ω and 2200 µF: 13.95 V, 3.40 V p-p against the rule's
+4.91 V; on a half-wave, 6.73 V and a PIV of 33.24 V. At 50 Hz with 4700 µF,
+2.13 V. The simulation was checked in a separate script with finer steps.
+
+The review found the tool half-wave only, though the name did not say so and
+the bridge is the common case; its numbers from the design rule while the
+drawn waveform came from a simulation, so the two disagreed; and a badge
+warning that the rule was strained, which the simulation makes unneeded. It
+now offers the three rectifiers, takes its figures from the simulation with
+the rule beside them, and is renamed Rectifier ripple.
 
 [↑ Index](#index)
 

@@ -279,6 +279,18 @@ const CHECK_CASES = {
     { name: "the series and current unit are remembered", do: [["set", "#led-series", "E96"], ["set", "#led-i-unit", "A"], ["reopen"]],
       expect: [["#led-series", "E96"], ["#led-i-unit", "A"]] },
   ],
+  "rectifier-halfwave-cap": [
+    { name: "bridge, 12 V AC, 220 Ω, 1000 µF, 60 Hz", do: [],
+      expect: [['[data-res="vdc"]', "15.31 V"], ['[data-res="vrpp"]', "532.4 mV"], ['[data-res="rule"]', "589.8 mV"], ['[data-res="piv"]', "16.97 V"]] },
+    { name: "example: 1 A from 2200 µF — simulated 3.4 V, rule 4.9 V", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="vdc"]', "13.95 V"], ['[data-res="vrpp"]', "3.401 V"], ['[data-res="rule"]', "4.915 V"]] },
+    { name: "example: half-wave doubles the ripple, PIV 2Vp − Vf", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="vrpp"]', "6.732 V"], ['[data-res="piv"]', "33.24 V"], [".pill.active", "Half-wave"]] },
+    { name: "example: 50 Hz, 4700 µF", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="vrpp"]', "2.132 V"]] },
+    { name: "mode, frequency and units are remembered", do: [["pill", 0], ["set", "#rhc-freq", "50"], ["set", "#rhc-cap-unit", "nF"], ["reopen"]],
+      expect: [[".pill.active", "Half-wave"], ["#rhc-freq", "50"], ["#rhc-cap-unit", "nF"]] },
+  ],
   "rectifier-centertap": [
     { name: "12 V a half, 0.7 V, 100 Ω: Vdc 10.11 V exact, PIV 2Vp − Vf", do: [],
       expect: [['[data-res="vdc"]', "10.11 V"], ['[data-res="idc"]', "101.1 mA"], ['[data-res="piv"]', "33.24 V"], ['[data-res="ripple"]', "0.515"], ['[data-res="eff"]', "79.1%"]] },

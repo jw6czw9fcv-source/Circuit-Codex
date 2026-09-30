@@ -13245,146 +13245,147 @@ function renderRectifierCenterTap(domain, tool, favId) {
   paint();
 }
 
-// ---------- Half-wave rectifier with capacitor (ripple) ----------
-// A smoothing cap turns the raw half-wave pulses into a nearly-flat DC
-// with a sawtooth ripple riding on top: the diode conducts briefly near
-// each peak (recharging the cap), then the cap alone supplies the load
-// while the diode is reverse biased, decaying until the next peak. The
-// standard linear-discharge approximation (valid while ripple is small
-// relative to the peak) gives closed-form Vr/Vdc formulas — verified via
-// WebSearch — rather than requiring a full transient solve.
+// ---------- Rectifier ripple (with capacitor) ----------
+// A smoothing capacitor across the load: the diodes conduct briefly near each
+// peak, recharging it, and between peaks it alone feeds the load, decaying
+// until the next peak. Half-wave gives one peak per cycle; a bridge or a
+// centre-tapped pair two, so half the ripple.
+// The figures come from simulating that circuit — ideal source, constant Vf,
+// exponential decay through R — over a steady cycle, so they are exact for the
+// circuit drawn and agree with the waveform. The textbook design rule
+// Vr ≈ Vpk / (fr·R·C) assumes the capacitor discharges for the whole period,
+// and is shown beside as the cautious bound: at 1 A from 2200 µF it says
+// 4.9 V where the circuit gives 3.4 V. A real transformer's winding resistance
+// lowers Vdc below the simulation, so keep margin.
+const RIPPLE_MODES = {
+  half: { label: "Half-wave", drops: 1, full: false, piv: (vp, vf) => 2 * vp - vf },
+  bridge: { label: "Bridge", drops: 2, full: true, piv: (vp) => vp },
+  ct: { label: "Centre tap", drops: 1, full: true, piv: (vp, vf) => 2 * vp - vf },
+};
+const RIPPLE_C_UNITS = { nF: 1e-9, "µF": 1e-6 };
+
 function renderRectifierHalfwaveCap(domain, tool, favId) {
+  const C = "rectifier-halfwave-cap";
   const state = {
-    vin: 12, vinUnit: "V",
-    vf: 0.7, vfUnit: "V",
-    rload: 220, rloadUnit: "Ω",
-    cap: 1000, capUnit: "µF",
-    freq: 60, freqUnit: "Hz",
+    mode: pref(C, "mode", "bridge", Object.keys(RIPPLE_MODES)),
+    vin: 12, vf: 0.7, rload: 220, cap: 1000, freq: pref(C, "freq", 60, [50, 60]),
+    rloadUnit: pref(C, "rloadUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
+    capUnit: pref(C, "capUnit", "µF", Object.keys(RIPPLE_C_UNITS)),
   };
 
-  const R_NAMES = ["rload"];
-  const F_UNITS = { Hz: 1, kHz: 1e3 };
+  // Supplies met in practice. Each sets the rectifier, the parts and the load.
+  const example = (mode, vin, rload, cap, freq) => () => {
+    Object.assign(state, { mode, vin, vf: 0.7, rload, rloadUnit: "Ω", cap, capUnit: "µF", freq });
+    paint();
+  };
+  useExamples([
+    { title: "12 V AC bridge, 2200 µF, 1 A", note: "13.95 V DC, 3.4 V of ripple at 120 Hz; the cautious rule I / (2f·C) says 4.9 V.",
+      apply: example("bridge", 12, 12, 2200, 60) },
+    { title: "The same on a half-wave", note: "One peak per cycle: 6.7 V of ripple, twice the bridge's, and a lower Vdc.",
+      apply: example("half", 12, 12, 2200, 60) },
+    { title: "50 Hz mains, 4700 µF bridge", note: "A bigger capacitor for a 1.2 A load at 50 Hz: 2.1 V of ripple.",
+      apply: example("bridge", 12, 12, 4700, 50) },
+  ]);
 
   function si(name) {
-    if (R_NAMES.includes(name)) return state.rload * OHM_UNITS[state.rloadUnit];
-    if (name === "cap") return state.cap * CAP_UNITS[state.capUnit];
-    if (name === "freq") return state.freq * F_UNITS[state.freqUnit];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (name === "rload") return state.rload * DIVIDER_R_UNITS[state.rloadUnit];
+    if (name === "cap") return state.cap * RIPPLE_C_UNITS[state.capUnit];
+    return state[name];
   }
 
-  // Ripple factor here comes from the ACTUAL Vdc (peak minus half the
-  // ripple), not the textbook's Vdc≈Vp shortcut — same "compute the real
-  // ratio, cite the shortcut separately" approach used throughout this
-  // app rather than only quoting the simplified constant.
+  // One steady cycle of the output: the capacitor follows the rectified input
+  // while that is higher (the diodes conduct), and otherwise decays through
+  // the load. A few cycles first let the start-up charge settle.
+  function simulate(vp, drop, full, rc, f) {
+    const N = 2000, warm = 4, dt = 1 / f / N;
+    const out = [];
+    let v = 0;
+    for (let i = 0; i < (warm + 1) * N; i++) {
+      const s = Math.sin(2 * Math.PI * f * i * dt);
+      const vr = Math.max(0, vp * (full ? Math.abs(s) : s) - drop);
+      v = vr > v ? vr : v * Math.exp(-dt / rc);
+      if (i >= warm * N) out.push(v);
+    }
+    return out;
+  }
+
   function compute() {
+    const m = RIPPLE_MODES[state.mode];
     const vinRms = si("vin"), vf = si("vf"), rload = si("rload"), cap = si("cap"), freq = si("freq");
 
-    if (!(vinRms > 0) || !(rload > 0) || !(cap > 0) || !(freq > 0) || vf < 0) {
-      return { problem: "Vac, Rload, C, and f must be greater than zero, and Vf must be zero or greater." };
+    if (!(vinRms > 0) || !(rload > 0) || !(cap > 0) || !(freq > 0) || !(vf >= 0)) {
+      return { problem: "Vac, Rload, C and f must be greater than zero, and Vf zero or greater." };
     }
 
     const vp = vinRms * Math.SQRT2;
-    const vpOut = vp - vf;
-    if (vpOut <= 0) {
-      return { problem: `Peak input (${siFormat(vp, "V")}) never exceeds Vf (${siFormat(vf, "V")}) — the diode never conducts, output stays at 0.` };
+    const drop = m.drops * vf;
+    if (vp <= drop) {
+      return { problem: `The peak input (${siFormat(vp, "V")}) never exceeds the diode drop (${siFormat(drop, "V")}): nothing conducts.` };
     }
 
-    const vrpp = vpOut / (freq * rload * cap);
-    const vdc = vpOut - vrpp / 2;
-    if (vdc <= 0) {
-      return { problem: "Estimated ripple exceeds the peak output — this linear approximation only holds for small ripple. Raise C or Rload, or lower f's demand on them." };
-    }
-
-    const vrRms = vrpp / (2 * Math.sqrt(3));
-    const ripple = vrRms / vdc;
+    const wave = simulate(vp, drop, m.full, rload * cap, freq);
+    const vmax = Math.max(...wave), vmin = Math.min(...wave);
+    const vdc = wave.reduce((a, b) => a + b, 0) / wave.length;
+    const vrRms = Math.sqrt(wave.reduce((a, b) => a + (b - vdc) * (b - vdc), 0) / wave.length);
+    const vrpp = vmax - vmin;
     const idc = vdc / rload;
-    const p = vdc * idc;
-    const piv = 2 * vp - vf;
-    const strained = vrpp / vpOut > 0.3;
+    const fr = m.full ? 2 * freq : freq;
+    const rule = (vp - drop) / (fr * rload * cap);
 
-    return { problem: "", vp, vpOut, vdc, vrpp, vrRms, ripple, idc, p, piv, strained };
+    return { problem: "", vp, drop, vdc, vrpp, vrRms, ripple: vrRms / vdc, idc, p: vdc * idc, piv: m.piv(vp, vf), fr, rule, wave };
   }
 
-  // Same loop as the plain half-wave tool, with a capacitor added in
-  // parallel with Rload — same vertical-plates symbol already used for
-  // capacitors in the RC filter tools, placed on its own branch between
-  // the diode and Rload so both share the same top/bottom rails.
+  // The source, the rectifier, and C and Rload across the output. Half-wave
+  // is one diode in the top wire; a bridge or a centre-tapped pair is drawn as
+  // the four-terminal block it is — AC in on the left, + and − out on the
+  // right — since its diodes do not sit in one wire. Parts in the part blue,
+  // wires grey.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
-    return `<svg width="260" height="110" viewBox="-20 -16 260 110" fill="none">
-      <path d="M30 20 H100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M115 20 H160" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M100,12 L100,28 L115,20 Z M115,12 V28" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
-      <text x="107" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vf</text>
-
+    const half = state.mode === "half";
+    const rect = half
+      ? `<path d="M30 20 H100 M115 20 H160 M30 90 H160" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         <path d="M100,12 L100,28 L115,20 Z M115,12 V28" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+         <text x="107" y="4" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">D</text>`
+      : `<path d="M30 20 H88 M128 20 H160 M30 90 H88 M128 90 H160" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         <rect x="88" y="8" width="40" height="94" rx="4" stroke="${comp}" stroke-width="1.6" fill="none"/>
+         <path d="M101,49 L101,61 L113,55 Z M113,49 V61" stroke="${comp}" stroke-width="1.6" stroke-linejoin="round" fill="none"/>
+         <text x="108" y="80" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">${state.mode === "bridge" ? "Bridge" : "CT"}</text>
+         <text x="140" y="14" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">+</text>
+         <text x="140" y="104" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">−</text>`;
+    return `<svg width="260" height="118" viewBox="-20 -8 260 118" fill="none">
+      ${rect}
       <circle cx="160" cy="20" r="2.6" fill="${wire}"/>
-      <path d="M160 20 V52" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M146 52 H174" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M146 58 H174" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
-      <path d="M160 58 V90" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <text x="160" y="46" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">C</text>
-
-      <path d="M160 20 H190" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M190 20 V35" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M160 20 V52 M160 58 V90 M160 20 H190 V35 M190 71 V90 H160" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M146 52 H174 M146 58 H174" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="146" y="46" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">C</text>
       <path d="${zig(190, 35)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="M190 71 V90" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <text x="205" y="56" fill="${comp}" font-size="12" font-weight="600">Rload</text>
       <circle cx="160" cy="90" r="2.6" fill="${wire}"/>
-
-      <path d="M190 90 H30" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-
-      <path d="M30 20 V37" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M30 73 V90" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M30 20 V37 M30 73 V90" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="30" cy="55" r="18" fill="none" stroke="${comp}" stroke-width="1.6"/>
       <path d="M21 55 Q25.5 45 30 55 Q34.5 65 39 55" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
       <text x="8" y="59" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vac</text>
     </svg>`;
   }
 
-  // Step-simulated, not the idealized clean hump: while the diode is
-  // forward biased the cap tracks the input instantaneously (an ideal
-  // diode, no source resistance), otherwise it decays exponentially at
-  // its own RC — the real sawtooth-with-exponential-decay shape a scope
-  // would show, not the linear-ramp approximation the formulas use to
-  // stay closed-form. Runs a few warm-up cycles first so the displayed
-  // ones are steady-state, not the initial charge-up transient.
+  // Two steady cycles of the simulated output, zoomed to the ripple band —
+  // a 2% ripple would be invisible at full scale.
   function waveDiagram(r) {
     if (r.problem) return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none"></svg>`;
-    const vp = r.vp, vf = si("vf"), rload = si("rload"), cap = si("cap"), freq = si("freq"), vdc = r.vdc, vrpp = r.vrpp;
-    const rc = rload * cap;
-    const T = 1 / freq;
-    const warmup = 4, shown = 2, periods = warmup + shown;
-    const samples = 360;
-    const dt = (periods * T) / samples;
-    const shownSamples = Math.round((shown / periods) * samples);
-    const startIdx = samples - shownSamples;
-    const outRaw = [];
-    let vcap = 0;
-    for (let i = 0; i <= samples; i++) {
-      const t = i * dt;
-      const vin = vp * Math.sin(2 * Math.PI * freq * t);
-      const vinRect = Math.max(0, vin - vf);
-      vcap = vinRect > vcap ? vinRect : vcap * Math.exp(-dt / rc);
-      if (i >= startIdx) outRaw.push(vcap);
-    }
-    // Y-axis is zoomed to the ripple band itself (not the full ±Vp swing
-    // the other rectifier tools use) — a 2% ripple is invisible at full
-    // scale, and that ripple shape is this tool's whole reason to exist.
-    const pxTop = 12, pxBottom = 48;
-    const bandTop = Math.max(...outRaw), bandBot = Math.min(...outRaw);
-    const pad = Math.max(vrpp * 0.3, (bandTop - bandBot) * 0.15, 1e-6);
-    const worldMax = bandTop + pad, worldMin = bandBot - pad;
-    const toY = (v) => pxBottom - ((v - worldMin) / (worldMax - worldMin)) * (pxBottom - pxTop);
-    const outPts = outRaw.map((v, idx) => `${(10 + (idx / shownSamples) * 190).toFixed(1)},${toY(v).toFixed(1)}`);
-    const dcY = toY(vdc), peakY = toY(bandTop);
-    return `<svg width="226" height="64" viewBox="0 0 226 64" fill="none">
-      <path d="M8,${dcY} H202" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
-      <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="204" y="${dcY + 3}" fill="#5DCAA5" font-size="9" font-weight="600">Vdc</text>
-      <text x="10" y="${peakY - 2}" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
-      <text x="150" y="58" fill="#8A9099" font-size="9" font-weight="600" text-anchor="middle">Vr(pp)=${siFormat(vrpp, "V")}, zoomed in</text>
+    const pts = r.wave.concat(r.wave).filter((_, i) => i % 10 === 0);
+    const pxTop = 10, pxBottom = 46;
+    const vmax = Math.max(...pts), vmin = Math.min(...pts);
+    const pad = Math.max((vmax - vmin) * 0.2, vmax * 1e-3);
+    const toY = (v) => pxBottom - ((v - (vmin - pad)) / ((vmax + pad) - (vmin - pad))) * (pxBottom - pxTop);
+    const line = pts.map((v, i) => `${(10 + (i / (pts.length - 1)) * 188).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+    return `<svg width="226" height="66" viewBox="0 0 226 66" fill="none">
+      <path d="M8,${toY(r.vdc).toFixed(1)} H200" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <polyline points="${line}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="202" y="${(toY(r.vdc) + 4).toFixed(1)}" fill="#5DCAA5" font-size="11" font-weight="600">Vdc</text>
+      <text x="113" y="62" fill="#8A9099" font-size="11" font-weight="600" text-anchor="middle">Vout, two cycles, zoomed to the ripple</text>
     </svg>`;
   }
 
@@ -13398,16 +13399,20 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
-      <div class="section-label" style="color:#5DCAA5">Output (across Rload)
-        ${r.strained ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Approximation strained</span>` : ""}
+      <div class="section-label" style="color:#5DCAA5">Output (across C and Rload)</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">DC output (Vdc)</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vdc">${siFormat(r.vdc, "V")}</span></div>
+        <div class="result-sub">Idc <span data-res="idc">${siFormat(r.idc, "A")}</span> &nbsp;·&nbsp; P ${siFormat(r.p, "W")} &nbsp;·&nbsp; ripple at ${siFormat(r.fr, "Hz")}</div>
+        <div class="result-sub">Cautious rule Vpk / (fr·R·C): <span data-res="rule">${siFormat(r.rule, "V")}</span> peak to peak</div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="clear:both; grid-template-columns:repeat(6,1fr);">
-        ${cell("Vdc", siFormat(r.vdc, "V"))}
-        ${cell("Vr(pp)", siFormat(r.vrpp, "V"))}
-        ${cell("Idc", siFormat(r.idc, "A"))}
-        ${cell("P", siFormat(r.p, "W"))}
-        ${cell("PIV", siFormat(r.piv, "V"))}
-        ${cell("Ripple", `${(r.ripple * 100).toFixed(2)}%`)}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Ripple (p-p)", `<span data-res="vrpp">${siFormat(r.vrpp, "V")}</span>`)}
+        ${cell("Ripple factor", `<span data-res="ripple">${Number((r.ripple * 100).toFixed(2))}%</span>`)}
+        ${cell("PIV", `<span data-res="piv">${siFormat(r.piv, "V")}</span>`)}
       </div>`;
   }
 
@@ -13419,27 +13424,30 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
 
   function paint() {
     const r = compute();
+    const m = RIPPLE_MODES[state.mode];
     app.innerHTML = `
-      ${calcHeader(tool, favId, "A capacitor smooths the pulses into a sawtooth ripple")}
+      ${calcHeader(tool, favId, "A capacitor turns the pulses into DC with a ripple")}
 
       <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
         ${diagram()}
         <div data-res="wave">${waveDiagram(r)}</div>
       </div>
 
+      ${pillRow(Object.entries(RIPPLE_MODES).map(([k, v]) => [k, v.label]), state.mode, domain.bg)}
+
       <div class="field-pair">
         <div class="field">
-          <label>Vac (RMS)</label>
+          <label>${state.mode === "ct" ? "Vac (one half, RMS)" : "Vac (RMS)"}</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rhc-vin" value="${state.vin}" />
-            <select id="rhc-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rhc-vin" value="${trim(state.vin)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
         <div class="field">
-          <label>Vf (diode)</label>
+          <label>Vf (per diode)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rhc-vf" value="${state.vf}" />
-            <select id="rhc-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rhc-vf" value="${trim(state.vf)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
       </div>
@@ -13447,52 +13455,53 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
         <div class="field">
           <label>Rload</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rhc-rload" value="${state.rload}" />
-            <select id="rhc-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rhc-rload" value="${trim(state.rload)}" />
+            <select id="rhc-rload-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
         <div class="field">
           <label>C</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rhc-cap" value="${state.cap}" />
-            <select id="rhc-cap-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.capUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rhc-cap" value="${trim(state.cap)}" />
+            <select id="rhc-cap-unit">${Object.keys(RIPPLE_C_UNITS).map((u) => `<option ${state.capUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
       </div>
-      <div class="field-pair">
-        <div class="field">
-          <label>f (line frequency)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rhc-freq" value="${state.freq}" />
-            <select id="rhc-freq-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+      <div class="field">
+        <label>Mains frequency</label>
+        <select id="rhc-freq">
+          ${[50, 60].map((f) => `<option value="${f}" ${state.freq === f ? "selected" : ""}>${f} Hz</option>`).join("")}
+        </select>
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
         [
-          "Vp = Vac × √2, Vp,out = Vp − Vf",
-          "Vr(pp) = Vp,out / (f × Rload × C)",
-          "Vdc = Vp,out − Vr(pp) / 2",
-          "Vr(rms) = Vr(pp) / (2√3)",
-          "Ripple = Vr(rms) / Vdc",
-          "PIV = 2×Vp − Vf",
+          "Vpk = Vac × √2 − n·Vf   (n = 2 for a bridge, else 1)",
+          "fr = f (half-wave), 2f (full-wave)",
+          "Vr(p-p) ≈ Vpk / (fr × Rload × C)   (cautious)",
+          "Vdc ≈ Vpk − Vr / 2",
+          `PIV = ${state.mode === "bridge" ? "Vp" : "2Vp − Vf"}`,
         ],
-        "PIV nearly doubles vs. a plain half-wave (2×Vp, not Vp) — the cap holds the output up while Vac swings negative. Linear-discharge approximation; weakens if ripple isn't small."
+        "A capacitor across the load stores charge at each peak and feeds the load between peaks, so the output stays near the peak and only dips a little: the ripple, a sawtooth at the ripple frequency fr — the mains frequency for a half-wave, twice it for a bridge or centre tap. Vdc is the average. The ripple factor is the ripple's RMS as a share of Vdc. The figures come from simulating the circuit drawn, with an ideal source; the classic rule Vpk / (fr·R·C) assumes the capacitor discharges for the whole period and so gives more ripple, a safe bound for design. A real transformer's resistance lowers Vdc somewhat. With the capacitor, a half-wave or centre-tap diode must block nearly twice the peak (PIV)."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint);
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
-    [["rhc-vin", "vin"], ["rhc-vf", "vf"], ["rhc-rload", "rload"], ["rhc-cap", "cap"], ["rhc-freq", "freq"]].forEach(([id, name]) => {
+    [["rhc-vin", "vin"], ["rhc-vf", "vf"], ["rhc-rload", "rload"], ["rhc-cap", "cap"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    [["rhc-vin-unit", "vinUnit"], ["rhc-vf-unit", "vfUnit"], ["rhc-rload-unit", "rloadUnit"], ["rhc-cap-unit", "capUnit"], ["rhc-freq-unit", "freqUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["rhc-rload-unit", "rloadUnit"], ["rhc-cap-unit", "capUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; setPref(C, name, e.target.value); refresh(); };
     });
+    document.getElementById("rhc-freq").onchange = (e) => {
+      state.freq = Number(e.target.value);
+      setPref(C, "freq", state.freq);
+      refresh();
+    };
   }
 
   paint();
