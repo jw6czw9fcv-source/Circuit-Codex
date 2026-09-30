@@ -7062,7 +7062,7 @@ function renderLogicGates(domain, tool, favId) {
 
   function gateSymbol(type) {
     const g = LOGIC_GATES[type];
-    const color = domain.color;
+    const color = "#8FC1F5"; // the part, in the part blue
     const wire = "#5A6169";
     let body, tipX, backX;
 
@@ -7229,13 +7229,15 @@ function renderLedSeriesResistor(domain, tool, favId) {
   // when several are stacked.
   function diagram() {
     const wire = "#5A6169";
-    const led = "#5DCAA5";
+    // Parts in blue, wires grey, the part being calculated — R — in green.
+    const led = "#8FC1F5";
+    const calc = "#5DCAA5";
     return `<svg width="220" height="104" viewBox="0 -4 220 104" fill="none">
       <path d="M40,20 H92 M128,20 H180 V40 M180,56 V84 H40 V58 M40,46 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M30,46 H50 M35,58 H45" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
       <text x="18" y="56" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Vs</text>
-      <path d="M92 20 L95 13 L101 27 L107 13 L113 27 L119 13 L125 27 L128 20" stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="110" y="9" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
+      <path d="M92 20 L95 13 L101 27 L107 13 L113 27 L119 13 L125 27 L128 20" stroke="${calc}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="110" y="9" fill="${calc}" font-size="12" font-weight="600" text-anchor="middle">R</text>
       <path d="M172,40 H188 L180,56 Z M172,56 H188" stroke="${led}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <path d="M192,44 L201,36 M197,36 H201 V40 M192,53 L201,45 M197,45 H201 V49" stroke="${led}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
       <text x="166" y="52" fill="${led}" font-size="12" font-weight="600" text-anchor="end">${state.n > 1 ? `LED ×${state.n}` : "LED"}</text>
@@ -7408,10 +7410,10 @@ function renderDiodeBiasing(domain, tool, favId) {
       <path d="${plates}" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
       <text x="24" y="47" fill="#8FC1F5" font-size="12" font-weight="700" text-anchor="middle">${signs[0]}</text>
       <text x="24" y="67" fill="#8FC1F5" font-size="12" font-weight="700" text-anchor="middle">${signs[1]}</text>
-      <path d="M92 20 L95 13 L101 27 L107 13 L113 27 L119 13 L125 27 L128 20" stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="110" y="9" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
+      <path d="M92 20 L95 13 L101 27 L107 13 L113 27 L119 13 L125 27 L128 20" stroke="#8FC1F5" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="110" y="9" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">R</text>
       ${arrow}
-      <path d="M172,40 H188 L180,56 Z M172,56 H188" stroke="${diodeColor}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M172,40 H188 L180,56 Z M172,56 H188" stroke="#8FC1F5" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <text x="196" y="46" fill="${label}" font-size="11" font-weight="600">A</text>
       <text x="196" y="60" fill="${label}" font-size="11" font-weight="600">K</text>
       <text x="110" y="58" fill="${diodeColor}" font-size="12" font-weight="600" text-anchor="middle">${forward ? "conducting" : "blocked"}</text>
@@ -8148,8 +8150,8 @@ function renderBatteryRuntime(domain, tool, favId) {
     return `<svg width="220" height="90" viewBox="0 0 220 90" fill="none">
       <path d="M30,18 H80 M140,18 H190 M190,18 V72 M190,72 H30 M30,72 V54 M30,42 V18" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
-      <rect x="80" y="8" width="60" height="20" rx="3" stroke="${domain.color}" stroke-width="1.6" fill="none"/>
-      <text x="110" y="22" fill="${domain.color}" font-size="11" font-weight="600" text-anchor="middle">Load</text>
+      <rect x="80" y="8" width="60" height="20" rx="3" stroke="#8FC1F5" stroke-width="1.6" fill="none"/>
+      <text x="110" y="22" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="middle">Load</text>
       <text x="12" y="51" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Bat</text>
     </svg>`;
   }
@@ -8639,10 +8641,10 @@ function renderRcCharge(domain, tool, favId) {
     return `<svg width="190" height="100" viewBox="-5 0 190 100" fill="none">
       <path d="M30,20 H70 M110,20 H150 M150,20 V47 M150,53 V80 M150,80 H30 ${charging ? "M30,80 V54 M30,42 V20" : "M30,80 V20"}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${charging ? `<path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>` : ""}
-      <path d="M70,20 L73,13 L79,27 L85,13 L91,27 L97,13 L103,27 L110,20" stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="M140,47 H160 M140,53 H160" stroke="${domain.color}" stroke-width="2" stroke-linecap="round"/>
-      <text x="90" y="12" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
-      <text x="167" y="53" fill="${domain.color}" font-size="12" font-weight="600">C</text>
+      <path d="M70,20 L73,13 L79,27 L85,13 L91,27 L97,13 L103,27 L110,20" stroke="#8FC1F5" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M140,47 H160 M140,53 H160" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+      <text x="90" y="12" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">R</text>
+      <text x="167" y="53" fill="#8FC1F5" font-size="12" font-weight="600">C</text>
       ${charging ? `<text x="12" y="51" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Vs</text>`
         : `<text x="136" y="40" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="end">V0</text>`}
     </svg>`;
