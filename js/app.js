@@ -13652,7 +13652,8 @@ function renderThyristorFiring(domain, tool, favId) {
     // channel, tied to the source. flip puts the source on the left.
     function nmos(a, flip) {
       const dx = flip ? 20.5 : 3.5, sx = flip ? 3.5 : 20.5, bx = a + 12;
-      return `<path d="M${a} 5 H${a + 7} M${a + 8.5} 5 H${a + 15.5} M${a + 17} 5 H${a + 24} M${a} -2 H${a + 24}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+      return `<path d="M${a} 5 H${a + 6} M${a + 9} 5 H${a + 15} M${a + 18} 5 H${a + 24}" stroke="${comp}" stroke-width="1.8" stroke-linecap="butt"/>
+        <path d="M${a} -2 H${a + 24}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
         <path d="M${a + dx} 5 V20 M${a + sx} 5 V20 M${bx} 10 V14 H${a + sx}" stroke="${comp}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M${bx} 6 L${bx - 3} 11 L${bx + 3} 11 Z" fill="${comp}"/>`;
     }
