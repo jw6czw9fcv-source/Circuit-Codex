@@ -268,12 +268,12 @@ const CHECK_CASES = {
   "diode-biasing": [
     { name: "forward bias conducts", do: [], expect: [[".diagram-box text:last-of-type", "conducting"]] },
     { name: "reverse bias blocks", do: [["pill", 1]], expect: [[".diagram-box text:last-of-type", "blocked"]] },
-    { name: "1N4148: 1 V at 10 mA (Vishay), quoted with its current", do: [], expect: [[".breadcrumb", "≤ 1 V at 10 mA"]] },
+    { name: "1N4148: 1 V at 10 mA (Vishay), quoted with its current", do: [], expect: [[".card-key", "≤ 1 V at 10 mA"]] },
   ],
   "smd-package-sizes": [
     { name: "1210 is 3.2 × 2.5 mm, 0.126 × 0.098 in", do: [["set", "#sps-input", "1210"]],
-      expect: [["#sps-results .breadcrumb", "/^0.126. × 0.098.*3.2 × 2.5 mm$/"]] },
-    { name: "0805 is 1.25 mm wide", do: [["set", "#sps-input", "0805"]], expect: [["#sps-results .breadcrumb", "/2\\.0 × 1\\.25 mm/"]] },
+      expect: [["#sps-results .card-key", "/^3.2 × 2.5 mm0.126. × 0.098.$/"]] },
+    { name: "0805 is 1.25 mm wide", do: [["set", "#sps-input", "0805"]], expect: [["#sps-results .card-key", "/^2\\.0 × 1\\.25 mm/"]] },
     { name: "metric 0402 finds imperial 01005", do: [["set", "#sps-input", "01005"]], expect: [["#sps-results .formula-card-title", "/^01005 imperial · 0402 metric/"]] },
   ],
   "rl-filter": [

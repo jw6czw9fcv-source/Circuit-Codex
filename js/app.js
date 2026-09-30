@@ -832,11 +832,16 @@ function relatedHTML() {
 // rearrangement, not just the one on screen — reusing the Formula search
 // screen's own card styling. Scrolling to see it is fine: unlike the rest of
 // a calculator screen, this section only exists to be read, not glanced at.
+// The link to the tool's section in the manual, when it has one.
+function manualLink() {
+  return typeof MANUAL_SECTIONS !== "undefined" && MANUAL_SECTIONS.has(CURRENT_CALC)
+    ? `<a class="manual-link" href="manual.html#${CURRENT_CALC}">${ICONS.book}Read more in the manual</a>` : "";
+}
+
 function formulaSection(lines, note) {
   // The note is kept short on purpose; the manual has the rest, so a tool
   // that has a section says where to find it.
-  const more = typeof MANUAL_SECTIONS !== "undefined" && MANUAL_SECTIONS.has(CURRENT_CALC)
-    ? `<a class="manual-link" href="manual.html#${CURRENT_CALC}">${ICONS.book}Read more in the manual</a>` : "";
+  const more = manualLink();
   return `
     <div class="section-label" style="color:#9AA0A8">Formula</div>
     <div class="formula-card formula-card--static" style="margin:0 16px 10px;">
@@ -6729,7 +6734,7 @@ function renderSmdPackageSizes(domain, tool, favId) {
         <div class="formula-card-head">
           <span class="formula-card-title">${p.imperial} <span style="opacity:.55;font-weight:500">imperial</span> · ${p.metric} <span style="opacity:.55;font-weight:500">metric</span></span>
         </div>
-        <div class="breadcrumb">${p.inches} &nbsp;·&nbsp; ${p.mm}</div>
+        <div class="card-key">${p.mm}<span class="card-key-alt">${p.inches}</span></div>
         ${p.note ? `<div class="formula-card-note">${p.note}</div>` : ""}
       </div>`;
   }
@@ -6759,6 +6764,7 @@ function renderSmdPackageSizes(domain, tool, favId) {
         <input id="sps-input" type="text" placeholder="Search an imperial or metric code" autocapitalize="off" spellcheck="false" />
       </div>
       <div id="sps-results"></div>
+      <div class="manual-link-row">${manualLink()}</div>
       ${tabbarHTML("")}
     `;
 
@@ -6883,14 +6889,14 @@ function renderResistorPowerRating(domain, tool, favId) {
     const title = p.group === "smd"
       ? `${p.imperial} <span style="opacity:.55;font-weight:500">imperial</span> · ${p.metric} <span style="opacity:.55;font-weight:500">metric</span>`
       : p.code;
-    const size = p.group === "smd" ? `${p.inches} &nbsp;·&nbsp; ${p.mm}` : p.size;
+    const size = p.group === "smd" ? `${p.mm} &nbsp;·&nbsp; ${p.inches}` : p.size;
     return `
       <div class="formula-card formula-card--static">
         <div class="formula-card-head">
           <span class="formula-card-title">${title}</span>
         </div>
-        <div class="breadcrumb">${p.watts}${p.volts ? ` &nbsp;·&nbsp; ${p.volts} V max` : ""}</div>
-        <div class="formula-line">${size}</div>
+        <div class="card-key">${p.watts}${p.volts ? `<span class="card-key-alt">${p.volts} V max</span>` : ""}</div>
+        <div class="card-sub">${size}</div>
         ${p.note ? `<div class="formula-card-note">${p.note}</div>` : ""}
       </div>`;
   }
@@ -7391,7 +7397,7 @@ function renderDiodeBiasing(domain, tool, favId) {
     return `
       <div class="formula-card formula-card--static">
         <div class="formula-card-head"><span class="formula-card-title">${d.type}</span></div>
-        <div class="breadcrumb">${d.vf}</div>
+        <div class="card-key">${d.vf}</div>
         <div class="formula-card-note">${d.note}</div>
       </div>`;
   }
