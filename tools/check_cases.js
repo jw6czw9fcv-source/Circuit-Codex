@@ -265,6 +265,11 @@ const CHECK_CASES = {
     { name: "topology, solve, poles and units are remembered", do: [["click", '.pill[data-topo="highpass"]'], ["click", '.pill[data-pill="c"]'], ["set", "#rcf-poles", "3"], ["set", 'select[data-unit="r"]', "Ω"], ["reopen"]],
       expect: [['#rcf-topology .pill.active', "High-pass"], ['.pill[data-pill].active', "C"], ["#rcf-poles", "3"], ['select[data-unit="r"]', "Ω"]] },
   ],
+  "diode-biasing": [
+    { name: "forward bias conducts", do: [], expect: [[".diagram-box text:last-of-type", "conducting"]] },
+    { name: "reverse bias blocks", do: [["pill", 1]], expect: [[".diagram-box text:last-of-type", "blocked"]] },
+    { name: "1N4148: 1 V at 10 mA (Vishay), quoted with its current", do: [], expect: [[".breadcrumb", "≤ 1 V at 10 mA"]] },
+  ],
   "smd-package-sizes": [
     { name: "1210 is 3.2 × 2.5 mm, 0.126 × 0.098 in", do: [["set", "#sps-input", "1210"]],
       expect: [["#sps-results .breadcrumb", "/^0.126. × 0.098.*3.2 × 2.5 mm$/"]] },

@@ -42,6 +42,10 @@ will key on, since that is the id the app already holds for each tool.
 - Passive filters → [RL filter](#rl-filter)
 - Reference → [SMD package sizes](#smd-package-sizes)
 
+### Active & semiconductor devices
+
+- Diodes → [Diode forward voltage](#diode-forward-voltage)
+
 ### Digital
 
 - Logic gates → [Karnaugh map simplification](#karnaugh-map-simplification)
@@ -2020,6 +2024,87 @@ online size charts and in no maker's datasheet read, was replaced by 1808,
 from KEMET's; 1218, a common power-resistor size, was added from Vishay's. The
 inches in the Resistor power rating table were aligned to the same
 figures.
+
+[↑ Index](#index)
+
+---
+
+# Active & semiconductor devices
+
+<a id="diode-biasing"></a>
+## Diode forward voltage
+
+`calc: diode-biasing` · Active & semiconductor devices › Diodes
+
+### What it computes
+
+Nothing is calculated: it is a reference. It shows which way round a diode
+conducts, and lists the forward voltage that common real diodes drop, each at
+the current its datasheet quotes it for.
+
+### Source
+
+- **Vishay 1N4148** (Rev. 1.6, 2024): VF ≤ 1 V at 10 mA; its curves show VF
+  at 25, 75 and 150 °C.
+- **Vishay 1N4001–1N4007**: VF ≤ 1.1 V at 1.0 A.
+- **Vishay 1N5817–1N5819**: VF ≤ 0.450 / 0.550 / 0.600 V at 1.0 A, and
+  0.750 / 0.875 / 0.900 V at 3.1 A.
+- **Diodes Inc. BAT54**: VF ≤ 240 mV at 0.1 mA, 320 mV at 1 mA, 400 mV at
+  10 mA, 500 mV at 30 mA, 800 mV at 100 mA.
+- **Taitron 1N34A** (germanium): VF ≤ 1.0 V at 5 mA.
+
+These are guaranteed maximums; a typical part drops somewhat less.
+
+### What it means
+
+A **diode** lets current through one way only, like a valve. Its two leads
+are the **anode (A)** and the **cathode (K)**, marked by the band on the body;
+in the symbol the triangle points from A to K, the way current flows.
+
+- **Forward bias** — the anode more positive than the cathode. Once the
+  voltage across the diode reaches about its **forward voltage, Vf**, it
+  conducts. From then on its voltage hardly changes: a little more voltage
+  means a lot more current. So a diode must never be put straight across a
+  supply; a resistor in series sets the current, taking the rest of the
+  supply's voltage.
+- **Reverse bias** — the cathode more positive. The diode blocks, apart from a
+  tiny leakage current, up to its reverse rating (VRRM). Past it the diode
+  breaks down and conducts, which destroys an ordinary diode. A Zener diode
+  is made to work in that region, as a voltage reference.
+
+**Vf is not one number.** It rises with the current — the BAT54 goes from
+0.24 V at 0.1 mA to 0.8 V at 100 mA — and falls as the diode warms, by about
+2 mV per °C for silicon. The familiar "0.6–0.7 V" is a rule of thumb for a
+silicon diode at a few milliamps; a 1N4007 carrying its rated 1 A may drop
+1.1 V. That is why each figure here comes with its current.
+
+**Which kind to choose.** A Schottky drops less (useful where every tenth of
+a volt counts, as in a supply's reverse-polarity protection) but leaks more
+when blocking. A silicon rectifier such as the 1N4007 blocks up to 1000 V. A
+small-signal diode such as the 1N4148 switches fast, at small currents.
+
+### Assumptions and limits
+
+- The figures are the datasheets' maximums at 25 °C, at the stated current.
+  Between the listed currents, read the datasheet's VF–IF curve.
+- Other makers' versions of the same part numbers have slightly different
+  limits.
+
+### What it deliberately does not do
+
+- **Working out the series resistor** is the LED series resistor tool, which
+  handles any diode's Vf.
+- **Zener regulation** will have its own tool.
+
+### How it was checked
+
+Every figure against the datasheet named. The review found the table giving
+bare ranges with no current ("silicon ≈0.6–0.7 V"), which a 1N4007 exceeds
+at its rated current, and "germanium ≈0.2–0.3 V", which its datasheet does
+not state; it now gives each part's figure with its current. It also found
+the drawing putting a diode straight across a battery with no resistor —
+the circuit that burns a diode out — and the note saying Vf stays "pinned
+regardless of current"; both were corrected.
 
 [↑ Index](#index)
 

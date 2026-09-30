@@ -7339,45 +7339,51 @@ function renderLedSeriesResistor(domain, tool, favId) {
 }
 
 // ---------- Diode forward voltage / biasing ----------
-// A concept-and-reference screen, not a calculator — the actual "given Vs,
-// Vf, and I, solve for R" arithmetic already lives on the LED series
-// resistor screen and shouldn't be duplicated here. What's missing without
-// this screen is the two things that formula assumes you already know:
-// which bias direction makes a diode conduct at all, and what Vf to plug
-// in for a given diode type. LED colour Vf specifically stays on the LED
-// screen — this table covers diode families in general, and points there
-// rather than repeating it.
+// A concept-and-reference screen, not a calculator — the "given Vs, Vf and I,
+// find R" arithmetic lives on the LED series resistor screen. What this one
+// adds: which bias direction makes a diode conduct, and what forward voltage
+// real parts drop. Every figure is a datasheet's, at the current it is quoted
+// for, because Vf depends on the current: a 1N4007 is well under 0.7 V at a
+// few milliamps but up to 1.1 V at its rated 1 A.
 const DIODE_VF_TYPES = [
-  { type: "Germanium", vf: "≈0.2–0.3 V", note: "Older/specialty parts — lower drop, more temperature-sensitive, mostly obsolete for new designs." },
-  { type: "Schottky", vf: "≈0.15–0.45 V", note: "Fast switching, low forward drop — common in rectification and reverse-polarity protection where drop matters." },
-  { type: "Silicon (standard / signal)", vf: "≈0.6–0.7 V", note: "The default assumption for a generic diode unless stated otherwise — 1N4148, 1N400x rectifiers, etc." },
-  { type: "LED", vf: "≈1.2–3.4 V", note: "Varies by colour and part — see the LED series resistor screen for typical values by colour." },
+  { type: "Small-signal silicon · 1N4148", vf: "≤ 1 V at 10 mA", note: "Vishay's maximum. The rule of thumb for silicon, 0.6–0.7 V, holds at a few milliamps." },
+  { type: "Rectifier · 1N4001–1N4007", vf: "≤ 1.1 V at 1 A", note: "Vishay's maximum at the rated current: a power diode carrying real current drops more than 0.7 V." },
+  { type: "Schottky · 1N5817–1N5819", vf: "≤ 0.45–0.60 V at 1 A", note: "Vishay: 1N5817 0.45 V, 1N5819 0.60 V at 1 A, 0.75–0.90 V at 3.1 A. Lower drop than silicon, more leakage." },
+  { type: "Small Schottky · BAT54", vf: "≤ 0.24 V at 0.1 mA, 0.8 V at 100 mA", note: "Diodes Inc.: 0.32 V at 1 mA, 0.40 V at 10 mA — the drop grows with the current." },
+  { type: "Germanium · 1N34A", vf: "≤ 1.0 V at 5 mA", note: "The one figure its datasheet (Taitron) guarantees. Found in old radios and guitar effects." },
+  { type: "LED", vf: "≈1.2–3.4 V", note: "Depends on the colour; the LED series resistor tool lists them." },
 ];
 
 function renderDiodeBiasing(domain, tool, favId) {
   const state = { bias: "forward" };
 
+  // A battery, a resistor to set the current, and the diode: without the
+  // resistor a forward-biased diode across a battery would burn out. The loop
+  // is symmetric about the resistor; the diode stands on the right, anode (A)
+  // at the top, so the battery's + at the top drives it forward.
   function diagram() {
     const wire = "#5A6169";
+    const label = "#8A9099";
     const forward = state.bias === "forward";
     const diodeColor = forward ? "#5DCAA5" : "#E08585";
-    const battery = forward
-      ? `<path d="M20,44 H40 M26,56 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
-         <text x="8" y="41" fill="#8FC1F5" font-size="11" font-weight="700">+</text>
-         <text x="8" y="66" fill="#8FC1F5" font-size="11" font-weight="700">−</text>`
-      : `<path d="M26,44 H34 M20,56 H40" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
-         <text x="8" y="41" fill="#8FC1F5" font-size="11" font-weight="700">−</text>
-         <text x="8" y="66" fill="#8FC1F5" font-size="11" font-weight="700">+</text>`;
+    // Long plate is +. Forward: + at the top; reverse: + at the bottom.
+    const plates = forward ? "M30,46 H50 M35,58 H45" : "M35,46 H45 M30,58 H50";
+    const signs = forward ? ["+", "−"] : ["−", "+"];
     const arrow = forward
-      ? `<path d="M115,20 H130 M124,16 L130,20 L124,24" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
-      : `<circle cx="122" cy="20" r="6" stroke="#E08585" stroke-width="1.6" fill="none"/><path d="M118,16 L126,24" stroke="#E08585" stroke-width="1.6" stroke-linecap="round"/>`;
-    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
-      <path d="M30,20 H190 M190,20 V80 M190,80 H30 M30,80 V57 M30,43 V20"
-            stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${battery}
+      ? `<path d="M58,11 H78 M73,7 L78,11 L73,15" stroke="#5DCAA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
+      : "";
+    return `<svg width="220" height="104" viewBox="0 -4 220 104" fill="none">
+      <path d="M40,20 H92 M128,20 H180 V40 M180,56 V84 H40 V58 M40,46 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${plates}" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+      <text x="24" y="47" fill="#8FC1F5" font-size="12" font-weight="700" text-anchor="middle">${signs[0]}</text>
+      <text x="24" y="67" fill="#8FC1F5" font-size="12" font-weight="700" text-anchor="middle">${signs[1]}</text>
+      <path d="M92 20 L95 13 L101 27 L107 13 L113 27 L119 13 L125 27 L128 20" stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="110" y="9" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
       ${arrow}
-      <path d="M140,12 L140,28 L155,20 Z M155,12 V28" stroke="${diodeColor}" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
-      <text x="147" y="42" fill="${diodeColor}" font-size="12" font-weight="600" text-anchor="middle">${forward ? "conducting" : "blocked"}</text>
+      <path d="M172,40 H188 L180,56 Z M172,56 H188" stroke="${diodeColor}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="196" y="46" fill="${label}" font-size="11" font-weight="600">A</text>
+      <text x="196" y="60" fill="${label}" font-size="11" font-weight="600">K</text>
+      <text x="110" y="58" fill="${diodeColor}" font-size="12" font-weight="600" text-anchor="middle">${forward ? "conducting" : "blocked"}</text>
     </svg>`;
   }
 
@@ -7401,13 +7407,17 @@ function renderDiodeBiasing(domain, tool, favId) {
 
       <div class="field">
         <div class="color-row-note">${forward
-          ? "Anode more positive than cathode. Once that difference reaches the diode's forward voltage (Vf), it conducts — current flows anode → cathode, and the voltage across it stays pinned near Vf regardless of current."
-          : "Cathode more positive than anode. The diode blocks conduction — only a tiny reverse leakage current flows — until the reverse voltage exceeds the diode's breakdown rating, which (outside a Zener diode used deliberately in that region) usually means failure."}</div>
+          ? "Anode (A) more positive than cathode (K). From about its forward voltage, Vf, the diode conducts, and its voltage then rises only slowly with current — so a resistor has to set the current. Vf is always quoted at a current, and falls by about 2 mV for each °C the diode warms."
+          : "Cathode (K) more positive than anode (A): the diode blocks, leaking only a tiny reverse current, until the voltage passes its reverse rating (VRRM). Beyond that it breaks down, which destroys an ordinary diode; a Zener is made to work there."}</div>
       </div>
 
-      <div class="section-label" style="color:#8FC1F5">Typical forward voltage by type</div>
+      <div class="section-label" style="color:#8FC1F5">Forward voltage of real parts (datasheet maximum)</div>
       ${DIODE_VF_TYPES.map(card).join("")}
 
+      ${formulaSection(
+        ["V(R) = Vs − Vf", "I = (Vs − Vf) / R"],
+        "In forward bias the supply's voltage divides: Vf across the diode, the rest across the resistor, which sets the current. The LED series resistor tool works out R for a given current."
+      )}
       ${calcFooter()}
     `;
 
