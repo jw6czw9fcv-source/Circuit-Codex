@@ -13550,7 +13550,8 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
 function renderThyristorFiring(domain, tool, favId) {
   const C = "thyristor-firing";
   const state = {
-    device: pref(C, "device", "triac", ["scr", "triac"]),
+    device: pref(C, "device", "triac", ["scr", "triac", "mosfet"]),
+    rds: 100, rdsUnit: pref(C, "rdsUnit", "mΩ", ["mΩ", "Ω"]),
     vac: 120,
     freq: pref(C, "freq", 60, [50, 60]),
     alpha: 90,
@@ -13559,8 +13560,9 @@ function renderThyristorFiring(domain, tool, favId) {
 
   // Phase control as it is used. Each sets the device, the mains, the load
   // and the firing angle.
-  const example = (device, vac, freq, rload, alpha) => () => {
+  const example = (device, vac, freq, rload, alpha, rds) => () => {
     Object.assign(state, { device, vac, freq, rload, rloadUnit: "Ω", alpha });
+    if (rds !== undefined) Object.assign(state, { rds, rdsUnit: "mΩ" });
     paint();
   };
   useExamples([
@@ -13570,10 +13572,13 @@ function renderThyristorFiring(domain, tool, favId) {
       apply: example("triac", 230, 50, 52.9, 60) },
     { title: "SCR rectifier, 24 V AC at 45°", note: "One half-cycle, from 45°: 9.22 V DC into 10 Ω.",
       apply: example("scr", 24, 60, 10, 45) },
+    { title: "Trailing-edge dimmer, 230 V", note: "MOSFETs off at β = 120°: 80% of a 100 W load, turning off 6.67 ms after each zero.",
+      apply: example("mosfet", 230, 50, 529, 120, 100) },
   ]);
 
   function si(name) {
     if (name === "rload") return state.rload * DIVIDER_R_UNITS[state.rloadUnit];
+    if (name === "rds") return state.rds * (state.rdsUnit === "mΩ" ? 1e-3 : 1);
     return state[name];
   }
 
@@ -13602,6 +13607,20 @@ function renderThyristorFiring(domain, tool, favId) {
     const tDelay = alphaDeg / (360 * freq);
     const powerPct = shape * 100;
 
+    // A MOSFET pair conducts from each zero crossing and is switched off at
+    // β (trailing edge): the mirror image of a thyristor's leading edge, so
+    // conducting 0..β passes the power a TRIAC does firing at 180° − β. Its
+    // two channels, Rds(on) each, sit in series with the load.
+    if (state.device === "mosfet") {
+      const beta = alpha;
+      const mshape = Math.max(0, Math.min(1, (beta - Math.sin(2 * beta) / 2) / Math.PI));
+      const rds = si("rds");
+      const irms = (vac * Math.sqrt(mshape)) / (rload + 2 * rds);
+      const vrms = irms * rload;
+      return { problem: "", isTriac: false, isMosfet: true, vp, alpha, alphaDeg, vrms, irms,
+        p: irms * irms * rload, loss: irms * irms * 2 * rds, piv, tDelay, powerPct: mshape * 100 };
+    }
+
     if (isTriac) {
       const vrms = vac * Math.sqrt(shape);
       const irms = vrms / rload;
@@ -13624,9 +13643,27 @@ function renderThyristorFiring(domain, tool, favId) {
   function diagram(isTriac) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
+    const isMosfet = state.device === "mosfet";
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
 
-    const device = isTriac
+    // An n-channel MOSFET turned on its side: gate plate on top, the
+    // channel's three dashes under it, drain and source leads down to the
+    // wire, and the body lead from the middle dash, arrow pointing into the
+    // channel, tied to the source. flip puts the source on the left.
+    function nmos(a, flip) {
+      const dx = flip ? 20.5 : 3.5, sx = flip ? 3.5 : 20.5, bx = a + 12;
+      return `<path d="M${a} 5 H${a + 7} M${a + 8.5} 5 H${a + 15.5} M${a + 17} 5 H${a + 24} M${a} -2 H${a + 24}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M${a + dx} 5 V20 M${a + sx} 5 V20 M${bx} 10 V14 H${a + sx}" stroke="${comp}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M${bx} 6 L${bx - 3} 11 L${bx + 3} 11 Z" fill="${comp}"/>`;
+    }
+
+    const device = isMosfet
+      ? `${nmos(80, false)}${nmos(112, true)}
+         <path d="M100.5 20 H115.5" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         <path d="M92 -2 V-9 H124 V-2" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+         <text x="129" y="-6" fill="${wire}" font-size="11" font-weight="600">G</text>
+         <text x="108" y="37" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">2 × MOSFET</text>`
+      : isTriac
       ? `<path d="M99 4 V36 M115 4 V36" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
          <path d="M99 4 L99 20 L115 12 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
          <path d="M115 20 L115 36 L99 28 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
@@ -13639,11 +13676,14 @@ function renderThyristorFiring(domain, tool, favId) {
          <text x="128" y="41" fill="${wire}" font-size="10" font-weight="600">G</text>
          <text x="107" y="-2" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">SCR</text>`;
 
-    const leftStop = isTriac ? 99 : 100;
+    // Where the source-side wire meets the device, and where the load-side
+    // wire leaves it.
+    const leftStop = isMosfet ? 83.5 : isTriac ? 99 : 100;
+    const rightStart = isMosfet ? 132.5 : 115;
 
     return `<svg width="260" height="110" viewBox="-20 -16 260 110" fill="none">
       <path d="M30 20 H${leftStop}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M115 20 H190" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M${rightStart} 20 H190" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${device}
 
       <path d="M190 20 V35" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
@@ -13678,7 +13718,9 @@ function renderThyristorFiring(domain, tool, favId) {
       const x = 10 + t * width;
       const vin = vp * Math.sin(theta);
       const mod = theta % (2 * Math.PI);
-      const conducting = isTriac
+      const conducting = r.isMosfet
+        ? mod < alpha || (mod >= Math.PI && mod < Math.PI + alpha)
+        : isTriac
         ? (mod >= alpha && mod < Math.PI) || (mod >= Math.PI + alpha && mod < 2 * Math.PI)
         : mod >= alpha && mod < Math.PI;
       inPts.push(`${x.toFixed(1)},${toY(vin).toFixed(1)}`);
@@ -13694,7 +13736,7 @@ function renderThyristorFiring(domain, tool, favId) {
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <path d="M10,${zeroY} H${markX.toFixed(1)}" stroke="#5DCAA5" stroke-width="1.4" stroke-dasharray="2 2"/>
       <path d="M10,${(zeroY - 6).toFixed(1)} V${(zeroY + 6).toFixed(1)} M${markX.toFixed(1)},${(zeroY - 6).toFixed(1)} V${(zeroY + 6).toFixed(1)}" stroke="#5DCAA5" stroke-width="1"/>
-      <text x="${((10 + markX) / 2).toFixed(1)}" y="${(zeroY + 16).toFixed(1)}" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="middle">α</text>
+      <text x="${((10 + markX) / 2).toFixed(1)}" y="${(zeroY + 16).toFixed(1)}" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="middle">${r.isMosfet ? "β" : "α"}</text>
       <path d="M10,73 H22" stroke="#5A6169" stroke-width="1.4"/>
       <text x="26" y="77" fill="#8A9099" font-size="11" font-weight="600">Vin</text>
       <path d="M58,73 H70" stroke="#8FC1F5" stroke-width="2"/>
@@ -13713,7 +13755,10 @@ function renderThyristorFiring(domain, tool, favId) {
   // passes, the DC an SCR rectifier gives — then the rest.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const main = r.isTriac
+    const main = r.isMosfet
+      ? { label: "Power to the load", value: `<span data-res="p">${siFormat(r.p, "W")}</span>`,
+          sub: `Vrms <span data-res="vrms">${siFormat(r.vrms, "V")}</span> &nbsp;·&nbsp; Irms ${siFormat(r.irms, "A")} &nbsp;·&nbsp; MOSFET loss <span data-res="loss">${siFormat(r.loss, "W")}</span>` }
+      : r.isTriac
       ? { label: "Power to the load", value: `<span data-res="p">${siFormat(r.p, "W")}</span>`,
           sub: `Vrms <span data-res="vrms">${siFormat(r.vrms, "V")}</span> &nbsp;·&nbsp; Irms ${siFormat(r.irms, "A")}` }
       : { label: "DC output (Vdc)", value: `<span data-res="vdc">${siFormat(r.vdc, "V")}</span>`,
@@ -13730,8 +13775,8 @@ function renderThyristorFiring(domain, tool, favId) {
       </div>
       <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
         ${cell("Of full power", `<span data-res="pct">${Number(r.powerPct.toFixed(1))}%</span>`)}
-        ${cell("Gate delay", `<span data-res="delay">${siFormat(r.tDelay, "s")}</span>`)}
-        ${cell("PIV", `<span data-res="piv">${siFormat(r.piv, "V")}</span>`)}
+        ${cell(r.isMosfet ? "Turns off at" : "Gate delay", `<span data-res="delay">${siFormat(r.tDelay, "s")}</span>`)}
+        ${cell(r.isMosfet ? "Vds rating ≥" : "PIV", `<span data-res="piv">${siFormat(r.piv, "V")}</span>`)}
       </div>`;
   }
 
@@ -13747,9 +13792,9 @@ function renderThyristorFiring(domain, tool, favId) {
     const isTriac = state.device === "triac";
 
     app.innerHTML = `
-      ${calcHeader(tool, favId, isTriac ? "TRIAC — full-wave phase control (dimmers, motors)" : "SCR — half-wave phase-controlled rectifier")}
+      ${calcHeader(tool, favId, state.device === "mosfet" ? "MOSFET pair — trailing-edge phase control" : isTriac ? "TRIAC — full-wave phase control (dimmers, motors)" : "SCR — half-wave phase-controlled rectifier")}
 
-      ${pillRow([["scr", "SCR"], ["triac", "TRIAC"]], state.device, domain.bg)}
+      ${pillRow([["scr", "SCR"], ["triac", "TRIAC"], ["mosfet", "MOSFET"]], state.device, domain.bg)}
 
       <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
         <div data-res="circuit">${diagram(isTriac)}</div>
@@ -13779,12 +13824,19 @@ function renderThyristorFiring(domain, tool, favId) {
             <select id="tf-rload-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
+        ${state.device === "mosfet" ? `<div class="field">
+          <label>Rds(on), each</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="tf-rds" value="${trim(state.rds)}" />
+            <select id="tf-rds-unit">${["mΩ", "Ω"].map((u) => `<option ${state.rdsUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          </div>
+        </div>` : ""}
       </div>
 
       <div class="r-list">
         <div class="r-item">
           <div class="r-line">
-            <span class="r-index">α</span>
+            <span class="r-index">${state.device === "mosfet" ? "β" : "α"}</span>
             <input type="number" inputmode="decimal" step="any" id="tf-alpha-input" style="font-size:26px;font-weight:600;" value="${trim(state.alpha)}" />
             <span class="r-hint" style="font-size:15px;">°</span>
             <button type="button" class="r-reset" id="tf-alpha-reset" aria-label="Reset to 90°">${ICONS.reset}</button>
@@ -13800,10 +13852,14 @@ function renderThyristorFiring(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        isTriac
+        state.device === "mosfet"
+          ? ["Vp = Vac × √2, Vds rating ≥ Vp", "k = (β − sin(2β)/2) / π, Power = k × 100%", "Irms = Vac × √k / (Rload + 2 × Rds(on))", "Vrms = Irms × Rload, P = Irms² × Rload", "Loss = Irms² × 2 × Rds(on)"]
+          : isTriac
           ? ["Vp = Vac × √2, PIV = Vp", "Vrms = Vac × √((π − α + sin(2α)/2) / π)", "Irms = Vrms / Rload", "P = Irms² × Rload", "Power = (Vrms/Vac)² × 100%"]
           : ["Vp = Vac × √2, PIV = Vp", "Vdc = (Vp / 2π) × (1 + cos α)", "Vrms = (Vp / 2) × √((π − α + sin(2α)/2) / π)", "Idc = Vdc / Rload", "P = Irms² × Rload"],
-        "A thyristor is a switch for AC that turns on when its gate (G) gets a pulse and stays on until the current falls to zero at the end of the half-cycle. Firing it later in each half-cycle — at the firing angle α, from 0° (at once) to 180° (never) — cuts off the start of each wave and so reduces the power: this is how lamp dimmers and heater and motor controls work. An SCR conducts one way only, so it passes one half-cycle and gives DC; a TRIAC conducts both ways and passes both halves, which is why dimmers use it. The gate delay is α converted to time after each zero crossing. Power falls slowly near 0° and 180° and fastest near 90°. The load is a resistor (lamp, heater); a motor or transformer behaves differently."
+        state.device === "mosfet"
+          ? "A MOSFET can be switched off at any moment, not only when the current reaches zero. Two of them back to back, sources joined, make an AC switch: one alone would still conduct one way through its built-in body diode. Turned on at each zero crossing and off at the angle β, they cut the end of each half-wave instead of its start — trailing-edge dimming, gentler on LED lamps and electronic transformers, and quieter. For a resistive load the power at β equals a TRIAC's fired at 180° − β. Each MOSFET is a small resistance, Rds(on), when on; the two dissipate the current squared times twice that. Each must be rated for the mains peak. Turns off at is β as time after each zero crossing."
+          : "A thyristor is a switch for AC that turns on when its gate (G) gets a pulse and stays on until the current falls to zero at the end of the half-cycle. Firing it later in each half-cycle — at the firing angle α, from 0° (at once) to 180° (never) — cuts off the start of each wave and so reduces the power: this is how lamp dimmers and heater and motor controls work. An SCR conducts one way only, so it passes one half-cycle and gives DC; a TRIAC conducts both ways and passes both halves, which is why dimmers use it. The gate delay is α converted to time after each zero crossing. Power falls slowly near 0° and 180° and fastest near 90°. The load is a resistor (lamp, heater); a motor or transformer behaves differently."
       )}
       ${calcFooter()}
     `;
@@ -13818,6 +13874,10 @@ function renderThyristorFiring(domain, tool, favId) {
       setPref(C, "freq", state.freq);
       refresh();
     };
+    if (state.device === "mosfet") {
+      document.getElementById("tf-rds").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.rds = v; refresh(); } };
+      document.getElementById("tf-rds-unit").onchange = (e) => { state.rdsUnit = e.target.value; setPref(C, "rdsUnit", state.rdsUnit); refresh(); };
+    }
     document.getElementById("tf-rload-unit").onchange = (e) => {
       state.rloadUnit = e.target.value;
       setPref(C, "rloadUnit", state.rloadUnit);

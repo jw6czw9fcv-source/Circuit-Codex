@@ -50,7 +50,7 @@ will key on, since that is the id the app already holds for each tool.
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
 - Rectifiers → [Rectifier ripple](#rectifier-ripple)
-- Thyristors & TRIAC → [Thyristor firing angle](#thyristor-firing-angle)
+- Thyristors & TRIAC → [AC phase control](#ac-phase-control)
 
 ### Digital
 
@@ -2551,92 +2551,147 @@ the rule beside them, and is renamed Rectifier ripple.
 ---
 
 <a id="thyristor-firing"></a>
-## Thyristor firing angle
+## AC phase control
 
 `calc: thyristor-firing` · Active & semiconductor devices › Thyristors & TRIAC
+(formerly Thyristor firing angle)
 
 ### What it computes
 
-For phase control of a resistive load from the mains with an SCR or a TRIAC:
-the power (TRIAC) or DC output (SCR) at a chosen firing angle, the RMS
-voltage and current, the share of full power, the delay from each zero
-crossing at which the gate must fire, and the peak voltage the device must
-block, with the waveforms.
+For phase control of a resistive load from the mains, with an SCR, a TRIAC
+or a pair of MOSFETs, at a chosen angle:
+- the power (TRIAC, MOSFET) or the DC output (SCR);
+- the RMS voltage and current;
+- the share of full power;
+- the delay from each zero crossing at which the device is switched;
+- the peak voltage the device must block;
+- for the MOSFETs, the power they lose;
+- the waveforms.
 
 ### Source
 
-No standard is needed: the results are averages of the chopped sine,
+No standard is needed. The results are averages of the chopped sine,
 derived below, and match the formulas of power-electronics textbooks for
 phase-controlled circuits with a resistive load.
 
 ### What it means
 
 A **thyristor** is a semiconductor switch for AC. It stays off until a
-short pulse on its **gate** (G) turns it on; it then stays on by itself until
-the current through it falls to zero, which on AC happens at the end of every
-half-cycle. So it can be switched on at any point of each half-cycle, but
-switches itself off at the next zero crossing.
+short pulse on its **gate** (G) turns it on. It then stays on by itself
+until the current through it falls to zero, which on AC happens at the end
+of every half-cycle. So it can be switched on at any point of each
+half-cycle, but it switches itself off at the next zero crossing.
 
 - **SCR** (silicon-controlled rectifier) — conducts one way only, like a
-  diode with a gate: it passes one half of each cycle, from the moment it is
+  diode with a gate. It passes one half of each cycle, from the moment it is
   fired, and gives DC.
-- **TRIAC** — conducts both ways, and is fired in each half-cycle: it passes
+- **TRIAC** — conducts both ways and is fired in each half-cycle. It passes
   both halves, so the load gets AC. Lamp dimmers, heater controls and simple
   motor speed controls use it.
 - **Firing angle, α** — how far into each half-cycle the gate is fired,
-  0° (at once, full power) to 180° (never, no power). Firing later cuts off
-  the start of each half-wave.
-- **Gate delay** — the same angle as time after the zero crossing: α / 360°
-  of a mains period; 4.17 ms for 90° at 60 Hz. A microcontroller dimmer waits
-  that long after detecting the zero crossing, then pulses the gate.
-- **Of full power** — the power at this angle as a share of the power at 0°.
-  Power falls slowly near 0° and 180° and fastest around 90°, where it is
-  exactly half.
-- **PIV** — the peak voltage the device blocks while off: the mains peak.
+  from 0° (at once, full power) to 180° (never, no power). Firing later cuts
+  off the start of each half-wave: this is **leading-edge** control.
+- **Gate delay** — the same angle as a time after the zero crossing:
+  α / 360° of a mains period, so 4.17 ms for 90° at 60 Hz. A microcontroller
+  dimmer waits that long after it detects the zero crossing, then pulses the
+  gate.
+- **MOSFET** — a transistor switch that turns on and off whenever its gate
+  says, not only at the zero crossing. Each MOSFET has a built-in diode (the
+  body diode) that conducts backwards. One MOSFET alone would therefore
+  still pass one half-wave, so an AC switch uses two back to back with their
+  sources joined: one blocks each direction, and one gate signal drives
+  both.
+- **Cut-off angle, β** — with MOSFETs the switch is turned on at each zero
+  crossing and off at β. This cuts the end of each half-wave instead of its
+  start: **trailing-edge** control. β runs from 0° (off at once, no power)
+  to 180° (never off, full power). It suits LED lamps and electronic
+  transformers, and it is quieter, because the current starts gently from
+  zero instead of jumping up.
+- **Turns off at** — β as a time after the zero crossing.
+- **Rds(on)** — the small resistance of a MOSFET that is switched on, from
+  its datasheet (tens to hundreds of milliohms for mains parts). The load
+  current flows through both MOSFETs, so they dissipate Irms² × 2 × Rds(on).
+  That power becomes heat in the MOSFETs, which is what the heatsink must
+  carry away.
+- **Of full power** — the power at this angle as a share of the power with
+  the switch always on. Power changes slowly near 0° and 180° and fastest
+  around 90°, where it is exactly half.
+- **PIV / Vds rating** — the peak voltage the device blocks while it is
+  off: the mains peak. Choose a part rated above it, with margin.
 
 ### Why the formulas are these
 
-The load sees Vp·sin θ from α to π in each half-cycle it conducts. Its
+With a TRIAC the load sees Vp·sin θ from α to π in each half-cycle. Its
 power is Vrms² / R, and the RMS of that chopped sine over a half-cycle is
 
     Vrms = Vac × √((π − α + sin 2α / 2) / π)        (TRIAC)
 
-which is Vac at α = 0 and 0 at α = π. The share of full power is the
-square of Vrms / Vac, the bracket under the root. An SCR conducts only one
-half of each cycle, so its RMS is that of a half-wave, (Vp / 2)·√(…), and its
-average, the DC,
+This is Vac at α = 0 and 0 at α = π. The share of full power is the square
+of Vrms / Vac, which is the bracket under the root.
+
+An SCR conducts only one half of each cycle. So its RMS is that of a
+half-wave, (Vp / 2)·√(…), and its average, the DC, is
 
     Vdc = (Vp / 2π) × (1 + cos α)
 
-which is Vp/π at α = 0, the plain half-wave rectifier. The gate delay is
-α / (360° × f).
+This is Vp/π at α = 0, the plain half-wave rectifier.
+
+With MOSFETs the load sees Vp·sin θ from 0 to β instead. Because the sine
+is symmetric about 90°, the part from 0 to β carries the same energy as the
+part from 180° − β to 180°. So
+
+    k = (β − sin 2β / 2) / π,   Irms = Vac × √k / (Rload + 2 × Rds(on))
+
+For a resistive load, trailing-edge control at β gives exactly the power
+of leading-edge control at α = 180° − β. The two differ in the shape of
+the current, not in the power. The MOSFETs' on-resistance is in series with
+the load, so it is included in the current.
+
+The gate delay (thyristors) and the turn-off time (MOSFETs) are the angle
+/ (360° × f).
 
 ### Assumptions and limits
 
 - **A resistive load** — lamp, heater. With a motor or a transformer the
-  current lags the voltage, the device does not turn off at the zero crossing
-  of the voltage, and these formulas do not hold.
-- **An ideal switch.** A real thyristor drops 1–2 V while on, small against
-  mains voltages, and needs a minimum holding current to stay on.
+  current lags the voltage, a thyristor does not turn off at the zero
+  crossing of the voltage, and a MOSFET switching off an inductive current
+  must absorb its energy. These formulas do not hold for such loads.
+- **Switches.**
+  - A real thyristor drops 1–2 V while on, small against mains voltages,
+    and needs a minimum holding current to stay on.
+  - The MOSFET loss is the conduction loss only. Switching losses at each
+    turn-off, and the rise of Rds(on) as the part heats, add to it.
 - Phase control chops the current sharply, which causes electrical noise and
-  harmonics; dimmers need filtering to meet emission limits. Not covered.
+  harmonics, and dimmers need filtering to meet emission limits. This is not
+  covered.
 
 ### What it deliberately does not do
 
-- **Gate drive** (pulse current, opto-isolation, snubbers) is not covered.
+- **Gate drive** is not covered: pulse current, opto-isolation, snubbers,
+  and the floating supply a MOSFET pair's gate needs.
 - **Inductive loads** need a different analysis, as above.
 
 ### How it was checked
 
-TRIAC, 120 V, 144 Ω (a 100 W lamp), α = 90°: 84.85 V RMS, 50 W, exactly half
-of the 100 W at α = 0, gate delay 4.167 ms at 60 Hz, PIV 169.7 V. SCR at
-90°: Vdc 27.01 V (Vp / 2π), 60 V RMS, 25 W. A 1 kW, 230 V heater at 60°:
-80.4% of full power, 3.333 ms at 50 Hz. SCR, 24 V AC at 45°: 9.222 V DC.
+- TRIAC, 120 V, 144 Ω (a 100 W lamp), α = 90°: 84.85 V RMS and 50 W,
+  exactly half of the 100 W at α = 0. Gate delay 4.167 ms at 60 Hz, PIV
+  169.7 V.
+- SCR at 90°: Vdc 27.01 V (Vp / 2π), 60 V RMS, 25 W.
+- A 1 kW, 230 V heater at 60°: 80.4% of full power, 3.333 ms at 50 Hz.
+- SCR, 24 V AC at 45°: 9.222 V DC.
+- MOSFETs, same lamp, β = 90°:
+  - with Rds(on) = 0: 50 W;
+  - with 2 × 100 mΩ: 49.86 W, and 69.25 mW lost in the MOSFETs.
+- β = 120° gives 80.4%, the TRIAC's figure at 60°.
 
-The review put the power (TRIAC) or DC (SCR) first and large, showed the
-gate delay it already worked out, limited the units to real ones (volts,
-50 or 60 Hz, ohms to megohms), moved the waveform's legend off the waves,
-and added plain definitions and examples.
+The review put the power (TRIAC) or the DC (SCR) first and large, showed
+the gate delay the tool already worked out, and limited the units to real
+ones (volts, 50 or 60 Hz, ohms to megohms). It also moved the waveform's
+legend off the waves and added plain definitions and examples.
+
+On Pierre's request it then added the MOSFET pair as a third switch, with
+trailing-edge control, its own waveform and its conduction loss. The tool
+was renamed AC phase control, and the old name stays findable in search.
 
 [↑ Index](#index)
 

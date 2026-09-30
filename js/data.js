@@ -77,7 +77,7 @@ const DOMAINS = [
       { title: "Transistors (BJT)", tools: [{ name: "BJT biasing (voltage divider)", was: "Biasing (voltage divider bias)", calc: "transistor-bias" }, { name: "BJT as a switch", was: "NPN/PNP as a switch", calc: "transistor-switch" }, { name: "BJT currents (hFE, IC)", was: "Example calculation (hFE, IC)", calc: "transistor-example" }] },
       { title: "MOSFET / IGBT", tools: [{ name: "MOSFET biasing", was: "Biasing", calc: "mosfet-bias" }, { name: "MOSFET switching", was: "Switching calculation", calc: "mosfet-switch" }] },
       { title: "Rectifiers", tools: [{ name: "Half-wave rectifier", was: "Half-wave", calc: "rectifier-halfwave" }, { name: "Bridge rectifier", was: "Full-wave (bridge)", calc: "rectifier-bridge" }, { name: "Center-tap rectifier", was: "Full-wave with center tap", calc: "rectifier-centertap" }, { name: "Rectifier ripple", was: "Half-wave with capacitor (ripple)", calc: "rectifier-halfwave-cap" }] },
-      { title: "Thyristors & TRIAC", tools: [{ name: "Thyristor firing angle", was: "Firing angle basics", calc: "thyristor-firing" }] },
+      { title: "Thyristors & TRIAC", tools: [{ name: "AC phase control", was: "Firing angle basics", calc: "thyristor-firing" }] },
       {
         title: "Op-amps",
         tools: [
@@ -274,7 +274,7 @@ const TOOL_KEYWORDS = {
   "rectifier-bridge": "full wave bridge rectifier diode",
   "rectifier-centertap": "full wave center tap transformer",
   "rectifier-halfwave-cap": "ripple smoothing capacitor filter",
-  "thyristor-firing": "scr triac phase angle dimmer",
+  "thyristor-firing": "thyristor firing angle scr triac mosfet trailing edge phase dimmer",
   "opamp-inverting": "op amp gain inverting amplifier",
   "opamp-noninverting": "op amp gain non inverting amplifier",
   "opamp-buffer": "op amp voltage follower unity gain",
