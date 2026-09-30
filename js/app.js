@@ -13548,20 +13548,33 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
 // triangle base sits on that side) ported from schemdraw's own SCR/Triac
 // elements the same way the bridge/center-tap rectifiers were.
 function renderThyristorFiring(domain, tool, favId) {
+  const C = "thyristor-firing";
   const state = {
-    device: "scr",
-    vac: 120, vacUnit: "V",
-    freq: 60, freqUnit: "Hz",
+    device: pref(C, "device", "triac", ["scr", "triac"]),
+    vac: 120,
+    freq: pref(C, "freq", 60, [50, 60]),
     alpha: 90,
-    rload: 100, rloadUnit: "Ω",
+    rload: 144, rloadUnit: pref(C, "rloadUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
   };
 
-  const F_UNITS = { Hz: 1, kHz: 1e3 };
+  // Phase control as it is used. Each sets the device, the mains, the load
+  // and the firing angle.
+  const example = (device, vac, freq, rload, alpha) => () => {
+    Object.assign(state, { device, vac, freq, rload, rloadUnit: "Ω", alpha });
+    paint();
+  };
+  useExamples([
+    { title: "Lamp dimmer at half power", note: "At α = 90° a TRIAC passes half the power: 50 W of a 100 W, 120 V lamp (144 Ω).",
+      apply: example("triac", 120, 60, 144, 90) },
+    { title: "1 kW heater on 230 V, α = 60°", note: "80% of the power, 805 W; the gate fires 3.33 ms after each zero crossing.",
+      apply: example("triac", 230, 50, 52.9, 60) },
+    { title: "SCR rectifier, 24 V AC at 45°", note: "One half-cycle, from 45°: 9.22 V DC into 10 Ω.",
+      apply: example("scr", 24, 60, 10, 45) },
+  ]);
 
   function si(name) {
-    if (name === "rload") return state.rload * OHM_UNITS[state.rloadUnit];
-    if (name === "freq") return state.freq * F_UNITS[state.freqUnit];
-    return state.vac * VOLT_UNITS[state.vacUnit];
+    if (name === "rload") return state.rload * DIVIDER_R_UNITS[state.rloadUnit];
+    return state[name];
   }
 
   // shape is the normalized Vrms²/Vp,ref² ratio both modes share (the
@@ -13575,7 +13588,7 @@ function renderThyristorFiring(domain, tool, favId) {
     const alpha = (alphaDeg * Math.PI) / 180;
 
     if (!(vac > 0) || !(freq > 0) || !(rload > 0)) {
-      return { problem: "Vac, f, and Rload must be greater than zero." };
+      return { problem: "Vac and Rload must be greater than zero." };
     }
 
     const vp = vac * Math.SQRT2;
@@ -13584,6 +13597,8 @@ function renderThyristorFiring(domain, tool, favId) {
     // stray -3.9e-15% on the Power readout or a NaN from sqrt(negative).
     const shape = Math.max(0, Math.min(1, (Math.PI - alpha + Math.sin(2 * alpha) / 2) / Math.PI));
     const piv = vp;
+    // The gate fires α of the way into each half-cycle: α / 360° of a period
+    // after the zero crossing.
     const tDelay = alphaDeg / (360 * freq);
     const powerPct = shape * 100;
 
@@ -13651,9 +13666,9 @@ function renderThyristorFiring(domain, tool, favId) {
   // (α to π, and π+α to 2π, mirrored). The bracket along the 0V line marks
   // the delay from each half-cycle's own zero crossing to first firing.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none"></svg>`;
     const vp = r.vp, alpha = r.alpha, isTriac = r.isTriac;
-    const pxTop = 20, pxBottom = 68;
+    const pxTop = 6, pxBottom = 58;
     const toY = (v) => pxBottom - ((v + vp) / (2 * vp)) * (pxBottom - pxTop);
     const width = 190, periods = 2, samples = 220;
     const inPts = [], outPts = [];
@@ -13671,17 +13686,19 @@ function renderThyristorFiring(domain, tool, favId) {
     }
     const zeroY = toY(0);
     const markX = 10 + (alpha / (periods * 2 * Math.PI)) * width;
-    return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none">
+    // The legend sits under the plot, as on the rectifier screens, clear of
+    // the waves.
+    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
       <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <path d="M10,${zeroY} H${markX.toFixed(1)}" stroke="#5DCAA5" stroke-width="1.4" stroke-dasharray="2 2"/>
       <path d="M10,${(zeroY - 6).toFixed(1)} V${(zeroY + 6).toFixed(1)} M${markX.toFixed(1)},${(zeroY - 6).toFixed(1)} V${(zeroY + 6).toFixed(1)}" stroke="#5DCAA5" stroke-width="1"/>
-      <text x="${((10 + markX) / 2).toFixed(1)}" y="${(zeroY - 10).toFixed(1)}" fill="#5DCAA5" font-size="9" font-weight="600" text-anchor="middle">α</text>
-      <line x1="150" y1="14" x2="161" y2="14" stroke="#5A6169" stroke-width="1.4"/>
-      <text x="164" y="17" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
-      <line x1="150" y1="30" x2="161" y2="30" stroke="#8FC1F5" stroke-width="2"/>
-      <text x="164" y="33" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
+      <text x="${((10 + markX) / 2).toFixed(1)}" y="${(zeroY + 16).toFixed(1)}" fill="#5DCAA5" font-size="11" font-weight="600" text-anchor="middle">α</text>
+      <path d="M10,73 H22" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="26" y="77" fill="#8A9099" font-size="11" font-weight="600">Vin</text>
+      <path d="M58,73 H70" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="74" y="77" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -13692,27 +13709,29 @@ function renderThyristorFiring(domain, tool, favId) {
     </div>`;
   }
 
+  // The figure that matters first and large — the power a TRIAC dimmer
+  // passes, the DC an SCR rectifier gives — then the rest.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    if (r.isTriac) {
-      return `
-        <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-        <div class="eseries-grid">
-          ${cell("Vrms", siFormat(r.vrms, "V"))}
-          ${cell("Irms", siFormat(r.irms, "A"))}
-          ${cell("P", siFormat(r.p, "W"))}
-          ${cell("PIV", siFormat(r.piv, "V"))}
-          ${cell("Power", `${trim(r.powerPct)}%`)}
-        </div>`;
-    }
+    const main = r.isTriac
+      ? { label: "Power to the load", value: `<span data-res="p">${siFormat(r.p, "W")}</span>`,
+          sub: `Vrms <span data-res="vrms">${siFormat(r.vrms, "V")}</span> &nbsp;·&nbsp; Irms ${siFormat(r.irms, "A")}` }
+      : { label: "DC output (Vdc)", value: `<span data-res="vdc">${siFormat(r.vdc, "V")}</span>`,
+          sub: `Idc ${siFormat(r.idc, "A")} &nbsp;·&nbsp; Vrms <span data-res="vrms">${siFormat(r.vrms, "V")}</span> &nbsp;·&nbsp; P <span data-res="p">${siFormat(r.p, "W")}</span>` };
     return `
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-      <div class="eseries-grid">
-        ${cell("Vdc", siFormat(r.vdc, "V"))}
-        ${cell("Idc", siFormat(r.idc, "A"))}
-        ${cell("P", siFormat(r.p, "W"))}
-        ${cell("PIV", siFormat(r.piv, "V"))}
-        ${cell("Power", `${trim(r.powerPct)}%`)}
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${main.label}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num">${main.value}</span></div>
+        <div class="result-sub">${main.sub}</div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Of full power", `<span data-res="pct">${Number(r.powerPct.toFixed(1))}%</span>`)}
+        ${cell("Gate delay", `<span data-res="delay">${siFormat(r.tDelay, "s")}</span>`)}
+        ${cell("PIV", `<span data-res="piv">${siFormat(r.piv, "V")}</span>`)}
       </div>`;
   }
 
@@ -13741,24 +13760,23 @@ function renderThyristorFiring(domain, tool, favId) {
         <div class="field">
           <label>Vac (RMS)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tf-vac" value="${state.vac}" />
-            <select id="tf-vac-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vacUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="tf-vac" value="${trim(state.vac)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
         <div class="field">
-          <label>Frequency</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tf-freq" value="${state.freq}" />
-            <select id="tf-freq-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
+          <label>Mains frequency</label>
+          <select id="tf-freq">
+            ${[50, 60].map((v) => `<option value="${v}" ${state.freq === v ? "selected" : ""}>${v} Hz</option>`).join("")}
+          </select>
         </div>
       </div>
       <div class="field-pair">
         <div class="field">
           <label>Rload</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tf-rload" value="${state.rload}" />
-            <select id="tf-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="tf-rload" value="${trim(state.rload)}" />
+            <select id="tf-rload-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
       </div>
@@ -13785,19 +13803,26 @@ function renderThyristorFiring(domain, tool, favId) {
         isTriac
           ? ["Vp = Vac × √2, PIV = Vp", "Vrms = Vac × √((π − α + sin(2α)/2) / π)", "Irms = Vrms / Rload", "P = Irms² × Rload", "Power = (Vrms/Vac)² × 100%"]
           : ["Vp = Vac × √2, PIV = Vp", "Vdc = (Vp / 2π) × (1 + cos α)", "Vrms = (Vp / 2) × √((π − α + sin(2α)/2) / π)", "Idc = Vdc / Rload", "P = Irms² × Rload"],
-        "Bigger α cuts power non-linearly (ideal switch, no Vf). SCR fires one half-cycle; TRIAC fires both, so it has no DC component."
+        "A thyristor is a switch for AC that turns on when its gate (G) gets a pulse and stays on until the current falls to zero at the end of the half-cycle. Firing it later in each half-cycle — at the firing angle α, from 0° (at once) to 180° (never) — cuts off the start of each wave and so reduces the power: this is how lamp dimmers and heater and motor controls work. An SCR conducts one way only, so it passes one half-cycle and gives DC; a TRIAC conducts both ways and passes both halves, which is why dimmers use it. The gate delay is α converted to time after each zero crossing. Power falls slowly near 0° and 180° and fastest near 90°. The load is a resistor (lamp, heater); a motor or transformer behaves differently."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.device = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.device = m; setPref(C, "device", m); paint(); });
 
-    [["tf-vac", "vac"], ["tf-freq", "freq"], ["tf-rload", "rload"]].forEach(([id, name]) => {
+    [["tf-vac", "vac"], ["tf-rload", "rload"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    [["tf-vac-unit", "vacUnit"], ["tf-freq-unit", "freqUnit"], ["tf-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
-    });
+    document.getElementById("tf-freq").onchange = (e) => {
+      state.freq = Number(e.target.value);
+      setPref(C, "freq", state.freq);
+      refresh();
+    };
+    document.getElementById("tf-rload-unit").onchange = (e) => {
+      state.rloadUnit = e.target.value;
+      setPref(C, "rloadUnit", state.rloadUnit);
+      refresh();
+    };
 
     const alphaInput = document.getElementById("tf-alpha-input");
     const alphaSlider = document.getElementById("tf-alpha-slider");

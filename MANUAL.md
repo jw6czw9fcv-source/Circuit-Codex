@@ -50,6 +50,7 @@ will key on, since that is the id the app already holds for each tool.
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
 - Rectifiers → [Rectifier ripple](#rectifier-ripple)
+- Thyristors & TRIAC → [Thyristor firing angle](#thyristor-firing-angle)
 
 ### Digital
 
@@ -2544,6 +2545,98 @@ drawn waveform came from a simulation, so the two disagreed; and a badge
 warning that the rule was strained, which the simulation makes unneeded. It
 now offers the three rectifiers, takes its figures from the simulation with
 the rule beside them, and is renamed Rectifier ripple.
+
+[↑ Index](#index)
+
+---
+
+<a id="thyristor-firing"></a>
+## Thyristor firing angle
+
+`calc: thyristor-firing` · Active & semiconductor devices › Thyristors & TRIAC
+
+### What it computes
+
+For phase control of a resistive load from the mains with an SCR or a TRIAC:
+the power (TRIAC) or DC output (SCR) at a chosen firing angle, the RMS
+voltage and current, the share of full power, the delay from each zero
+crossing at which the gate must fire, and the peak voltage the device must
+block, with the waveforms.
+
+### Source
+
+No standard is needed: the results are averages of the chopped sine,
+derived below, and match the formulas of power-electronics textbooks for
+phase-controlled circuits with a resistive load.
+
+### What it means
+
+A **thyristor** is a semiconductor switch for AC. It stays off until a
+short pulse on its **gate** (G) turns it on; it then stays on by itself until
+the current through it falls to zero, which on AC happens at the end of every
+half-cycle. So it can be switched on at any point of each half-cycle, but
+switches itself off at the next zero crossing.
+
+- **SCR** (silicon-controlled rectifier) — conducts one way only, like a
+  diode with a gate: it passes one half of each cycle, from the moment it is
+  fired, and gives DC.
+- **TRIAC** — conducts both ways, and is fired in each half-cycle: it passes
+  both halves, so the load gets AC. Lamp dimmers, heater controls and simple
+  motor speed controls use it.
+- **Firing angle, α** — how far into each half-cycle the gate is fired,
+  0° (at once, full power) to 180° (never, no power). Firing later cuts off
+  the start of each half-wave.
+- **Gate delay** — the same angle as time after the zero crossing: α / 360°
+  of a mains period; 4.17 ms for 90° at 60 Hz. A microcontroller dimmer waits
+  that long after detecting the zero crossing, then pulses the gate.
+- **Of full power** — the power at this angle as a share of the power at 0°.
+  Power falls slowly near 0° and 180° and fastest around 90°, where it is
+  exactly half.
+- **PIV** — the peak voltage the device blocks while off: the mains peak.
+
+### Why the formulas are these
+
+The load sees Vp·sin θ from α to π in each half-cycle it conducts. Its
+power is Vrms² / R, and the RMS of that chopped sine over a half-cycle is
+
+    Vrms = Vac × √((π − α + sin 2α / 2) / π)        (TRIAC)
+
+which is Vac at α = 0 and 0 at α = π. The share of full power is the
+square of Vrms / Vac, the bracket under the root. An SCR conducts only one
+half of each cycle, so its RMS is that of a half-wave, (Vp / 2)·√(…), and its
+average, the DC,
+
+    Vdc = (Vp / 2π) × (1 + cos α)
+
+which is Vp/π at α = 0, the plain half-wave rectifier. The gate delay is
+α / (360° × f).
+
+### Assumptions and limits
+
+- **A resistive load** — lamp, heater. With a motor or a transformer the
+  current lags the voltage, the device does not turn off at the zero crossing
+  of the voltage, and these formulas do not hold.
+- **An ideal switch.** A real thyristor drops 1–2 V while on, small against
+  mains voltages, and needs a minimum holding current to stay on.
+- Phase control chops the current sharply, which causes electrical noise and
+  harmonics; dimmers need filtering to meet emission limits. Not covered.
+
+### What it deliberately does not do
+
+- **Gate drive** (pulse current, opto-isolation, snubbers) is not covered.
+- **Inductive loads** need a different analysis, as above.
+
+### How it was checked
+
+TRIAC, 120 V, 144 Ω (a 100 W lamp), α = 90°: 84.85 V RMS, 50 W, exactly half
+of the 100 W at α = 0, gate delay 4.167 ms at 60 Hz, PIV 169.7 V. SCR at
+90°: Vdc 27.01 V (Vp / 2π), 60 V RMS, 25 W. A 1 kW, 230 V heater at 60°:
+80.4% of full power, 3.333 ms at 50 Hz. SCR, 24 V AC at 45°: 9.222 V DC.
+
+The review put the power (TRIAC) or DC (SCR) first and large, showed the
+gate delay it already worked out, limited the units to real ones (volts,
+50 or 60 Hz, ohms to megohms), moved the waveform's legend off the waves,
+and added plain definitions and examples.
 
 [↑ Index](#index)
 
