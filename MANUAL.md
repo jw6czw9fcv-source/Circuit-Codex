@@ -52,6 +52,7 @@ will key on, since that is the id the app already holds for each tool.
 - Rectifiers → [Rectifier ripple](#rectifier-ripple)
 - Thyristors (SCR, TRIAC) & MOSFET → [AC phase control](#ac-phase-control)
 - Op-amps → [Inverting amplifier](#inverting-amplifier)
+- Op-amps → [Non-inverting amplifier](#non-inverting-amplifier)
 
 ### Digital
 
@@ -2831,8 +2832,117 @@ The review found three problems:
 - the units included mΩ, GΩ and kV.
 
 It now has the headroom and GBW fields, shows Vout first and large, and
-remembers the units and the op-amp's figures. It also adds plain
+remembers the units, and the op-amp's figures for all the op-amp tools. It also adds plain
 definitions, examples and an 11 px legend under the waves.
+
+[↑ Index](#index)
+
+---
+
+<a id="opamp-noninverting"></a>
+## Non-inverting amplifier
+
+`calc: opamp-noninverting` · Active & semiconductor devices › Op-amps
+
+### What it computes
+
+For the non-inverting op-amp amplifier, it gives:
+- the output voltage for a given input, the same way up;
+- the gain, as a ratio and in decibels;
+- the current through the feedback divider;
+- where the output clips, from the supply and the op-amp's headroom;
+- the bandwidth, from the op-amp's gain-bandwidth product.
+
+It also draws the input and output waves.
+
+### Source
+
+No standard applies: the gain comes from the ideal op-amp model. The
+headroom and gain-bandwidth figures were read from the TL072, LM358 and
+MCP6002 datasheets, as listed in the Inverting amplifier section.
+
+### What it means
+
+The signal goes straight into the op-amp's **+ input**. Rf and R1 form a
+**voltage divider** from the output to ground, and its middle point feeds
+the − input. The op-amp drives its output until the divided-down voltage
+equals Vin.
+
+- **Gain** — Vout / Vin = 1 + Rf / R1. The output is the same way up as the
+  input (in phase), and the gain is never below 1.
+  - With Rf = 0, or with no R1, the gain is exactly 1: a buffer.
+- **Gain in dB** — 20 × log₁₀ of the gain.
+- **Zin** — the signal source sees only the op-amp's own input, megohms to
+  teraohms, and no resistor. This is the main reason to choose this circuit
+  over the inverting amplifier, whose input impedance is only Rin.
+- **Current in Rf, R1** — the divider current, supplied by the op-amp's
+  output. Keep it to a few milliamps: resistors in the kΩ range.
+- **Headroom** — how close the output can get to the supply. It is about
+  1.5–2 V for a TL072 or LM358; enter 0 for a rail-to-rail op-amp.
+  **Clipping** is when the gain asks for more than that and the tops of the
+  wave are cut flat.
+- **GBW** — the op-amp's gain-bandwidth product, from its datasheet.
+  **Bandwidth** — the frequency where the gain has fallen by 3 dB.
+
+The headroom and GBW entered here are remembered for all the op-amp tools,
+since they describe the op-amp rather than the circuit.
+
+### Why the formulas are these
+
+The op-amp holds its − input at the same voltage as its + input, which is
+Vin. The divider puts Vout × R1 / (R1 + Rf) on the − input, so
+
+    Vout × R1 / (R1 + Rf) = Vin   →   Vout = Vin × (1 + Rf / R1)
+
+The divider current is Vout / (Rf + R1). The output can only reach the
+supply less the headroom, so |Vout| ≤ supply − headroom.
+
+Here the **noise gain**, which sets the bandwidth, equals the signal gain,
+so
+
+    Bandwidth = GBW / Gain
+
+A gain of 101 on a 1 MHz op-amp leaves only 9.9 kHz. For audio, use a faster
+op-amp or split the gain over two stages.
+
+### Assumptions and limits
+
+The limits are the same as for the inverting amplifier:
+- an ideal op-amp for the gain;
+- a symmetric supply, with the same headroom on both sides;
+- slew rate, offset and bias current are not calculated;
+- the load and the divider together must not demand more current than the
+  output can give.
+
+The input voltage must also stay within the op-amp's **common-mode range**
+(on the datasheet), because here the inputs follow the signal. Many
+classic op-amps do not accept inputs close to their positive supply.
+
+### What it deliberately does not do
+
+- It does not choose the resistors. Pick R1 in the kΩ range, then
+  Rf = (gain − 1) × R1 from the E-series.
+- Frequency response curves and phase are not drawn.
+
+### How it was checked
+
+- 10 kΩ / 100 kΩ, 0.5 V peak, ±12 V, 1.5 V headroom, 1 MHz GBW:
+  - gain 11 (20.83 dB), 5.5 V out, 50 µA in the divider;
+  - bandwidth 90.91 kHz.
+- Rf = R1: gain 2 (6.02 dB), 500 kHz.
+- Gain 101, 20 mV: 2.02 V, 9.901 kHz.
+- Gain 11, 1.5 V: the ideal 16.5 V clips at 10.5 V.
+- Rf = 0: gain 1 and the whole 1 MHz.
+
+The review found the same problems as on the inverting amplifier:
+- clipping at the full supply;
+- no bandwidth;
+- units such as mΩ, GΩ and kV;
+- a 9 px legend and textbook jargon ("series feedback", "virtual short").
+
+It now shares the headroom and GBW fields and the waveform with the
+inverting amplifier. It shows Vout first and large, and adds plain
+definitions and examples.
 
 [↑ Index](#index)
 
