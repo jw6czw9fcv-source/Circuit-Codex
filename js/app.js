@@ -7158,60 +7158,87 @@ function renderLogicGates(domain, tool, favId) {
 }
 
 // ---------- LED series resistor ----------
-// R = (Vs − n·Vf) / I. The n (LEDs in series under one resistor) is a real
-// extension worth having, not scope creep — it's the same formula, and
-// stacking LEDs off a single resistor is common enough in practice that
-// leaving it out would just push the user to do the subtraction by hand.
-// Common-colour Vf presets are approximate starting points, not a spec —
-// real forward voltage depends on the specific part and drive current, so
-// they fill the field rather than lock it, and the note says so.
+// R = (Vs − n·Vf) / I, n LEDs in series under one resistor. The colour presets
+// are typical forward voltages from datasheets — Kingbright's WP7113 5 mm
+// lamps, Vishay's TSAL6200 infrared — and fill the field rather than lock it:
+// a real part's Vf spreads between its typical and maximum figures.
 const LED_VF_PRESETS = {
-  "Infrared (~1.2 V)": 1.2,
-  "Red (~2.0 V)": 2.0,
-  "Yellow / amber (~2.1 V)": 2.1,
-  "Green (~2.2 V)": 2.2,
-  "Blue (~3.2 V)": 3.2,
-  "White (~3.2 V)": 3.2,
+  "Infrared (1.35 V)": 1.35,
+  "Red (1.9 V)": 1.9,
+  "Yellow (1.95 V)": 1.95,
+  "Green, standard (2.0 V)": 2.0,
+  "Green, bright (3.3 V)": 3.3,
+  "Blue (3.3 V)": 3.3,
+  "White (3.3 V)": 3.3,
 };
 
 function renderLedSeriesResistor(domain, tool, favId) {
-  const state = { n: 1, vs: 9, vsUnit: "V", vf: 2, vfUnit: "V", i: 20, iUnit: "mA", series: "E24" };
+  const C = "led-series-resistor";
+  const state = {
+    n: 1, vs: 5, vf: 1.9, i: 10,
+    iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
+    series: pref(C, "series", "E24", Object.keys(E_TOLERANCE)),
+  };
+
+  // LEDs as they are really driven. Each sets the whole circuit.
+  const example = (n, vs, vf, i) => () => {
+    Object.assign(state, { n, vs, vf, i, iUnit: "mA" });
+    paint();
+  };
+  useExamples([
+    { title: "Red indicator on 5 V", note: "1.9 V at 10 mA needs 310 Ω; the next E24 value up, 330 Ω, gives 9.4 mA.",
+      apply: example(1, 5, 1.9, 10) },
+    { title: "White LED from 5 V", note: "3.3 V at 20 mA leaves 1.7 V: 85 Ω, 91 Ω in E24. From 3.3 V nothing is left for a resistor.",
+      apply: example(1, 5, 3.3, 20) },
+    { title: "Three red LEDs on 12 V", note: "In series they share one current: 12 − 3 × 1.9 = 6.3 V over 315 Ω, 330 Ω in E24.",
+      apply: example(3, 12, 1.9, 20) },
+  ]);
+
+  // The smallest standard value at or above R, so the LED never gets more
+  // than the current asked for.
+  function nextUp(ohms, series) {
+    const values = eSeriesValues(series);
+    const places = values[0] >= 100 ? 3 : 2;
+    let scale = Math.pow(10, Math.floor(Math.log10(ohms)) - (places - 1));
+    for (let k = 0; k < 2; k++, scale *= 10) {
+      const hit = values.find((v) => v * scale >= ohms * (1 - 1e-9));
+      if (hit !== undefined) return { value: hit * scale, exact: Math.abs(hit * scale - ohms) <= ohms * 1e-9 };
+    }
+    return { value: values[0] * scale, exact: false };
+  }
 
   function compute() {
-    const vs = state.vs * VOLT_UNITS[state.vsUnit];
-    const vf = state.vf * VOLT_UNITS[state.vfUnit];
     const i = state.i * AMP_UNITS[state.iUnit];
-    const vr = vs - state.n * vf;
+    const vr = state.vs - state.n * state.vf;
     const r = vr / i;
-    // Vr is what actually fixes the current, so the same part-to-part Vf
-    // spread hurts far more when little of it is left. A white LED on 3.3V
-    // leaves 100mV and a normal ±0.1V spread then swings the current 100%.
+    // What the resistor is left with is what fixes the current, so the same
+    // change of Vf hurts far more when little is left.
     const shiftPct = vr > 0 ? (state.n * 0.1 / vr) * 100 : Infinity;
-    return { vs, vf, i, vr, r, p: vr * i, shiftPct, tight: shiftPct > 20 };
+    return { i, vr, r, p: vr * i, shiftPct, tight: shiftPct > 20 };
   }
 
   function problem(r) {
     if (!isFinite(r.i) || r.i <= 0) return "LED current must be greater than zero.";
-    if (r.vr <= 0) return `Supply voltage must exceed ${state.n > 1 ? `${state.n} × ` : ""}LED forward voltage.`;
+    if (r.vr <= 0) return `The supply must be above ${state.n > 1 ? `${state.n} × ` : ""}the LED's forward voltage.`;
     return "";
   }
 
-  // Diode with two light-rays — the ANSI LED symbol, not a plain diode.
-  // "×n" only appears once more than one LED is stacked, so the single-LED
-  // case (by far the common one) stays uncluttered.
+  // Battery, resistor, LED in one loop, laid out like the diode screen's:
+  // symmetric about the resistor, the LED standing on the right with its
+  // anode at the top and its light going out to the right. "×n" appears only
+  // when several are stacked.
   function diagram() {
     const wire = "#5A6169";
-    return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
-      <path d="M30,20 H70 M110,20 H135 M165,20 H190 M190,20 V80 M190,80 H30 M30,80 V57 M30,43 V20"
-            stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M20,44 H40 M26,56 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
-      <path d="M70,20 L73,13 L79,27 L85,13 L91,27 L97,13 L103,27 L110,20"
-            stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="M140,12 L140,28 L155,20 Z M155,12 V28" stroke="#5DCAA5" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
-      <path d="M143,10 L149,3 M146,3 H149 V6 M150,10 L156,3 M153,3 H156 V6" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="90" y="12" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
-      <text x="149" y="42" fill="#5DCAA5" font-size="12" font-weight="600" text-anchor="middle">${state.n > 1 ? `×${state.n}` : "LED"}</text>
-      <text x="12" y="53" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Vs</text>
+    const led = "#5DCAA5";
+    return `<svg width="220" height="104" viewBox="0 -4 220 104" fill="none">
+      <path d="M40,20 H92 M128,20 H180 V40 M180,56 V84 H40 V58 M40,46 V20" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M30,46 H50 M35,58 H45" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
+      <text x="18" y="56" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Vs</text>
+      <path d="M92 20 L95 13 L101 27 L107 13 L113 27 L119 13 L125 27 L128 20" stroke="${domain.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="110" y="9" fill="${domain.color}" font-size="12" font-weight="600" text-anchor="middle">R</text>
+      <path d="M172,40 H188 L180,56 Z M172,56 H188" stroke="${led}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <path d="M192,44 L201,36 M197,36 H201 V40 M192,53 L201,45 M197,45 H201 V49" stroke="${led}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="166" y="52" fill="${led}" font-size="12" font-weight="600" text-anchor="end">${state.n > 1 ? `LED ×${state.n}` : "LED"}</text>
     </svg>`;
   }
 
@@ -7220,23 +7247,20 @@ function renderLedSeriesResistor(domain, tool, favId) {
     const err = problem(r);
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="err"]').textContent = err;
+    const shift = app.querySelector('[data-res="shift"]');
     if (err) {
-      app.querySelector('[data-res="r"]').textContent = "—";
-      app.querySelector('[data-res="p"]').textContent = "—";
-      app.querySelector('[data-res="e24"]').textContent = "";
-      app.querySelector('[data-res="shift"]').textContent = "";
-      app.querySelector('[data-res="shift"]').className = "result-sub";
+      ["r", "p", "e24"].forEach((k) => { app.querySelector(`[data-res="${k}"]`).textContent = k === "r" ? "—" : ""; });
+      shift.textContent = "";
+      shift.className = "result-sub";
       return;
     }
     app.querySelector('[data-res="r"]').textContent = siFormat(r.r, "Ω");
     app.querySelector('[data-res="p"]').textContent = `${siFormat(r.p, "W")} dissipated in the resistor`;
-    const snap = nearestESeries(r.r, state.series);
-    const actualI = r.vr / snap.value;
-    app.querySelector('[data-res="e24"]').textContent = snap.exact
-      ? `${formatOhms(snap.value)} is already a ${state.series} standard value.`
-      : `Nearest ${state.series}: ${formatOhms(snap.value)} → ${siFormat(actualI, "A", 3)} through the LED${state.n > 1 ? "s" : ""}.`;
-    const shift = app.querySelector('[data-res="shift"]');
-    shift.textContent = `${siFormat(r.vr, "V")} across R — ±0.1V of Vf shifts the current ${trim(r.shiftPct)}%.`;
+    const up = nextUp(r.r, state.series);
+    app.querySelector('[data-res="e24"]').textContent = up.exact
+      ? `${formatOhms(up.value)} is an ${state.series} standard value.`
+      : `Next ${state.series} value up: ${formatOhms(up.value)} → ${siFormat(r.vr / up.value, "A", 3)} through the LED${state.n > 1 ? "s" : ""}.`;
+    shift.textContent = `${siFormat(r.vr, "V")} across R — 0.1 V more or less of Vf changes the current ${Number(r.shiftPct.toFixed(1))}%.`;
     shift.className = r.tight ? "error-text" : "result-sub";
   }
 
@@ -7257,7 +7281,7 @@ function renderLedSeriesResistor(domain, tool, favId) {
           <label>Supply (Vs)</label>
           <div class="field-row">
             <input id="led-vs" type="number" inputmode="decimal" step="any" value="${trim(state.vs)}" />
-            <select id="led-vs-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <span class="unit-fixed">V</span>
           </div>
         </div>
       </div>
@@ -7266,7 +7290,7 @@ function renderLedSeriesResistor(domain, tool, favId) {
           <label>Forward voltage (Vf)</label>
           <div class="field-row">
             <input id="led-vf" type="number" inputmode="decimal" step="any" value="${trim(state.vf)}" />
-            <select id="led-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <span class="unit-fixed">V</span>
           </div>
         </div>
         <div class="field">
@@ -7277,20 +7301,18 @@ function renderLedSeriesResistor(domain, tool, favId) {
           </div>
         </div>
       </div>
-      <div class="field-pair">
-        <div class="field">
-          <label>Common colour (fills Vf)</label>
-          <select id="led-vf-preset">
-            <option value="">Custom</option>
-            ${Object.keys(LED_VF_PRESETS).map((k) => `<option value="${k}">${k}</option>`).join("")}
-          </select>
-        </div>
+      <div class="field">
+        <label>Colour (fills Vf with a typical value)</label>
+        <select id="led-vf-preset">
+          <option value="">Custom</option>
+          ${Object.keys(LED_VF_PRESETS).map((k) => `<option value="${k}" ${LED_VF_PRESETS[k] === state.vf ? "" : ""}>${k}</option>`).join("")}
+        </select>
       </div>
       <div class="error-text" data-res="err"></div>
 
       <div class="section-label" style="color:#5DCAA5">Results
         <select id="led-series" class="label-select">
-          ${Object.keys(E_TOLERANCE).map((s) => `<option value="${s}" ${state.series === s ? "selected" : ""}>Snap to ${s} (${E_TOLERANCE[s]})</option>`).join("")}
+          ${Object.keys(E_TOLERANCE).map((s) => `<option value="${s}" ${state.series === s ? "selected" : ""}>${s} (${E_TOLERANCE[s]})</option>`).join("")}
         </select>
       </div>
       <div class="result-field">
@@ -7301,20 +7323,24 @@ function renderLedSeriesResistor(domain, tool, favId) {
         <div class="result-value">
           <span class="num" data-res="r">—</span>
         </div>
-        <div class="result-sub" data-res="p"></div>
         <div class="result-sub" data-res="e24"></div>
+        <div class="result-sub" data-res="p"></div>
         <div class="result-sub" data-res="shift"></div>
       </div>
 
       ${formulaSection(
-        ["R = (Vs − n·Vf) / I", "P = (Vs − n·Vf) · I", "ΔI per 0.1V of Vf = n × 0.1 / (Vs − n·Vf)"],
-        "n is how many LEDs sit in series under this one resistor. Vf is set by the LED's bandgap and the bandgap sets its colour, which is why red sits near 2V and blue or white near 3.2V — the presets are typical starting points, not a spec. What the resistor is left with is what really fixes the current, so leaving little of it lets an ordinary Vf spread swing the current hard. Never parallel LEDs across one resistor: the lowest Vf hogs the current and gets hotter still."
+        ["R = (Vs − n·Vf) / I", "P = (Vs − n·Vf) · I", "ΔI for 0.1 V of Vf = n × 0.1 / (Vs − n·Vf)"],
+        "An LED must be fed a set current, not a voltage: past its forward voltage Vf a little more voltage means a lot more current. The resistor takes the rest of the supply and so sets the current. n is how many LEDs sit in series under it. Vf depends on the colour — about 1.9 V for red, 3.3 V for blue, white and bright green — and varies from part to part, so the presets are typical values. The less voltage the resistor is left with, the more that spread moves the current. The standard value offered is the next one up, so the current stays at or below what you asked. Never share one resistor between LEDs in parallel: the one with the lowest Vf takes most of the current."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint);
-    document.getElementById("led-series").onchange = (e) => { state.series = e.target.value; refresh(); };
+    document.getElementById("led-series").onchange = (e) => {
+      state.series = e.target.value;
+      setPref(C, "series", state.series);
+      refresh();
+    };
 
     const nField = document.getElementById("led-n");
     const vsField = document.getElementById("led-vs");
@@ -7325,16 +7351,15 @@ function renderLedSeriesResistor(domain, tool, favId) {
     vsField.oninput = () => { const v = parseFloat(vsField.value); if (isFinite(v)) { state.vs = v; refresh(); } };
     vfField.oninput = () => { const v = parseFloat(vfField.value); if (isFinite(v)) { state.vf = v; refresh(); } };
     iField.oninput = () => { const v = parseFloat(iField.value); if (isFinite(v)) { state.i = v; refresh(); } };
-
-    document.getElementById("led-vs-unit").onchange = (e) => { state.vsUnit = e.target.value; refresh(); };
-    document.getElementById("led-vf-unit").onchange = (e) => { state.vfUnit = e.target.value; refresh(); };
-    document.getElementById("led-i-unit").onchange = (e) => { state.iUnit = e.target.value; refresh(); };
+    document.getElementById("led-i-unit").onchange = (e) => {
+      state.iUnit = e.target.value;
+      setPref(C, "iUnit", state.iUnit);
+      refresh();
+    };
     document.getElementById("led-vf-preset").onchange = (e) => {
       if (!e.target.value) return;
       state.vf = LED_VF_PRESETS[e.target.value];
-      state.vfUnit = "V";
       vfField.value = trim(state.vf);
-      document.getElementById("led-vf-unit").value = "V";
       refresh();
     };
 

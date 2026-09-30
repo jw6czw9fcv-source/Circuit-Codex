@@ -45,6 +45,7 @@ will key on, since that is the id the app already holds for each tool.
 ### Active & semiconductor devices
 
 - Diodes → [Diode forward voltage](#diode-forward-voltage)
+- Diodes → [LED series resistor](#led-series-resistor)
 
 ### Digital
 
@@ -2105,6 +2106,92 @@ not state; it now gives each part's figure with its current. It also found
 the drawing putting a diode straight across a battery with no resistor —
 the circuit that burns a diode out — and the note saying Vf stays "pinned
 regardless of current"; both were corrected.
+
+[↑ Index](#index)
+
+---
+
+<a id="led-series-resistor"></a>
+## LED series resistor
+
+`calc: led-series-resistor` · Active & semiconductor devices › Diodes
+
+### What it computes
+
+The resistor that sets an LED's current from a given supply — for one LED or
+several in series — the power it dissipates, the next standard value up and
+the current that value gives, and how much the current moves if the LED's
+forward voltage is 0.1 V off.
+
+### Source
+
+- The formula is Ohm's law, applied to the voltage the LEDs leave.
+- The colour presets are typical forward voltages from **Kingbright's WP7113**
+  5 mm LED datasheets (typical / maximum): red 1.9 / 2.3 V and yellow
+  1.95 / 2.4 V at 10 mA, standard (GaP) green 2.0 / 2.4 V at 10 mA; bright
+  (InGaN) green 3.3 / 4.1 V, blue 3.3 / 4.0 V and white 3.3 / 4.0 V at 20 mA.
+- Infrared from **Vishay's TSAL6200**: 1.35 V typical, 1.6 V maximum, at
+  100 mA; its forward voltage falls 1.8 mV per kelvin.
+
+### What it means
+
+An LED is a diode that gives light (see Diode forward voltage). Like any
+diode, once past its **forward voltage, Vf**, its current rises steeply with
+the voltage, so it cannot be fed from a voltage directly: it would take as
+much current as the supply can give and burn out. A **series resistor** takes
+up the rest of the supply's voltage and so sets the current:
+
+    R = (Vs − n·Vf) / I
+
+with **n** LEDs in series, each dropping Vf, and **I** the current you want —
+typically 10–20 mA for an indicator, and the datasheet's maximum is the
+limit. The resistor turns P = (Vs − n·Vf) × I into heat; choose its power
+rating from that (see Resistor power rating).
+
+**The colour sets Vf.** Red and yellow LEDs are about 1.9–2 V; blue, white
+and the bright green ones about 3.3 V. The old, dimmer green is about 2 V —
+the tool offers both greens because they differ by more than a volt.
+
+**Headroom.** The voltage the resistor is left with, Vs − n·Vf, is what
+fixes the current. Vf varies from one LED to the next (the datasheets give a
+typical and a maximum a few tenths of a volt apart) and with temperature. With
+volts to spare, that hardly matters; with a few tenths left, it moves the
+current a lot. The tool shows how much a 0.1 V change would move it, and
+flags it in red above 20%. A white LED on 3.3 V has no headroom at all.
+
+**Rounding up.** The standard value offered is the next one up in the chosen
+series, never the nearest one down, so the LED gets at most the current asked
+for.
+
+### Assumptions and limits
+
+- Vf is taken as fixed at the current asked. It really rises slightly with
+  current, so the true current differs a little from the figure.
+- **Several LEDs in parallel on one resistor** do not share the current
+  evenly: the one with the lowest Vf takes most of it and runs hottest. Give
+  each its own resistor.
+- High-power LEDs (hundreds of milliamps) are usually driven by a
+  constant-current regulator rather than a resistor, which would waste too
+  much power.
+
+### What it deliberately does not do
+
+- **Brightness** (luminous intensity) is in the LED's datasheet, not
+  calculated.
+- **Constant-current drivers** are not covered.
+
+### How it was checked
+
+A red LED (1.9 V) on 5 V at 10 mA needs 310 Ω; the next E24 value up, 330 Ω,
+gives 9.39 mA. 2.0 V at 20 mA from 5 V is exactly 150 Ω, an E24 value. 345 Ω
+goes up to 360 Ω, not down to 330. Three red LEDs on 12 V at 20 mA need
+315 Ω, 330 Ω in E24.
+
+The review found the drawing's LED not joined to the wires either side, the
+standard value rounded to the nearest (so the current could exceed the one
+asked), and a green preset of 2.2 V that fits only the old GaP LEDs — a
+bright green LED is 3.3 V. The presets now follow the datasheets, the value
+rounds up, and the drawing is laid out like the diode screen's.
 
 [↑ Index](#index)
 
