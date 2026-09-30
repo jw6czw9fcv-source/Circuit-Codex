@@ -13837,15 +13837,15 @@ function renderThyristorFiring(domain, tool, favId) {
       <div class="r-list">
         <div class="r-item">
           <div class="r-line">
-            <span class="r-index">${state.device === "mosfet" ? "β" : "α"}</span>
+            <span class="r-index">${state.device === "mosfet" ? "Cut-off angle β" : "Firing angle α"}</span>
             <input type="number" inputmode="decimal" step="any" id="tf-alpha-input" style="font-size:26px;font-weight:600;" value="${trim(state.alpha)}" />
             <span class="r-hint" style="font-size:15px;">°</span>
             <button type="button" class="r-reset" id="tf-alpha-reset" aria-label="Reset to 90°">${ICONS.reset}</button>
           </div>
           <div class="slider-row">
-            <button type="button" class="slider-step" id="tf-alpha-dec" aria-label="Decrease firing angle">−</button>
-            <input type="range" class="series-slider" id="tf-alpha-slider" min="0" max="180" step="1" value="${state.alpha}" aria-label="Drag to set firing angle" />
-            <button type="button" class="slider-step" id="tf-alpha-inc" aria-label="Increase firing angle">+</button>
+            <button type="button" class="slider-step" id="tf-alpha-dec" aria-label="Decrease ${state.device === "mosfet" ? "cut-off" : "firing"} angle">−</button>
+            <input type="range" class="series-slider" id="tf-alpha-slider" min="0" max="180" step="1" value="${state.alpha}" aria-label="Drag to set ${state.device === "mosfet" ? "cut-off" : "firing"} angle" />
+            <button type="button" class="slider-step" id="tf-alpha-inc" aria-label="Increase ${state.device === "mosfet" ? "cut-off" : "firing"} angle">+</button>
           </div>
         </div>
       </div>
@@ -13859,8 +13859,8 @@ function renderThyristorFiring(domain, tool, favId) {
           ? ["Vp = Vac × √2, PIV = Vp", "Vrms = Vac × √((π − α + sin(2α)/2) / π)", "Irms = Vrms / Rload", "P = Irms² × Rload", "Power = (Vrms/Vac)² × 100%"]
           : ["Vp = Vac × √2, PIV = Vp", "Vdc = (Vp / 2π) × (1 + cos α)", "Vrms = (Vp / 2) × √((π − α + sin(2α)/2) / π)", "Idc = Vdc / Rload", "P = Irms² × Rload"],
         state.device === "mosfet"
-          ? "A MOSFET can be switched off at any moment, not only when the current reaches zero. Two of them back to back, sources joined, make an AC switch: one alone would still conduct one way through its built-in body diode. Turned on at each zero crossing and off at the angle β, they cut the end of each half-wave instead of its start — trailing-edge dimming, gentler on LED lamps and electronic transformers, and quieter. For a resistive load the power at β equals a TRIAC's fired at 180° − β. Each MOSFET is a small resistance, Rds(on), when on; the two dissipate the current squared times twice that. Each must be rated for the mains peak. Turns off at is β as time after each zero crossing."
-          : "A thyristor is a switch for AC that turns on when its gate (G) gets a pulse and stays on until the current falls to zero at the end of the half-cycle. Firing it later in each half-cycle — at the firing angle α, from 0° (at once) to 180° (never) — cuts off the start of each wave and so reduces the power: this is how lamp dimmers and heater and motor controls work. An SCR conducts one way only, so it passes one half-cycle and gives DC; a TRIAC conducts both ways and passes both halves, which is why dimmers use it. The gate delay is α converted to time after each zero crossing. Power falls slowly near 0° and 180° and fastest near 90°. The load is a resistor (lamp, heater); a motor or transformer behaves differently."
+          ? "A MOSFET can be switched off at any moment, not only when the current reaches zero. Two of them back to back, sources joined, make an AC switch: one alone would still conduct one way through its built-in body diode. Turned on at each zero crossing and off at the angle β, they cut the end of each half-wave instead of its start — trailing-edge dimming, gentler on LED lamps and electronic transformers, and quieter. For a resistive load the power at β equals a TRIAC's fired at 180° − β. Each MOSFET is a small resistance, Rds(on), when on; the two dissipate the current squared times twice that. Each must be rated above the mains peak, Vac × √2 (Vds rating). Turns off at is β as time after each zero crossing."
+          : "A thyristor is a switch for AC that turns on when its gate (G) gets a pulse and stays on until the current falls to zero at the end of the half-cycle. Firing it later in each half-cycle — at the firing angle α, from 0° (at once) to 180° (never) — cuts off the start of each wave and so reduces the power: this is how lamp dimmers and heater and motor controls work. An SCR conducts one way only, so it passes one half-cycle and gives DC; a TRIAC conducts both ways and passes both halves, which is why dimmers use it. The gate delay is α converted to time after each zero crossing. PIV (peak inverse voltage) is the highest voltage the device must block while off — the mains peak, Vac × √2 — so choose a part rated above it. Power falls slowly near 0° and 180° and fastest near 90°. The load is a resistor (lamp, heater); a motor or transformer behaves differently."
       )}
       ${calcFooter()}
     `;
