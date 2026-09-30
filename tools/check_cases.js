@@ -279,6 +279,15 @@ const CHECK_CASES = {
     { name: "the series and current unit are remembered", do: [["set", "#led-series", "E96"], ["set", "#led-i-unit", "A"], ["reopen"]],
       expect: [["#led-series", "E96"], ["#led-i-unit", "A"]] },
   ],
+  "rectifier-centertap": [
+    { name: "12 V a half, 0.7 V, 100 Ω: Vdc 10.11 V exact, PIV 2Vp − Vf", do: [],
+      expect: [['[data-res="vdc"]', "10.11 V"], ['[data-res="idc"]', "101.1 mA"], ['[data-res="piv"]', "33.24 V"], ['[data-res="ripple"]', "0.515"], ['[data-res="eff"]', "79.1%"]] },
+    { name: "ideal diodes: 2Vp/π, ripple 0.483", do: [["set", "#rc-vf", "0"]],
+      expect: [['[data-res="vdc"]', "10.8 V"], ['[data-res="ripple"]', "0.483"], ['[data-res="piv"]', "33.94 V"]] },
+    { name: "example: 48 V CT PIV", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="piv"]', "67.18 V"]] },
+    { name: "the load unit is remembered", do: [["set", "#rc-rload-unit", "kΩ"], ["reopen"]], expect: [["#rc-rload-unit", "kΩ"]] },
+  ],
   "rectifier-bridge": [
     { name: "12 V AC, 2 × 0.7 V, 100 Ω: Vdc 9.441 V exact", do: [],
       expect: [['[data-res="vdc"]', "9.441 V"], ['[data-res="idc"]', "94.41 mA"], ['[data-res="piv"]', "16.97 V"], ['[data-res="ripple"]', "0.546"], ['[data-res="eff"]', "77%"]] },

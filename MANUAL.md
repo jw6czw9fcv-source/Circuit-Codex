@@ -48,6 +48,7 @@ will key on, since that is the id the app already holds for each tool.
 - Diodes → [LED series resistor](#led-series-resistor)
 - Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
+- Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
 
 ### Digital
 
@@ -2365,6 +2366,87 @@ ripple factor 0.546, efficiency 77.0%; with ideal diodes 10.80 V (2Vp/π),
 The review replaced the 2(Vp − 2Vf)/π shortcut with the exact averages, which
 the drawn waveform already followed; put Vdc first and large; limited the
 units; and added plain definitions and examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="rectifier-centertap"></a>
+## Center-tap rectifier
+
+`calc: rectifier-centertap` · Active & semiconductor devices › Rectifiers
+
+### What it computes
+
+For a full-wave rectifier made of two diodes and a centre-tapped transformer,
+feeding a resistive load: the average (DC) output voltage and current, the DC
+power, the RMS output, the peak reverse voltage each diode must withstand,
+the ripple factor and the efficiency, with the waveforms.
+
+### Source
+
+No standard is needed: the results are averages of the output waveform, as
+for the bridge rectifier (see that section), with one diode drop instead of
+two. The peak inverse voltage follows from the circuit, below.
+
+### What it means
+
+The transformer's secondary winding has a connection at its middle, the
+**centre tap**, which becomes the output's negative side. Each end of the
+winding feeds the load through its own diode. On one half-cycle the top half
+drives the load through the top diode, on the other half the bottom half
+through the bottom diode — current flows through the load the same way both
+times, so the output is full-wave, two pulses per cycle.
+
+- **Vac** is the RMS voltage of **one half** of the secondary. A transformer
+  sold as "24 V CT" (centre-tapped) is two 12 V halves: enter 12.
+- **One diode drop.** Only one diode conducts at a time, so each pulse loses
+  Vf, where a bridge loses 2 × Vf — better at low voltage.
+- **The catch: PIV.** While one diode conducts, the other has one end at the
+  peak of its own half and the other end at the peak of the conducting half,
+  of opposite sign: it blocks nearly **twice the peak**, 2Vp − Vf. Choose
+  diodes rated for that.
+- **Vdc**, **ripple factor** and **efficiency** mean the same as for the
+  half-wave rectifier.
+
+**Bridge or centre tap?** The centre tap saves two diodes and one drop but
+needs a winding twice as long, each half working only half the time, and
+diodes rated for twice the voltage. The bridge uses the whole winding all the
+time and is the usual choice today.
+
+### Why the formulas are these
+
+The output is Vout = max(0, Vp·|sin θ| − Vf), Vp being one half's peak. Each
+half-cycle conducts from θ1 = asin(Vf / Vp) to π − θ1, so:
+
+    Vdc   = 2·[Vp·cos θ1 − Vf·(π/2 − θ1)] / π
+    Vrms² = 2·[Vp²·((π − 2θ1)/2 + sin 2θ1 / 2) − 4·Vp·Vf·cos θ1 + Vf²·(π − 2θ1)] / 2π
+    PIV   = 2Vp − Vf
+
+With Vf = 0, Vdc = 2Vp/π, ripple factor 0.483 and efficiency 81.1%, as for
+the bridge. The shortcut 2(Vp − Vf)/π reads 2.4% high at 12 V a half.
+
+### Assumptions and limits
+
+- Each diode is an ideal switch with a constant drop.
+- The transformer has no resistance or leakage, and both halves are equal.
+- The load is a resistor; a smoothing capacitor is the Rectifier ripple tool.
+
+### What it deliberately does not do
+
+- **The bridge rectifier** has its own tool.
+- **Transformer selection** (VA rating, regulation) is not covered.
+
+### How it was checked
+
+12 V a half, 0.7 V diodes, 100 Ω: Vp 16.97 V, Vdc 10.11 V, Idc 101.1 mA, PIV
+33.24 V, ripple factor 0.515, efficiency 79.1%; with ideal diodes 10.80 V
+and 0.483. 5 V a half gives 3.824 V; 24 V a half needs 67.18 V PIV. Both
+closed forms were checked against a numerical average.
+
+The review replaced the 2(Vp − Vf)/π shortcut with the exact averages, put
+Vdc first and large, limited the units, and added plain definitions and
+examples. The PIV, 2Vp − Vf, was already right.
 
 [↑ Index](#index)
 

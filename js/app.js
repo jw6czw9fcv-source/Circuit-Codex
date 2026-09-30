@@ -13001,50 +13001,63 @@ function renderRectifierBridge(domain, tool, favId) {
 }
 
 // ---------- Full-wave rectifier (center tap) ----------
-// Two diodes instead of four, at the cost of needing a center-tapped
-// secondary — each half of the winding drives the load on its own
-// half-cycle through just one diode, so the drop is Vf (not 2×Vf like
-// the bridge), but each diode's own reverse-blocking swing spans the
-// FULL secondary (both halves), so PIV ends up 2×Vp — the one fact
-// everyone gets wrong about this topology, verified via WebSearch
-// (Instrumentation Tools' PIV note, AllAboutCircuits' Vdc derivation)
-// rather than assumed.
+// Two diodes and a centre-tapped secondary: each half of the winding drives
+// the load on its own half-cycle through one diode, so the output is
+// max(0, Vp·|sin θ| − Vf), Vp being one half's peak. Vdc and Vrms are the
+// exact averages of that shape (checked against a numerical integration),
+// not the 2(Vp − Vf)/π shortcut, which reads 2.4% high at 12 V a half. The
+// diode that is off sees the whole secondary, so PIV = 2Vp − Vf.
 function renderRectifierCenterTap(domain, tool, favId) {
+  const C = "rectifier-centertap";
   const state = {
-    vin: 12, vinUnit: "V",
-    vf: 0.7, vfUnit: "V",
-    rload: 100, rloadUnit: "Ω",
+    vin: 12, vf: 0.7, rload: 100,
+    rloadUnit: pref(C, "rloadUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
   };
 
+  // Circuits met in practice. Vac is one half of the secondary.
+  const example = (vin, vf, rload, rloadUnit) => () => {
+    Object.assign(state, { vin, vf, rload, rloadUnit });
+    paint();
+  };
+  useExamples([
+    { title: "24 V CT transformer, 100 Ω", note: "Two 12 V halves: 10.11 V DC through one diode drop, against 9.44 V from a 12 V bridge.",
+      apply: example(12, 0.7, 100, "Ω") },
+    { title: "5 V a half: one drop only", note: "3.82 V DC, where a bridge on 5 V loses two drops and gives 3.19 V.",
+      apply: example(5, 0.7, 10, "Ω") },
+    { title: "48 V CT: the catch", note: "The off diode sees the whole winding, 67.2 V PIV: use 100 V diodes.",
+      apply: example(24, 0.7, 100, "Ω") },
+  ]);
+
   function si(name) {
-    if (name === "rload") return state.rload * OHM_UNITS[state.rloadUnit];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (name === "rload") return state.rload * DIVIDER_R_UNITS[state.rloadUnit];
+    return state[name];
   }
 
   function compute() {
     const vinRms = si("vin"), vf = si("vf"), rload = si("rload");
 
-    if (!(vinRms > 0) || !(rload > 0) || vf < 0) {
-      return { problem: "Vac and Rload must be greater than zero, and Vf must be zero or greater." };
+    if (!(vinRms > 0) || !(rload > 0) || !(vf >= 0)) {
+      return { problem: "Vac and Rload must be greater than zero, and Vf zero or greater." };
     }
 
     const vp = vinRms * Math.SQRT2;
-    const vpOut = vp - vf;
-    if (vpOut <= 0) {
-      return { problem: `Peak per-half voltage (${siFormat(vp, "V")}) never exceeds Vf (${siFormat(vf, "V")}) — nothing conducts, output stays at 0.` };
+    if (vp <= vf) {
+      return { problem: `The peak of each half (${siFormat(vp, "V")}) never exceeds Vf (${siFormat(vf, "V")}): nothing conducts.` };
     }
 
-    const vdc = (2 * vpOut) / Math.PI;
-    const vrms = vpOut / Math.SQRT2;
+    // Each half-cycle conducts from θ1 to π − θ1; the averages of
+    // max(0, Vp·|sin θ| − Vf).
+    const t1 = Math.asin(vf / vp);
+    const vdc = 2 * (vp * Math.cos(t1) - vf * (Math.PI / 2 - t1)) / Math.PI;
+    const vrms = Math.sqrt(2 * (vp * vp * ((Math.PI - 2 * t1) / 2 + Math.sin(2 * t1) / 2)
+      - 4 * vp * vf * Math.cos(t1) + vf * vf * (Math.PI - 2 * t1)) / (2 * Math.PI));
     const idc = vdc / rload;
-    const irms = vrms / rload;
     const piv = 2 * vp - vf;
     const ripple = Math.sqrt((vrms / vdc) * (vrms / vdc) - 1);
-    const pdc = idc * idc * rload;
-    const pac = irms * irms * rload;
-    const eff = pac > 0 ? (pdc / pac) * 100 : 0;
+    const pdc = vdc * idc;
+    const eff = (vdc / vrms) * (vdc / vrms) * 100;
 
-    return { problem: "", vp, vdc, vrms, idc, irms, piv, ripple, eff, pdc };
+    return { problem: "", vp, vdc, vrms, idc, piv, ripple, eff, pdc };
   }
 
   // A real transformer symbol — two coupled coils with a core — reads
@@ -13138,17 +13151,24 @@ function renderRectifierCenterTap(domain, tool, favId) {
     </div>`;
   }
 
+  // The average output first and large; what each diode must stand and how
+  // smooth the output is, beside it.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);">
-        ${cell("Vdc", siFormat(r.vdc, "V"))}
-        ${cell("Idc", siFormat(r.idc, "A"))}
-        ${cell("P", siFormat(r.pdc, "W"))}
-        ${cell("PIV", siFormat(r.piv, "V"))}
-        ${cell("Ripple", `${trim(r.ripple)}×`)}
-        ${cell("Efficiency", `${trim(r.eff)}%`)}
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Average output (Vdc)</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vdc">${siFormat(r.vdc, "V")}</span></div>
+        <div class="result-sub">Idc <span data-res="idc">${siFormat(r.idc, "A")}</span> &nbsp;·&nbsp; Pdc ${siFormat(r.pdc, "W")} &nbsp;·&nbsp; RMS ${siFormat(r.vrms, "V")}</div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("PIV", `<span data-res="piv">${siFormat(r.piv, "V")}</span>`)}
+        ${cell("Ripple factor", `<span data-res="ripple">${Number(r.ripple.toFixed(3))}</span>`)}
+        ${cell("Efficiency", `<span data-res="eff">${Number(r.eff.toFixed(1))}%</span>`)}
       </div>`;
   }
 
@@ -13172,15 +13192,15 @@ function renderRectifierCenterTap(domain, tool, favId) {
         <div class="field">
           <label>Vac (per half, RMS)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rc-vin" value="${state.vin}" />
-            <select id="rc-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rc-vin" value="${trim(state.vin)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
         <div class="field">
           <label>Vf (diode)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rc-vf" value="${state.vf}" />
-            <select id="rc-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rc-vf" value="${trim(state.vf)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
       </div>
@@ -13188,8 +13208,8 @@ function renderRectifierCenterTap(domain, tool, favId) {
         <div class="field">
           <label>Rload</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rc-rload" value="${state.rload}" />
-            <select id="rc-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rc-rload" value="${trim(state.rload)}" />
+            <select id="rc-rload-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
       </div>
@@ -13198,17 +13218,14 @@ function renderRectifierCenterTap(domain, tool, favId) {
 
       ${formulaSection(
         [
-          "Vp = Vac(per half) × √2",
-          "Vp,out = Vp − Vf",
-          "Vdc = 2×Vp,out / π",
-          "Vrms = Vp,out / √2",
-          "Idc = Vdc / Rload",
-          "P = Vdc × Idc",
-          "PIV = 2×Vp − Vf",
-          "Ripple = √((Vrms/Vdc)² − 1)",
-          "Efficiency = (Idc/Irms)² × 100%",
+          "Vp = Vac (one half) × √2",
+          "Vout = max(0, Vp·|sin θ| − Vf)",
+          "Vdc ≈ 2(Vp − Vf) / π   (exact: average of Vout)",
+          "PIV = 2Vp − Vf",
+          "Ripple factor = √((Vrms / Vdc)² − 1)",
+          "Efficiency = (Vdc / Vrms)² × 100%",
         ],
-        "Vac is ONE HALF of the center-tapped secondary — a \"24V CT\" transformer is two 12V halves, enter 12V here. Only one diode conducts (one Vf drop, not two like the bridge) — but the off diode swings from +Vp to −Vp, so PIV is 2×Vp."
+        "A full-wave rectifier with two diodes: the transformer's secondary has a tap at its middle, and each half drives the load through its own diode on alternate half-cycles. Vac is one half — a \"24 V CT\" transformer is two 12 V halves, so enter 12. Only one diode conducts at a time, so each pulse loses one Vf, not the bridge's two. The catch: the diode that is off sees the whole secondary, so its PIV, the reverse voltage it must block, is twice the peak. Vdc is the average output; the ripple factor and efficiency are as for a bridge."
       )}
       ${calcFooter()}
     `;
@@ -13218,9 +13235,11 @@ function renderRectifierCenterTap(domain, tool, favId) {
     [["rc-vin", "vin"], ["rc-vf", "vf"], ["rc-rload", "rload"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    [["rc-vin-unit", "vinUnit"], ["rc-vf-unit", "vfUnit"], ["rc-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
-    });
+    document.getElementById("rc-rload-unit").onchange = (e) => {
+      state.rloadUnit = e.target.value;
+      setPref(C, "rloadUnit", state.rloadUnit);
+      refresh();
+    };
   }
 
   paint();
