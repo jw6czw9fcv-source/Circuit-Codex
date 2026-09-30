@@ -13372,20 +13372,43 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
   }
 
   // Two steady cycles of the simulated output, zoomed to the ripple band —
-  // a 2% ripple would be invisible at full scale.
+  // a 2% ripple would be invisible at full scale — with its top and bottom
+  // written at the left, so the zoom cannot pass for a large ripple. The
+  // rectified input (less the diode drop) is drawn in grey where it crosses
+  // the band: where it rises above the output the diodes conduct and
+  // recharge the capacitor. The source is ideal; a real transformer rounds
+  // the tops and lowers them a little.
   function waveDiagram(r) {
     if (r.problem) return `<svg width="220" height="64" viewBox="0 0 220 64" fill="none"></svg>`;
-    const pts = r.wave.concat(r.wave).filter((_, i) => i % 10 === 0);
-    const pxTop = 10, pxBottom = 46;
-    const vmax = Math.max(...pts), vmin = Math.min(...pts);
+    const full = RIPPLE_MODES[state.mode].full;
+    const n = r.wave.length, step = 10, x0 = 46, x1 = 200;
+    const out = [], inp = [];
+    for (let k = 0; k <= 2 * n; k += step) {
+      out.push(r.wave[k % n]);
+      const sn = Math.sin((2 * Math.PI * k) / n);
+      inp.push(Math.max(0, r.vp * (full ? Math.abs(sn) : sn) - r.drop));
+    }
+    const pxTop = 8, pxBottom = 44;
+    // Top and bottom from the full simulation, not the thinned line, so
+    // they agree with the ripple figure below to the last digit.
+    const vmax = Math.max(...r.wave), vmin = Math.min(...r.wave);
     const pad = Math.max((vmax - vmin) * 0.2, vmax * 1e-3);
     const toY = (v) => pxBottom - ((v - (vmin - pad)) / ((vmax + pad) - (vmin - pad))) * (pxBottom - pxTop);
-    const line = pts.map((v, i) => `${(10 + (i / (pts.length - 1)) * 188).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
-    return `<svg width="226" height="66" viewBox="0 0 226 66" fill="none">
-      <path d="M8,${toY(r.vdc).toFixed(1)} H200" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
-      <polyline points="${line}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="202" y="${(toY(r.vdc) + 4).toFixed(1)}" fill="#5DCAA5" font-size="11" font-weight="600">Vdc</text>
-      <text x="113" y="62" fill="#8A9099" font-size="11" font-weight="600" text-anchor="middle">Vout, two cycles, zoomed to the ripple</text>
+    const xs = (i) => (x0 + (i / (out.length - 1)) * (x1 - x0)).toFixed(1);
+    const line = (vals) => vals.map((v, i) => `${xs(i)},${toY(v).toFixed(1)}`).join(" ");
+    return `<svg width="226" height="68" viewBox="0 0 226 68" fill="none">
+      <defs><clipPath id="rip-band"><rect x="${x0}" y="2" width="${x1 - x0}" height="48"/></clipPath></defs>
+      <path d="M${x0},${toY(r.vdc).toFixed(1)} H${x1}" stroke="#5DCAA5" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <polyline points="${line(inp)}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round" clip-path="url(#rip-band)"/>
+      <polyline points="${line(out)}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="${x0 - 4}" y="${(toY(vmax) + 4).toFixed(1)}" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">${siFormat(vmax, "V")}</text>
+      <text x="${x0 - 4}" y="${(toY(vmin) + 4).toFixed(1)}" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">${siFormat(vmin, "V")}</text>
+      <text x="${x1 + 2}" y="${(toY(r.vdc) + 4).toFixed(1)}" fill="#5DCAA5" font-size="11" font-weight="600">Vdc</text>
+      <path d="M${x0},62 H${x0 + 12}" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="${x0 + 16}" y="66" fill="#8A9099" font-size="11" font-weight="600">input</text>
+      <path d="M${x0 + 52},62 H${x0 + 64}" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="${x0 + 68}" y="66" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
+      <text x="${x1 + 20}" y="66" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">ideal source</text>
     </svg>`;
   }
 
