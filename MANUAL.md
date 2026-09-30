@@ -50,7 +50,7 @@ will key on, since that is the id the app already holds for each tool.
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
 - Rectifiers → [Rectifier ripple](#rectifier-ripple)
-- Thyristors & TRIAC → [AC phase control](#ac-phase-control)
+- AC power control → [AC phase control](#ac-phase-control)
 - Op-amps → [Inverting amplifier](#inverting-amplifier)
 
 ### Digital
@@ -2554,7 +2554,7 @@ the rule beside them, and is renamed Rectifier ripple.
 <a id="thyristor-firing"></a>
 ## AC phase control
 
-`calc: thyristor-firing` · Active & semiconductor devices › Thyristors & TRIAC
+`calc: thyristor-firing` · Active & semiconductor devices › AC power control
 (formerly Thyristor firing angle)
 
 ### What it computes
