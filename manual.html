@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=177f10d5ff" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=8bbe3000b6" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -2236,7 +2236,7 @@ examples. The PIV, 2Vp − Vf, was already right.</p>
 <section class="tool" id="rectifier-halfwave-cap" style="--accent:#B98FE0">
   <div class="crumb">Active &amp; semiconductor devices › Rectifiers</div>
   <h2>Rectifier ripple</h2>
-  <figure class="shot"><img src="manual/img/rectifier-halfwave-cap.jpg?h=45fef5cdd9" loading="lazy" alt="Rectifier ripple as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/rectifier-halfwave-cap.jpg?h=9df13412ec" loading="lazy" alt="Rectifier ripple as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>For a half-wave, bridge or centre-tap rectifier with a smoothing capacitor
 across a resistive load: the DC output voltage, current and power, the
@@ -2270,8 +2270,9 @@ DC with a small sawtooth on top: the <strong>ripple</strong>.</p>
 the rectified input, while that is higher (the diodes conduct), or decays
 through the load, v → v·e^(−dt/RC). After a few cycles to settle, one cycle
 gives the maximum, the minimum, the average (Vdc) and the RMS of the ripple.
-It models an ideal source and diodes with a constant drop, so it is exact for
-the circuit drawn.</p>
+It models a perfect transformer — an ideal source, one that keeps its voltage
+whatever current is drawn — and diodes with a constant drop, so it is exact
+for the circuit drawn.</p>
 <p><strong>The design rule.</strong> Assuming the capacitor discharges at the full load
 current for the whole period 1/fr gives</p>
 <pre><code>Vr(p-p) ≈ Vpk / (fr × R × C),   Vdc ≈ Vpk − Vr / 2

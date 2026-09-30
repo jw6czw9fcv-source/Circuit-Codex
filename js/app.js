@@ -13408,7 +13408,6 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
       <text x="${x0 + 16}" y="66" fill="#8A9099" font-size="11" font-weight="600">input</text>
       <path d="M${x0 + 52},62 H${x0 + 64}" stroke="#8FC1F5" stroke-width="2"/>
       <text x="${x0 + 68}" y="66" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
-      <text x="${x1 + 20}" y="66" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">ideal source</text>
     </svg>`;
   }
 
@@ -13507,7 +13506,7 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
           "Vdc ≈ Vpk − Vr / 2",
           `PIV = ${state.mode === "bridge" ? "Vp" : "2Vp − Vf"}`,
         ],
-        "A capacitor across the load stores charge at each peak and feeds the load between peaks, so the output stays near the peak and only dips a little: the ripple, a sawtooth at the ripple frequency fr — the mains frequency for a half-wave, twice it for a bridge or centre tap. Vdc is the average. The ripple factor is the ripple's RMS as a share of Vdc. The figures come from simulating the circuit drawn, with an ideal source; the classic rule Vpk / (fr·R·C) assumes the capacitor discharges for the whole period and so gives more ripple, a safe bound for design. A real transformer's resistance lowers Vdc somewhat. With the capacitor, a half-wave or centre-tap diode must block nearly twice the peak (PIV)."
+        "A capacitor across the load stores charge at each peak and feeds the load between peaks, so the output stays near the peak and only dips a little: the ripple, a sawtooth at the ripple frequency fr — the mains frequency for a half-wave, twice it for a bridge or centre tap. Vdc is the average. The ripple factor is the ripple's RMS as a share of Vdc. The figures and the curve come from simulating the circuit drawn with a perfect transformer; a real one, with resistance in its windings, gives a slightly lower, rounder top. The classic rule Vpk / (fr·R·C) assumes the capacitor discharges for the whole period and so gives more ripple, a safe bound for design. With the capacitor, a half-wave or centre-tap diode must block nearly twice the peak (PIV)."
       )}
       ${calcFooter()}
     `;

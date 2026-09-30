@@ -2498,8 +2498,9 @@ More capacitance, or less load current (a larger Rload), gives less ripple.
 the rectified input, while that is higher (the diodes conduct), or decays
 through the load, v → v·e^(−dt/RC). After a few cycles to settle, one cycle
 gives the maximum, the minimum, the average (Vdc) and the RMS of the ripple.
-It models an ideal source and diodes with a constant drop, so it is exact for
-the circuit drawn.
+It models a perfect transformer — an ideal source, one that keeps its voltage
+whatever current is drawn — and diodes with a constant drop, so it is exact
+for the circuit drawn.
 
 **The design rule.** Assuming the capacitor discharges at the full load
 current for the whole period 1/fr gives
