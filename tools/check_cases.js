@@ -279,6 +279,18 @@ const CHECK_CASES = {
     { name: "the series and current unit are remembered", do: [["set", "#led-series", "E96"], ["set", "#led-i-unit", "A"], ["reopen"]],
       expect: [["#led-series", "E96"], ["#led-i-unit", "A"]] },
   ],
+  "rectifier-halfwave": [
+    { name: "12 V AC, 0.7 V, 100 Ω: Vdc 5.056 V exact", do: [],
+      expect: [['[data-res="vdc"]', "5.056 V"], ['[data-res="idc"]', "50.56 mA"], ['[data-res="piv"]', "16.97 V"], ['[data-res="ripple"]', "1.237"], ['[data-res="eff"]', "39.5%"]] },
+    { name: "ideal diode: Vp/π, ripple 1.211, 40.5%", do: [["set", "#rh-vf", "0"]],
+      expect: [['[data-res="vdc"]', "5.402 V"], ['[data-res="ripple"]', "1.211"], ['[data-res="eff"]', "40.5%"]] },
+    { name: "a peak below Vf never conducts", do: [["set", "#rh-vin", "0.4"]], expect: [['[data-res="results"]', "/never conducts/"]] },
+    { name: "example: Schottky at 3 V AC", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="vdc"]', "1.156 V"]] },
+    { name: "example: 24 V AC PIV", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="piv"]', "33.94 V"]] },
+    { name: "the load unit is remembered", do: [["set", "#rh-rload-unit", "kΩ"], ["reopen"]], expect: [["#rh-rload-unit", "kΩ"]] },
+  ],
   "diode-biasing": [
     { name: "forward bias conducts", do: [], expect: [[".diagram-box text:last-of-type", "conducting"]] },
     { name: "reverse bias blocks", do: [["pill", 1]], expect: [[".diagram-box text:last-of-type", "blocked"]] },

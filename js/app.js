@@ -12493,49 +12493,63 @@ function renderMosfetSwitch(domain, tool, favId) {
 }
 
 // ---------- Half-wave rectifier ----------
-// A single diode passes only the half-cycle where it's forward biased —
-// the load sees a chain of one-sided humps, not a mirror-image negative
-// half like a full-wave circuit gives. Vdc/Vrms/ripple/efficiency here
-// are the standard textbook constants for that shape (verified via
-// WebSearch — Vdc=Vp/π, ripple≈1.21, efficiency≈40.6% — rather than
-// derived from memory), and the diode is modeled as an ideal constant-Vf
-// drop, same simplification the diode-biasing and LED tools already use.
+// A single diode passes only the half-cycle where it is forward biased; the
+// load sees one-sided humps. The diode is a constant Vf drop, so the output is
+// max(0, Vp·sin θ − Vf): it conducts from θ1 = asin(Vf/Vp) to π − θ1 only.
+// Vdc and Vrms are the exact averages of that shape (checked against a
+// numerical integration), not the (Vp − Vf)/π approximation, which treats
+// the hump as a whole half-sine and reads 2.4% high at 12 V AC.
 function renderRectifierHalfwave(domain, tool, favId) {
+  const C = "rectifier-halfwave";
   const state = {
-    vin: 12, vinUnit: "V",
-    vf: 0.7, vfUnit: "V",
-    rload: 100, rloadUnit: "Ω",
+    vin: 12, vf: 0.7, rload: 100,
+    rloadUnit: pref(C, "rloadUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
   };
 
+  // Circuits met in practice. Each sets the transformer's RMS voltage, the
+  // diode's drop and the load.
+  const example = (vin, vf, rload, rloadUnit) => () => {
+    Object.assign(state, { vin, vf, rload, rloadUnit });
+    paint();
+  };
+  useExamples([
+    { title: "12 V AC, 1N4007, 100 Ω", note: "Only 5.06 V DC: half of each cycle is lost, and the diode takes 0.7 V.",
+      apply: example(12, 0.7, 100, "Ω") },
+    { title: "3 V AC: Schottky or silicon?", note: "A 0.4 V Schottky gives 1.16 V DC, a 0.7 V silicon diode 1.02 V.",
+      apply: example(3, 0.4, 10, "Ω") },
+    { title: "24 V AC: the diode's rating", note: "Off, the diode blocks the 33.9 V peak (PIV): use at least a 50 V part.",
+      apply: example(24, 0.7, 1, "kΩ") },
+  ]);
+
   function si(name) {
-    if (name === "rload") return state.rload * OHM_UNITS[state.rloadUnit];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (name === "rload") return state.rload * DIVIDER_R_UNITS[state.rloadUnit];
+    return state[name];
   }
 
   function compute() {
     const vinRms = si("vin"), vf = si("vf"), rload = si("rload");
 
-    if (!(vinRms > 0) || !(rload > 0) || vf < 0) {
-      return { problem: "Vin and Rload must be greater than zero, and Vf must be zero or greater." };
+    if (!(vinRms > 0) || !(rload > 0) || !(vf >= 0)) {
+      return { problem: "Vac and Rload must be greater than zero, and Vf zero or greater." };
     }
 
     const vp = vinRms * Math.SQRT2;
-    const vpOut = vp - vf;
-    if (vpOut <= 0) {
-      return { problem: `Peak input (${siFormat(vp, "V")}) never exceeds Vf (${siFormat(vf, "V")}) — the diode never conducts, output stays at 0.` };
+    if (vp <= vf) {
+      return { problem: `The peak input (${siFormat(vp, "V")}) never exceeds Vf (${siFormat(vf, "V")}): the diode never conducts.` };
     }
 
-    const vdc = vpOut / Math.PI;
-    const vrms = vpOut / 2;
+    // Conduction from θ1 to π − θ1; the averages of max(0, Vp·sin θ − Vf).
+    const t1 = Math.asin(vf / vp);
+    const vdc = (vp * Math.cos(t1) - vf * (Math.PI / 2 - t1)) / Math.PI;
+    const vrms = Math.sqrt((vp * vp * ((Math.PI - 2 * t1) / 2 + Math.sin(2 * t1) / 2)
+      - 4 * vp * vf * Math.cos(t1) + vf * vf * (Math.PI - 2 * t1)) / (2 * Math.PI));
     const idc = vdc / rload;
-    const irms = vrms / rload;
     const piv = vp;
     const ripple = Math.sqrt((vrms / vdc) * (vrms / vdc) - 1);
-    const pdc = idc * idc * rload;
-    const pac = irms * irms * rload;
-    const eff = pac > 0 ? (pdc / pac) * 100 : 0;
+    const pdc = vdc * idc;
+    const eff = (vdc / vrms) * (vdc / vrms) * 100;
 
-    return { problem: "", vp, vdc, vrms, idc, irms, piv, ripple, eff, pdc };
+    return { problem: "", vp, vdc, vrms, idc, piv, ripple, eff, pdc };
   }
 
   // Loop drawn the same way the diode-biasing tool's battery loop is — a
@@ -12615,17 +12629,24 @@ function renderRectifierHalfwave(domain, tool, favId) {
     </div>`;
   }
 
+  // The average output first and large; what the diode must stand and how
+  // smooth the output is, beside it.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);">
-        ${cell("Vdc", siFormat(r.vdc, "V"))}
-        ${cell("Idc", siFormat(r.idc, "A"))}
-        ${cell("P", siFormat(r.pdc, "W"))}
-        ${cell("PIV", siFormat(r.piv, "V"))}
-        ${cell("Ripple", `${trim(r.ripple)}×`)}
-        ${cell("Efficiency", `${trim(r.eff)}%`)}
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Average output (Vdc)</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vdc">${siFormat(r.vdc, "V")}</span></div>
+        <div class="result-sub">Idc <span data-res="idc">${siFormat(r.idc, "A")}</span> &nbsp;·&nbsp; Pdc ${siFormat(r.pdc, "W")} &nbsp;·&nbsp; RMS ${siFormat(r.vrms, "V")}</div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("PIV", `<span data-res="piv">${siFormat(r.piv, "V")}</span>`)}
+        ${cell("Ripple factor", `<span data-res="ripple">${Number(r.ripple.toFixed(3))}</span>`)}
+        ${cell("Efficiency", `<span data-res="eff">${Number(r.eff.toFixed(1))}%</span>`)}
       </div>`;
   }
 
@@ -12649,15 +12670,15 @@ function renderRectifierHalfwave(domain, tool, favId) {
         <div class="field">
           <label>Vac (RMS)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rh-vin" value="${state.vin}" />
-            <select id="rh-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rh-vin" value="${trim(state.vin)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
         <div class="field">
           <label>Vf (diode)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rh-vf" value="${state.vf}" />
-            <select id="rh-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rh-vf" value="${trim(state.vf)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
       </div>
@@ -12665,8 +12686,8 @@ function renderRectifierHalfwave(domain, tool, favId) {
         <div class="field">
           <label>Rload</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rh-rload" value="${state.rload}" />
-            <select id="rh-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rh-rload" value="${trim(state.rload)}" />
+            <select id="rh-rload-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
       </div>
@@ -12676,16 +12697,13 @@ function renderRectifierHalfwave(domain, tool, favId) {
       ${formulaSection(
         [
           "Vp = Vac × √2",
-          "Vp,out = Vp − Vf",
-          "Vdc = Vp,out / π",
-          "Vrms = Vp,out / 2",
-          "Idc = Vdc / Rload",
-          "P = Vdc × Idc",
-          "PIV (peak inverse voltage) = Vp",
-          "Ripple = √((Vrms/Vdc)² − 1)",
-          "Efficiency = (Idc/Irms)² × 100%",
+          "Vout = max(0, Vp·sin θ − Vf)",
+          "Vdc ≈ (Vp − Vf) / π   (exact: average of Vout)",
+          "PIV = Vp",
+          "Ripple factor = √((Vrms / Vdc)² − 1)",
+          "Efficiency = (Vdc / Vrms)² × 100%",
         ],
-        "PIV is the max reverse voltage the diode must block while off — no load current, no Rload drop, so the full input peak lands across the diode. Ripple/efficiency are fixed by the half-wave shape alone."
+        "A rectifier turns AC into DC, current flowing one way. Here one diode passes only the half of each cycle that forward-biases it, so the load gets one pulse per cycle; each is Vf lower than the input's peak. Vdc is the average of that output, what a DC meter reads. PIV, the peak inverse voltage, is what the diode must block while off: the whole input peak; choose a diode rated above it. The ripple factor says how much AC is left on top of the DC — 1.21 for a bare half-wave, far from smooth — and the efficiency how much of the load's power is DC, at most 40.5%. A capacitor across the load smooths it: see Rectifier ripple."
       )}
       ${calcFooter()}
     `;
@@ -12695,9 +12713,11 @@ function renderRectifierHalfwave(domain, tool, favId) {
     [["rh-vin", "vin"], ["rh-vf", "vf"], ["rh-rload", "rload"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    [["rh-vin-unit", "vinUnit"], ["rh-vf-unit", "vfUnit"], ["rh-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
-    });
+    document.getElementById("rh-rload-unit").onchange = (e) => {
+      state.rloadUnit = e.target.value;
+      setPref(C, "rloadUnit", state.rloadUnit);
+      refresh();
+    };
   }
 
   paint();

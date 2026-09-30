@@ -46,6 +46,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Diodes → [Diode forward voltage](#diode-forward-voltage)
 - Diodes → [LED series resistor](#led-series-resistor)
+- Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
 
 ### Digital
 
@@ -2192,6 +2193,96 @@ standard value rounded to the nearest (so the current could exceed the one
 asked), and a green preset of 2.2 V that fits only the old GaP LEDs — a
 bright green LED is 3.3 V. The presets now follow the datasheets, the value
 rounds up, and the drawing is laid out like the diode screen's.
+
+[↑ Index](#index)
+
+---
+
+<a id="rectifier-halfwave"></a>
+## Half-wave rectifier
+
+`calc: rectifier-halfwave` · Active & semiconductor devices › Rectifiers
+
+### What it computes
+
+For one diode feeding a resistive load from an AC source: the average (DC)
+output voltage and current, the DC power, the RMS output, the peak reverse
+voltage the diode must withstand, the ripple factor and the efficiency. It
+draws the input and output waveforms.
+
+### Source
+
+No standard is needed: the results are averages of the output waveform over
+one cycle, derived below. With a zero diode drop they reduce to the textbook
+figures for a half-wave rectifier — Vdc = Vp/π, ripple factor 1.21,
+efficiency 4/π² = 40.5%.
+
+### What it means
+
+A **rectifier** turns alternating current into current that flows one way
+only. The **half-wave** rectifier is the simplest: a single diode in series
+with the load. During the half of each cycle that makes the diode's anode
+positive, it conducts and the load sees the input, less the diode's forward
+voltage **Vf**; during the other half it blocks and the load sees nothing.
+The output is one hump per cycle.
+
+- **Vac** is the source's RMS voltage, the figure on a transformer's label;
+  its **peak**, Vp = Vac × √2, is 1.41 times higher.
+- **Vdc** is the average of the output, what a DC voltmeter reads.
+- **PIV**, the peak inverse voltage, is the reverse voltage the diode must
+  block while it is off: the whole input peak, since no current flows and the
+  load drops nothing. The diode's rated reverse voltage (VRRM) must exceed it.
+- **Ripple factor** — how much AC is left riding on the DC, as the ratio of
+  the AC part's RMS to the DC value. 1.21 means the output is mostly ripple.
+- **Efficiency** — the share of the power in the load that is DC, at most
+  40.5% here.
+
+A bare half-wave rectifier is used where smoothness does not matter, or with
+a capacitor across the load to fill the gaps (the Rectifier ripple tool).
+
+### Why the formulas are these
+
+With a constant drop Vf, the output is Vout = max(0, Vp·sin θ − Vf): the
+diode conducts from θ1 = asin(Vf / Vp) to π − θ1, a little less than half a
+cycle. Averaging over the cycle:
+
+    Vdc   = [Vp·cos θ1 − Vf·(π/2 − θ1)] / π
+    Vrms² = [Vp²·((π − 2θ1)/2 + sin 2θ1 / 2) − 4·Vp·Vf·cos θ1 + Vf²·(π − 2θ1)] / 2π
+
+With Vf = 0 these are Vp/π and Vp/2. The common shortcut Vdc ≈ (Vp − Vf)/π
+treats the output as a whole half-sine of peak Vp − Vf, and reads 2.4% high
+at 12 V AC with a 0.7 V diode.
+
+Then Idc = Vdc / R, Pdc = Vdc × Idc, ripple factor = √((Vrms/Vdc)² − 1) and
+efficiency = (Vdc/Vrms)², the DC power over the total power in the load.
+
+### Assumptions and limits
+
+- The diode is an ideal switch with a constant drop; a real one's drop rises
+  with current (see Diode forward voltage).
+- The source has no resistance of its own: a transformer's winding
+  resistance lowers the output under load.
+- The load is a resistor. With a capacitor across it the output, the PIV
+  (up to twice the peak) and the diode's current all change; that is the
+  Rectifier ripple tool.
+
+### What it deliberately does not do
+
+- **Full-wave rectifiers** (bridge, centre-tapped) have their own tools.
+- **Smoothing and ripple voltage** with a capacitor is the Rectifier ripple
+  tool.
+
+### How it was checked
+
+12 V AC with a 0.7 V diode into 100 Ω: Vp 16.97 V, Vdc 5.056 V, Idc
+50.56 mA, ripple factor 1.237, efficiency 39.5%; with Vf = 0, 5.402 V
+(Vp/π), 1.211 and 40.5%. Both closed forms were checked against a numerical
+average over the cycle. 3 V AC gives 1.156 V with a 0.4 V Schottky and
+1.019 V with 0.7 V silicon; 24 V AC has a 33.94 V PIV.
+
+The review replaced the (Vp − Vf)/π shortcut with the exact averages, which
+the drawn waveform already followed; put Vdc first and large; limited the
+units to volts and ohms to megohms; and added plain definitions.
 
 [↑ Index](#index)
 
