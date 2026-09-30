@@ -279,6 +279,16 @@ const CHECK_CASES = {
     { name: "the series and current unit are remembered", do: [["set", "#led-series", "E96"], ["set", "#led-i-unit", "A"], ["reopen"]],
       expect: [["#led-series", "E96"], ["#led-i-unit", "A"]] },
   ],
+  "rectifier-bridge": [
+    { name: "12 V AC, 2 × 0.7 V, 100 Ω: Vdc 9.441 V exact", do: [],
+      expect: [['[data-res="vdc"]', "9.441 V"], ['[data-res="idc"]', "94.41 mA"], ['[data-res="piv"]', "16.97 V"], ['[data-res="ripple"]', "0.546"], ['[data-res="eff"]', "77%"]] },
+    { name: "ideal diodes: 2Vp/π, ripple 0.483, 81.1%", do: [["set", "#rb-vf", "0"]],
+      expect: [['[data-res="vdc"]', "10.8 V"], ['[data-res="ripple"]', "0.483"], ['[data-res="eff"]', "81.1%"]] },
+    { name: "a peak below 2 Vf never conducts", do: [["set", "#rb-vin", "0.9"]], expect: [['[data-res="results"]', "/nothing conducts/"]] },
+    { name: "example: 5 V AC", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="vdc"]', "3.19 V"]] },
+    { name: "the load unit is remembered", do: [["set", "#rb-rload-unit", "kΩ"], ["reopen"]], expect: [["#rb-rload-unit", "kΩ"]] },
+  ],
   "rectifier-halfwave": [
     { name: "12 V AC, 0.7 V, 100 Ω: Vdc 5.056 V exact", do: [],
       expect: [['[data-res="vdc"]', "5.056 V"], ['[data-res="idc"]', "50.56 mA"], ['[data-res="piv"]', "16.97 V"], ['[data-res="ripple"]', "1.237"], ['[data-res="eff"]', "39.5%"]] },

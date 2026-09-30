@@ -47,6 +47,7 @@ will key on, since that is the id the app already holds for each tool.
 - Diodes → [Diode forward voltage](#diode-forward-voltage)
 - Diodes → [LED series resistor](#led-series-resistor)
 - Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
+- Rectifiers → [Bridge rectifier](#bridge-rectifier)
 
 ### Digital
 
@@ -2283,6 +2284,87 @@ average over the cycle. 3 V AC gives 1.156 V with a 0.4 V Schottky and
 The review replaced the (Vp − Vf)/π shortcut with the exact averages, which
 the drawn waveform already followed; put Vdc first and large; limited the
 units to volts and ohms to megohms; and added plain definitions.
+
+[↑ Index](#index)
+
+---
+
+<a id="rectifier-bridge"></a>
+## Bridge rectifier
+
+`calc: rectifier-bridge` · Active & semiconductor devices › Rectifiers
+
+### What it computes
+
+For a bridge of four diodes feeding a resistive load from an AC source: the
+average (DC) output voltage and current, the DC power, the RMS output, the
+peak reverse voltage each diode must withstand, the ripple factor and the
+efficiency, with the input and output waveforms.
+
+### Source
+
+No standard is needed: the results are averages of the output waveform,
+derived below. With zero diode drop they reduce to the textbook figures for a
+full-wave rectifier — Vdc = 2Vp/π, ripple factor 0.483, efficiency
+8/π² = 81.1%.
+
+### What it means
+
+A **bridge rectifier** is four diodes in a diamond. The AC source (usually a
+transformer's secondary) connects to two opposite corners, the load to the
+other two. On one half-cycle two of the diodes conduct, on the other half the
+other two, and in both cases the current passes through the load **the same
+way**. So where a half-wave rectifier (see that section) gives one pulse per
+cycle, the bridge gives two, and uses the whole of the input.
+
+The price is two diodes in the current's path at every moment: each pulse is
+**2 × Vf** lower than the input's peak. From a low voltage that loss is a
+large part of the output; Schottky diodes, with a smaller Vf, reduce it.
+
+The other figures — **Vdc**, **PIV**, **ripple factor**, **efficiency** —
+mean the same as for the half-wave rectifier. Each diode, while off, blocks
+the input's peak Vp, as in the half-wave case; a bridge does not double it.
+
+### Why the formulas are these
+
+The output is Vout = max(0, Vp·|sin θ| − 2Vf). Each half-cycle conducts from
+θ1 = asin(2Vf / Vp) to π − θ1, so the averages are twice the half-wave ones
+with 2Vf as the drop:
+
+    Vdc   = 2·[Vp·cos θ1 − 2Vf·(π/2 − θ1)] / π
+    Vrms² = 2·[Vp²·((π − 2θ1)/2 + sin 2θ1 / 2) − 8·Vp·Vf·cos θ1 + 4Vf²·(π − 2θ1)] / 2π
+
+With Vf = 0 these are 2Vp/π and Vp/√2. The shortcut 2(Vp − 2Vf)/π treats
+each pulse as a whole half-sine and reads 5% high at 12 V AC with 0.7 V
+diodes. Ripple factor and efficiency follow as for the half-wave rectifier.
+
+### Assumptions and limits
+
+- Each diode is an ideal switch with a constant drop.
+- The source has no resistance; a transformer's winding resistance lowers the
+  output under load.
+- The load is a resistor. A smoothing capacitor changes the diodes' current
+  into short peaks and the output into DC with a small ripple — the Rectifier
+  ripple tool.
+- Strictly, a blocking diode sees Vp − Vf, the conducting diode's drop taken
+  off; Vp is the figure to rate it by.
+
+### What it deliberately does not do
+
+- **The centre-tapped full-wave rectifier**, two diodes and a transformer
+  with a centre tap, has its own tool.
+- **Smoothing** with a capacitor is the Rectifier ripple tool.
+
+### How it was checked
+
+12 V AC with 0.7 V diodes into 100 Ω: Vp 16.97 V, Vdc 9.441 V, Idc 94.41 mA,
+ripple factor 0.546, efficiency 77.0%; with ideal diodes 10.80 V (2Vp/π),
+0.483 and 81.1%. Both closed forms were checked against a numerical average.
+5 V AC gives 3.190 V with 0.7 V diodes and 3.638 V with 0.45 V Schottky ones.
+
+The review replaced the 2(Vp − 2Vf)/π shortcut with the exact averages, which
+the drawn waveform already followed; put Vdc first and large; limited the
+units; and added plain definitions and examples.
 
 [↑ Index](#index)
 

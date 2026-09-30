@@ -12724,48 +12724,64 @@ function renderRectifierHalfwave(domain, tool, favId) {
 }
 
 // ---------- Full-wave rectifier (bridge) ----------
-// Same source and load as the half-wave tool, but current has a path to
-// the load on BOTH halves of the cycle — so the load never sees zero,
-// and the current always passes through two diodes in series (not one),
-// which is why the output peak drops by 2×Vf here instead of just Vf.
-// Ripple (≈0.482) and efficiency (≈81.2%) are the standard textbook
-// constants for this shape, verified via WebSearch, not guessed.
+// Four diodes: the load gets current on both halves of the cycle, always
+// through two diodes in series, so the output is max(0, Vp·|sin θ| − 2Vf).
+// Vdc and Vrms are the exact averages of that shape (checked against a
+// numerical integration) — twice the half-wave's with 2Vf as the drop — not
+// the 2(Vp − 2Vf)/π shortcut, which reads 5% high at 12 V AC.
 function renderRectifierBridge(domain, tool, favId) {
+  const C = "rectifier-bridge";
   const state = {
-    vin: 12, vinUnit: "V",
-    vf: 0.7, vfUnit: "V",
-    rload: 100, rloadUnit: "Ω",
+    vin: 12, vf: 0.7, rload: 100,
+    rloadUnit: pref(C, "rloadUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
   };
 
+  // Circuits met in practice. Each sets the transformer's RMS voltage, each
+  // diode's drop and the load.
+  const example = (vin, vf, rload, rloadUnit) => () => {
+    Object.assign(state, { vin, vf, rload, rloadUnit });
+    paint();
+  };
+  useExamples([
+    { title: "12 V AC, four 1N4007, 100 Ω", note: "9.44 V DC, against 5.06 V from a half-wave: both halves reach the load.",
+      apply: example(12, 0.7, 100, "Ω") },
+    { title: "5 V AC: two drops hurt", note: "Two 0.7 V drops leave 3.19 V DC; 0.45 V Schottky diodes give 3.64 V.",
+      apply: example(5, 0.7, 10, "Ω") },
+    { title: "24 V AC: the diodes' rating", note: "Each diode off blocks the 33.9 V peak (PIV): use at least 50 V parts.",
+      apply: example(24, 0.7, 1, "kΩ") },
+  ]);
+
   function si(name) {
-    if (name === "rload") return state.rload * OHM_UNITS[state.rloadUnit];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (name === "rload") return state.rload * DIVIDER_R_UNITS[state.rloadUnit];
+    return state[name];
   }
 
   function compute() {
     const vinRms = si("vin"), vf = si("vf"), rload = si("rload");
 
-    if (!(vinRms > 0) || !(rload > 0) || vf < 0) {
-      return { problem: "Vin and Rload must be greater than zero, and Vf must be zero or greater." };
+    if (!(vinRms > 0) || !(rload > 0) || !(vf >= 0)) {
+      return { problem: "Vac and Rload must be greater than zero, and Vf zero or greater." };
     }
 
     const vp = vinRms * Math.SQRT2;
-    const vpOut = vp - 2 * vf;
-    if (vpOut <= 0) {
-      return { problem: `Peak input (${siFormat(vp, "V")}) never exceeds the two diode drops (${siFormat(2 * vf, "V")}) — nothing conducts, output stays at 0.` };
+    const vd = 2 * vf; // two diodes conduct at a time
+    if (vp <= vd) {
+      return { problem: `The peak input (${siFormat(vp, "V")}) never exceeds the two diode drops (${siFormat(vd, "V")}): nothing conducts.` };
     }
 
-    const vdc = (2 * vpOut) / Math.PI;
-    const vrms = vpOut / Math.SQRT2;
+    // Each half-cycle conducts from θ1 to π − θ1; the averages of
+    // max(0, Vp·|sin θ| − 2Vf), twice the half-wave's.
+    const t1 = Math.asin(vd / vp);
+    const vdc = 2 * (vp * Math.cos(t1) - vd * (Math.PI / 2 - t1)) / Math.PI;
+    const vrms = Math.sqrt(2 * (vp * vp * ((Math.PI - 2 * t1) / 2 + Math.sin(2 * t1) / 2)
+      - 4 * vp * vd * Math.cos(t1) + vd * vd * (Math.PI - 2 * t1)) / (2 * Math.PI));
     const idc = vdc / rload;
-    const irms = vrms / rload;
     const piv = vp;
     const ripple = Math.sqrt((vrms / vdc) * (vrms / vdc) - 1);
-    const pdc = idc * idc * rload;
-    const pac = irms * irms * rload;
-    const eff = pac > 0 ? (pdc / pac) * 100 : 0;
+    const pdc = vdc * idc;
+    const eff = (vdc / vrms) * (vdc / vrms) * 100;
 
-    return { problem: "", vp, vdc, vrms, idc, irms, piv, ripple, eff, pdc };
+    return { problem: "", vp, vdc, vrms, idc, piv, ripple, eff, pdc };
   }
 
   // Standard bridge diamond, ported from schemdraw's own Rectifier element
@@ -12890,17 +12906,24 @@ function renderRectifierBridge(domain, tool, favId) {
     </div>`;
   }
 
+  // The average output first and large; what each diode must stand and how
+  // smooth the output is, beside it.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output (across Rload)</div>
-      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);">
-        ${cell("Vdc", siFormat(r.vdc, "V"))}
-        ${cell("Idc", siFormat(r.idc, "A"))}
-        ${cell("P", siFormat(r.pdc, "W"))}
-        ${cell("PIV", siFormat(r.piv, "V"))}
-        ${cell("Ripple", `${trim(r.ripple)}×`)}
-        ${cell("Efficiency", `${trim(r.eff)}%`)}
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Average output (Vdc)</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vdc">${siFormat(r.vdc, "V")}</span></div>
+        <div class="result-sub">Idc <span data-res="idc">${siFormat(r.idc, "A")}</span> &nbsp;·&nbsp; Pdc ${siFormat(r.pdc, "W")} &nbsp;·&nbsp; RMS ${siFormat(r.vrms, "V")}</div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("PIV", `<span data-res="piv">${siFormat(r.piv, "V")}</span>`)}
+        ${cell("Ripple factor", `<span data-res="ripple">${Number(r.ripple.toFixed(3))}</span>`)}
+        ${cell("Efficiency", `<span data-res="eff">${Number(r.eff.toFixed(1))}%</span>`)}
       </div>`;
   }
 
@@ -12924,15 +12947,15 @@ function renderRectifierBridge(domain, tool, favId) {
         <div class="field">
           <label>Vac (RMS)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rb-vin" value="${state.vin}" />
-            <select id="rb-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rb-vin" value="${trim(state.vin)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
         <div class="field">
           <label>Vf (per diode)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rb-vf" value="${state.vf}" />
-            <select id="rb-vf-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rb-vf" value="${trim(state.vf)}" />
+            <span class="unit-fixed">V</span>
           </div>
         </div>
       </div>
@@ -12940,8 +12963,8 @@ function renderRectifierBridge(domain, tool, favId) {
         <div class="field">
           <label>Rload</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="rb-rload" value="${state.rload}" />
-            <select id="rb-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="rb-rload" value="${trim(state.rload)}" />
+            <select id="rb-rload-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
       </div>
@@ -12951,16 +12974,13 @@ function renderRectifierBridge(domain, tool, favId) {
       ${formulaSection(
         [
           "Vp = Vac × √2",
-          "Vp,out = Vp − 2×Vf",
-          "Vdc = 2×Vp,out / π",
-          "Vrms = Vp,out / √2",
-          "Idc = Vdc / Rload",
-          "P = Vdc × Idc",
-          "PIV (peak inverse voltage) = Vp",
-          "Ripple = √((Vrms/Vdc)² − 1)",
-          "Efficiency = (Idc/Irms)² × 100%",
+          "Vout = max(0, Vp·|sin θ| − 2Vf)",
+          "Vdc ≈ 2(Vp − 2Vf) / π   (exact: average of Vout)",
+          "PIV = Vp (per diode)",
+          "Ripple factor = √((Vrms / Vdc)² − 1)",
+          "Efficiency = (Vdc / Vrms)² × 100%",
         ],
-        "Two diodes conduct at once (2×Vf drop), but both halves reach the load — ripple ≈0.482, efficiency ≈81.2%, vs half-wave's ≈1.21/≈40.6%."
+        "A bridge of four diodes turns both halves of each AC cycle into current the same way through the load: two pulses per cycle instead of one. Current always passes two diodes in series, so each pulse is 2 × Vf lower than the input's peak. Vdc is the average output, what a DC meter reads. PIV is what each diode must block while off, the input's peak. The ripple factor, the AC left on the DC, is 0.483 for an ideal bridge against 1.21 for a half-wave, and the efficiency, the share of the load's power that is DC, up to 81.1%. A capacitor smooths it further: see Rectifier ripple."
       )}
       ${calcFooter()}
     `;
@@ -12970,9 +12990,11 @@ function renderRectifierBridge(domain, tool, favId) {
     [["rb-vin", "vin"], ["rb-vf", "vf"], ["rb-rload", "rload"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    [["rb-vin-unit", "vinUnit"], ["rb-vf-unit", "vfUnit"], ["rb-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
-    });
+    document.getElementById("rb-rload-unit").onchange = (e) => {
+      state.rloadUnit = e.target.value;
+      setPref(C, "rloadUnit", state.rloadUnit);
+      refresh();
+    };
   }
 
   paint();
