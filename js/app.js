@@ -13915,48 +13915,73 @@ function renderThyristorFiring(domain, tool, favId) {
 // taps at half the tip-to-vertex distance from center) ported from
 // schemdraw's own Opamp element rather than eyeballed.
 function renderOpampInverting(domain, tool, favId) {
+  const C = "opamp-inverting";
+  const GBW_UNITS = { kHz: 1e3, MHz: 1e6 };
+  const VIN_UNITS = { mV: 1e-3, V: 1 };
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
+  // Headroom and GBW describe the op-amp the user has on the bench, so they
+  // are remembered with the units.
   const state = {
-    rin: 10, rinUnit: "kΩ",
-    rf: 100, rfUnit: "kΩ",
-    vin: 0.5, vinUnit: "V",
-    vsupply: 12, vsupplyUnit: "V",
+    rin: 10, rinUnit: pref(C, "rinUnit", "kΩ", R_UNITS),
+    rf: 100, rfUnit: pref(C, "rfUnit", "kΩ", R_UNITS),
+    vin: 0.5, vinUnit: pref(C, "vinUnit", "V", Object.keys(VIN_UNITS)),
+    vsupply: 12,
+    headroom: pref(C, "headroom", 1.5),
+    gbw: pref(C, "gbw", 1), gbwUnit: pref(C, "gbwUnit", "MHz", Object.keys(GBW_UNITS)),
   };
 
-  const R_NAMES = ["rin", "rf"];
+  // Inverting stages as they are built. Each sets both resistors, the
+  // input, the supply and the op-amp.
+  const example = (rin, rinUnit, rf, rfUnit, vin, vinUnit, vsupply, headroom, gbw) => () => {
+    Object.assign(state, { rin, rinUnit, rf, rfUnit, vin, vinUnit, vsupply, headroom, gbw, gbwUnit: "MHz" });
+    paint();
+  };
+  useExamples([
+    { title: "Gain of −10", note: "Rf / Rin = 100 k / 10 k: a 0.5 V peak comes out as −5 V, turned upside down.",
+      apply: example(10, "kΩ", 100, "kΩ", 0.5, "V", 12, 1.5, 1) },
+    { title: "Unity-gain inverter", note: "Rf = Rin flips the signal without changing its size; the bandwidth is half the GBW.",
+      apply: example(10, "kΩ", 10, "kΩ", 1, "V", 12, 1.5, 1) },
+    { title: "Mic preamp, gain −47", note: "20 mV becomes 0.94 V; a 1 MHz op-amp keeps 20.8 kHz of bandwidth, just the audio band.",
+      apply: example(1, "kΩ", 47, "kΩ", 20, "mV", 12, 1.5, 1) },
+    { title: "Too much gain: clipping", note: "−100 × 0.2 V asks for −20 V; the output stops at −10.5 V, 1.5 V short of the −12 V rail.",
+      apply: example(1, "kΩ", 100, "kΩ", 0.2, "V", 12, 1.5, 1) },
+  ]);
+
   function si(name) {
-    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (name === "rin" || name === "rf") return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    if (name === "vin") return state.vin * VIN_UNITS[state.vinUnit];
+    if (name === "gbw") return state.gbw * GBW_UNITS[state.gbwUnit];
+    return state[name];
   }
 
+  // Ideal op-amp for the gain: the "−" input is held at the "+" input's
+  // 0 V (virtual ground), so all of Vin / Rin flows on through Rf and
+  // Vout = −Vin × Rf / Rin. Two real limits on top: the output cannot get
+  // closer to a rail than the headroom, and the gain falls off where the
+  // noise gain 1 + Rf/Rin meets the op-amp's gain-bandwidth product.
   function compute() {
-    const rin = si("rin"), rf = si("rf"), vin = si("vin"), vsupply = si("vsupply");
-    if (!(rin > 0) || !(rf >= 0) || !(vsupply > 0)) {
-      return { problem: "Rin and the supply must be greater than zero, and Rf must be zero or greater." };
+    const rin = si("rin"), rf = si("rf"), vin = si("vin"), vsupply = si("vsupply"), headroom = si("headroom"), gbw = si("gbw");
+    if (!(rin > 0) || !(rf >= 0) || !(vsupply > 0) || !(gbw > 0)) {
+      return { problem: "Rin, the supply and GBW must be greater than zero, and Rf zero or greater." };
+    }
+    if (!(headroom >= 0) || headroom >= vsupply) {
+      return { problem: "The headroom must be zero or more, and less than the supply." };
     }
 
     const gain = -rf / rin;
+    const vmax = vsupply - headroom;
     const voutIdeal = gain * vin;
-    const saturated = Math.abs(voutIdeal) > vsupply;
-    const vout = saturated ? Math.sign(voutIdeal) * vsupply : voutIdeal;
-    const iin = vin / rin;
+    const saturated = Math.abs(voutIdeal) > vmax;
+    const vout = saturated ? Math.sign(voutIdeal) * vmax : voutIdeal;
     const gainDb = 20 * Math.log10(Math.max(Math.abs(gain), 1e-12));
-    const zin = rin;
+    const bandwidth = gbw / (1 + rf / rin);
 
-    return { problem: "", gain, vout, voutIdeal, saturated, iin, gainDb, zin, vinPk: Math.abs(vin), vsupply };
+    return { problem: "", gain, gainDb, vin, vout, voutIdeal, vmax, saturated, iin: vin / rin, zin: rin, bandwidth };
   }
 
-  // Rebuilt as a real closed circuit — verified against the standard
-  // textbook inverting-amp diagram (electronics-tutorials.ws and others),
-  // not just approximated: Vin and Vout are each a proper two-terminal
-  // port (a signal lead plus its own return lead), not a labeled wire
-  // dangling in space. Both return leads land on one common/ground rail
-  // that also carries the op-amp's grounded "+" input — that rail IS the
-  // reference every voltage here is measured against, which a floating
-  // labeled end can't actually show. Triangle proportions (input taps at
-  // half the center-to-vertex distance; "−" on top, "+" on bottom) still
-  // ported from schemdraw's Opamp element. Rf loops up and over the top,
-  // the standard way to draw shunt feedback without crossing the forward
-  // path.
+  // Layout from Pierre's op-amp reference sheet: "−" on top, "+" on the
+  // bottom to ground, Rin in from the left, Rf over the top. Every lead is
+  // 17 px; the two Rf stubs are 24 px so Rf sits centred over the op-amp.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
@@ -13964,13 +13989,6 @@ function renderOpampInverting(domain, tool, favId) {
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
 
-    // Every horizontal connector between a component and a node is the
-    // same length (LEAD = 17px, set by the Vin→Rin run) so the drawing
-    // reads as one consistent grid. The two Rf stubs are the documented
-    // exception: the feedback loop has to close, so once the op-amp is
-    // 50 wide with 17px leads either side, the stubs are whatever spans
-    // the remainder around a 36px resistor — 24px each, symmetric, which
-    // also keeps Rf centered over the op-amp.
     return `<svg width="258" height="124" viewBox="-16 -22 258 124" fill="none">
       <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
@@ -14001,38 +14019,36 @@ function renderOpampInverting(domain, tool, favId) {
     </svg>`;
   }
 
-
-  // Two cycles of the input against the output on one shared axis, scaled to
-  // whichever is larger — so the gain reads as the height difference and the
-  // phase relationship reads directly, instead of both being normalised away.
-  // Multiplying by the signed gain is what draws the flip: a negative gain
-  // puts the output trough under the input crest with no special case. The
-  // output is clamped at the rails, so a clipped stage visibly flattens.
+  // Two cycles of the input and the output on one axis, scaled to the
+  // larger, so the gain reads as the height difference and the flip as the
+  // output's trough under the input's crest. The output stops at the swing
+  // limit, so a clipping stage visibly flattens. Legend under the plot.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
-    const vinPk = Math.abs(r.vinPk);
-    const voutPk = Math.min(Math.abs(r.gain) * vinPk, r.vsupply);
+    if (r.problem) return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none"></svg>`;
+    const vinPk = Math.abs(r.vin);
+    const voutPk = Math.min(Math.abs(r.gain) * vinPk, r.vmax);
     const scale = Math.max(vinPk, voutPk, 1e-12);
-    const pxTop = 8, pxBottom = 58;
+    const pxTop = 6, pxBottom = 58;
     const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
     const toY = (v) => mid - (v / scale) * half;
-    const x0 = 10, width = 184, samples = 170;
+    const x0 = 10, width = 190, samples = 170;
     const inPts = [], outPts = [];
     for (let i = 0; i <= samples; i++) {
       const t = i / samples;
       const x = (x0 + t * width).toFixed(1);
-      const vi = vinPk * Math.sin(t * 4 * Math.PI);
+      const vi = r.vin * Math.sin(t * 4 * Math.PI);
       inPts.push(`${x},${toY(vi).toFixed(1)}`);
-      outPts.push(`${x},${toY(Math.max(-r.vsupply, Math.min(r.vsupply, r.gain * vi))).toFixed(1)}`);
+      outPts.push(`${x},${toY(Math.max(-r.vmax, Math.min(r.vmax, r.gain * vi))).toFixed(1)}`);
     }
-    const zeroY = toY(0);
-    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
-      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+    const zeroY = toY(0).toFixed(1);
+    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
+      <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin</text>
-      <text x="30" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (inverted)</text>
+      <path d="M10,73 H22" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="26" y="77" fill="#8A9099" font-size="11" font-weight="600">Vin</text>
+      <path d="M58,73 H70" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="74" y="77" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -14043,24 +14059,28 @@ function renderOpampInverting(domain, tool, favId) {
     </div>`;
   }
 
-  // Rails read as "+12 V" / "-12 V" - with saturation the point is *which*
-  // limit was hit, so the sign has to be explicit, not implied by its absence.
+  // Signed on purpose: the minus is the inversion.
   const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
 
+  // Vout first and large, then the gain and what limits it.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
-      <div class="section-label" style="color:#5DCAA5">Output
-        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>` : ""}
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Vout (peak)</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vout">${siFormat(r.vout, "V")}</span></div>
+        <div class="result-sub">Gain <span data-res="gain">${trim(Number(r.gain.toPrecision(4)))}×</span> &nbsp;·&nbsp; Zin = Rin = ${siFormat(r.zin, "Ω")}</div>
       </div>
-      <div class="eseries-grid" style="clear:both">
-        ${cell("Gain", `${trim(r.gain)}×`)}
-        ${cell("Gain (dB)", r.gain === 0 ? "−∞ dB" : `${trim(r.gainDb)} dB`)}
-        ${cell("Vout", siFormat(r.vout, "V"))}
-        ${cell("Iin", siFormat(r.iin, "A"))}
-        ${cell("Zin", siFormat(r.zin, "Ω"))}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Gain (dB)", `<span data-res="db">${r.gain === 0 ? "−∞ dB" : `${Number(r.gainDb.toFixed(2))} dB`}</span>`)}
+        ${cell("Iin (peak)", `<span data-res="iin">${siFormat(r.iin, "A")}</span>`)}
+        ${cell("Bandwidth", `<span data-res="bw">${siFormat(r.bandwidth, "Hz")}</span>`)}
       </div>
-      ${r.saturated ? `<div class="error-text">Clipping — the gain calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. The output stops there, so the peaks of the signal flatten off.</div>` : ""}`;
+      ${r.saturated ? `<div class="error-text" data-res="clip">Clipping — the gain asks for ${signed(r.voutIdeal)}, but the output stops at ${signed(r.vout)}${state.headroom > 0 ? `, ${trim(state.headroom)} V short of the rail` : ", the rail"}. The peaks flatten.</div>` : ""}`;
   }
 
   function refresh() {
@@ -14071,8 +14091,16 @@ function renderOpampInverting(domain, tool, favId) {
 
   function paint() {
     const r = compute();
+    const unitSelect = (id, units, cur) => `<select id="${id}">${units.map((u) => `<option ${cur === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const numField = (label, id, value, unitHTML) => `<div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${trim(value)}" />
+            ${unitHTML}
+          </div>
+        </div>`;
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Shunt feedback through Rf — output inverted, gain set by a resistor ratio")}
+      ${calcHeader(tool, favId, "Output upside down, gain set by Rf / Rin")}
 
       <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
         <div>${diagram()}</div>
@@ -14080,54 +14108,40 @@ function renderOpampInverting(domain, tool, favId) {
       </div>
 
       <div class="field-pair">
-        <div class="field">
-          <label>Rin</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oa-rin" value="${state.rin}" />
-            <select id="oa-rin-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Rf</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oa-rf" value="${state.rf}" />
-            <select id="oa-rf-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rfUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${numField("Rin", "oa-rin", state.rin, unitSelect("oa-rin-unit", R_UNITS, state.rinUnit))}
+        ${numField("Rf", "oa-rf", state.rf, unitSelect("oa-rf-unit", R_UNITS, state.rfUnit))}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>Vin (pk)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oa-vin" value="${state.vin}" />
-            <select id="oa-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Supply (±V)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oa-vsupply" value="${state.vsupply}" />
-            <select id="oa-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${numField("Vin (peak)", "oa-vin", state.vin, unitSelect("oa-vin-unit", Object.keys(VIN_UNITS), state.vinUnit))}
+        ${numField("Supply (±)", "oa-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`)}
+      </div>
+      <div class="field-pair">
+        ${numField("Headroom", "oa-headroom", state.headroom, `<span class="unit-fixed">V</span>`)}
+        ${numField("GBW", "oa-gbw", state.gbw, unitSelect("oa-gbw-unit", Object.keys(GBW_UNITS), state.gbwUnit))}
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Gain = −Rf / Rin", "Vout = Gain × Vin", "Iin = Vin / Rin", "Zin = Rin", "Gain (dB) = 20 × log₁₀(|Gain|)"],
-        "Ideal op-amp: infinite open-loop gain and input impedance, zero output impedance, no bias current — that's what pins V− to 0V (virtual ground) and forces all of Iin through Rf. Vout clips at the supply rails here; a real (non rail-to-rail) op-amp actually saturates 1–2V short of that."
+        ["Gain = −Rf / Rin, Vout = Gain × Vin", "Gain (dB) = 20 × log₁₀(|Gain|)", "Iin = Vin / Rin, Zin = Rin", "|Vout| ≤ supply − headroom", "Bandwidth = GBW / (1 + Rf / Rin)"],
+        "An op-amp amplifies the difference between its two inputs so strongly that, with feedback, it holds its − input at the same voltage as its + input — here 0 V, a \"virtual ground\". All the current Vin / Rin then has to continue through Rf, which makes Vout = −Vin × Rf / Rin: the gain is set only by the two resistors, and the minus means the output is turned upside down. Gain in dB is 20 × log₁₀ of it. Zin, what the source sees, is simply Rin. The output cannot reach the supply voltage: a classic op-amp (TL072, LM358) stops about 1.5–2 V short of each rail — the headroom — and a rail-to-rail one within a few tens of millivolts (enter 0). Past that it clips. GBW, the gain-bandwidth product on the datasheet, is how much gain × frequency the op-amp can give; the gain here holds up to GBW / (1 + Rf/Rin), then falls."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint);
 
-    [["oa-rin", "rin"], ["oa-rf", "rf"], ["oa-vin", "vin"], ["oa-vsupply", "vsupply"]].forEach(([id, name]) => {
-      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    [["oa-rin", "rin"], ["oa-rf", "rf"], ["oa-vin", "vin"], ["oa-vsupply", "vsupply"], ["oa-headroom", "headroom"], ["oa-gbw", "gbw"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        state[name] = v;
+        if (name === "headroom" || name === "gbw") setPref(C, name, v);
+        refresh();
+      };
     });
-    [["oa-rin-unit", "rinUnit"], ["oa-rf-unit", "rfUnit"], ["oa-vin-unit", "vinUnit"], ["oa-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["oa-rin-unit", "rinUnit"], ["oa-rf-unit", "rfUnit"], ["oa-vin-unit", "vinUnit"], ["oa-gbw-unit", "gbwUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; setPref(C, name, state[name]); refresh(); };
     });
   }
 

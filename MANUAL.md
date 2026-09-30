@@ -51,6 +51,7 @@ will key on, since that is the id the app already holds for each tool.
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
 - Rectifiers → [Rectifier ripple](#rectifier-ripple)
 - Thyristors & TRIAC → [AC phase control](#ac-phase-control)
+- Op-amps → [Inverting amplifier](#inverting-amplifier)
 
 ### Digital
 
@@ -2692,6 +2693,146 @@ legend off the waves and added plain definitions and examples.
 On Pierre's request it then added the MOSFET pair as a third switch, with
 trailing-edge control, its own waveform and its conduction loss. The tool
 was renamed AC phase control, and the old name stays findable in search.
+
+[↑ Index](#index)
+
+---
+
+<a id="opamp-inverting"></a>
+## Inverting amplifier
+
+`calc: opamp-inverting` · Active & semiconductor devices › Op-amps
+
+### What it computes
+
+For the inverting op-amp amplifier:
+- the output voltage for a given input, turned upside down;
+- the gain, as a ratio and in decibels;
+- the input current and the input impedance;
+- where the output clips, from the supply and the op-amp's headroom;
+- the bandwidth, from the op-amp's gain-bandwidth product.
+
+It draws the input and output waves.
+
+### Source
+
+No standard applies. The gain comes from the ideal op-amp model found in
+every analog textbook. The two real limits, headroom and bandwidth, were
+checked against manufacturers' datasheets, read from the documents
+themselves:
+- **TI TL072** (SLOS080W, July 2025):
+  - maximum peak output ±13.5 V typical, ±12 V minimum, on ±15 V into
+    10 kΩ, so about 1.5 V short of each rail;
+  - gain-bandwidth product 5.25 MHz (3 MHz for some versions).
+- **TI LM358** (SLOS068AB, October 2024):
+  - the output stops 2 V typical, 3 V maximum, below the positive rail
+    at 30 V, and 5–20 mV above the negative one;
+  - gain-bandwidth product 0.7 MHz (1.2 MHz for the LM358B).
+- **Microchip MCP6002** (DS20001733L), a rail-to-rail part:
+  - the output gets within 25 mV of each rail;
+  - gain-bandwidth product 1 MHz.
+
+### What it means
+
+An **op-amp** (operational amplifier) is a chip with two inputs, "−" and
+"+", and one output. It amplifies the difference between its inputs by a
+huge amount, 100 000 times or more. It is almost always used with
+**feedback**: part of the output is returned to the "−" input, and the
+resistors then set the gain.
+
+- **Virtual ground** — the "+" input is at 0 V here. With feedback, the
+  op-amp drives its output until the "−" input sits at the same 0 V. So the
+  "−" input is at ground potential without being connected to ground.
+- **Rin** — the input resistor. With one end at Vin and the other at 0 V,
+  it carries Iin = Vin / Rin.
+- **Rf** — the feedback resistor, from the output back to the "−" input.
+  The op-amp's input takes no current, so all of Iin continues through Rf.
+- **Gain** — Vout / Vin = −Rf / Rin. The minus sign means the output is
+  turned upside down: a positive input gives a negative output. For a sine
+  wave this is a 180° phase shift.
+- **Gain in dB** — 20 × log₁₀ of the size of the gain. A gain of 10 is
+  20 dB, and a gain of 100 is 40 dB.
+- **Zin** — the input impedance, the load the signal source sees. It is
+  simply Rin, because the other end of Rin is held at 0 V.
+- **Headroom** — how close the output can get to the supply. Enter the
+  value from the op-amp's datasheet:
+  - a classic op-amp (TL072, LM358) stops about 1.5–2 V short of each
+    rail;
+  - a rail-to-rail op-amp gets within a few tens of millivolts, so enter
+    0 for it.
+- **Clipping** — when the gain asks for more than the output can give, the
+  output stops at its limit and the tops of the wave are cut flat. That is
+  distortion.
+- **GBW** (gain-bandwidth product) — a figure from the datasheet: the gain
+  the op-amp can give, multiplied by the frequency, is at most this. A
+  1 MHz op-amp can give a gain of 10 up to about 100 kHz.
+- **Bandwidth** — the frequency where the stage's gain has fallen by 3 dB,
+  to 71% of its low-frequency value.
+
+### Why the formulas are these
+
+The "−" input is at 0 V, so the current through Rin is Vin / Rin. None of
+it enters the op-amp, so the same current flows through Rf, from the "−"
+node towards the output. The output must therefore sit Iin × Rf below
+0 V:
+
+    Vout = −Vin × Rf / Rin
+
+The output can only swing to the supply less the headroom, so
+
+    |Vout| ≤ supply − headroom
+
+beyond which it clips.
+
+The bandwidth depends on the **noise gain**, 1 + Rf / Rin, rather than on
+the signal gain Rf / Rin. The noise gain is how much the op-amp's own
+feedback loop divides down its output, and GBW is shared out by it:
+
+    Bandwidth = GBW / (1 + Rf / Rin)
+
+That is why a unity-gain inverter (Rf = Rin) has only half the GBW as
+bandwidth, whereas a unity-gain buffer has all of it.
+
+### Assumptions and limits
+
+- **An ideal op-amp for the gain.** Its open-loop gain is taken as
+  infinite. A real one's is large but finite, which lowers the gain a
+  little: well under 0.1% for ordinary gains.
+- **Symmetric supply.** The supply is ± the value entered, and the
+  headroom is taken as the same on both sides. A single-supply circuit
+  needs its input biased to mid-supply, which is not covered.
+- **Slew rate.** A large, fast output can also be limited by how fast the
+  output can move (V/µs on the datasheet). This is not calculated.
+- **Offset and bias current** add a small DC error at the output. They are
+  not included.
+- The output must also drive its load. A load below about 2 kΩ lowers the
+  swing of most classic op-amps; see the datasheet.
+
+### What it deliberately does not do
+
+- It does not choose the resistors. Pick Rin for the input impedance you
+  need (often 10 kΩ), then Rf = gain × Rin from the E-series.
+- Frequency response curves and phase are not drawn.
+
+### How it was checked
+
+- 10 kΩ / 100 kΩ, 0.5 V peak, ±12 V, 1.5 V headroom, 1 MHz GBW:
+  - gain −10 (20 dB), Vout −5 V, Iin 50 µA;
+  - bandwidth 1 MHz / 11 = 90.91 kHz.
+- Unity inverter: −1 V out, 500 kHz bandwidth.
+- Mic preamp, 1 kΩ / 47 kΩ, 20 mV: −940 mV out, 20.83 kHz bandwidth.
+- Gain −100, 0.2 V: the ideal −20 V clips at −10.5 V, or at −12 V with no
+  headroom.
+
+The review found three problems:
+- the output clipped at the full supply, which only rail-to-rail op-amps
+  reach;
+- the gain was given without the bandwidth that limits it;
+- the units included mΩ, GΩ and kV.
+
+It now has the headroom and GBW fields, shows Vout first and large, and
+remembers the units and the op-amp's figures. It also adds plain
+definitions, examples and an 11 px legend under the waves.
 
 [↑ Index](#index)
 
