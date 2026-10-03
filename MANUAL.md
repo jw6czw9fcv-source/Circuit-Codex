@@ -51,8 +51,8 @@ will key on, since that is the id the app already holds for each tool.
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
 - Rectifiers → [Rectifier ripple](#rectifier-ripple)
 - Thyristors (SCR, TRIAC) & MOSFET → [AC phase control](#ac-phase-control)
-- Op-amps → [Inverting amp](#inverting-amp)
-- Op-amps → [Non-inverting amp](#non-inverting-amp)
+- Op-amps → [Inverting](#inverting)
+- Op-amps → [Non-inverting](#non-inverting)
 - Op-amps → [Buffer](#buffer)
 - Op-amps → [Comparators](#comparators)
 
@@ -2702,7 +2702,7 @@ was renamed AC phase control, and the old name stays findable in search.
 ---
 
 <a id="opamp-inverting"></a>
-## Inverting amp
+## Inverting
 
 `calc: opamp-inverting` · Active & semiconductor devices › Op-amps
 (formerly Inverting amplifier)
@@ -2843,7 +2843,7 @@ definitions, examples and an 11 px legend under the waves.
 ---
 
 <a id="opamp-noninverting"></a>
-## Non-inverting amp
+## Non-inverting
 
 `calc: opamp-noninverting` · Active & semiconductor devices › Op-amps
 (formerly Non-inverting amplifier)
@@ -2863,7 +2863,7 @@ It also draws the input and output waves.
 
 No standard applies: the gain comes from the ideal op-amp model. The
 headroom and gain-bandwidth figures were read from the TL072, LM358 and
-MCP6002 datasheets, as listed in the Inverting amp section.
+MCP6002 datasheets, as listed in the Inverting section.
 
 ### What it means
 
@@ -2911,7 +2911,7 @@ op-amp or split the gain over two stages.
 
 ### Assumptions and limits
 
-The limits are the same as for the inverting amp:
+The limits are the same as for the inverting amplifier:
 - an ideal op-amp for the gain;
 - a symmetric supply, with the same headroom on both sides;
 - slew rate, offset and bias current are not calculated;
@@ -2938,7 +2938,7 @@ classic op-amps do not accept inputs close to their positive supply.
 - Gain 11, 1.5 V: the ideal 16.5 V clips at 10.5 V.
 - Rf = 0: gain 1 and the whole 1 MHz.
 
-The review found the same problems as on the inverting amp:
+The review found the same problems as on the inverting amplifier:
 - clipping at the full supply;
 - no bandwidth;
 - units such as mΩ, GΩ and kV;
@@ -2972,7 +2972,7 @@ For an op-amp buffer between a source and a load, it gives:
 No standard applies. The figures come from the ideal op-amp model and
 from Ohm's law for the source and load.
 - **Headroom and gain-bandwidth figures** — read from the TL072, LM358 and
-  MCP6002 datasheets, as listed in the Inverting amp section.
+  MCP6002 datasheets, as listed in the Inverting section.
 - **The 10 mA warning** — follows the TI LM358 datasheet (SLOS068AB,
   October 2024). At a 15 V supply it gives an output current of 20 mA
   minimum (30 typical) when sourcing and 10 mA minimum (20 typical) when
@@ -3030,7 +3030,7 @@ noise gain is 1, so the bandwidth equals GBW.
 ### What it deliberately does not do
 
 - It does not model the source's own frequency response or noise.
-- Gain other than 1 belongs to the Non-inverting amp.
+- Gain other than 1 belongs to the Non-inverting tool.
 
 ### How it was checked
 
@@ -3078,7 +3078,7 @@ produces.
 No standard applies. The points come from the resistor network at the
 + input; the derivation is below. The output levels use the op-amp's
 headroom, read from the TL072, LM358 and MCP6002 datasheets as listed in
-the Inverting amp section.
+the Inverting section.
 
 ### What it means
 
