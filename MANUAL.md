@@ -58,6 +58,7 @@ will key on, since that is the id the app already holds for each tool.
 - Op-amps → [Integrator](#integrator)
 - Op-amps → [Differentiator](#differentiator)
 - Op-amps → [Summing](#summing)
+- Op-amps → [Differential](#differential)
 
 ### Digital
 
@@ -3555,6 +3556,135 @@ The review made these changes:
 - The tool was renamed Summing, on Pierre's request.
 - Also on Pierre's request, inputs can be added, up to four. Each is one
   compact line with its weight, and the drawing grows one arm per input.
+
+[↑ Index](#index)
+
+---
+
+<a id="opamp-differential"></a>
+## Differential
+
+`calc: opamp-differential` · Active & semiconductor devices › Op-amps
+(formerly Differential amplifier)
+
+### What it computes
+
+For the one-op-amp difference amplifier, it gives:
+- the output for two input voltages;
+- the gain;
+- the common-mode rejection (CMRR), both as drawn and at worst with real
+  resistors of a chosen tolerance;
+- the bandwidth;
+- where the output clips.
+
+When the two arms are not balanced, it also gives how much of the output
+is leaked common-mode voltage.
+
+### Source
+
+No standard applies. The output follows from the ideal op-amp model by
+superposition. The worst-case CMRR with resistor tolerance is derived below
+from the same equation. The headroom and gain-bandwidth figures come from
+the TL072, LM358 and MCP6002 datasheets, as listed in the Inverting
+section.
+
+### What it means
+
+A **difference amplifier** outputs the difference between its inputs,
+V2 − V1, times a gain, and ignores the voltage both inputs share.
+
+- **Common-mode voltage** — the shared part, (V1 + V2) / 2. It is often
+  much larger than the difference:
+  - a sensor bridge sitting at 2.5 V with millivolts between its sides;
+  - a current shunt at 12 V;
+  - hum picked up equally on both wires.
+- **Balanced arms** — the circuit rejects the shared part only when
+  R3 / R2 equals Rf / R1. The gain is then Rf / R1.
+- **CMRR** (common-mode rejection ratio) — how much more the difference
+  is amplified than the shared voltage, in dB. With exactly matched
+  resistors it is infinite.
+- **CMRR with tolerance** — real resistors are off by their tolerance.
+  At worst, four ±1 % resistors at gain 1 leave only about 34 dB: a shared
+  12 V would still put about 240 mV on the output. That is why precision
+  resistors, or a ready-made difference-amplifier chip with laser-trimmed
+  resistors, are used.
+- **Input loading** — V1 sees R1 to the virtual input, and V2 sees R2 + R3
+  to ground. Both draw current from their sources, unlike an
+  instrumentation amplifier.
+- **Headroom** and **bandwidth** — as on the other op-amp tools. The
+  bandwidth is GBW / (1 + Rf / R1).
+
+The headroom and GBW are remembered for all the op-amp tools.
+
+### Why the formulas are these
+
+With k = Rf / R1 and β = R3 / (R2 + R3), the + input sits at β × V2, and
+the op-amp holds the − input there too. So
+
+    Vout = β(1 + k) × V2 − k × V1
+
+Writing V1 and V2 as the common part Vcm plus or minus half the difference
+Vd gives
+
+    Vout = [β(1 + k) + k] / 2 × Vd + [β(1 + k) − k] × Vcm
+         =        Ad        × Vd +       Acm        × Vcm
+
+Acm is zero exactly when β(1 + k) = k, which means R3 / R2 = Rf / R1. Then
+Ad = k.
+
+**Worst case with tolerance.** Let the ratios Rf / R1 and R3 / R2 be off
+by fractions a and b. To first order, Acm = k(b − a) / (1 + k). Each ratio
+of two ±t resistors can be off by 2t, in opposite directions, so at worst
+|Acm| = 4tk / (1 + k). With Ad ≈ k:
+
+    CMRR (worst) = (1 + Rf / R1) / 4t
+
+A higher gain helps: the same ±1 % resistors give about 49 dB at gain 10.
+
+### Assumptions and limits
+
+- **An ideal op-amp.** The op-amp's own CMRR, usually 70–100 dB, is
+  assumed far better than the resistors'. With 0.1 % resistors at high
+  gain, the two become comparable.
+- **Ideal sources.** Each source is taken as having no resistance of its
+  own. A source's resistance adds to R1 or R2 and unbalances the arms.
+- **Inputs within range.** The op-amp's inputs sit at β × V2, which must
+  stay within its input range even when V1 and V2 are higher. In the 12 V
+  shunt example they sit at about 6 V.
+- **Symmetric supply**, with the same headroom on both sides.
+
+### What it deliberately does not do
+
+- The three-op-amp instrumentation amplifier, with high input impedance,
+  is not covered.
+- Frequency-dependent CMRR is not calculated.
+
+### How it was checked
+
+- **Four 10 kΩ, 1 V and 1.1 V:** 100 mV out, CMRR ∞ as drawn, 34 dB at
+  ±1 %, 500 kHz on a 1 MHz op-amp.
+- **Bridge at 2.5 V, 10 k / 100 k:** 2.49 V and 2.51 V give 200 mV, gain
+  10, 48.8 dB at ±1 %, 90.91 kHz.
+- **R3 = 110 kΩ instead of 100 kΩ:**
+  - 409.2 mV out;
+  - CMRR 41.6 dB;
+  - 50.9 % of the output is leaked common-mode voltage.
+- **Shunt at 12 V (11.9 V and 12 V):** 100 mV out, common-mode voltage
+  11.95 V.
+- **±0.1 % at gain 1:** 54 dB.
+
+These figures were checked in a separate calculation.
+
+The review made these changes:
+- It moved clipping from the full supply to the supply less the headroom,
+  and added the bandwidth.
+- It added the worst-case CMRR for a chosen resistor tolerance.
+- It put Vout first and large, replacing a row of six small cells.
+- It removed the waveform. That waveform showed an invented slow
+  interference unrelated to the entered inputs.
+- It limited the units to real ones and remembers them.
+- It rewrote the note in plain words and added examples.
+- The tool was renamed Differential, on Pierre's request.
 
 [↑ Index](#index)
 

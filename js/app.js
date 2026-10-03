@@ -15770,27 +15770,56 @@ function renderOpampSumming(domain, tool, favId) {
 }
 
 function renderOpampDifferential(domain, tool, favId) {
+  const C = "opamp-differential";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
+  const V_UNITS = Object.keys(OPAMP_VIN_UNITS);
+  const TOLS = [0.1, 0.5, 1, 5];
   const state = {
-    r1: 10, r1Unit: "kΩ",
-    rf: 100, rfUnit: "kΩ",
-    r2: 10, r2Unit: "kΩ",
-    r3: 100, r3Unit: "kΩ",
-    v1: 1, v1Unit: "V",
-    v2: 1.1, v2Unit: "V",
-    vsupply: 12, vsupplyUnit: "V",
+    r1: 10, r1Unit: pref(C, "r1Unit", "kΩ", R_UNITS),
+    rf: 10, rfUnit: pref(C, "rfUnit", "kΩ", R_UNITS),
+    r2: 10, r2Unit: pref(C, "r2Unit", "kΩ", R_UNITS),
+    r3: 10, r3Unit: pref(C, "r3Unit", "kΩ", R_UNITS),
+    v1: 1, v1Unit: pref(C, "v1Unit", "V", V_UNITS),
+    v2: 1.1, v2Unit: pref(C, "v2Unit", "V", V_UNITS),
+    vsupply: 12,
+    tol: pref(C, "tol", 1, TOLS),
+    headroom: pref(OPAMP_PREF, "headroom", 1.5),
+    gbw: pref(OPAMP_PREF, "gbw", 1), gbwUnit: pref(OPAMP_PREF, "gbwUnit", "MHz", Object.keys(OPAMP_GBW_UNITS)),
   };
+
+  // Each example sets the four resistors (kΩ) and the two inputs (V).
+  const example = (r1, rf, r2, r3, v1, v2) => () => {
+    Object.assign(state, { r1, rf, r2, r3, r1Unit: "kΩ", rfUnit: "kΩ", r2Unit: "kΩ", r3Unit: "kΩ",
+      v1, v2, v1Unit: "V", v2Unit: "V", vsupply: 12, headroom: 1.5 });
+    paint();
+  };
+  useExamples([
+    { title: "Unity difference amp", note: "Four equal resistors: Vout = V2 − V1 = 100 mV, whatever voltage both inputs share.",
+      apply: example(10, 10, 10, 10, 1, 1.1) },
+    { title: "Sensor bridge, gain 10", note: "A bridge at 2.5 V with 20 mV between its sides: gain 10 gives 0.2 V and ignores the 2.5 V.",
+      apply: example(10, 100, 10, 100, 2.49, 2.51) },
+    { title: "One resistor 10% off", note: "R3 = 110 k instead of 100 k: about half of the 0.41 V output is leaked common voltage.",
+      apply: example(10, 100, 10, 110, 2.49, 2.51) },
+    { title: "Current shunt at 12 V", note: "1 A through 0.1 Ω at 12 V: the 0.1 V across it comes out alone, the 12 V rejected.",
+      apply: example(10, 10, 10, 10, 11.9, 12) },
+  ]);
 
   const R_NAMES = ["r1", "rf", "r2", "r3"];
   function si(name) {
-    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (R_NAMES.includes(name)) return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    if (name === "v1" || name === "v2") return state[name] * OPAMP_VIN_UNITS[state[name + "Unit"]];
+    if (name === "gbw") return state.gbw * OPAMP_GBW_UNITS[state.gbwUnit];
+    return state[name];
   }
 
   function compute() {
     const r1 = si("r1"), rf = si("rf"), r2 = si("r2"), r3 = si("r3");
-    const v1 = si("v1"), v2 = si("v2"), vsupply = si("vsupply");
-    if (!(r1 > 0) || !(r2 > 0) || !(r3 > 0) || !(rf >= 0) || !(vsupply > 0)) {
-      return { problem: "R1, R2, R3 and the supply must be greater than zero, and Rf must be zero or greater." };
+    const v1 = si("v1"), v2 = si("v2"), vsupply = si("vsupply"), headroom = si("headroom"), gbw = si("gbw");
+    if (!(r1 > 0) || !(r2 > 0) || !(r3 > 0) || !(rf >= 0) || !(vsupply > 0) || !(gbw > 0)) {
+      return { problem: "R1, R2, R3, the supply and GBW must be greater than zero, and Rf zero or greater." };
+    }
+    if (!(headroom >= 0) || headroom >= vsupply) {
+      return { problem: "The headroom must be zero or more, and less than the supply." };
     }
 
     // Split the inputs into what they share and what they don't, because that
@@ -15810,11 +15839,20 @@ function renderOpampDifferential(domain, tool, favId) {
     const vd = v2 - v1;
     const vcm = (v1 + v2) / 2;
     const voutIdeal = vcm * acm + vd * ad;
-    const saturated = Math.abs(voutIdeal) > vsupply;
-    const vout = saturated ? Math.sign(voutIdeal) * vsupply : voutIdeal;
+    const vmax = vsupply - headroom;
+    const saturated = Math.abs(voutIdeal) > vmax;
+    const vout = saturated ? Math.sign(voutIdeal) * vmax : voutIdeal;
     const cmrrDb = acm === 0 ? Infinity : 20 * Math.log10(Math.abs(ad / acm));
+    // Real resistors are off by up to ±t each. To first order the common
+    // gain is k(b − a)/(1 + k), where a and b are the errors of Rf/R1 and
+    // R3/R2; at worst each ratio is off by 2t the opposite way, so
+    // |Acm| = 4tk/(1 + k) and, with Ad ≈ k, CMRR = (1 + k) / 4t.
+    const tolCmrrDb = 20 * Math.log10((1 + k) / (4 * state.tol / 100));
+    // The − input sees R1 back to the output through Rf: noise gain 1 + k.
+    const bandwidth = gbw / (1 + k);
 
-    return { problem: "", k, ad, acm, cmrrDb, vd, vcm, vout, voutIdeal, saturated, vsupply };
+    return { problem: "", k, ad, acm, cmrrDb, tolCmrrDb, vd, vcm, vout, voutIdeal, saturated, vmax, bandwidth,
+             zin1: r1, zin2: r2 + r3 };
   }
 
   // The reference sheet's difference amplifier: an input arm into each side,
@@ -15874,42 +15912,6 @@ function renderOpampDifferential(domain, tool, favId) {
   }
 
 
-  // Same single shared axis the amplifiers use, scaled to whichever signal is
-  // larger, so the gain reads as the height difference rather than being
-  // normalised away. Grey is the differential input — the thing being
-  // measured — as a sine; blue is what comes out, which is that same sine
-  // times Ad, plus Acm times a slower common-mode interference the two leads
-  // pick up together. Matched arms give a clean scaled copy; a mismatch drags
-  // a slow wobble across it, and that wobble is the leak CMRR names. Only the
-  // two rates are chosen — every amplitude comes from the computed results.
-  function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="68" viewBox="0 0 220 68" fill="none"></svg>`;
-    const x0 = 10, width = 184, samples = 180;
-    const pxTop = 6, pxBottom = 50;
-    const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
-
-    const vdPk = Math.abs(r.vd), vcmPk = Math.abs(r.vcm);
-    const ins = [], outs = [];
-    for (let i = 0; i <= samples; i++) {
-      const t = i / samples;
-      ins.push(vdPk * Math.sin(t * 4 * Math.PI));
-      outs.push(Math.max(-r.vsupply, Math.min(r.vsupply,
-        r.ad * r.vd * Math.sin(t * 4 * Math.PI) + r.acm * vcmPk * Math.sin(t * 2 * Math.PI))));
-    }
-    const scale = Math.max(vdPk, Math.max(...outs.map(Math.abs)), 1e-12);
-    const toY = (v) => mid - (v / scale) * half;
-    const pts = (arr) => arr.map((v, i) => `${(x0 + (i / samples) * width).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
-
-    return `<svg width="220" height="68" viewBox="0 0 220 68" fill="none">
-      <path d="M8,${mid} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
-      <polyline points="${pts(ins)}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
-      <polyline points="${pts(outs)}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="199" y="${mid + 3}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="10" y="64" fill="#5A6169" font-size="9" font-weight="600">Vdiff</text>
-      <text x="40" y="64" fill="#8FC1F5" font-size="9" font-weight="600">Vout</text>
-    </svg>`;
-  }
-
   function cell(label, value) {
     return `<div class="eseries-cell">
       <div style="font-weight:600;color:${domain.color};">${label}</div>
@@ -15919,44 +15921,37 @@ function renderOpampDifferential(domain, tool, favId) {
 
   const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
 
+  const dbText = (db) => (isFinite(db) ? `${Number(db.toFixed(1))} dB` : "∞");
+
+  // Vout first and large, then the gain, how well the shared voltage is
+  // rejected (as drawn, and at worst with real resistors) and the bandwidth.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     const matched = r.acm === 0;
+    const leak = r.voutIdeal ? Math.abs((r.acm * r.vcm) / r.voutIdeal) * 100 : 0;
     return `
-      <div class="section-label" style="color:#5DCAA5">Output
-        ${r.saturated
-          ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>`
-          : matched
-            ? `<span class="badge-calc" style="background:var(--result-border);color:var(--result-text);float:right;">Arms matched</span>`
-            : `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Arms unmatched</span>`}
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Vout</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vout">${siFormat(r.vout, "V")}</span></div>
+        <div class="result-sub">Difference V2 − V1 = <span data-res="vd">${siFormat(r.vd, "V")}</span> &nbsp;·&nbsp; shared <span data-res="vcm">${siFormat(r.vcm, "V")}</span></div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);clear:both">
-        ${cell("Vout", siFormat(r.vout, "V"))}
-        ${cell("Gain diff", `${trim(r.ad)}×`)}
-        ${cell("Gain cm", `${trim(r.acm)}×`)}
-        ${cell("CMRR", isFinite(r.cmrrDb) ? `${trim(r.cmrrDb)} dB` : "∞")}
-        ${cell("Vdiff", siFormat(r.vd, "V"))}
-        ${cell("Vcm", siFormat(r.vcm, "V"))}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(4,1fr);">
+        ${cell("Gain", `<span data-res="ad">${trim(Number(r.ad.toPrecision(4)))}×</span>`)}
+        ${cell("CMRR", `<span data-res="cmrr">${dbText(r.cmrrDb)}</span>`)}
+        ${cell(`CMRR ±${state.tol}%`, `<span data-res="tolcmrr">${dbText(r.tolCmrrDb)}</span>`)}
+        ${cell("Bandwidth", `<span data-res="bw">${siFormat(r.bandwidth, "Hz")}</span>`)}
       </div>
-      ${r.saturated ? `<div class="error-text">Clipping — the output calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail.</div>` : ""}
-      ${!matched && !r.saturated ? `<div class="error-text">${trim(Math.abs(r.acm * r.vcm / (r.voutIdeal || 1)) * 100)}% of Vout is leaked common mode — set R2/R3 = R1/Rf.</div>` : ""}`;
+      ${r.saturated ? `<div class="error-text" data-res="clip">Clipping — the output asks for ${signed(r.voutIdeal)}, but stops at ${signed(r.vout)}${state.headroom > 0 ? `, ${trim(state.headroom)} V short of the rail` : ", the rail"}.</div>` : ""}
+      ${!matched && !r.saturated ? `<div class="error-text" data-res="leak">Arms unmatched: ${Number(leak.toPrecision(3))}% of Vout is the shared voltage leaking through. Make R3 / R2 equal to Rf / R1.</div>` : ""}`;
   }
 
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
-    app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
-  }
-
-  function numField(id, name, label, units, unitName) {
-    return `
-        <div class="field">
-          <label>${label}</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[unitName] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>`;
   }
 
   function paint() {
@@ -15964,42 +15959,54 @@ function renderOpampDifferential(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "Amplifies the difference, rejects what both inputs share")}
 
-      <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
-        <div>${diagram()}</div>
-        <div data-res="wave">${waveDiagram(r)}</div>
-      </div>
+      <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
       <div class="field-pair">
-        ${numField("ox-r1", "r1", "R1", OHM_UNITS, "r1Unit")}
-        ${numField("ox-rf", "rf", "Rf", OHM_UNITS, "rfUnit")}
+        ${opampField("R1", "ox-r1", state.r1, opampUnitSelect("ox-r1-unit", R_UNITS, state.r1Unit))}
+        ${opampField("Rf", "ox-rf", state.rf, opampUnitSelect("ox-rf-unit", R_UNITS, state.rfUnit))}
+        ${opampField("R2", "ox-r2", state.r2, opampUnitSelect("ox-r2-unit", R_UNITS, state.r2Unit))}
       </div>
       <div class="field-pair">
-        ${numField("ox-r2", "r2", "R2", OHM_UNITS, "r2Unit")}
-        ${numField("ox-r3", "r3", "R3", OHM_UNITS, "r3Unit")}
+        ${opampField("R3", "ox-r3", state.r3, opampUnitSelect("ox-r3-unit", R_UNITS, state.r3Unit))}
+        ${opampField("V1", "ox-v1", state.v1, opampUnitSelect("ox-v1-unit", V_UNITS, state.v1Unit))}
+        ${opampField("V2", "ox-v2", state.v2, opampUnitSelect("ox-v2-unit", V_UNITS, state.v2Unit))}
       </div>
       <div class="field-pair">
-        ${numField("ox-v1", "v1", "V1", VOLT_UNITS, "v1Unit")}
-        ${numField("ox-v2", "v2", "V2", VOLT_UNITS, "v2Unit")}
-        ${numField("ox-vsupply", "vsupply", "Supply (±V)", VOLT_UNITS, "vsupplyUnit")}
+        ${opampField("Supply (±)", "ox-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`)}
+        ${opampField("Headroom", "ox-headroom", state.headroom, `<span class="unit-fixed">V</span>`)}
+        ${opampField("GBW", "ox-gbw", state.gbw, opampUnitSelect("ox-gbw-unit", Object.keys(OPAMP_GBW_UNITS), state.gbwUnit))}
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Resistor tolerance</label>
+          <select id="ox-tol">${TOLS.map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t} %</option>`).join("")}</select>
+        </div>
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vdiff = V2 − V1,  Vcm = (V1 + V2) / 2", "Vout = Gain diff × Vdiff + Gain cm × Vcm", "R2/R3 = R1/Rf → Gain cm = 0, Gain diff = Rf/R1", "CMRR = 20 × log₁₀(|Gain diff / Gain cm|)"],
-        "The arms cancel the shared part only if R2/R3 equals R1/Rf. Otherwise a slow wobble of Gain cm × Vcm rides across the output — hence instrumentation amps."
+        ["Matched means R3 / R2 = Rf / R1", "Then Vout = (Rf / R1) × (V2 − V1)", "Vout = Ad × (V2 − V1) + Acm × (V1 + V2) / 2", "CMRR = 20 × log₁₀(|Ad / Acm|)", "Worst case with ±t: CMRR = (1 + Rf/R1) / 4t", "Bandwidth = GBW / (1 + Rf / R1)"],
+        "A difference amplifier outputs the difference between its two inputs, V2 − V1, times a gain, and ignores the voltage both inputs share. That shared (common-mode) voltage is often much larger than the difference — a sensor bridge sitting at 2.5 V, a current shunt at 12 V, hum picked up on both wires. It works only when the two arms are balanced: R3 / R2 must equal Rf / R1, and then the gain is Rf / R1. CMRR (common-mode rejection ratio) says how well the shared voltage is rejected, in dB: infinite when the resistors are exactly matched, but real resistors are off by their tolerance, and four ±1% resistors at gain 1 can leave only about 34 dB — which is why precision resistors, or a ready-made difference-amp chip, are used. The inputs load their sources: V1 sees R1, V2 sees R2 + R3. The output stops short of the supply by the headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail). Headroom and GBW are remembered for all the op-amp tools."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint);
 
-    [["ox-r1", "r1"], ["ox-rf", "rf"], ["ox-r2", "r2"], ["ox-r3", "r3"], ["ox-v1", "v1"], ["ox-v2", "v2"], ["ox-vsupply", "vsupply"]].forEach(([id, name]) => {
-      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    [["ox-r1", "r1"], ["ox-rf", "rf"], ["ox-r2", "r2"], ["ox-r3", "r3"], ["ox-v1", "v1"], ["ox-v2", "v2"], ["ox-vsupply", "vsupply"], ["ox-headroom", "headroom"], ["ox-gbw", "gbw"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        state[name] = v;
+        if (name === "headroom" || name === "gbw") setPref(OPAMP_PREF, name, v);
+        refresh();
+      };
     });
-    [["ox-r1", "r1Unit"], ["ox-rf", "rfUnit"], ["ox-r2", "r2Unit"], ["ox-r3", "r3Unit"], ["ox-v1", "v1Unit"], ["ox-v2", "v2Unit"], ["ox-vsupply", "vsupplyUnit"]].forEach(([id, name]) => {
-      document.getElementById(id + "-unit").onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["ox-r1", "r1Unit"], ["ox-rf", "rfUnit"], ["ox-r2", "r2Unit"], ["ox-r3", "r3Unit"], ["ox-v1", "v1Unit"], ["ox-v2", "v2Unit"], ["ox-gbw", "gbwUnit"]].forEach(([id, name]) => {
+      document.getElementById(id + "-unit").onchange = (e) => { state[name] = e.target.value; setPref(name === "gbwUnit" ? OPAMP_PREF : C, name, state[name]); refresh(); };
     });
+    document.getElementById("ox-tol").onchange = (e) => { state.tol = Number(e.target.value); setPref(C, "tol", state.tol); paint(); };
   }
 
   paint();
