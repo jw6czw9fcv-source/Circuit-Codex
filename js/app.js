@@ -15592,10 +15592,10 @@ function renderOpampSumming(domain, tool, favId) {
 
   // The reference sheet's summing amp — input arms landing on one node
   // column, Rf over the top, + to ground — with one arm per input. The
-  // bottom arm stays level with the − input's lower side and the others
-  // stack above it, 34 px apart so each resistor's name has room over its
-  // body. Dots mark only the three-way joins: the bottom arm simply turns
-  // into the column.
+  // bottom arm runs straight into the − input, level with it, and the
+  // others stack above it, 34 px apart so each resistor's name has room
+  // over its body. Every arm meets the column at a three-way join, so each
+  // gets a dot.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
@@ -15603,7 +15603,7 @@ function renderOpampSumming(domain, tool, favId) {
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
     const n = state.inputs.length;
-    const ys = state.inputs.map((_, k) => 46 - 34 * (n - 1 - k));
+    const ys = state.inputs.map((_, k) => 38 - 34 * (n - 1 - k));
     const top = ys[0], rfY = top - 24, vbTop = rfY - 22;
 
     const arms = ys.map((y, k) => `
@@ -15611,17 +15611,16 @@ function renderOpampSumming(domain, tool, favId) {
       <text x="8" y="${y + 4}" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">V${k + 1}</text>
       <path d="M23 ${y} H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${zigH(y, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="58" y="${k === n - 1 ? y + 22 : y - 11}" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R${k + 1}</text>
+      <text x="58" y="${y - 11}" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R${k + 1}</text>
       <path d="M76 ${y} H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${k < n - 1 ? `<circle cx="93" cy="${y}" r="2.6" fill="${wire}"/>` : ""}`).join("");
+      <circle cx="93" cy="${y}" r="2.6" fill="${wire}"/>`).join("");
 
     return `<svg width="258" height="${102 - vbTop}" viewBox="-16 ${vbTop} 258 ${102 - vbTop}" fill="none">
       <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
       <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
       ${arms}
-      <path d="M93 ${top} V46" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="93" cy="38" r="2.6" fill="${wire}"/>
+      <path d="M93 ${top} V38" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       <path d="M93 ${top} V${rfY} H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
