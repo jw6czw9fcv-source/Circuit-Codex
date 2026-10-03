@@ -59,7 +59,8 @@ will key on, since that is the id the app already holds for each tool.
 - Op-amps → [Differentiator](#differentiator)
 - Op-amps → [Summing](#summing)
 - Op-amps → [Differential](#differential)
-- Optoelectronics → [Photocell / LDR](#photocell-ldr)
+- Optoelectronics → [Photocell / LDR](#photocell--ldr)
+- Optoelectronics → [Optocoupler](#optocoupler)
 
 ### Digital
 
@@ -3822,6 +3823,128 @@ The review made these changes:
 - It limited the units to real ones and remembers them.
 - It rewrote the note in plain words, with typical light levels, and
   added the warning below 1 lx and examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="optocoupler"></a>
+## Optocoupler
+
+`calc: optocoupler` · Active & semiconductor devices › Optoelectronics
+
+### What it computes
+
+For a phototransistor optocoupler driven through a resistor, with a pull-up
+on the output side:
+- the input resistor Rin for the LED current wanted, the nearest E24
+  value, and the power in it;
+- the collector current the minimum CTR makes available;
+- the current the pull-up needs to pull the output low;
+- the output voltage with the LED on;
+- whether the output really pulls low, and with how much margin.
+
+### Source
+
+Data read from the manufacturers' datasheets themselves.
+
+**Sharp PC817X series** (sheet D2-A03101EN, 2003):
+- **CTR by rank** — measured at IF = 5 mA, VCE = 5 V, from the
+  collector-current bins:
+
+  | Rank | CTR |
+  |---|---|
+  | A | 80–160 % |
+  | B | 130–260 % |
+  | C | 200–400 % |
+  | D | 300–600 % |
+  | Unranked | 50–600 % |
+
+- **VF** — 1.2 V typical, 1.4 V maximum, at 20 mA.
+- **VCE(sat)** — 0.1 V typical, 0.2 V maximum, at IF = 20 mA, IC = 1 mA.
+- **Rise / fall time** — 4 / 3 µs typical (VCE 2 V, IC 2 mA, RL 100 Ω).
+
+**Vishay 4N35** (document 81181, rev. 1.2, 2010):
+- **CTR** — at least 100 % at IF = 10 mA, VCE = 10 V. Over −55 to +100 °C
+  it is at least 40 %, 50 % typical.
+- **VF** — 1.3 V typical, 1.5 V maximum, at 10 mA.
+- **Switching time** — 10 µs typical (VCC 10 V, IC 2 mA, RL 100 Ω).
+- **VCE(sat)** — no limit is given. Its curves of saturated CTR are drawn
+  at VCE = 0.4 V, which the tool uses.
+
+### What it means
+
+An **optocoupler** is an LED and a light-sensitive transistor sealed in
+one package, facing each other across an insulating gap. The signal
+crosses as light, so the two circuits share no wire. They can sit at very
+different voltages, a microcontroller and mains equipment for example; the
+PC817 and 4N35 are both rated for 5 kV rms between their sides.
+
+- **Rin** — sets the LED current If, as for any LED: Rin = (Vin − Vf) / If.
+- **CTR** (current transfer ratio) — the collector current the transistor
+  can pass for a given LED current, in %. A CTR of 50 % turns 10 mA of LED
+  current into 5 mA available on the output side.
+- **Pull-up RL** — from Vcc to the transistor's collector:
+  - with the LED off, the output reads high;
+  - with it on, the transistor pulls the output low, provided it can pass
+    the current RL needs: (Vcc − Vce(sat)) / RL.
+- **Vce(sat)** — the voltage left across the transistor when it is fully
+  on: 0.2 V for the PC817.
+- **Margin** — CTR varies widely between pieces, which is why the PC817 is
+  sold in ranks. It is also lower when the transistor is saturated, and it
+  falls as the LED ages and with temperature.
+  - Design on the **minimum** CTR, and aim for about **2×** the current
+    RL needs. That 2× is a rule of thumb, not a datasheet figure.
+  - Below 1× the output stops part way down, between logic levels.
+
+Choosing a part fills in its minimum CTR, Vf and Vce(sat). Typing your
+own values switches it to Custom.
+
+### Why the formulas are these
+
+    Rin = (Vin − Vf) / If
+    Ic available = If × CTR / 100
+    Ic needed = (Vcc − Vce(sat)) / RL
+
+If Ic available ≥ Ic needed, the transistor saturates and Vout = Vce(sat).
+Otherwise it passes only Ic available, and Vout = Vcc − Ic available × RL.
+
+### Assumptions and limits
+
+- **CTR at the test current.** CTR changes with If; both datasheets plot
+  it against If. The ranks are specified at 5 mA (PC817) and 10 mA
+  (4N35), so far from those currents read the curve.
+- **Speed.** Phototransistor optocouplers are slow, a few microseconds,
+  and a larger RL makes them slower. Fast signals need a logic-output part.
+- **The input source** is taken as ideal, and the LED is driven with
+  steady DC.
+- **No load** on Vout other than RL.
+
+### What it deliberately does not do
+
+- Switching speed is not calculated.
+- Triac-output and logic-output optocouplers are not covered.
+
+### How it was checked
+
+- **PC817, any rank, 5 V, 10 mA, 10 kΩ to 5 V:**
+  - Rin 380 Ω, nearest E24 390 Ω giving 9.744 mA, 38 mW;
+  - 5 mA available, 480 µA needed: 10× margin, Vout 200 mV.
+- **3.3 V drive at 5 mA:** 420 Ω, 5.2× margin.
+- **1 kΩ to 12 V with 2 mA:** needs 11.8 mA but only 1 mA is available,
+  so the output stops at 11 V.
+- **4N35 at 10 mA from 5 V:** 370 Ω, nearest E24 360 Ω, Vout 400 mV.
+- **1 mA at 50 %:** only 1× over, so the tool flags it.
+
+The review made these changes:
+- The output check used a fixed 0.3 V saturation. It now takes the
+  part's datasheet Vce(sat) and minimum CTR, from a choice of PC817 ranks
+  or the 4N35.
+- It added the 2× margin advice.
+- It put Rin first and large, and draws it green as the calculated part.
+- It added the nearest E24 value.
+- It limited the units to real ones, rewrote the note in plain words and
+  added examples.
 
 [↑ Index](#index)
 
