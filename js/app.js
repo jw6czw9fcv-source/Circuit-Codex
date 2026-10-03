@@ -15535,111 +15535,99 @@ function renderOpampSumming(domain, tool, favId) {
   const C = "opamp-summing";
   const R_UNITS = Object.keys(DIVIDER_R_UNITS);
   const V_UNITS = Object.keys(OPAMP_VIN_UNITS);
+  // Four inputs is what still leaves the result above the tab bar.
+  const MAX_INPUTS = 4;
+  const input = (v, r) => ({ v, vUnit: "V", r, rUnit: "kΩ" });
   const state = {
-    r1: 10, r1Unit: pref(C, "r1Unit", "kΩ", R_UNITS),
-    r2: 10, r2Unit: pref(C, "r2Unit", "kΩ", R_UNITS),
+    inputs: [input(1, 10), input(2, 10)],
     rf: 10, rfUnit: pref(C, "rfUnit", "kΩ", R_UNITS),
-    v1: 1, v1Unit: pref(C, "v1Unit", "V", V_UNITS),
-    v2: 2, v2Unit: pref(C, "v2Unit", "V", V_UNITS),
     vsupply: 12,
     headroom: pref(OPAMP_PREF, "headroom", 1.5),
     gbw: pref(OPAMP_PREF, "gbw", 1), gbwUnit: pref(OPAMP_PREF, "gbwUnit", "MHz", Object.keys(OPAMP_GBW_UNITS)),
   };
 
-  // Mixing as it is used. Each example sets the three resistors (kΩ) and
-  // the two inputs (V).
-  const example = (r1, r2, rf, v1, v2) => () => {
-    Object.assign(state, { r1, r2, rf, r1Unit: "kΩ", r2Unit: "kΩ", rfUnit: "kΩ", v1, v2, v1Unit: "V", v2Unit: "V", vsupply: 12, headroom: 1.5 });
+  // Mixing as it is used. Each example sets Rf and the inputs as
+  // [volts, kΩ] pairs.
+  const example = (rf, pairs) => () => {
+    Object.assign(state, { rf, rfUnit: "kΩ", vsupply: 12, headroom: 1.5, inputs: pairs.map(([v, r]) => input(v, r)) });
     paint();
   };
   useExamples([
     { title: "Plain sum", note: "Equal resistors add the inputs: 1 V + 2 V comes out as −3 V.",
-      apply: example(10, 10, 10, 1, 2) },
-    { title: "Two-channel mixer", note: "R2 = 2 × R1 mixes channel 2 at half level: 0.5 V + 0.5 V comes out as −0.75 V.",
-      apply: example(10, 20, 10, 0.5, 0.5) },
+      apply: example(10, [[1, 10], [2, 10]]) },
+    { title: "Three-channel mixer", note: "R3 = 2 × R1 mixes channel 3 at half level: 0.5 + 0.5 + 0.5 V gives −1.25 V.",
+      apply: example(10, [[0.5, 10], [0.5, 10], [0.5, 20]]) },
     { title: "Averager", note: "Rf = R / 2 gives the average: (1 V + 2 V) / 2 comes out as −1.5 V.",
-      apply: example(10, 10, 5, 1, 2) },
-    { title: "2-bit DAC", note: "Binary weights R and 2R: two 5 V bits give −(5 + 2.5) = −7.5 V.",
-      apply: example(10, 20, 10, 5, 5) },
+      apply: example(5, [[1, 10], [2, 10]]) },
+    { title: "3-bit DAC, code 101", note: "Weights R, 2R, 4R: bits 5 V, 0 V, 5 V give −(5 + 0 + 1.25) = −6.25 V.",
+      apply: example(10, [[5, 10], [0, 20], [5, 40]]) },
   ]);
 
-  const R_NAMES = ["r1", "r2", "rf"];
-  function si(name) {
-    if (R_NAMES.includes(name)) return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
-    if (name === "v1" || name === "v2") return state[name] * OPAMP_VIN_UNITS[state[name + "Unit"]];
-    if (name === "gbw") return state.gbw * OPAMP_GBW_UNITS[state.gbwUnit];
-    return state[name];
-  }
+  const ohms = (inp) => inp.r * DIVIDER_R_UNITS[inp.rUnit];
+  const volts = (inp) => inp.v * OPAMP_VIN_UNITS[inp.vUnit];
 
+  // The op-amp holds its − input at 0 V, so each input pushes V/R into the
+  // node without knowing the others exist; the currents add and all of the
+  // sum leaves through Rf. Every input resistor loads the − node, so the
+  // noise gain that shares out GBW is 1 + Rf/R1 + Rf/R2 + …
   function compute() {
-    const r1 = si("r1"), r2 = si("r2"), rf = si("rf"), v1 = si("v1"), v2 = si("v2"), vsupply = si("vsupply"), headroom = si("headroom"), gbw = si("gbw");
-    if (!(r1 > 0) || !(r2 > 0) || !(rf >= 0) || !(vsupply > 0) || !(gbw > 0)) {
-      return { problem: "R1, R2, the supply and GBW must be greater than zero, and Rf zero or greater." };
+    const rf = state.rf * DIVIDER_R_UNITS[state.rfUnit];
+    const gbw = state.gbw * OPAMP_GBW_UNITS[state.gbwUnit];
+    const { vsupply, headroom } = state;
+    if (!state.inputs.every((inp) => ohms(inp) > 0 && isFinite(inp.v)) || !(rf >= 0) || !(vsupply > 0) || !(gbw > 0)) {
+      return { problem: "Every input resistor, the supply and GBW must be greater than zero, and Rf zero or greater." };
     }
     if (!(headroom >= 0) || headroom >= vsupply) {
       return { problem: "The headroom must be zero or more, and less than the supply." };
     }
-
-    // The virtual ground is the whole trick: V− sits at 0V whatever happens, so
-    // each input pushes V/R into the node without knowing the others exist. The
-    // node stores nothing, so the currents simply add and all of the sum leaves
-    // through Rf — which is why the channels never interact.
-    const a1 = -rf / r1, a2 = -rf / r2;
-    const i1 = v1 / r1, i2 = v2 / r2;
-    const isum = i1 + i2;
+    const weights = state.inputs.map((inp) => -rf / ohms(inp));
+    const isum = state.inputs.reduce((sum, inp) => sum + volts(inp) / ohms(inp), 0);
     const voutIdeal = -rf * isum;
     const vmax = vsupply - headroom;
     const saturated = Math.abs(voutIdeal) > vmax;
     const vout = saturated ? Math.sign(voutIdeal) * vmax : voutIdeal;
-    // Every input resistor loads the − node, so the noise gain that shares
-    // out GBW is 1 + Rf/R1 + Rf/R2, larger than either channel's gain.
-    const bandwidth = gbw / (1 + rf / r1 + rf / r2);
-
-    return { problem: "", a1, a2, i1, i2, isum, vout, voutIdeal, saturated, vmax, bandwidth };
+    const bandwidth = gbw / (1 - weights.reduce((sum, w) => sum + w, 0));
+    return { problem: "", weights, isum, vout, voutIdeal, saturated, vmax, bandwidth };
   }
 
-  // The reference sheet's summing amp: two input arms landing on one node, Rf
-  // looping over the top, + to ground — the inverting amplifier with a second
-  // input arm bolted on, which is exactly what it is electrically. The two arms
-  // straddle the − input so the node column reads as one net, and the junction
-  // dots mark only the two genuine three-way points; the corners where an arm
-  // simply turns are left plain. The + input's ground drop sits 16px below the
-  // node column's lower end so the two nets stay visibly separate.
+  // The reference sheet's summing amp — input arms landing on one node
+  // column, Rf over the top, + to ground — with one arm per input. The
+  // bottom arm stays level with the − input's lower side and the others
+  // stack above it, 34 px apart so each resistor's name has room over its
+  // body. Dots mark only the three-way joins: the bottom arm simply turns
+  // into the column.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+    const n = state.inputs.length;
+    const ys = state.inputs.map((_, k) => 46 - 34 * (n - 1 - k));
+    const top = ys[0], rfY = top - 24, vbTop = rfY - 22;
 
-    return `<svg width="258" height="134" viewBox="-16 -32 258 134" fill="none">
+    const arms = ys.map((y, k) => `
+      ${port(20, y)}
+      <text x="8" y="${y + 4}" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">V${k + 1}</text>
+      <path d="M23 ${y} H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(y, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="${k === n - 1 ? y + 22 : y - 11}" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R${k + 1}</text>
+      <path d="M76 ${y} H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${k < n - 1 ? `<circle cx="93" cy="${y}" r="2.6" fill="${wire}"/>` : ""}`).join("");
+
+    return `<svg width="258" height="${102 - vbTop}" viewBox="-16 ${vbTop} 258 ${102 - vbTop}" fill="none">
       <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
       <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
-
-      ${port(20, 22)}
-      <text x="8" y="26" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">V1</text>
-      <path d="M23 22 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(22, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="58" y="10" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R1</text>
-      <path d="M76 22 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-
-      ${port(20, 46)}
-      <text x="8" y="50" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">V2</text>
-      <path d="M23 46 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(46, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="58" y="68" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">R2</text>
-      <path d="M76 46 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-
-      <path d="M93 22 V46" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="93" cy="22" r="2.6" fill="${wire}"/>
+      ${arms}
+      <path d="M93 ${top} V46" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="93" cy="38" r="2.6" fill="${wire}"/>
       <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
-      <path d="M93 22 V-2 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zigH(-2, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="135" y="-14" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
-      <path d="M153 -2 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M93 ${top} V${rfY} H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${zigH(rfY, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="135" y="${rfY - 12}" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M153 ${rfY} H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
@@ -15660,10 +15648,28 @@ function renderOpampSumming(domain, tool, favId) {
   }
 
   const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
+  const weightText = (w) => `×${trim(Number(w.toPrecision(3)))}`;
 
-  const gainText = (g) => `${trim(Number(g.toPrecision(4)))}×`;
+  // One compact line per input: its voltage, its resistor, the weight that
+  // resistor gives it, and a remove button (two inputs at least).
+  function inputsHTML() {
+    const n = state.inputs.length;
+    return state.inputs.map((inp, k) => `
+      <div class="r-item">
+        <div class="r-line">
+          <span class="r-index">V${k + 1}</span>
+          <input type="number" inputmode="decimal" step="any" id="os-v${k + 1}" data-in="${k}" data-key="v" value="${trim(inp.v)}" aria-label="V${k + 1}" />
+          <select id="os-v${k + 1}-unit" data-in="${k}" data-key="vUnit" aria-label="V${k + 1} unit">${V_UNITS.map((u) => `<option ${inp.vUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <span class="r-index">R${k + 1}</span>
+          <input type="number" inputmode="decimal" step="any" id="os-r${k + 1}" data-in="${k}" data-key="r" value="${trim(inp.r)}" aria-label="R${k + 1}" />
+          <select id="os-r${k + 1}-unit" data-in="${k}" data-key="rUnit" aria-label="R${k + 1} unit">${R_UNITS.map((u) => `<option ${inp.rUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+          <span class="r-hint" data-res="w${k}"></span>
+          <button class="r-drop" data-drop="${k}" aria-label="Remove input ${k + 1}" ${n <= 2 ? "disabled" : ""}>×</button>
+        </div>
+      </div>`).join("");
+  }
 
-  // Vout first and large, then each channel's weight and the bandwidth.
+  // Vout first and large, then the current through Rf and the bandwidth.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
@@ -15674,11 +15680,10 @@ function renderOpampSumming(domain, tool, favId) {
           <span class="badge-calc">${ICONS.bolt2}Calculated</span>
         </div>
         <div class="result-value"><span class="num" data-res="vout">${siFormat(r.vout, "V")}</span></div>
-        <div class="result-sub">The inputs added, upside down &nbsp;·&nbsp; current through Rf <span data-res="isum">${siFormat(r.isum, "A")}</span></div>
+        <div class="result-sub">The ${state.inputs.length} inputs added, each × its weight, upside down</div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
-        ${cell("V1 weight", `<span data-res="a1">${gainText(r.a1)}</span>`)}
-        ${cell("V2 weight", `<span data-res="a2">${gainText(r.a2)}</span>`)}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(2,1fr);">
+        ${cell("Current through Rf", `<span data-res="isum">${siFormat(r.isum, "A")}</span>`)}
         ${cell("Bandwidth", `<span data-res="bw">${siFormat(r.bandwidth, "Hz")}</span>`)}
       </div>
       ${r.saturated ? `<div class="error-text" data-res="clip">Clipping — the sum asks for ${signed(r.voutIdeal)}, but the output stops at ${signed(r.vout)}${state.headroom > 0 ? `, ${trim(state.headroom)} V short of the rail` : ", the rail"}.</div>` : ""}`;
@@ -15687,6 +15692,9 @@ function renderOpampSumming(domain, tool, favId) {
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    state.inputs.forEach((_, k) => {
+      app.querySelector(`[data-res="w${k}"]`).textContent = r.problem ? "" : weightText(r.weights[k]);
+    });
   }
 
   function paint() {
@@ -15696,33 +15704,55 @@ function renderOpampSumming(domain, tool, favId) {
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
+      <div class="section-label split" style="color:#8FC1F5">
+        <span>Inputs</span>
+        <button class="label-btn" id="os-add" ${state.inputs.length >= MAX_INPUTS ? "disabled" : ""}>+ add</button>
+      </div>
+      <div class="r-list">${inputsHTML()}</div>
+
       <div class="field-pair">
-        ${opampField("R1", "os-r1", state.r1, opampUnitSelect("os-r1-unit", R_UNITS, state.r1Unit))}
-        ${opampField("R2", "os-r2", state.r2, opampUnitSelect("os-r2-unit", R_UNITS, state.r2Unit))}
         ${opampField("Rf", "os-rf", state.rf, opampUnitSelect("os-rf-unit", R_UNITS, state.rfUnit))}
-      </div>
-      <div class="field-pair">
-        ${opampField("V1", "os-v1", state.v1, opampUnitSelect("os-v1-unit", V_UNITS, state.v1Unit))}
-        ${opampField("V2", "os-v2", state.v2, opampUnitSelect("os-v2-unit", V_UNITS, state.v2Unit))}
-        ${opampField("Supply (±)", "os-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`)}
-      </div>
-      <div class="field-pair">
-        ${opampField("Headroom", "os-headroom", state.headroom, `<span class="unit-fixed">V</span>`)}
         ${opampField("GBW", "os-gbw", state.gbw, opampUnitSelect("os-gbw-unit", Object.keys(OPAMP_GBW_UNITS), state.gbwUnit))}
+      </div>
+      <div class="field-pair">
+        ${opampField("Supply (±)", "os-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`)}
+        ${opampField("Headroom", "os-headroom", state.headroom, `<span class="unit-fixed">V</span>`)}
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vout = −Rf × (V1 / R1 + V2 / R2)", "Weights: −Rf / R1, −Rf / R2", "Current through Rf = V1 / R1 + V2 / R2", "|Vout| ≤ supply − headroom", "Bandwidth = GBW / (1 + Rf/R1 + Rf/R2)"],
-        "The op-amp holds its − input at 0 V (a \"virtual ground\"), so each input drives a current V / R through its own resistor, unaffected by the others. Those currents meet at the − input, add up, and all flow on through Rf, which turns the total into the output voltage — upside down (inverted). Each input's weight is Rf divided by its own resistor: equal resistors give a plain sum, unequal ones mix channels at different levels (an audio mixer), and R, 2R, 4R… make a simple DAC. The output stops short of the supply by the headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail); past that it clips. GBW, the op-amp's gain-bandwidth product, is shared out by 1 + Rf/R1 + Rf/R2, so every extra input lowers the bandwidth a little. Headroom and GBW are remembered for all the op-amp tools."
+        ["Vout = −Rf × (V1 / R1 + V2 / R2 + …)", "Weight of input k = −Rf / Rk", "Current through Rf = V1 / R1 + V2 / R2 + …", "|Vout| ≤ supply − headroom", "Bandwidth = GBW / (1 + Rf/R1 + Rf/R2 + …)"],
+        "The op-amp holds its − input at 0 V (a \"virtual ground\"), so each input drives a current V / R through its own resistor, unaffected by the others. Those currents meet at the − input, add up, and all flow on through Rf, which turns the total into the output voltage — upside down (inverted). Each input's weight, shown on its line, is Rf divided by its own resistor: equal resistors give a plain sum, unequal ones mix channels at different levels (an audio mixer), and R, 2R, 4R… make a simple DAC. Use + add for up to four inputs. The output stops short of the supply by the headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail); past that it clips. GBW, the op-amp's gain-bandwidth product, is shared out by 1 + Rf/R1 + Rf/R2 + …, so every extra input lowers the bandwidth. Headroom and GBW are remembered for all the op-amp tools."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint);
 
-    [["os-r1", "r1"], ["os-r2", "r2"], ["os-rf", "rf"], ["os-v1", "v1"], ["os-v2", "v2"], ["os-vsupply", "vsupply"], ["os-headroom", "headroom"], ["os-gbw", "gbw"]].forEach(([id, name]) => {
+    app.querySelectorAll("[data-in]").forEach((el) => {
+      const k = +el.dataset.in, key = el.dataset.key;
+      if (el.tagName === "SELECT") {
+        el.onchange = () => { state.inputs[k][key] = el.value; refresh(); };
+      } else {
+        el.oninput = () => { const v = parseFloat(el.value); if (isFinite(v)) { state.inputs[k][key] = v; refresh(); } };
+      }
+    });
+    app.querySelectorAll("[data-drop]").forEach((btn) => {
+      btn.onclick = () => {
+        if (state.inputs.length <= 2) return;
+        state.inputs.splice(+btn.dataset.drop, 1);
+        paint();
+      };
+    });
+    document.getElementById("os-add").onclick = () => {
+      if (state.inputs.length >= MAX_INPUTS) return;
+      const last = state.inputs[state.inputs.length - 1];
+      state.inputs.push({ ...last, v: 1 });
+      paint();
+    };
+
+    [["os-rf", "rf"], ["os-vsupply", "vsupply"], ["os-headroom", "headroom"], ["os-gbw", "gbw"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => {
         const v = parseFloat(e.target.value);
         if (!isFinite(v)) return;
@@ -15731,9 +15761,10 @@ function renderOpampSumming(domain, tool, favId) {
         refresh();
       };
     });
-    [["os-r1", "r1Unit"], ["os-r2", "r2Unit"], ["os-rf", "rfUnit"], ["os-v1", "v1Unit"], ["os-v2", "v2Unit"], ["os-gbw", "gbwUnit"]].forEach(([id, name]) => {
-      document.getElementById(id + "-unit").onchange = (e) => { state[name] = e.target.value; setPref(name === "gbwUnit" ? OPAMP_PREF : C, name, state[name]); refresh(); };
-    });
+    document.getElementById("os-rf-unit").onchange = (e) => { state.rfUnit = e.target.value; setPref(C, "rfUnit", state.rfUnit); refresh(); };
+    document.getElementById("os-gbw-unit").onchange = (e) => { state.gbwUnit = e.target.value; setPref(OPAMP_PREF, "gbwUnit", state.gbwUnit); refresh(); };
+
+    refresh();
   }
 
   paint();

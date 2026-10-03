@@ -3469,9 +3469,10 @@ The review made these changes:
 
 ### What it computes
 
-For the inverting summing amplifier with two inputs, it gives:
+For the inverting summing amplifier, with two to four inputs (+ add and
+× on each input's line), it gives:
 - the output voltage;
-- each input's weight;
+- each input's weight, shown on its line;
 - the current through Rf;
 - where the output clips, from the supply and the op-amp's headroom;
 - the bandwidth, from the op-amp's gain-bandwidth product.
@@ -3500,8 +3501,8 @@ datasheets, as listed in the Inverting section.
   1.5–2 V for a TL072 or LM358, and 0 for a rail-to-rail op-amp. Past
   that, the output clips.
 - **Bandwidth** — the op-amp's gain-bandwidth product (GBW) is shared out
-  by the noise gain, 1 + Rf/R1 + Rf/R2. Every input resistor counts, so
-  the bandwidth is lower than either channel's gain alone would suggest.
+  by the noise gain, 1 + Rf/R1 + Rf/R2 + …. Every input resistor counts,
+  so the bandwidth is lower than any one channel's gain would suggest.
 
 The headroom and GBW entered here are remembered for all the op-amp tools.
 
@@ -3511,11 +3512,12 @@ The − input is at 0 V, so input k drives Vk / Rk into it. No current
 enters the op-amp, so the sum flows through Rf, from the − node towards
 the output:
 
-    Vout = −Rf × (V1 / R1 + V2 / R2)
+    Vout = −Rf × (V1 / R1 + V2 / R2 + …)
 
-The feedback network divides the output by 1 + Rf / (R1 ∥ R2) on its way
-back to the − input, which equals 1 + Rf/R1 + Rf/R2. That noise gain sets
-the bandwidth: GBW / (1 + Rf/R1 + Rf/R2).
+The feedback network divides the output by 1 + Rf / (R1 ∥ R2 ∥ …) on its
+way back to the − input, which equals 1 + Rf/R1 + Rf/R2 + …. That noise
+gain sets the bandwidth: GBW / (1 + Rf/R1 + Rf/R2 + …). Each input added
+lowers it.
 
 ### Assumptions and limits
 
@@ -3523,8 +3525,8 @@ the bandwidth: GBW / (1 + Rf/R1 + Rf/R2).
 - A symmetric supply, with the same headroom on both sides.
 - Each source is taken as having no resistance of its own. A source's
   resistance adds to its input resistor and lowers its weight.
-- Two inputs are offered. More inputs work the same way, each adding its
-  own V / R term.
+- Up to four inputs are offered, which is what still fits above the tab
+  bar. More work the same way, each adding its own V / R term.
 
 ### What it deliberately does not do
 
@@ -3537,10 +3539,11 @@ All on ±12 V with 1.5 V headroom and a 1 MHz GBW:
 - 10 kΩ all round, 1 V + 2 V:
   - −3 V, weights −1 and −1, 300 µA through Rf;
   - bandwidth 333.3 kHz (1 MHz / 3).
-- Mixer, R2 = 20 kΩ, 0.5 V + 0.5 V: −750 mV, weight −0.5 on V2,
-  400 kHz.
+- **+ add**, with a third input of 1 V through 10 kΩ: −4 V, 250 kHz.
+- Three-channel mixer, R3 = 20 kΩ, 0.5 V on each input: −1.25 V,
+  weight −0.5 on V3, 285.7 kHz.
 - Averager, Rf = 5 kΩ: −1.5 V.
-- 2-bit DAC, 10 kΩ / 20 kΩ, 5 V + 5 V: −7.5 V.
+- 3-bit DAC, 10 / 20 / 40 kΩ, code 101 (5 V, 0 V, 5 V): −6.25 V.
 - 6 V + 6 V: the ideal −12 V clips at −10.5 V.
 
 The review made these changes:
@@ -3550,6 +3553,8 @@ The review made these changes:
 - It limited the units to real ones and remembers them.
 - It rewrote the subtitle and note in plain words, and added examples.
 - The tool was renamed Summing, on Pierre's request.
+- Also on Pierre's request, inputs can be added, up to four. Each is one
+  compact line with its weight, and the drawing grows one arm per input.
 
 [↑ Index](#index)
 

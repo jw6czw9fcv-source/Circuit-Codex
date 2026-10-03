@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=cc6dd18a21" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=8032cc8161" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -3104,12 +3104,13 @@ integrator.</p>
 <section class="tool" id="opamp-summing" style="--accent:#B98FE0">
   <div class="crumb">Active &amp; semiconductor devices › Op-amps</div>
   <h2>Summing</h2>
-  <figure class="shot"><img src="manual/img/opamp-summing.jpg?h=6515f427bb" loading="lazy" alt="Summing as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/opamp-summing.jpg?h=35cd0ddc1e" loading="lazy" alt="Summing as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Summing amplifier)</p>
 <h3>What it computes</h3>
-<p>For the inverting summing amplifier with two inputs, it gives:
+<p>For the inverting summing amplifier, with two to four inputs (+ add and
+× on each input's line), it gives:
 - the output voltage;
-- each input's weight;
+- each input's weight, shown on its line;
 - the current through Rf;
 - where the output clips, from the supply and the op-amp's headroom;
 - the bandwidth, from the op-amp's gain-bandwidth product.</p>
@@ -3135,27 +3136,28 @@ datasheets, as listed in the Inverting section.</p>
   1.5–2 V for a TL072 or LM358, and 0 for a rail-to-rail op-amp. Past
   that, the output clips.</li>
 <li><strong>Bandwidth</strong> — the op-amp's gain-bandwidth product (GBW) is shared out
-  by the noise gain, 1 + Rf/R1 + Rf/R2. Every input resistor counts, so
-  the bandwidth is lower than either channel's gain alone would suggest.</li>
+  by the noise gain, 1 + Rf/R1 + Rf/R2 + …. Every input resistor counts,
+  so the bandwidth is lower than any one channel's gain would suggest.</li>
 </ul>
 <p>The headroom and GBW entered here are remembered for all the op-amp tools.</p>
 <h3>Why the formulas are these</h3>
 <p>The − input is at 0 V, so input k drives Vk / Rk into it. No current
 enters the op-amp, so the sum flows through Rf, from the − node towards
 the output:</p>
-<pre><code>Vout = −Rf × (V1 / R1 + V2 / R2)
+<pre><code>Vout = −Rf × (V1 / R1 + V2 / R2 + …)
 </code></pre>
-<p>The feedback network divides the output by 1 + Rf / (R1 ∥ R2) on its way
-back to the − input, which equals 1 + Rf/R1 + Rf/R2. That noise gain sets
-the bandwidth: GBW / (1 + Rf/R1 + Rf/R2).</p>
+<p>The feedback network divides the output by 1 + Rf / (R1 ∥ R2 ∥ …) on its
+way back to the − input, which equals 1 + Rf/R1 + Rf/R2 + …. That noise
+gain sets the bandwidth: GBW / (1 + Rf/R1 + Rf/R2 + …). Each input added
+lowers it.</p>
 <h3>Assumptions and limits</h3>
 <ul>
 <li>An ideal op-amp for the sum.</li>
 <li>A symmetric supply, with the same headroom on both sides.</li>
 <li>Each source is taken as having no resistance of its own. A source's
   resistance adds to its input resistor and lowers its weight.</li>
-<li>Two inputs are offered. More inputs work the same way, each adding its
-  own V / R term.</li>
+<li>Up to four inputs are offered, which is what still fits above the tab
+  bar. More work the same way, each adding its own V / R term.</li>
 </ul>
 <h3>What it deliberately does not do</h3>
 <ul>
@@ -3167,10 +3169,11 @@ the bandwidth: GBW / (1 + Rf/R1 + Rf/R2).</p>
 - 10 kΩ all round, 1 V + 2 V:
   - −3 V, weights −1 and −1, 300 µA through Rf;
   - bandwidth 333.3 kHz (1 MHz / 3).
-- Mixer, R2 = 20 kΩ, 0.5 V + 0.5 V: −750 mV, weight −0.5 on V2,
-  400 kHz.
+- <strong>+ add</strong>, with a third input of 1 V through 10 kΩ: −4 V, 250 kHz.
+- Three-channel mixer, R3 = 20 kΩ, 0.5 V on each input: −1.25 V,
+  weight −0.5 on V3, 285.7 kHz.
 - Averager, Rf = 5 kΩ: −1.5 V.
-- 2-bit DAC, 10 kΩ / 20 kΩ, 5 V + 5 V: −7.5 V.
+- 3-bit DAC, 10 / 20 / 40 kΩ, code 101 (5 V, 0 V, 5 V): −6.25 V.
 - 6 V + 6 V: the ideal −12 V clips at −10.5 V.</p>
 <p>The review made these changes:
 - It moved clipping from the full supply to the supply less the headroom,
@@ -3178,7 +3181,9 @@ the bandwidth: GBW / (1 + Rf/R1 + Rf/R2).</p>
 - It put Vout first and large, replacing a row of six small cells.
 - It limited the units to real ones and remembers them.
 - It rewrote the subtitle and note in plain words, and added examples.
-- The tool was renamed Summing, on Pierre's request.</p>
+- The tool was renamed Summing, on Pierre's request.
+- Also on Pierre's request, inputs can be added, up to four. Each is one
+  compact line with its weight, and the drawing grows one arm per input.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/active%3A5%3A6/opamp-summing">Open the tool</a></p>
 </section>
 <section class="tool" id="karnaugh" style="--accent:#5DCAA5">
