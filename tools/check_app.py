@@ -69,6 +69,9 @@ def main():
     tight = sorted((r for r in report if "clearance" in r and 0 <= r["clearance"] < 20), key=lambda r: r["clearance"])
     for r in tight:
         print(f"  note: {r['name']} ({r['calc']}) has only {r['clearance']} px above the tab bar")
+    wraps = [r for r in report if r.get("titleWraps")]
+    if wraps:
+        print(f"  note: {len(wraps)} title(s) wrap on the phone: " + ", ".join(r["name"] for r in wraps))
     print(f"{len(report)} tools, {cases} reference cases: "
           + ("all passed" if not bad else f"{bad} tool(s) with problems"))
     sys.exit(1 if bad else 0)

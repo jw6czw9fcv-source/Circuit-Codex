@@ -14526,27 +14526,50 @@ function renderOpampBuffer(domain, tool, favId) {
 }
 
 function renderOpampComparator(domain, tool, favId) {
+  const C = "opamp-comparator";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
   const state = {
-    mode: "comp",
-    rin: 4.7, rinUnit: "kΩ",
-    r1: 10, r1Unit: "kΩ",
-    r2: 10, r2Unit: "kΩ",
-    rf: 100, rfUnit: "kΩ",
-    vin: 1, vinUnit: "V",
-    vsupply: 12, vsupplyUnit: "V",
+    mode: pref(C, "mode", "comp", ["comp", "schmitt", "schmittni"]),
+    rin: 10, rinUnit: pref(C, "rinUnit", "kΩ", R_UNITS),
+    r1: 10, r1Unit: pref(C, "r1Unit", "kΩ", R_UNITS),
+    r2: 10, r2Unit: pref(C, "r2Unit", "kΩ", R_UNITS),
+    rf: 100, rfUnit: pref(C, "rfUnit", "kΩ", R_UNITS),
+    vin: 7, vinUnit: pref(C, "vinUnit", "V", Object.keys(OPAMP_VIN_UNITS)),
+    vsupply: 12,
+    headroom: pref(OPAMP_PREF, "headroom", 1.5),
   };
 
-  const R_NAMES = ["rin", "r1", "r2", "rf"];
+  // Each example sets the mode and every value it depends on.
+  const example = (mode, vals) => () => {
+    Object.assign(state, { mode, vsupply: 12, headroom: 1.5, vinUnit: "V",
+      rinUnit: "kΩ", r1Unit: "kΩ", r2Unit: "kΩ", rfUnit: "kΩ" }, vals);
+    paint();
+  };
+  useExamples([
+    { title: "Switch at half supply", note: "R1 = R2 sets the switching point at 6 V; 7 V on the − input sends the output low.",
+      apply: example("comp", { r1: 10, r2: 10, vin: 7 }) },
+    { title: "Schmitt trigger on a noisy signal", note: "Rf = 100 k leaves 1 V between the two points; smaller noise cannot make it chatter.",
+      apply: example("schmitt", { r1: 10, r2: 10, rf: 100, vin: 5.5 }) },
+    { title: "Smaller Rf, wider band", note: "Rf = 22 k pushes the switching points to 6.83 V and 2.94 V, 3.89 V apart.",
+      apply: example("schmitt", { r1: 10, r2: 10, rf: 22, vin: 5 }) },
+    { title: "Zero-crossing detector", note: "Non-inverting, 10 k / 100 k: switches high above +1.05 V and low below −1.05 V.",
+      apply: example("schmittni", { rin: 10, rf: 100, vin: 2 }) },
+  ]);
+
   function si(name) {
-    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (["rin", "r1", "r2", "rf"].includes(name)) return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    if (name === "vin") return state.vin * OPAMP_VIN_UNITS[state.vinUnit];
+    return state[name];
   }
 
   function compute() {
-    const rin = si("rin"), r1 = si("r1"), r2 = si("r2"), rf = si("rf"), vin = si("vin"), vsupply = si("vsupply");
+    const rin = si("rin"), r1 = si("r1"), r2 = si("r2"), rf = si("rf"), vin = si("vin"), vsupply = si("vsupply"), headroom = si("headroom");
     const schmitt = state.mode === "schmitt";
     const ni = state.mode === "schmittni";
     if (!(vsupply > 0)) return { problem: "The supply must be greater than zero." };
+    if (!(headroom >= 0) || headroom >= vsupply) {
+      return { problem: "The headroom must be zero or more, and less than the supply." };
+    }
     if (ni) {
       if (!(rin > 0) || !(rf > 0)) {
         return { problem: "Rin and Rf must both be greater than zero — without them there is no feedback and no hysteresis." };
@@ -14560,9 +14583,10 @@ function renderOpampComparator(domain, tool, favId) {
       }
     }
 
-    // Open loop, so the output only ever sits at a rail. Ideal saturation is
-    // the rail itself; the note carries the 1-2V a real part falls short by.
-    const vsat = vsupply;
+    // Open loop, so the output only ever sits at one of its two limits: the
+    // supply less the op-amp's headroom. In the Schmitt modes that level is
+    // what is fed back, so it moves the switching points too.
+    const vsat = vsupply - headroom;
 
     if (ni) {
       // Signal and feedback arrive at the SAME node here, so the trip point is
@@ -14573,7 +14597,7 @@ function renderOpampComparator(domain, tool, favId) {
       const vtHigh = vsat * k;
       const vtLow = -vsat * k;
       const settled = vin > vtHigh ? "high" : vin < vtLow ? "low" : "hold";
-      return { problem: "", schmitt, ni, vtHigh, vtLow, hyst: vtHigh - vtLow, center: 0, settled,
+      return { problem: "", schmitt, ni, vin, vtHigh, vtLow, hyst: vtHigh - vtLow, center: 0, settled,
                vout: settled === "low" ? -vsat : vsat, vsat };
     }
 
@@ -14582,7 +14606,7 @@ function renderOpampComparator(domain, tool, favId) {
       const idiv = vsupply / (r1 + r2);
       // Vin drives V−, so the output is inverted: above the reference is low.
       const high = vin < vref;
-      return { problem: "", schmitt, vref, idiv, high, vout: high ? vsat : -vsat, margin: vin - vref, vsat };
+      return { problem: "", schmitt, vin, vref, idiv, high, settled: high ? "high" : "low", vout: high ? vsat : -vsat, margin: vin - vref, vsat };
     }
 
     // Three sources reach V+ at once — the rail through R1, ground through R2
@@ -14596,7 +14620,7 @@ function renderOpampComparator(domain, tool, favId) {
     // Between the thresholds the output keeps whatever it already was, so a
     // static input genuinely cannot name it — that IS the hysteresis.
     const settled = vin > vtHigh ? "low" : vin < vtLow ? "high" : "hold";
-    return { problem: "", schmitt, vtHigh, vtLow, hyst, center, settled, vout: settled === "high" ? vsat : -vsat, vsat };
+    return { problem: "", schmitt, vin, vtHigh, vtLow, hyst, center, settled, vout: settled === "high" ? vsat : -vsat, vsat, idiv: vsupply / (r1 + r2) };
   }
 
   // The reference sheet's comparator pair: a divider off the positive rail
@@ -14694,23 +14718,23 @@ function renderOpampComparator(domain, tool, favId) {
   }
 
 
-  // Two bands, not one shared axis: the input lives within a volt or so of the
-  // thresholds while the output slams between the rails, so a single scale
-  // would render one of them invisible. The top band zooms on the threshold
-  // region and dashes the trip points in; the bottom band is just high/low.
-  // The output is produced by actually running the hysteresis state through
-  // the sweep rather than by formula — that is what puts the rising edge and
-  // the falling edge at visibly different places, which is the whole point.
+  // Two bands, not one shared axis: the input lives near the switching
+  // points while the output jumps between its limits, so a single scale
+  // would make one of them invisible. The top band zooms on the switching
+  // region with the points dashed in; the bottom band is just high / low.
+  // The output is produced by running the hysteresis state through the
+  // sweep, which is what puts the rising and falling edges at different
+  // places. Legend under the plot.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none"></svg>`;
     const banded = r.schmitt || r.ni;
     const centre = banded ? r.center : r.vref;
     const hyst = banded ? r.hyst : 0;
-    const range = Math.max(hyst * 1.6, 0.15 * (r.vsat || 12));
-    const inMid = 23, inHalf = 17;
+    const range = Math.max(hyst * 1.6, 0.15 * r.vsat);
+    const inMid = 24, inHalf = 18;
     const yIn = (v) => inMid - ((v - centre) / range) * inHalf;
-    const yHi = 48, yLo = 68;
-    const x0 = 10, width = 182, samples = 180, amp = range * 0.85;
+    const yHi = 52, yLo = 72;
+    const x0 = 10, width = 196, samples = 180, amp = range * 0.85;
 
     const inPts = [], outPts = [];
     let st = 1;
@@ -14734,18 +14758,19 @@ function renderOpampComparator(domain, tool, favId) {
       outPts.push(`${x},${st > 0 ? yHi : yLo}`);
     }
 
-    const marks = banded
-      ? `<path d="M8,${yIn(r.vtHigh).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>
-         <path d="M8,${yIn(r.vtLow).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>`
-      : `<path d="M8,${yIn(centre).toFixed(1)} H192" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>`;
+    const marks = (banded ? [r.vtHigh, r.vtLow] : [centre])
+      .map((v) => `<path d="M8,${yIn(v).toFixed(1)} H208" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>`).join("");
 
-    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
+    return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
       ${marks}
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="196" y="14" fill="#5A6169" font-size="8" font-weight="600">Vin</text>
-      <text x="196" y="${Math.min(40, Math.max(28, yIn(banded ? r.vtHigh : centre) + 3)).toFixed(1)}" fill="#E08585" font-size="8" font-weight="600">${banded ? "VT" : "Vref"}</text>
-      <text x="196" y="54" fill="#8FC1F5" font-size="8" font-weight="600">Vout</text>
+      <path d="M10,88 H22" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="26" y="92" fill="#8A9099" font-size="11" font-weight="600">Vin</text>
+      <path d="M54,88 H66" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="70" y="92" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
+      <path d="M108,88 H120" stroke="#E08585" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="124" y="92" fill="#E08585" font-size="11" font-weight="600">switches</text>
     </svg>`;
   }
 
@@ -14758,37 +14783,39 @@ function renderOpampComparator(domain, tool, favId) {
 
   const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
 
-  // Same vocabulary the NPN/PNP switch uses: green for a settled rail, neutral
-  // for the one case that isn't a fault but isn't determined either.
-  function stateInfo(r) {
-    if (r.settled === "hold") {
-      return { label: "Holds last state", color: "var(--text-secondary)", bg: "var(--card-border)" };
-    }
-    const high = r.settled ? r.settled === "high" : r.high;
-    return high
-      ? { label: `HIGH — ${signed(r.vout)}`, color: "var(--result-text)", bg: "var(--result-border)" }
-      : { label: `LOW — ${signed(r.vout)}`, color: "var(--text-secondary)", bg: "var(--card-border)" };
+  function outputText(r) {
+    if (r.settled === "hold") return "keeps its last state";
+    return r.settled === "high" ? `HIGH, ${signed(r.vout)}` : `LOW, ${signed(r.vout)}`;
   }
 
+  // The switching point(s) first and large — what the resistors are chosen
+  // for — then where the input sits and what the output does.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const info = stateInfo(r);
+    const banded = r.schmitt || r.ni;
+    const where = banded
+      ? (r.vin > r.vtHigh ? "above both points" : r.vin < r.vtLow ? "below both points" : "between the points")
+      : (r.vin > r.vref ? "above the point" : "below the point");
     return `
-      <div class="section-label" style="color:#5DCAA5">Output
-        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${banded ? "Switches at, rising / falling" : "Switches at (Vref)"}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num">${banded
+          ? `<span data-res="vth">${siFormat(r.vtHigh, "V")}</span> / <span data-res="vtl">${siFormat(r.vtLow, "V")}</span>`
+          : `<span data-res="vref">${siFormat(r.vref, "V")}</span>`}</span></div>
+        <div class="result-sub">Vin ${siFormat(r.vin, "V")} is ${where}: output <span data-res="state">${outputText(r)}</span></div>
       </div>
-      <div class="eseries-grid" style="clear:both">
-        ${r.schmitt || r.ni ? `
-          ${cell("VT+", siFormat(r.vtHigh, "V"))}
-          ${cell("VT−", siFormat(r.vtLow, "V"))}
-          ${cell("Hysteresis", siFormat(r.hyst, "V"))}
-          ${cell("Centre", siFormat(r.center, "V"))}
-        ` : `
-          ${cell("Vref", siFormat(r.vref, "V"))}
-          ${cell("Vout", siFormat(r.vout, "V"))}
-          ${cell("Margin", signed(r.margin))}
-          ${cell("Idiv", siFormat(r.idiv, "A"))}
-        `}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${banded
+          ? `${cell("Hysteresis", `<span data-res="hyst">${siFormat(r.hyst, "V")}</span>`)}
+             ${cell("Centre", `<span data-res="center">${siFormat(r.center, "V")}</span>`)}
+             ${cell("Output levels", `±${siFormat(r.vsat, "V")}`)}`
+          : `${cell("Vin − Vref", `<span data-res="margin">${signed(r.margin)}</span>`)}
+             ${cell("Divider current", `<span data-res="idiv">${siFormat(r.idiv, "A")}</span>`)}
+             ${cell("Output levels", `±${siFormat(r.vsat, "V")}`)}`}
       </div>`;
   }
 
@@ -14802,21 +14829,23 @@ function renderOpampComparator(domain, tool, favId) {
     const r = compute();
     const schmitt = state.mode === "schmitt";
     const ni = state.mode === "schmittni";
-    const ohmField = (id, name, label) => `
-        <div class="field">
-          <label>${label}</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            <select id="${id}-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>`;
+    const ohmField = (id, name, label) => opampField(label, id, state[name], opampUnitSelect(`${id}-unit`, R_UNITS, state[name + "Unit"]));
+    const vinField = opampField("Vin", "oc-vin", state.vin, opampUnitSelect("oc-vin-unit", Object.keys(OPAMP_VIN_UNITS), state.vinUnit));
+    const supplyField = opampField("Supply (±)", "oc-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`);
+    const headroomField = opampField("Headroom", "oc-headroom", state.headroom, `<span class="unit-fixed">V</span>`);
+    // Two rows in every mode — the resistors, then the three voltages — so
+    // the tall divider drawing still leaves the result above the tab bar.
+    const resistors = ni
+      ? [ohmField("oc-rin", "rin", "Rin"), ohmField("oc-rf", "rf", "Rf")]
+      : [ohmField("oc-r1", "r1", "R1"), ohmField("oc-r2", "r2", "R2"), ...(schmitt ? [ohmField("oc-rf", "rf", "Rf")] : [])];
+    const rows = [resistors, [vinField, supplyField, headroomField]].map((row) => `<div class="field-pair">${row.join("")}</div>`);
 
     app.innerHTML = `
       ${calcHeader(tool, favId, ni
-        ? "Signal and feedback share the + node — the output follows the input"
+        ? "Two switching points around 0 V, output the same way up"
         : schmitt
-          ? "Positive feedback through Rf opens a threshold band"
-          : "Open loop — the output slams to one rail or the other")}
+          ? "Two switching points, output upside down"
+          : "One switching point, set by R1 and R2")}
 
       ${pillRow([["comp", "Comparator"], ["schmitt", "Schmitt inv"], ["schmittni", "Schmitt non-inv"]], state.mode, domain.bg)}
 
@@ -14825,55 +14854,40 @@ function renderOpampComparator(domain, tool, favId) {
         <div data-res="wave">${waveDiagram(r)}</div>
       </div>
 
-      <div class="field-pair">
-        ${ni
-          ? ohmField("oc-rin", "rin", "Rin") + ohmField("oc-rf", "rf", "Rf")
-          : ohmField("oc-r1", "r1", "R1") + ohmField("oc-r2", "r2", "R2")}
-      </div>
-      <div class="field-pair">
-        ${schmitt ? ohmField("oc-rf", "rf", "Rf") : ""}
-        <div class="field">
-          <label>Vin</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oc-vin" value="${state.vin}" />
-            <select id="oc-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Supply (±V)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="oc-vsupply" value="${state.vsupply}" />
-            <select id="oc-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-      </div>
+      ${rows.join("")}
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
         ni
-          ? ["V+ = (Vin/Rin + Vout/Rf) / (1/Rin + 1/Rf)", "Trips where V+ = 0 → Vin = −Vout × Rin/Rf", "VT± = ± Vsat × Rin / Rf,  Centre = 0", "Hysteresis = 2 × Vsat × Rin / Rf"]
+          ? ["Vsat = supply − headroom", "VT± = ± Vsat × Rin / Rf, centre 0 V", "Hysteresis = 2 × Vsat × Rin / Rf"]
           : schmitt
-            ? ["G = 1/R1 + 1/R2 + 1/Rf", "VT± = (V / R1 ± Vsat / Rf) / G", "Hysteresis = 2 × Vsat / (Rf × G)"]
-            : ["Vref = V × R2 / (R1 + R2)", "Vout = −Vsat if Vin > Vref, else +Vsat", "Idiv = V / (R1 + R2),  Margin = Vin − Vref"],
+            ? ["Vsat = supply − headroom", "G = 1/R1 + 1/R2 + 1/Rf", "VT± = (V / R1 ± Vsat / Rf) / G", "Hysteresis = 2 × Vsat / (Rf × G)"]
+            : ["Vref = V × R2 / (R1 + R2)", "Vout = −Vsat if Vin > Vref, else +Vsat", "Vsat = supply − headroom", "Divider current = V / (R1 + R2)"],
         ni
-          ? "The signal arrives at V+ through Rin, where the feedback already is, so the two fight over one node and the output flips where they cancel against the grounded V−. That makes it non-inverting — Vin above VT+ drives the output high."
+          ? "A comparator's output sits at one of two levels, high or low, depending on which input is higher. Here Vin reaches the + input through Rin, and Rf feeds the output back to the same input, while the − input is at 0 V. When the output is low, Vin must rise to +Vsat × Rin / Rf to switch it high; when it is high, Vin must fall to the same amount below 0 V. The gap between the two switching points is the hysteresis: noise smaller than it cannot flip the output back and forth. The output follows the input (non-inverting). Vsat is the output level, the supply less the op-amp's headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail); it sets the points, so enter the right headroom. Headroom is remembered for all the op-amp tools."
           : schmitt
-            ? "Rf feeds part of the output back to V+ — positive feedback, so a crossing pushes the threshold away from the input and the output snaps instead of chattering. Three sources reach V+ at once, so the thresholds come from the conductance sum G, not a plain divider."
-            : "No feedback, so nothing holds the output between the rails: the smallest input difference drives it hard to one. Vin drives V−, so it inverts — above Vref the output goes low. R1/R2 set Vref off the +V rail and burn Idiv continuously."
+            ? "A comparator's output sits at one of two levels, high or low, depending on which input is higher. Here Vin drives the − input, and R1 and R2 make a reference from the supply for the + input. Rf feeds part of the output back to that reference, so the reference moves with the output: while the output is high the switching point is VT+, while it is low it is VT−. A rising input switches the output low at VT+; a falling one switches it back high at VT−. The gap between them is the hysteresis: noise smaller than it cannot make the output chatter. Three resistors meet at the + input, so the points come from all three (G is their combined conductance). Vsat is the output level, the supply less the op-amp's headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail); it sets the points, so enter the right headroom."
+            : "A comparator's output sits at one of two levels, high or low, depending on which input is higher — there is no feedback to hold it in between. R1 and R2 divide the supply to make the reference Vref on the + input; Vin drives the − input. Vin above Vref sends the output low, below it high (inverting). The divider draws its current all the time. Without hysteresis, a slow or noisy input near Vref can make the output flip back and forth — the Schmitt modes fix that. The output levels are the supply less the op-amp's headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail). Headroom is remembered for all the op-amp tools."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.mode = m; setPref(C, "mode", m); paint(); });
 
-    [["oc-rin", "rin"], ["oc-r1", "r1"], ["oc-r2", "r2"], ["oc-rf", "rf"], ["oc-vin", "vin"], ["oc-vsupply", "vsupply"]].forEach(([id, name]) => {
+    [["oc-rin", "rin"], ["oc-r1", "r1"], ["oc-r2", "r2"], ["oc-rf", "rf"], ["oc-vin", "vin"], ["oc-vsupply", "vsupply"], ["oc-headroom", "headroom"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
-      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+      if (el) el.oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        state[name] = v;
+        if (name === "headroom") setPref(OPAMP_PREF, "headroom", v);
+        refresh();
+      };
     });
-    [["oc-rin-unit", "rinUnit"], ["oc-r1-unit", "r1Unit"], ["oc-r2-unit", "r2Unit"], ["oc-rf-unit", "rfUnit"], ["oc-vin-unit", "vinUnit"], ["oc-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
+    [["oc-rin-unit", "rinUnit"], ["oc-r1-unit", "r1Unit"], ["oc-r2-unit", "r2Unit"], ["oc-rf-unit", "rfUnit"], ["oc-vin-unit", "vinUnit"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
-      if (el) el.onchange = (e) => { state[name] = e.target.value; refresh(); };
+      if (el) el.onchange = (e) => { state[name] = e.target.value; setPref(C, name, state[name]); refresh(); };
     });
   }
 

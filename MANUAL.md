@@ -51,9 +51,10 @@ will key on, since that is the id the app already holds for each tool.
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
 - Rectifiers → [Rectifier ripple](#rectifier-ripple)
 - Thyristors (SCR, TRIAC) & MOSFET → [AC phase control](#ac-phase-control)
-- Op-amps → [Inverting amplifier](#inverting-amplifier)
-- Op-amps → [Non-inverting amplifier](#non-inverting-amplifier)
-- Op-amps → [Buffer (voltage follower)](#buffer-voltage-follower)
+- Op-amps → [Inverting amp](#inverting-amp)
+- Op-amps → [Non-inverting amp](#non-inverting-amp)
+- Op-amps → [Voltage follower](#voltage-follower)
+- Op-amps → [Comparators](#comparators)
 
 ### Digital
 
@@ -2701,9 +2702,10 @@ was renamed AC phase control, and the old name stays findable in search.
 ---
 
 <a id="opamp-inverting"></a>
-## Inverting amplifier
+## Inverting amp
 
 `calc: opamp-inverting` · Active & semiconductor devices › Op-amps
+(formerly Inverting amplifier)
 
 ### What it computes
 
@@ -2841,9 +2843,10 @@ definitions, examples and an 11 px legend under the waves.
 ---
 
 <a id="opamp-noninverting"></a>
-## Non-inverting amplifier
+## Non-inverting amp
 
 `calc: opamp-noninverting` · Active & semiconductor devices › Op-amps
+(formerly Non-inverting amplifier)
 
 ### What it computes
 
@@ -2860,7 +2863,7 @@ It also draws the input and output waves.
 
 No standard applies: the gain comes from the ideal op-amp model. The
 headroom and gain-bandwidth figures were read from the TL072, LM358 and
-MCP6002 datasheets, as listed in the Inverting amplifier section.
+MCP6002 datasheets, as listed in the Inverting amp section.
 
 ### What it means
 
@@ -2908,7 +2911,7 @@ op-amp or split the gain over two stages.
 
 ### Assumptions and limits
 
-The limits are the same as for the inverting amplifier:
+The limits are the same as for the inverting amp:
 - an ideal op-amp for the gain;
 - a symmetric supply, with the same headroom on both sides;
 - slew rate, offset and bias current are not calculated;
@@ -2935,7 +2938,7 @@ classic op-amps do not accept inputs close to their positive supply.
 - Gain 11, 1.5 V: the ideal 16.5 V clips at 10.5 V.
 - Rf = 0: gain 1 and the whole 1 MHz.
 
-The review found the same problems as on the inverting amplifier:
+The review found the same problems as on the inverting amp:
 - clipping at the full supply;
 - no bandwidth;
 - units such as mΩ, GΩ and kV;
@@ -2950,9 +2953,10 @@ definitions and examples.
 ---
 
 <a id="opamp-buffer"></a>
-## Buffer (voltage follower)
+## Voltage follower
 
 `calc: opamp-buffer` · Active & semiconductor devices › Op-amps
+(formerly Buffer (voltage follower))
 
 ### What it computes
 
@@ -2968,7 +2972,7 @@ For an op-amp buffer between a source and a load, it gives:
 No standard applies. The figures come from the ideal op-amp model and
 from Ohm's law for the source and load.
 - **Headroom and gain-bandwidth figures** — read from the TL072, LM358 and
-  MCP6002 datasheets, as listed in the Inverting amplifier section.
+  MCP6002 datasheets, as listed in the Inverting amp section.
 - **The 10 mA warning** — follows the TI LM358 datasheet (SLOS068AB,
   October 2024). At a 15 V supply it gives an output current of 20 mA
   minimum (30 typical) when sourcing and 10 mA minimum (20 typical) when
@@ -3026,7 +3030,7 @@ noise gain is 1, so the bandwidth equals GBW.
 ### What it deliberately does not do
 
 - It does not model the source's own frequency response or noise.
-- Gain other than 1 belongs to the Non-inverting amplifier.
+- Gain other than 1 belongs to the Non-inverting amp.
 
 ### How it was checked
 
@@ -3045,6 +3049,135 @@ the output-current warning, and put the buffered voltage first and large,
 with the unbuffered value beside it. It also limited the units to real
 ones, remembered the choices, and wrote the note in plain words with
 examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="opamp-comparator"></a>
+## Comparators
+
+`calc: opamp-comparator` · Active & semiconductor devices › Op-amps
+(formerly Comparator (± hysteresis / Schmitt trigger))
+
+### What it computes
+
+For an op-amp used as a comparator, in three forms, it gives:
+- the switching point or points: one for a plain comparator, two for a
+  Schmitt trigger;
+- the hysteresis between the two points, and their centre;
+- whether the output is high or low for a given input, and the two output
+  levels;
+- for the plain comparator, the reference divider's current.
+
+The waveform shows a sine wave swept across the points and the output it
+produces.
+
+### Source
+
+No standard applies. The points come from the resistor network at the
++ input; the derivation is below. The output levels use the op-amp's
+headroom, read from the TL072, LM358 and MCP6002 datasheets as listed in
+the Inverting amp section.
+
+### What it means
+
+A **comparator** answers one question: which input is higher? It has no
+feedback to hold its output in between, so the output sits at one of two
+levels, **high** or **low**. Those levels are the supply less the op-amp's
+headroom, called **Vsat**. They are about 1.5–2 V short of the rails for a
+TL072 or LM358, and at the rails for a rail-to-rail op-amp.
+
+- **Comparator** — R1 and R2 divide the supply into a reference, Vref, on
+  the + input. Vin goes to the − input. Vin above Vref sends the output low,
+  and below it high: it is inverting. The divider draws its current all the
+  time.
+- **The problem with a plain comparator** — when the input is slow or noisy
+  near Vref, the noise carries it back and forth across the point, and the
+  output flips many times. This is called **chatter**.
+- **Schmitt trigger** — the cure is **hysteresis**: two switching points
+  instead of one. A rising input switches at the upper point, **VT+**, and a
+  falling one at the lower point, **VT−**. Noise smaller than the gap
+  between them cannot flip the output back.
+  - **Inverting** — Rf feeds part of the output back to the divider's
+    middle point, so the reference moves with the output. While the output
+    is high, the point is VT+; while it is low, VT−. When Vin is between
+    the points, the output keeps its last state.
+  - **Non-inverting** — Vin comes to the + input through Rin, with Rf from
+    the output to the same input, and the − input at 0 V. The points sit
+    symmetrically around 0 V, and the output follows the input.
+- **Centre** — the middle of the two points.
+
+The headroom entered here is remembered for all the op-amp tools.
+
+### Why the formulas are these
+
+**Comparator.** Vref = V × R2 / (R1 + R2), and the divider current is
+V / (R1 + R2).
+
+**Inverting Schmitt.** Three resistors meet at the + input: R1 from the
+supply V, R2 to ground, and Rf from the output (±Vsat). With no current
+into the op-amp, the currents into that node sum to zero, so its voltage
+is
+
+    V+ = (V / R1 + Vout / Rf) / G,   G = 1/R1 + 1/R2 + 1/Rf
+
+Putting Vout = +Vsat gives VT+, and −Vsat gives VT−. The gap is
+2 × Vsat / (Rf × G). A smaller Rf makes it wider.
+
+**Non-inverting Schmitt.** The output switches when the + input crosses
+0 V. There Vin / Rin = −Vout / Rf, so
+
+    VT± = ± Vsat × Rin / Rf
+
+and the gap is 2 × Vsat × Rin / Rf.
+
+The output level Vsat appears in both Schmitt formulas. That is why the
+headroom changes the switching points, not only the output.
+
+### Assumptions and limits
+
+- **An op-amp used as a comparator.**
+  - An op-amp is not made for this. It switches slowly (its slew rate),
+    and some op-amps misbehave with their inputs far apart.
+  - A dedicated comparator chip (LM393, LM339) is faster. Its output is
+    usually open-collector: it only pulls low, a pull-up resistor makes the
+    high level, and the high level is the pull-up's voltage. That case is
+    not modelled.
+- **Symmetric supply** of ± the value entered, with the same headroom on
+  both sides.
+- **Input range** — both inputs must stay within the op-amp's input
+  common-mode range from the datasheet.
+- The source driving Vin is taken as having no resistance of its own. In
+  the non-inverting form, any source resistance adds to Rin.
+
+### What it deliberately does not do
+
+- It does not choose the resistors for given switching points. Try values
+  instead: a smaller Rf widens the gap, and R1 and R2 move the centre.
+- Switching speed and propagation delay are not calculated.
+
+### How it was checked
+
+All on ±12 V with 1.5 V headroom, so the output levels are ±10.5 V:
+- **Comparator**, 10 k / 10 k: switches at 6 V. Vin 7 V gives a low
+  output, −10.5 V, and the divider draws 600 µA.
+- **Inverting Schmitt**, 10 k / 10 k:
+  - Rf 100 k: VT+ 6.214 V, VT− 5.214 V, a 1 V gap;
+  - Rf 22 k: 6.833 V and 2.944 V, 3.889 V apart;
+  - Rf 100 k on a rail-to-rail op-amp (headroom 0): 6.286 V and 5.143 V.
+- **Non-inverting Schmitt**, 10 k / 100 k: ±1.05 V. A 2 V input gives a
+  high output.
+
+The review made several changes:
+- The output levels were the full supply, so the switching points were
+  wrong for most op-amps. The shared headroom field fixes both.
+- The switching points come first and large.
+- The Schmitt mode's Rf no longer squeezes three fields into one row.
+- The waveform legend is now 11 px, below the plot.
+- Units are limited to real ones and remembered, the note is in plain
+  words, and there are examples.
+- The tool was renamed Comparators to fit on one line on the phone.
 
 [↑ Index](#index)
 

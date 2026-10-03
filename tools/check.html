@@ -143,6 +143,17 @@ async function checkTool(t) {
   if (faint.size) r.notes.push(`${faint.size} drawing text(s) under 4.5:1 contrast: ${[...faint].slice(0, 3).join(", ")}`);
   if (overlaps.length) r.notes.push(`${overlaps.length} overlapping label pair(s): ${overlaps.slice(0, 2).join(", ")}`);
 
+  // A tool's name should sit on one line beside the bulb and the star; a
+  // wrapped title pushes the whole screen down a line. Noted, not failed,
+  // until every tool has been reviewed.
+  const title = doc.querySelector(".calc-header h1, h1");
+  if (title) {
+    const range = doc.createRange();
+    range.selectNodeContents(title);
+    const lines = new Set([...range.getClientRects()].map((q) => Math.round(q.top))).size;
+    if (lines > 1) r.titleWraps = true;
+  }
+
   const tab = doc.querySelector(".tabbar");
   const res = firstResult(doc);
   if (tab && res) {

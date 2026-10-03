@@ -81,8 +81,8 @@ const DOMAINS = [
       {
         title: "Op-amps",
         tools: [
-          { name: "Inverting amplifier", calc: "opamp-inverting" }, { name: "Non-inverting amplifier", calc: "opamp-noninverting" }, { name: "Buffer (voltage follower)", calc: "opamp-buffer" },
-          { name: "Comparator (± hysteresis / Schmitt trigger)", calc: "opamp-comparator" }, { name: "Op-amp integrator", was: "Integrator", calc: "opamp-integrator" }, { name: "Op-amp differentiator", was: "Differentiator", calc: "opamp-differentiator" },
+          { name: "Inverting amp", was: "Inverting amplifier", calc: "opamp-inverting" }, { name: "Non-inverting amp", was: "Non-inverting amplifier", calc: "opamp-noninverting" }, { name: "Voltage follower", was: "Buffer (voltage follower)", calc: "opamp-buffer" },
+          { name: "Comparators", was: "Comparator (± hysteresis / Schmitt trigger)", calc: "opamp-comparator" }, { name: "Op-amp integrator", was: "Integrator", calc: "opamp-integrator" }, { name: "Op-amp differentiator", was: "Differentiator", calc: "opamp-differentiator" },
           { name: "Summing amplifier", calc: "opamp-summing" }, { name: "Differential amplifier", calc: "opamp-differential" }, { name: "Sallen-Key filter" },
         ],
       },
@@ -277,8 +277,8 @@ const TOOL_KEYWORDS = {
   "thyristor-firing": "thyristor firing angle scr triac mosfet trailing edge phase dimmer",
   "opamp-inverting": "op amp gain inverting amplifier",
   "opamp-noninverting": "op amp gain non inverting amplifier",
-  "opamp-buffer": "op amp voltage follower unity gain",
-  "opamp-comparator": "schmitt trigger hysteresis comparator",
+  "opamp-buffer": "op amp buffer voltage follower unity gain",
+  "opamp-comparator": "comparator schmitt trigger hysteresis threshold op amp",
   "opamp-integrator": "op amp integrator ramp",
   "opamp-differentiator": "op amp differentiator",
   "opamp-summing": "op amp adder mixer",
