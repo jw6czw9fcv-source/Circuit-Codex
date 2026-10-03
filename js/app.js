@@ -14345,68 +14345,101 @@ function renderOpampNonInverting(domain, tool, favId) {
 }
 
 function renderOpampBuffer(domain, tool, favId) {
+  const C = "opamp-buffer";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
   const state = {
-    vin: 1, vinUnit: "V",
-    rs: 100, rsUnit: "kΩ",
-    rl: 10, rlUnit: "kΩ",
-    vsupply: 12, vsupplyUnit: "V",
+    vin: 1, vinUnit: pref(C, "vinUnit", "V", Object.keys(OPAMP_VIN_UNITS)),
+    vsupply: 12,
+    rs: 100, rsUnit: pref(C, "rsUnit", "kΩ", R_UNITS),
+    rl: 10, rlUnit: pref(C, "rlUnit", "kΩ", R_UNITS),
+    headroom: pref(OPAMP_PREF, "headroom", 1.5),
+    gbw: pref(OPAMP_PREF, "gbw", 1), gbwUnit: pref(OPAMP_PREF, "gbwUnit", "MHz", Object.keys(OPAMP_GBW_UNITS)),
   };
 
-  const R_NAMES = ["rs", "rl"];
+  const example = (vin, rs, rsUnit, rl, rlUnit) => () => {
+    Object.assign(state, { vin, vinUnit: "V", rs, rsUnit, rl, rlUnit, vsupply: 12, headroom: 1.5 });
+    paint();
+  };
+  useExamples([
+    { title: "High-impedance sensor", note: "A 100 kΩ source into a 10 kΩ load keeps only 91 mV of its 1 V; buffered, the load gets all of it.",
+      apply: example(1, 100, "kΩ", 10, "kΩ") },
+    { title: "Buffering a divider", note: "A 10 k / 10 k divider gives 2.5 V from 5 kΩ; into 1 kΩ it sags to 0.42 V, buffered it stays 2.5 V.",
+      apply: example(2.5, 5, "kΩ", 1, "kΩ") },
+    { title: "Strong source: little gained", note: "A 50 Ω source into 10 kΩ loses only 0.5% — a buffer adds little here.",
+      apply: example(1, 50, "Ω", 10, "kΩ") },
+    { title: "Input beyond the swing", note: "An 11 V input cannot pass: the output stops at 10.5 V, 1.5 V short of the 12 V rail.",
+      apply: example(11, 100, "kΩ", 10, "kΩ") },
+  ]);
+
   function si(name) {
-    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (name === "rs" || name === "rl") return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    if (name === "vin") return state.vin * OPAMP_VIN_UNITS[state.vinUnit];
+    if (name === "gbw") return state.gbw * OPAMP_GBW_UNITS[state.gbwUnit];
+    return state[name];
   }
 
+  // A follower has no gain to set, so the figure worth computing is what it
+  // saves: wired straight to the load, Rs and RL are a divider. Through the
+  // buffer the source gives almost no current, and the op-amp drives RL
+  // itself, so Vout stays at Vin up to the swing limit. The noise gain is 1,
+  // so the bandwidth is the whole GBW.
   function compute() {
-    const vin = si("vin"), rs = si("rs"), rl = si("rl"), vsupply = si("vsupply");
-    if (!(rs >= 0) || !(rl > 0) || !(vsupply > 0)) {
-      return { problem: "RL and the supply must be greater than zero, and Rs must be zero or greater." };
+    const vin = si("vin"), rs = si("rs"), rl = si("rl"), vsupply = si("vsupply"), headroom = si("headroom"), gbw = si("gbw");
+    if (!(rs >= 0) || !(rl > 0) || !(vsupply > 0) || !(gbw > 0)) {
+      return { problem: "RL, the supply and GBW must be greater than zero, and Rs zero or greater." };
     }
-
-    // A follower has no gain to compute, so the number worth computing is what
-    // it saves you: tie the source straight to the load and Rs/RL is just a
-    // divider. The buffer draws essentially nothing from the source and drives
-    // RL from its own near-zero output impedance, so Vout stays at Vin.
-    const saturated = Math.abs(vin) > vsupply;
-    const vout = saturated ? Math.sign(vin) * vsupply : vin;
-    const vdirect = vin * (rl / (rs + rl));
-    const lossPct = (rs / (rs + rl)) * 100;
-    const iload = vout / rl;
-
-    return { problem: "", vout, voutIdeal: vin, saturated, vdirect, lossPct, iload };
+    if (!(headroom >= 0) || headroom >= vsupply) {
+      return { problem: "The headroom must be zero or more, and less than the supply." };
+    }
+    const vmax = vsupply - headroom;
+    const saturated = Math.abs(vin) > vmax;
+    const vout = saturated ? Math.sign(vin) * vmax : vin;
+    return {
+      problem: "", vin, vout, saturated,
+      vdirect: vin * (rl / (rs + rl)),
+      lossPct: (rs / (rs + rl)) * 100,
+      iload: vout / rl,
+      bandwidth: gbw,
+    };
   }
 
-  // The reference sheet's buffer: + on top taking Vin, - on the bottom, and
-  // the output wrapping back around the outside of the body to reach it. The
-  // return run sits one lead-length (17px) below the triangle's lower edge,
-  // the same clearance the non-inverting amp's feedback node uses, and turns
-  // up on the output junction's own column so the loop closes on the node
-  // rather than on the wire.
+  // The reference sheet's buffer — + on top, − on the bottom, the output
+  // wrapping back around the outside of the body one lead-length (17px)
+  // below the triangle — with what surrounds it drawn in: the source Vin
+  // with its own resistance Rs in series on the left, and the load RL from
+  // the output to ground on the right. Both grounds sit on one line.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
-    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+    const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
+    const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
 
-    return `<svg width="189" height="82" viewBox="49 17 189 82" fill="none">
+    return `<svg width="262" height="104" viewBox="-22 12 262 104" fill="none">
       <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">+</text>
       <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">−</text>
 
-      ${port(90, 38)}
-      <text x="78" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
-      <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="20" cy="70" r="14" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      <path d="M13 70 Q16.5 62 20 70 Q23.5 78 27 70" stroke="${comp}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <text x="2" y="74" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      <path d="M20 56 V38 H40" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${zigH(38, 76)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="58" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rs</text>
+      <path d="M76 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M20 84 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(20, 100)}
 
-      <path d="M110 62 H93 V92 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-
-      <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M110 62 H93 V92 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M160 50 H210 V58" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
-      <path d="M177 50 H194" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      ${port(197, 50)}
-      <text x="205" y="54" fill="${comp}" font-size="12" font-weight="600">Vout</text>
+      <text x="193" y="44" fill="${comp}" font-size="12" font-weight="600" text-anchor="middle">Vout</text>
+      <path d="${zig(210, 58)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="222" y="80" fill="${comp}" font-size="11" font-weight="600">RL</text>
+      <path d="M210 94 V100" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${ground(210, 100)}
     </svg>`;
   }
-
 
   function cell(label, value) {
     return `<div class="eseries-cell">
@@ -14419,18 +14452,24 @@ function renderOpampBuffer(domain, tool, favId) {
 
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const pct = Number(r.lossPct.toPrecision(3));
     return `
-      <div class="section-label" style="color:#5DCAA5">Output
-        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>` : ""}
+      <div class="section-label" style="color:#5DCAA5">Output (across RL)</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Vout, buffered</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vout">${siFormat(r.vout, "V")}</span></div>
+        <div class="result-sub">Without the buffer: <span data-res="direct">${siFormat(r.vdirect, "V")}</span>, <span data-res="loss">${pct}%</span> lost</div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="clear:both">
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
         ${cell("Gain", "1×")}
-        ${cell("Vout", siFormat(r.vout, "V"))}
-        ${cell("Iload", siFormat(r.iload, "A"))}
-        ${cell("Unbuffered", siFormat(r.vdirect, "V"))}
-        ${cell("Loading loss", `${trim(r.lossPct)}%`)}
+        ${cell("Load current", `<span data-res="iload">${siFormat(r.iload, "A")}</span>`)}
+        ${cell("Bandwidth", `<span data-res="bw">${siFormat(r.bandwidth, "Hz")}</span>`)}
       </div>
-      ${r.saturated ? `<div class="error-text">Clipping — Vin is ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. A follower has no gain to blame; the input itself is outside what the supply can reproduce.</div>` : ""}`;
+      ${r.saturated ? `<div class="error-text" data-res="clip">Clipping — Vin is ${signed(r.vin)}, but the output stops at ${signed(r.vout)}${state.headroom > 0 ? `, ${trim(state.headroom)} V short of the rail` : ", the rail"}. A buffer has no gain to reduce: the input itself is too large for this supply.</div>` : ""}
+      ${Math.abs(r.iload) > 0.01 ? `<div class="error-text" data-res="iwarn">The load draws ${siFormat(Math.abs(r.iload), "A")}. Many op-amps cannot deliver more than about 10 mA and keep their swing; check the output current on the datasheet.</div>` : ""}`;
   }
 
   function refresh() {
@@ -14441,59 +14480,45 @@ function renderOpampBuffer(domain, tool, favId) {
   function paint() {
     const r = compute();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Unity gain — isolates a weak source from its load")}
+      ${calcHeader(tool, favId, "Gain 1 — shields a weak source from its load")}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
       <div class="field-pair">
-        <div class="field">
-          <label>Vin</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ob-vin" value="${state.vin}" />
-            <select id="ob-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Supply (±V)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ob-vsupply" value="${state.vsupply}" />
-            <select id="ob-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("Vin", "ob-vin", state.vin, opampUnitSelect("ob-vin-unit", Object.keys(OPAMP_VIN_UNITS), state.vinUnit))}
+        ${opampField("Supply (±)", "ob-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`)}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>Source Rs</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ob-rs" value="${state.rs}" />
-            <select id="ob-rs-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rsUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Load RL</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ob-rl" value="${state.rl}" />
-            <select id="ob-rl-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rlUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("Source Rs", "ob-rs", state.rs, opampUnitSelect("ob-rs-unit", R_UNITS, state.rsUnit))}
+        ${opampField("Load RL", "ob-rl", state.rl, opampUnitSelect("ob-rl-unit", R_UNITS, state.rlUnit))}
+      </div>
+      <div class="field-pair">
+        ${opampField("Headroom", "ob-headroom", state.headroom, `<span class="unit-fixed">V</span>`)}
+        ${opampField("GBW", "ob-gbw", state.gbw, opampUnitSelect("ob-gbw-unit", Object.keys(OPAMP_GBW_UNITS), state.gbwUnit))}
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Gain = 1, so Vout = Vin", "Iload = Vout / RL", "Unbuffered = Vin × RL / (Rs + RL)", "Loading loss = Rs / (Rs + RL) × 100%", "Zin ≈ op-amp input impedance, Zout ≈ 0"],
-        "A follower has no gain to set — feedback ties the output back to V−, so Vout tracks Vin. What it buys is isolation, which is why Rs and RL are here rather than in the drawing: they are the source and load around the buffer, not part of it. Wire them together directly and Rs/RL is just a divider — the Unbuffered figure is what arrives. Through the buffer the source gives up almost no current, and the op-amp drives RL from its own near-zero output impedance. Two limits the ideal model hides: Vout still clips at the rails, and the op-amp has to source Iload, so check the part's output current rating."
+        ["Vout = Vin, |Vout| ≤ supply − headroom", "Without buffer = Vin × RL / (Rs + RL)", "Lost = Rs / (Rs + RL) × 100%", "Load current = Vout / RL", "Bandwidth = GBW"],
+        "Every real source has some internal resistance, Rs — a sensor, a divider, a pickup. Connect it straight to a load RL and the two form a divider: the load gets only Vin × RL / (Rs + RL), the rest is lost inside the source. A buffer is an op-amp whose output is wired back to its − input, so it copies Vin to its output (gain 1, same way up). Its input draws almost no current, so the source keeps its full voltage, and its output drives the load itself with almost no resistance of its own. Rs and RL are the parts around the buffer, not in it. Limits: the output stops short of the supply by the headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail), and here the input follows the signal too, so it must stay within the op-amp's input range from the datasheet. The output must also supply the load current. With a gain of 1 the bandwidth is the whole GBW. Headroom and GBW are remembered for all the op-amp tools."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint);
 
-    [["ob-vin", "vin"], ["ob-vsupply", "vsupply"], ["ob-rs", "rs"], ["ob-rl", "rl"]].forEach(([id, name]) => {
-      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    [["ob-vin", "vin"], ["ob-vsupply", "vsupply"], ["ob-rs", "rs"], ["ob-rl", "rl"], ["ob-headroom", "headroom"], ["ob-gbw", "gbw"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        state[name] = v;
+        if (name === "headroom" || name === "gbw") setPref(OPAMP_PREF, name, v);
+        refresh();
+      };
     });
-    [["ob-vin-unit", "vinUnit"], ["ob-vsupply-unit", "vsupplyUnit"], ["ob-rs-unit", "rsUnit"], ["ob-rl-unit", "rlUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["ob-vin-unit", "vinUnit"], ["ob-rs-unit", "rsUnit"], ["ob-rl-unit", "rlUnit"], ["ob-gbw-unit", "gbwUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; setPref(name === "gbwUnit" ? OPAMP_PREF : C, name, state[name]); refresh(); };
     });
   }
 

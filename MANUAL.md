@@ -53,6 +53,7 @@ will key on, since that is the id the app already holds for each tool.
 - Thyristors (SCR, TRIAC) & MOSFET → [AC phase control](#ac-phase-control)
 - Op-amps → [Inverting amplifier](#inverting-amplifier)
 - Op-amps → [Non-inverting amplifier](#non-inverting-amplifier)
+- Op-amps → [Buffer (voltage follower)](#buffer-voltage-follower)
 
 ### Digital
 
@@ -2943,6 +2944,107 @@ The review found the same problems as on the inverting amplifier:
 It now shares the headroom and GBW fields and the waveform with the
 inverting amplifier. It shows Vout first and large, and adds plain
 definitions and examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="opamp-buffer"></a>
+## Buffer (voltage follower)
+
+`calc: opamp-buffer` · Active & semiconductor devices › Op-amps
+
+### What it computes
+
+For an op-amp buffer between a source and a load, it gives:
+- the voltage the load receives through the buffer;
+- what the load would get without the buffer, and how much is lost;
+- the load current;
+- where the output clips, from the supply and the op-amp's headroom;
+- the bandwidth.
+
+### Source
+
+No standard applies. The figures come from the ideal op-amp model and
+from Ohm's law for the source and load.
+- **Headroom and gain-bandwidth figures** — read from the TL072, LM358 and
+  MCP6002 datasheets, as listed in the Inverting amplifier section.
+- **The 10 mA warning** — follows the TI LM358 datasheet (SLOS068AB,
+  October 2024). At a 15 V supply it gives an output current of 20 mA
+  minimum (30 typical) when sourcing and 10 mA minimum (20 typical) when
+  sinking.
+
+### What it means
+
+Every real signal source has some resistance of its own, **Rs**: a sensor,
+a voltage divider, a guitar pickup, a reference. When it drives a **load**,
+RL, current flows, and part of the voltage is lost across Rs before it
+reaches the load. The two resistances form a divider. This is called
+**loading**.
+
+- **Without the buffer** — the load gets Vin × RL / (Rs + RL). A
+  100 kΩ sensor into a 10 kΩ load delivers only 91 mV of its 1 V.
+- **Buffer** — an op-amp whose output is wired straight back to its
+  − input. It copies its + input to its output: a gain of 1, the same way
+  up.
+  - Its input draws almost no current, so no voltage is lost across Rs.
+  - Its output drives the load from the op-amp's own supply, with almost
+    no resistance of its own.
+- **Load current** — Vout / RL. The op-amp's output has to supply it. Above
+  about 10 mA many op-amps lose swing or limit; check the output current on
+  the datasheet.
+- **Headroom** — how close the output can get to the supply. It is about
+  1.5–2 V for a TL072 or LM358, and 0 for a rail-to-rail op-amp. A larger
+  input clips: a buffer has no gain to reduce, so the input itself is too
+  large for the supply.
+- **Bandwidth** — with a gain of 1, the bandwidth is the op-amp's whole
+  gain-bandwidth product (GBW).
+
+The headroom and GBW entered here are remembered for all the op-amp tools.
+
+### Why the formulas are these
+
+Without the buffer, the same current flows through Rs and RL, so RL gets
+the share RL / (Rs + RL) of Vin, and the share Rs / (Rs + RL) is lost.
+
+With the buffer, the op-amp holds its − input, which is its output, at the
+voltage of its + input. Almost no current flows into the + input, so
+nothing is dropped across Rs, and Vout = Vin, up to supply − headroom. The
+noise gain is 1, so the bandwidth equals GBW.
+
+### Assumptions and limits
+
+- An ideal op-amp, apart from the headroom.
+- **Input range.** In a buffer the inputs follow the signal, so Vin must
+  stay within the op-amp's input common-mode range on the datasheet. Many
+  classic op-amps do not accept inputs near their positive supply.
+- **Output current.** The 10 mA figure is a rule of thumb from the LM358;
+  other parts deliver more or less.
+- **Capacitive loads** (long cables) can make a buffer oscillate. This is
+  not covered.
+
+### What it deliberately does not do
+
+- It does not model the source's own frequency response or noise.
+- Gain other than 1 belongs to the Non-inverting amplifier.
+
+### How it was checked
+
+- 1 V from 100 kΩ into 10 kΩ:
+  - buffered: 1 V, 100 µA, a 1 MHz bandwidth on a 1 MHz op-amp;
+  - without the buffer: 90.91 mV, 90.9% lost.
+- A 10 k / 10 k divider (2.5 V from 5 kΩ) into 1 kΩ: 416.7 mV without the
+  buffer, 2.5 V with it, 2.5 mA.
+- 50 Ω into 10 kΩ: 0.498% lost.
+- 11 V on ±12 V with 1.5 V headroom: clips at 10.5 V.
+- 5 V into 100 Ω: 50 mA, with the warning.
+
+The review kept the drawing from Pierre's sheet and added the source with
+its Rs and the load RL around it. It added the headroom, the bandwidth and
+the output-current warning, and put the buffered voltage first and large,
+with the unbuffered value beside it. It also limited the units to real
+ones, remembered the choices, and wrote the note in plain words with
+examples.
 
 [↑ Index](#index)
 
