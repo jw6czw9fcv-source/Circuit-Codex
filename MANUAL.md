@@ -3198,6 +3198,8 @@ For the op-amp integrator, with a square or a sine wave at its input:
   each ramp lasts;
 - for a sine, the gain, as a ratio and in decibels;
 - the time constant RC and the frequency f₀ where the gain is 1;
+- with the optional drift resistor Rf across C, its corner frequency fL,
+  and the output it then gives;
 - where the output clips, from the supply and the op-amp's headroom.
 
 It draws the input and output waves.
@@ -3231,6 +3233,14 @@ the input over time.
 - **Headroom** — how close the output can get to the supply. It is about
   1.5–2 V for a TL072 or LM358, and 0 for a rail-to-rail op-amp. At low
   frequencies the integrator asks for large outputs and clips.
+- **Rf across C** (optional) — a real integrator also adds up the
+  op-amp's own small offset voltage, so its output slowly drifts into a
+  rail. A large resistor across C, around 100 × R, stops that. Leave the
+  field empty for the ideal circuit.
+  - **fL, the Rf corner** — 1 / (2π × Rf × C). Above fL the circuit
+    integrates; well below it, it is just an inverting amplifier of gain
+    Rf / R.
+  - Under 10 × fL the tool warns that the integration is poor.
 
 The headroom is remembered for all the op-amp tools.
 
@@ -3250,17 +3260,26 @@ I / C per second, and the output is the far side of C from the 0 V input:
 - **Sine** — integrating Vp × sin(2πft) gives −Vp × cos(2πft) / (2πf).
   With the minus sign of the circuit, that becomes +Vp × cos / (2πfRC):
   the same shape, a quarter cycle ahead, scaled by 1 / (2πfRC) = f₀ / f.
+- **With Rf** — Rf in parallel with C makes a first-order low-pass of DC
+  gain Rf / R and corner fL.
+  - A sine sees a gain of (Rf / R) / √(1 + (f / fL)²) and leads by
+    180° − atan(f / fL). Well above fL this is the ideal f₀ / f and 90°.
+  - A square settles to exponential edges. Each half period starts at +A
+    and heads towards −(Rf / R) × Vin with time constant Rf × C. Requiring
+    it to end at −A gives
+
+        A = (Rf / R) × Vin × tanh(1 / (4 × f × Rf × C))
+
+    As Rf grows this becomes the ideal Vin / (4 × f × RC). The slope
+    through 0 V is always Vin / RC.
 
 ### Assumptions and limits
 
-- **Drift.** A real op-amp has a small input offset voltage, and the
-  integrator adds it up too, so the output slowly runs into a rail. The
-  usual cure is a large resistor across C, around 100 × R. It limits the
-  gain at very low frequencies, below about f₀ / 100 for 100 × R. That
-  resistor is not modelled here; the tool shows the ideal integrator.
-- **Steady state.** The triangle is shown centred on 0 V, as it settles
-  once the drift resistor is present. Without one, its level depends on
-  where it started.
+- **Drift.** Without Rf, the tool shows the ideal integrator. A real one
+  drifts into a rail; fit Rf to model the practical circuit. The offset
+  itself is not calculated.
+- **Steady state.** The output is shown as it settles, centred on 0 V.
+  Without Rf, its level in a real circuit depends on where it started.
 - **Op-amp speed.** At high frequencies the op-amp's gain-bandwidth and
   slew rate limit the output. This is not calculated.
 - The input is assumed to have no DC part. A DC input makes a ramp that
@@ -3268,7 +3287,8 @@ I / C per second, and the output is the far side of C from the 0 V input:
 
 ### What it deliberately does not do
 
-- The drift resistor and its low-frequency corner are not calculated.
+- The output's DC error from the offset voltage, multiplied by
+  Rf / R, is not calculated.
 - Other waveshapes (pulses, ramps) are not offered.
 
 ### How it was checked
@@ -3280,6 +3300,13 @@ All on ±12 V with 1.5 V headroom:
 - Sine at 100 Hz with 10 kΩ and 100 nF: gain 1.592 (4.04 dB), 1.592 V
   peak.
 - Square at 10 Hz: the ideal 25 V peak clips at 10.5 V.
+- With Rf = 1 MΩ:
+  - fL is 1.592 Hz;
+  - the 100 Hz square gives 2.499 V peak, against 2.5 V ideal;
+  - a 100 Hz sine has a gain of 1.591 and leads by 90.9°;
+  - at 10 Hz, below 10 × fL (15.92 Hz), the tool warns.
+
+  These were checked in a separate script.
 
 The review made several changes:
 - It moved clipping from the full supply to the supply less the headroom.
@@ -3291,6 +3318,8 @@ The review made several changes:
 - It moved the 11 px legend below the waves.
 - It limited the units to real ones and remembers them.
 - It rewrote the note in plain words and added examples.
+- On Pierre's request, it added the optional Rf across C, drawn as a
+  second rung above C.
 
 [↑ Index](#index)
 

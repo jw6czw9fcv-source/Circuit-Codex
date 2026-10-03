@@ -14902,14 +14902,17 @@ function renderOpampIntegrator(domain, tool, favId) {
     wave: pref(C, "wave", "square", ["square", "sine"]),
     r: 10, rUnit: pref(C, "rUnit", "kΩ", R_UNITS),
     c: 100, cUnit: pref(C, "cUnit", "nF", Object.keys(RCF_C_UNITS)),
+    // Optional drift resistor across C; 0 means not fitted (the ideal
+    // integrator of the reference sheet).
+    rf: 0, rfUnit: pref(C, "rfUnit", "MΩ", R_UNITS),
     vin: 1, vinUnit: pref(C, "vinUnit", "V", Object.keys(OPAMP_VIN_UNITS)),
     freq: 100, freqUnit: pref(C, "freqUnit", "Hz", Object.keys(F_UNITS)),
     vsupply: 12,
     headroom: pref(OPAMP_PREF, "headroom", 1.5),
   };
 
-  const example = (wave, r, c, cUnit, freq, freqUnit) => () => {
-    Object.assign(state, { wave, r, rUnit: "kΩ", c, cUnit, vin: 1, vinUnit: "V", freq, freqUnit, vsupply: 12, headroom: 1.5 });
+  const example = (wave, r, c, cUnit, freq, freqUnit, rf = 0) => () => {
+    Object.assign(state, { wave, r, rUnit: "kΩ", c, cUnit, vin: 1, vinUnit: "V", freq, freqUnit, vsupply: 12, headroom: 1.5, rf, rfUnit: "MΩ" });
     paint();
   };
   useExamples([
@@ -14919,10 +14922,13 @@ function renderOpampIntegrator(domain, tool, favId) {
       apply: example("sine", 10, 100, "nF", 100, "Hz") },
     { title: "Too slow: clipping", note: "At 10 Hz the ramp would need 50 V p-p; the triangle flattens at ±10.5 V.",
       apply: example("square", 10, 100, "nF", 10, "Hz") },
+    { title: "Practical, with Rf = 1 MΩ", note: "Rf = 100 × R stops the drift; it integrates above fL = 1.59 Hz, so 100 Hz is unchanged.",
+      apply: example("square", 10, 100, "nF", 100, "Hz", 1) },
   ]);
 
   function si(name) {
     if (name === "r") return state.r * DIVIDER_R_UNITS[state.rUnit];
+    if (name === "rf") return (state.rf > 0 ? state.rf : 0) * DIVIDER_R_UNITS[state.rfUnit];
     if (name === "c") return state.c * RCF_C_UNITS[state.cUnit];
     if (name === "freq") return state.freq * F_UNITS[state.freqUnit];
     if (name === "vin") return state.vin * OPAMP_VIN_UNITS[state.vinUnit];
@@ -14930,7 +14936,7 @@ function renderOpampIntegrator(domain, tool, favId) {
   }
 
   function compute() {
-    const r = si("r"), c = si("c"), vin = si("vin"), vsupply = si("vsupply"), freq = si("freq"), headroom = si("headroom");
+    const r = si("r"), c = si("c"), vin = si("vin"), vsupply = si("vsupply"), freq = si("freq"), headroom = si("headroom"), rf = si("rf");
     if (!(r > 0) || !(c > 0) || !(vsupply > 0) || !(freq > 0)) {
       return { problem: "R, C, the frequency and the supply must all be greater than zero." };
     }
@@ -14952,13 +14958,27 @@ function renderOpampIntegrator(domain, tool, favId) {
     // triangle's peak-to-peak, and half of it is the peak. A sine instead
     // integrates to a cosine scaled by 1/ωRC.
     const ramp = vinPk / tau;
-    const voutPp = vinPk / (2 * freq * tau);
-    const voutPkIdeal = square ? voutPp / 2 : vinPk * gain;
+    let voutPp = vinPk / (2 * freq * tau);
+    let sineGain = gain, lead = 90, fL = 0;
+    // With Rf across C the circuit is a first-order low-pass of DC gain
+    // Rf/R and corner fL: a sine sees (Rf/R) / √(1 + (f/fL)²) and leads by
+    // 180° − atan(f/fL); a square settles to exponential edges whose peak is
+    // (Rf/R) × Vin × tanh(half period / 2RfC). Both tend to the ideal values
+    // as Rf grows, and the slope through 0 V stays Vin / RC.
+    const hasRf = rf > 0;
+    if (hasRf) {
+      fL = 1 / (2 * Math.PI * rf * c);
+      sineGain = (rf / r) / Math.sqrt(1 + (freq / fL) ** 2);
+      lead = 180 - (Math.atan(freq / fL) * 180) / Math.PI;
+      voutPp = 2 * (rf / r) * vinPk * Math.tanh(1 / (4 * freq * rf * c));
+    }
+    const voutPkIdeal = square ? voutPp / 2 : vinPk * sineGain;
     const vmax = vsupply - headroom;
     const clipped = voutPkIdeal > vmax;
     const voutPk = clipped ? vmax : voutPkIdeal;
 
-    return { problem: "", square, tau, f0, gain, ramp, voutPp, vinPk, voutPkIdeal, voutPk, clipped, vmax };
+    return { problem: "", square, tau, f0, gain: sineGain, ramp, voutPp, vinPk, voutPkIdeal, voutPk, clipped, vmax,
+             hasRf, fL, lead, k: rf / r, tauF: rf * c, freq };
   }
 
   // The inverting amplifier's schematic with C in place of Rf, exactly as the
@@ -14967,15 +14987,19 @@ function renderOpampIntegrator(domain, tool, favId) {
   // circuit. The plates are centred on the triangle at x=135 with equal 38px
   // runs either side; they stand a little taller than a resistor body, which
   // is why this viewBox has 4px more headroom than the inverting amp's.
-  function diagram() {
+  // With Rf fitted it runs as a second rung above C, between the same two
+  // nodes, and C's label moves under it so the two parts keep their names
+  // clear of each other.
+  function diagram(hasRf) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
     const cap = (x, y) => `M${x - 4} ${y - 9} V${y + 9} M${x + 4} ${y - 9} V${y + 9}`;
+    const top = hasRf ? -46 : -20;
 
-    return `<svg width="258" height="128" viewBox="-16 -26 258 128" fill="none">
+    return `<svg width="258" height="${102 - top}" viewBox="-16 ${top} 258 ${102 - top}" fill="none">
       <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
       <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
@@ -14992,8 +15016,15 @@ function renderOpampIntegrator(domain, tool, favId) {
 
       <path d="M93 38 V6 H131" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="${cap(135, 6)}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <text x="135" y="-8" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">C</text>
+      <text x="${hasRf ? 148 : 135}" y="${hasRf ? 24 : -8}" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">C</text>
       <path d="M139 6 H177 V50" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${hasRf ? `
+      <circle cx="93" cy="6" r="2.6" fill="${wire}"/>
+      <circle cx="177" cy="6" r="2.6" fill="${wire}"/>
+      <path d="M93 6 V-20 H117" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${zigH(-20, 153)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="135" y="-34" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rf</text>
+      <path d="M153 -20 H177 V6" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` : ""}
 
       <path d="M160 50 H177" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="177" cy="50" r="2.6" fill="${wire}"/>
@@ -15012,9 +15043,9 @@ function renderOpampIntegrator(domain, tool, favId) {
   // The output is clamped at the rails, which is what a clipped integrator
   // actually does.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none"></svg>`;
     const scale = Math.max(r.vinPk, r.voutPk, 1e-12);
-    const pxTop = 6, pxBottom = 58;
+    const pxTop = 4, pxBottom = 52;
     const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
     const toY = (v) => mid - (v / scale) * half;
     const x0 = 10, width = 190, samples = 170;
@@ -15025,10 +15056,18 @@ function renderOpampIntegrator(domain, tool, favId) {
       const x = x0 + t * width;
       // Starting at the positive peak in both modes, so the two shapes line up
       // against the same input phase and can be compared directly.
-      const shape = r.square
-        ? (ph < Math.PI ? 1 - 2 * (ph / Math.PI) : -1 + 2 * ((ph - Math.PI) / Math.PI))
-        : Math.cos(ph);
-      const vo = Math.max(-r.vmax, Math.min(r.vmax, r.voutPkIdeal * shape));
+      let vi;
+      if (r.square && r.hasRf) {
+        // Exponential edges: from +A towards −K·Vin, then from −A back up.
+        const a = r.voutPkIdeal, kv = r.k * r.vinPk;
+        const decay = Math.exp(-((ph % Math.PI) / Math.PI) / (2 * r.freq * r.tauF));
+        vi = ph < Math.PI ? -kv + (a + kv) * decay : kv - (a + kv) * decay;
+      } else if (r.square) {
+        vi = r.voutPkIdeal * (ph < Math.PI ? 1 - 2 * (ph / Math.PI) : -1 + 2 * ((ph - Math.PI) / Math.PI));
+      } else {
+        vi = r.voutPkIdeal * Math.sin(ph + (r.lead * Math.PI) / 180);
+      }
+      const vo = Math.max(-r.vmax, Math.min(r.vmax, vi));
       outPts.push(`${x.toFixed(1)},${toY(vo).toFixed(1)}`);
     }
     // The input is drawn rather than sampled in square mode: sampling would
@@ -15048,14 +15087,14 @@ function renderOpampIntegrator(domain, tool, favId) {
       }
     }
     const zeroY = toY(0).toFixed(1);
-    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
+    return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none">
       <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <path d="M10,73 H22" stroke="#5A6169" stroke-width="1.4"/>
-      <text x="26" y="77" fill="#8A9099" font-size="11" font-weight="600">Vin</text>
-      <path d="M58,73 H70" stroke="#8FC1F5" stroke-width="2"/>
-      <text x="74" y="77" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
+      <path d="M10,64 H22" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="26" y="68" fill="#8A9099" font-size="11" font-weight="600">Vin</text>
+      <path d="M58,64 H70" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="74" y="68" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -15078,7 +15117,7 @@ function renderOpampIntegrator(domain, tool, favId) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     const sub = r.square
       ? `Triangle, <span data-res="vpp">${siFormat(r.clipped ? 2 * r.vmax : r.voutPp, "V")}</span> p-p &nbsp;·&nbsp; ramps at <span data-res="ramp">${rampText(r.ramp)}</span>`
-      : `Gain <span data-res="gain">${trim(Number(r.gain.toPrecision(4)))}×</span> &nbsp;·&nbsp; leads the input by 90°`;
+      : `Gain <span data-res="gain">${trim(Number(r.gain.toPrecision(4)))}×</span> &nbsp;·&nbsp; leads the input by <span data-res="lead">${Number(r.lead.toFixed(1))}°</span>`;
     return `
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div class="result-field">
@@ -15089,13 +15128,15 @@ function renderOpampIntegrator(domain, tool, favId) {
         <div class="result-value"><span class="num" data-res="vout">${siFormat(r.voutPk, "V")}</span></div>
         <div class="result-sub">${sub}</div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(${r.hasRf ? 4 : 3},1fr);">
         ${cell("RC", `<span data-res="tau">${siFormat(r.tau, "s")}</span>`)}
-        ${cell("Gain 1 at (f₀)", `<span data-res="f0">${siFormat(r.f0, "Hz")}</span>`)}
+        ${cell(r.hasRf ? "Gain 1 at" : "Gain 1 at (f₀)", `<span data-res="f0">${siFormat(r.f0, "Hz")}</span>`)}
+        ${r.hasRf ? cell("Rf corner", `<span data-res="fl">${siFormat(r.fL, "Hz")}</span>`) : ""}
         ${r.square
           ? cell("Each ramp lasts", `<span data-res="half">${siFormat(1 / (2 * si("freq")), "s")}</span>`)
           : cell("Gain (dB)", `<span data-res="db">${Number((20 * Math.log10(r.gain)).toFixed(2))} dB</span>`)}
       </div>
+      ${r.hasRf && r.freq < 10 * r.fL ? `<div class="error-text" data-res="lowf">Below 10 × the Rf corner (${siFormat(10 * r.fL, "Hz")}) the circuit integrates poorly: it acts more and more as an inverting amplifier of gain Rf / R.</div>` : ""}
       ${r.clipped ? `<div class="error-text" data-res="clip">Clipping — the ${r.square ? "triangle" : "wave"} would need ${siFormat(r.voutPkIdeal, "V")} peak, but the output stops at ±${siFormat(r.vmax, "V")}${state.headroom > 0 ? `, ${trim(state.headroom)} V short of the rails` : ""}. Raise the frequency or RC, or lower Vin.</div>` : ""}`;
   }
 
@@ -15103,6 +15144,7 @@ function renderOpampIntegrator(domain, tool, favId) {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
     app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
+    app.querySelector('[data-res="circuit"]').innerHTML = diagram(state.rf > 0);
   }
 
   function paint() {
@@ -15116,7 +15158,7 @@ function renderOpampIntegrator(domain, tool, favId) {
       ${pillRow([["square", "Square in"], ["sine", "Sine in"]], state.wave, domain.bg)}
 
       <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
-        <div>${diagram()}</div>
+        <div data-res="circuit">${diagram(state.rf > 0)}</div>
         <div data-res="wave">${waveDiagram(r)}</div>
       </div>
 
@@ -15130,22 +15172,40 @@ function renderOpampIntegrator(domain, tool, favId) {
         ${opampField("Supply (±)", "oi-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`)}
         ${opampField("Headroom", "oi-headroom", state.headroom, `<span class="unit-fixed">V</span>`)}
       </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Rf across C (optional)</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="oi-rf" placeholder="none" value="${state.rf > 0 ? trim(state.rf) : ""}" />
+            ${opampUnitSelect("oi-rf-unit", R_UNITS, state.rfUnit)}
+          </div>
+        </div>
+      </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
         square
-          ? ["Vout(t) = −(1 / RC) × ∫ Vin dt", "Ramp = Vin / RC", "Vout p-p = Vin / (2 × f × RC)", "f₀ = 1 / (2π × RC)"]
-          : ["Vout(t) = −(1 / RC) × ∫ Vin dt", "Gain = 1 / (2π × f × RC) = f₀ / f", "Vout peak = Vin peak × Gain", "f₀ = 1 / (2π × RC)"],
+          ? (state.rf > 0
+            ? ["Ramp through 0 V = Vin / RC", "Vout peak = (Rf/R) × Vin × tanh(1 / (4 f Rf C))", "f₀ = 1 / (2π RC), Rf corner fL = 1 / (2π Rf C)"]
+            : ["Vout(t) = −(1 / RC) × ∫ Vin dt", "Ramp = Vin / RC", "Vout p-p = Vin / (2 × f × RC)", "f₀ = 1 / (2π × RC)"])
+          : (state.rf > 0
+            ? ["Gain = (Rf/R) / √(1 + (f / fL)²)", "Lead = 180° − atan(f / fL)", "f₀ = 1 / (2π RC), Rf corner fL = 1 / (2π Rf C)"]
+            : ["Vout(t) = −(1 / RC) × ∫ Vin dt", "Gain = 1 / (2π × f × RC) = f₀ / f", "Vout peak = Vin peak × Gain", "f₀ = 1 / (2π × RC)"]),
         `To integrate is to keep adding up: the output is the running total of the input over time. The op-amp holds its − input at 0 V, so the current through R is Vin / R, and all of it charges C. A capacitor charged by a steady current changes its voltage at a steady rate, so the output moves at Vin / RC volts per second, downwards for a positive input (the circuit inverts). ${square
           ? "A square wave is a steady +Vin, then a steady −Vin, so the output ramps down, then up: a triangle. Its height is the ramp rate times half a period."
-          : "A sine comes out as a sine shifted a quarter cycle (90°), its size multiplied by the gain 1 / (2πfRC): the gain halves each time the frequency doubles, and equals 1 at f₀."} The output stops short of the supply by the headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail). <b style="color:${domain.color}">Used for:</b> triangle and ramp generators (with a Schmitt trigger), dual-slope converters in multimeters, the I term of an analog PID controller. A real integrator also integrates the op-amp's own tiny offset and slowly runs into a rail; a large resistor across C (around 100 × R) stops that. Headroom is remembered for all the op-amp tools.`
+          : "A sine comes out as a sine shifted a quarter cycle (90°), its size multiplied by the gain 1 / (2πfRC): the gain halves each time the frequency doubles, and equals 1 at f₀."} The output stops short of the supply by the headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail). <b style="color:${domain.color}">Used for:</b> triangle and ramp generators (with a Schmitt trigger), dual-slope converters in multimeters, the I term of an analog PID controller. A real integrator also integrates the op-amp's own tiny offset and slowly runs into a rail. The cure is Rf, a large resistor across C (around 100 × R): leave it empty for the ideal circuit. With Rf the circuit integrates only above its corner fL = 1 / (2π Rf C); well below it, it is just an inverting amplifier of gain Rf / R. Headroom is remembered for all the op-amp tools.`
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (m) => { state.wave = m; setPref(C, "wave", m); paint(); });
 
+    document.getElementById("oi-rf").oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      state.rf = isFinite(v) && v > 0 ? v : 0;
+      refresh();
+    };
     [["oi-r", "r"], ["oi-c", "c"], ["oi-vin", "vin"], ["oi-freq", "freq"], ["oi-vsupply", "vsupply"], ["oi-headroom", "headroom"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => {
         const v = parseFloat(e.target.value);
@@ -15155,7 +15215,7 @@ function renderOpampIntegrator(domain, tool, favId) {
         refresh();
       };
     });
-    [["oi-r-unit", "rUnit"], ["oi-c-unit", "cUnit"], ["oi-vin-unit", "vinUnit"], ["oi-freq-unit", "freqUnit"]].forEach(([id, name]) => {
+    [["oi-r-unit", "rUnit"], ["oi-c-unit", "cUnit"], ["oi-rf-unit", "rfUnit"], ["oi-vin-unit", "vinUnit"], ["oi-freq-unit", "freqUnit"]].forEach(([id, name]) => {
       document.getElementById(id).onchange = (e) => { state[name] = e.target.value; setPref(C, name, state[name]); refresh(); };
     });
   }

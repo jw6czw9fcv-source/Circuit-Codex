@@ -346,6 +346,12 @@ const CHECK_CASES = {
       expect: [['[data-res="vout"]', "10.5 V"], ['[data-res="clip"]', "/25 V.*10\\.5 V/"]] },
     { name: "wave and units are remembered", do: [["pill", 1], ["set", "#oi-c-unit", "µF"], ["set", "#oi-freq-unit", "kHz"], ["reopen"]],
       expect: [[".pill.active", "Sine in"], ["#oi-c-unit", "µF"], ["#oi-freq-unit", "kHz"]] },
+    { name: "example: Rf 1 MΩ, fL 1.592 Hz, 100 Hz barely changed", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="3"]']],
+      expect: [['[data-res="vout"]', "2.499 V"], ['[data-res="fl"]', "1.592 Hz"], ['[data-res="ramp"]', "1 V/ms"]] },
+    { name: "Rf 1 MΩ, sine at 100 Hz: gain 1.591, leads 90.9°", do: [["pill", 1], ["set", "#oi-rf", "1"]],
+      expect: [['[data-res="gain"]', "1.591×"], ['[data-res="lead"]', "90.9°"]] },
+    { name: "Rf 1 MΩ at 10 Hz: below 10 × fL, warned", do: [["set", "#oi-rf", "1"], ["set", "#oi-freq", "10"]],
+      expect: [['[data-res="lowf"]', "/15\\.92 Hz/"]] },
   ],
   "thyristor-firing": [
     { name: "TRIAC, 120 V, 144 Ω, α 90°: half power, 50 W", do: [],
