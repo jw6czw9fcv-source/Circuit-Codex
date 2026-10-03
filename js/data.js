@@ -86,7 +86,7 @@ const DOMAINS = [
           { name: "Summing", was: "Summing amplifier", calc: "opamp-summing" }, { name: "Differential", was: "Differential amplifier", calc: "opamp-differential" }, { name: "Sallen-Key filter" },
         ],
       },
-      { title: "Optoelectronics", tools: [{ name: "Photocell / LDR", calc: "photocell-ldr" }, { name: "Optocoupler", calc: "optocoupler" }, { name: "Light wavelength ↔ color", was: "Wavelength ↔ color/spectrum chart", calc: "spectrum-chart" }] },
+      { title: "Optoelectronics", tools: [{ name: "Photocell / LDR", calc: "photocell-ldr" }, { name: "Optocoupler", calc: "optocoupler" }, { name: "Wavelength ↔ color", was: "Light wavelength ↔ color", calc: "spectrum-chart" }] },
     ],
   },
   {
@@ -285,7 +285,7 @@ const TOOL_KEYWORDS = {
   "opamp-differential": "op amp differential difference amplifier subtractor",
   "photocell-ldr": "ldr light sensor photoresistor lux",
   "optocoupler": "opto isolator ctr",
-  "spectrum-chart": "light color nm wavelength led",
+  "spectrum-chart": "light color colour nm wavelength led spectrum chart photon energy ev uv infrared",
   "logic-gates": "and or not nand nor xor truth table",
   "karnaugh": "k-map boolean minimise simplify logic",
   "flip-flops": "latch sr d jk t flip flop",

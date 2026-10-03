@@ -16511,10 +16511,10 @@ function renderOptocoupler(domain, tool, favId) {
   paint();
 }
 
-// Boundaries are a convention, not a measurement — the spectrum is continuous
-// and references disagree by a few nm. These are the commonly published set
-// (Britannica among others), which is what a datasheet's "green 525nm" is
-// implicitly quoting against.
+// Colour names inside the visible band are a convention, not a standard:
+// published tables disagree by 10–20 nm, and some add cyan or indigo. This
+// is one common set. The visible band's own edges follow ISO 20473 and the
+// CIE: light is 380–780 nm, ultraviolet below, infrared above.
 const SPECTRUM_BANDS = [
   ["Ultraviolet", 0, 380],
   ["Violet", 380, 450],
@@ -16522,8 +16522,19 @@ const SPECTRUM_BANDS = [
   ["Green", 495, 570],
   ["Yellow", 570, 590],
   ["Orange", 590, 620],
-  ["Red", 620, 750],
-  ["Infrared", 750, Infinity],
+  ["Red", 620, 780],
+  ["Infrared", 780, Infinity],
+];
+
+// The named regions of optical radiation: UV-A/B/C as ISO 20473 divides
+// them for optics and photonics, visible 380–780 nm, and the CIE's IR-A/B.
+const SPECTRUM_REGIONS = [
+  ["UV-C", 100, 280],
+  ["UV-B", 280, 315],
+  ["UV-A", 315, 380],
+  ["Visible", 380, 780],
+  ["IR-A (near infrared)", 780, 1400],
+  ["IR-B", 1400, 3000],
 ];
 
 // hc expressed in eV·nm, so photon energy in eV is just this over λ in nm.
@@ -16559,6 +16570,21 @@ function renderSpectrumChart(domain, tool, favId) {
   const state = { nm: 525 };
   const MIN_NM = 200, MAX_NM = 1100;
 
+  // Common LEDs, with the wavelength from their datasheets: the dominant
+  // wavelength (the colour the eye sees) for the visible ones, the peak for
+  // the infrared one.
+  const example = (nm) => () => { state.nm = nm; paint(); };
+  useExamples([
+    { title: "Red LED, 640 nm", note: "Kingbright WP7113SRC/DU: 1.94 eV photons, and a 1.85 V forward voltage, about the same.",
+      apply: example(640) },
+    { title: "True green LED, 525 nm", note: "Kingbright WP7113ZGC: 2.36 eV photons, but it needs 3.3 V, well above that.",
+      apply: example(525) },
+    { title: "Blue LED, 465 nm", note: "Kingbright WP7113QBC/D: 2.67 eV photons, 3.3 V forward voltage.",
+      apply: example(465) },
+    { title: "IR remote LED, 940 nm", note: "Vishay TSAL6200: invisible near infrared, 1.32 eV photons, 1.35 V forward voltage.",
+      apply: example(940) },
+  ]);
+
   function bandOf(nm) {
     return SPECTRUM_BANDS.find(([, lo, hi]) => nm >= lo && nm < hi) || SPECTRUM_BANDS[SPECTRUM_BANDS.length - 1];
   }
@@ -16567,8 +16593,10 @@ function renderSpectrumChart(domain, tool, favId) {
     const nm = state.nm;
     if (!(nm > 0)) return { problem: "Wavelength must be greater than zero." };
     const [name, lo, hi] = bandOf(nm);
+    const region = SPECTRUM_REGIONS.find(([, a, b]) => nm >= a && nm < b);
     return {
       problem: "", nm, name,
+      region: region ? region[0] : nm < 100 ? "Far UV" : "Infrared",
       range: lo === 0 ? `under ${hi} nm` : isFinite(hi) ? `${lo}–${hi} nm` : `over ${lo} nm`,
       eV: HC_EV_NM / nm,
       thz: C_M_S / (nm * 1e-9) / 1e12,
@@ -16590,14 +16618,14 @@ function renderSpectrumChart(domain, tool, favId) {
     }
     const ticks = [200, 400, 600, 800, 1000].map((nm) =>
       `<path d="M${at(nm).toFixed(1)} ${yTop + h} V${yTop + h + 4}" stroke="#5A6169" stroke-width="1"/>
-       <text x="${at(nm).toFixed(1)}" y="${yTop + h + 14}" fill="#8A9099" font-size="9" font-weight="600" text-anchor="middle">${nm}</text>`).join("");
+       <text x="${at(nm).toFixed(1)}" y="${yTop + h + 16}" fill="#8A9099" font-size="11" font-weight="600" text-anchor="middle">${nm}</text>`).join("");
     const mx = at(Math.max(MIN_NM, Math.min(MAX_NM, r.problem ? MIN_NM : r.nm)));
-    return `<svg width="308" height="56" viewBox="0 0 308 56" fill="none">
+    return `<svg width="308" height="58" viewBox="0 0 308 58" fill="none">
       ${slices.join("")}
       ${ticks}
       <path d="M${mx.toFixed(1)} ${yTop - 5} V${yTop + h + 1}" stroke="#E8EAED" stroke-width="1.6"/>
       <path d="M${(mx - 4).toFixed(1)} ${yTop - 5} L${(mx + 4).toFixed(1)} ${yTop - 5} L${mx.toFixed(1)} ${yTop + 1} Z" fill="#E8EAED"/>
-      <text x="300" y="${yTop + h + 14}" fill="#8A9099" font-size="9" font-weight="600" text-anchor="end">nm</text>
+      <text x="306" y="${yTop + h + 16}" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">nm</text>
     </svg>`;
   }
 
@@ -16608,18 +16636,26 @@ function renderSpectrumChart(domain, tool, favId) {
     </div>`;
   }
 
+  // The colour first and large, with its swatch, then where the wavelength
+  // sits in the named regions and what a photon of it carries.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     const swatch = r.rgb
-      ? `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;background:${r.rgb};margin-right:6px;vertical-align:-4px;"></span>`
+      ? `<span style="display:inline-block;width:26px;height:26px;border-radius:5px;background:${r.rgb};margin-right:10px;vertical-align:-3px;"></span>`
       : "";
     return `
-      <div class="section-label" style="color:#5DCAA5">Output</div>
-      <div class="eseries-grid eseries-grid--tight">
-        ${cell("Colour", `${swatch}${r.name}`)}
-        ${cell("Band", r.range)}
-        ${cell("Energy", `${trim(r.eV)} eV`)}
-        ${cell("Frequency", `${trim(r.thz)} THz`)}
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Colour</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num">${swatch}<span data-res="name">${r.name}</span></span></div>
+        <div class="result-sub">${r.name === "Ultraviolet" || r.name === "Infrared" ? "Invisible to the eye" : `Named ${r.range}`} &nbsp;·&nbsp; <span data-res="region">${r.region}</span></div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(2,1fr);">
+        ${cell("Photon energy", `<span data-res="ev">${trim(Number(r.eV.toPrecision(4)))} eV</span>`)}
+        ${cell("Frequency", `<span data-res="thz">${trim(Number(r.thz.toPrecision(4)))} THz</span>`)}
       </div>`;
   }
 
@@ -16632,7 +16668,7 @@ function renderSpectrumChart(domain, tool, favId) {
   function paint() {
     const r = compute();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Where a wavelength sits, what it costs in electron-volts")}
+      ${calcHeader(tool, favId, "A wavelength's colour, and the energy of its photons")}
 
       <div class="diagram-box" style="padding:2px 6px;"><div data-res="strip">${strip(r)}</div></div>
 
@@ -16655,8 +16691,8 @@ function renderSpectrumChart(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Frequency f = c / λ", "Photon energy = hc / λ = 1239.8 / λ(nm) eV"],
-        "Colour names and band boundaries are a convention, not a measurement — the spectrum is continuous and references disagree by a few nanometres; these are the commonly published set, violet from 380nm then blue 450, green 495, yellow 570, orange 590, red 620, infrared past 750. Photon energy is the useful half — E in electron-volts is what a photon of that wavelength carries, and it is the floor an LED's forward voltage sits on. A 460nm blue photon costs 2.70eV, which is why a blue LED needs over 3V while a red one manages on 2V. The same arithmetic holds either side of the visible band, which is why the axis runs out to the near-infrared where remotes and optocouplers work."
+        ["Frequency f = c / λ", "Photon energy E = h × c / λ", "E in eV = 1239.84 / λ in nm"],
+        "Light is an electromagnetic wave; its wavelength λ, in nanometres (nm, millionths of a millimetre), sets its colour. The eye sees from about 380 nm (violet) to 780 nm (red) — the band ISO 20473 and the CIE call visible; shorter is ultraviolet (UV-A, -B, -C), longer is infrared (IR-A is the near infrared of remotes and optocouplers). The colour names inside that band are a convention: tables disagree by 10–20 nm, and this is one common set. Light also comes in packets, photons, each carrying an energy E = 1239.84 / λ electron-volts (eV): blue photons carry more than red. An LED makes photons of roughly its material's energy, so its forward voltage tracks the colour: red, yellow and infrared LEDs run at about the photon energy (a 640 nm red at 1.94 eV needs 1.85 V), while blue and true-green ones need 3.3 V, well above it. An LED's datasheet gives its dominant wavelength, the colour the eye sees, and its peak wavelength, where it emits most."
       )}
       ${calcFooter()}
     `;

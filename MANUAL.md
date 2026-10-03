@@ -61,6 +61,7 @@ will key on, since that is the id the app already holds for each tool.
 - Op-amps → [Differential](#differential)
 - Optoelectronics → [Photocell / LDR](#photocell--ldr)
 - Optoelectronics → [Optocoupler](#optocoupler)
+- Optoelectronics → [Wavelength ↔ color](#wavelength--color)
 
 ### Digital
 
@@ -3945,6 +3946,111 @@ The review made these changes:
 - It added the nearest E24 value.
 - It limited the units to real ones, rewrote the note in plain words and
   added examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="spectrum-chart"></a>
+## Wavelength ↔ color
+
+`calc: spectrum-chart` · Active & semiconductor devices › Optoelectronics
+(formerly Light wavelength ↔ color)
+
+### What it computes
+
+For a wavelength from 200 nm to 1100 nm, it gives:
+- the colour name, with a swatch;
+- the named region it falls in (ultraviolet, visible or infrared, and
+  which part of them);
+- the energy of one photon, in electron-volts;
+- the frequency.
+
+It marks the wavelength on a drawn spectrum.
+
+### Source
+
+- **Region limits** — the UV divisions follow ISO 20473:2007, for optics
+  and photonics: UV-A 315–380 nm, UV-B 280–315 nm, UV-C 100–280 nm. The
+  visible band is 380–780 nm, and IR-A is 780–1400 nm and IR-B
+  1400–3000 nm, as the CIE defines them.
+  - These limits were read from Opsytec's published table of spectral
+    ranges by standard (2024), not from the standards themselves.
+  - The CIE notes that visible light has no precise limits: the lower one
+    lies between 360 and 400 nm, the upper one between 760 and 830 nm.
+- **Colour names** — no standard names the colours inside the visible
+  band. Published tables disagree by 10–20 nm, and some add cyan or indigo.
+  The tool uses one common set: violet from 380 nm, blue 450, green 495,
+  yellow 570, orange 590, red 620 to 780.
+- **The examples' LEDs** — taken from their datasheets: Kingbright
+  WP7113SRC/DU, WP7113ZGC and WP7113QBC/D, and Vishay TSAL6200.
+- **The swatch** — drawn with Dan Bruton's wavelength-to-RGB
+  approximation, a way to put a colour on screen. It is not colorimetry.
+
+### What it means
+
+- **Wavelength** — light is an electromagnetic wave, and its wavelength λ,
+  in nanometres (millionths of a millimetre), sets its colour. The eye sees
+  about 380 nm (violet) to 780 nm (red).
+  - Shorter than that is **ultraviolet**: UV-A, then UV-B, then UV-C.
+  - Longer is **infrared**: IR-A is the near infrared that remote controls
+    and optocouplers use.
+- **Photon energy** — light comes in packets, photons, each carrying an
+  energy E = 1239.84 / λ electron-volts (eV). Blue photons carry more than
+  red.
+- **LEDs** — an LED makes photons of roughly its material's energy, so
+  its forward voltage tracks its colour:
+  - red, yellow and infrared LEDs run at about the photon energy: a
+    640 nm red, at 1.94 eV, needs 1.85 V;
+  - blue and true-green LEDs need about 3.3 V, well above it.
+- **Dominant and peak wavelength** — an LED datasheet gives both. The
+  dominant wavelength is the colour the eye sees; the peak is where the
+  LED emits most. Names follow the dominant one.
+- **Naming varies** — Kingbright sells its WP7113ID, at 617 nm, as "High
+  Efficiency Red", yet 617 nm is orange in the set used here.
+
+### Why the formulas are these
+
+    f = c / λ,   E = h × f = h × c / λ
+
+With h × c = 1239.84 eV·nm, E in eV is 1239.84 divided by λ in nm. With
+c = 299 792 458 m/s, 525 nm is 571 THz.
+
+### Assumptions and limits
+
+- **Single wavelengths.** Real sources emit a band. LEDs are 20–45 nm
+  wide (half-width, from the same datasheets), and white light mixes many
+  wavelengths.
+- **Approximate swatch.** Screens cannot show pure spectral colours. The
+  swatch is an approximation, and blank outside 380–780 nm.
+
+### What it deliberately does not do
+
+- Colour mixing and colour spaces (RGB, CIE xy) are not covered.
+- The eye's sensitivity (lumens) is not calculated.
+
+### How it was checked
+
+- **525 nm:** green, visible, 2.362 eV, 571 THz.
+- **Red LED at 640 nm:** red, 1.937 eV.
+- **617 nm:** orange in this set, 2.009 eV.
+- **IR LED at 940 nm:** infrared, IR-A, 1.319 eV.
+- **760 nm:** still red, since visible light runs to 780 nm.
+- **365 nm:** ultraviolet, UV-A.
+
+The review made these changes:
+- Infrared started at 750 nm; it now starts at 780 nm, the limit
+  ISO 20473 and the CIE use.
+- It added the named UV and IR regions.
+- It removed a source attribution ("Britannica") that had never been
+  checked.
+- It corrected the claim that photon energy is the floor of an LED's
+  forward voltage: a red LED runs slightly below it.
+- It put the colour first and large, with its swatch.
+- It enlarged the strip's 9 px labels to 11 px.
+- It added LED examples from datasheets and rewrote the note in plain
+  words.
+- It shortened the name to Wavelength ↔ color, which fits on the phone.
 
 [↑ Index](#index)
 
