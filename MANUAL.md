@@ -59,6 +59,7 @@ will key on, since that is the id the app already holds for each tool.
 - Op-amps → [Differentiator](#differentiator)
 - Op-amps → [Summing](#summing)
 - Op-amps → [Differential](#differential)
+- Optoelectronics → [Photocell / LDR](#photocell-ldr)
 
 ### Digital
 
@@ -3685,6 +3686,142 @@ The review made these changes:
 - It limited the units to real ones and remembers them.
 - It rewrote the note in plain words and added examples.
 - The tool was renamed Differential, on Pierre's request.
+
+[↑ Index](#index)
+
+---
+
+<a id="photocell-ldr"></a>
+## Photocell / LDR
+
+`calc: photocell-ldr` · Active & semiconductor devices › Optoelectronics
+
+### What it computes
+
+For a light-dependent resistor in a voltage divider with a fixed resistor,
+it gives:
+- the output voltage at a given light level;
+- the LDR's resistance at that light;
+- the range of output the part's 2:1 manufacturing spread can give;
+- how much the output changes for each ×10 of light;
+- the fixed resistor that would make the divider most sensitive;
+- the current drawn.
+
+It plots the output across four decades of light.
+
+### Source
+
+GL55-series data from the series' datasheet, "GL55 Series CdS
+Photoresistor Manual" (5 pages; the copy read names no manufacturer).
+- **Test conditions** — light resistance is measured at 10 lx under
+  standard light source A (2856 K), after two hours at 400–600 lx.
+- **γ** — defined as lg(R10 / R100), the logarithm of the ratio of the
+  resistances at 10 and 100 lx.
+
+| Part | R at 10 lx | Dark resistance (min) | γ | Rise / fall |
+|---|---|---|---|---|
+| GL5516 | 5–10 kΩ | 0.5 MΩ | 0.5 | 30 / 30 ms |
+| GL5528 | 10–20 kΩ | 1 MΩ | 0.6 | 20 / 30 ms |
+| GL5537-1 | 20–30 kΩ | 2 MΩ | 0.6 | 20 / 30 ms |
+| GL5537-2 | 30–50 kΩ | 3 MΩ | 0.7 | 20 / 30 ms |
+| GL5539 | 50–100 kΩ | 5 MΩ | 0.8 | 20 / 30 ms |
+| GL5549 | 100–200 kΩ | 10 MΩ | 0.9 | 20 / 30 ms |
+
+Other vendors' sheets for the same names differ a little. One gives
+8–20 kΩ for the GL5528, for example, so the spread is real.
+
+### What it means
+
+An **LDR** (light-dependent resistor, photoresistor or photocell) is a
+resistor whose value falls as the light rises. It is thousands of ohms in a
+dim room, a few hundred in daylight, and megohms in the dark. The common
+ones are made of cadmium sulphide (CdS).
+
+- **Lux (lx)** — the unit of illuminance, how much light falls on a
+  surface. Rough values:
+  - about 1 lx at deep twilight;
+  - 50–100 lx in a dim room;
+  - 300–500 lx in an office;
+  - 10 000 lx and more in daylight.
+- **R at 10 lx** — the datasheet's reference resistance.
+- **γ** — how steeply the resistance falls: each ×10 of light divides it
+  by 10^γ. With γ = 0.6, 100 lx gives about a quarter of the 10 lx value.
+- **The divider** — the LDR and a fixed resistor R between the supply and
+  ground. The midpoint, Vout, follows the light:
+  - with the LDR **on top**, brighter light gives a higher Vout;
+  - with it **at the bottom**, darker gives a higher Vout, as for a night
+    light that switches on at dusk.
+- **Sensitivity** — the change of Vout for each ×10 of light. It is
+  largest when R equals the LDR's resistance at the light level you care
+  about, which puts Vout at half the supply. "Best R here" gives that
+  value.
+- **Spread** — pieces of the same part differ by up to 2:1 at 10 lx. With
+  a part chosen, the tool shows the range of Vout this gives, and draws it
+  as two faint curves.
+
+Choosing a part fills in its middle R at 10 lx and its γ. Typing your own
+values switches the choice to Custom.
+
+### Why the formulas are these
+
+The datasheet's γ = lg(R10 / R100) describes a straight line of slope −γ
+on log-log axes, so
+
+    R_LDR = R(10 lx) × (light / 10)^−γ
+
+The divider gives Vout = Vcc × R / (R_LDR + R) with the LDR on top, or
+Vcc × R_LDR / (R_LDR + R) with it at the bottom.
+
+Differentiating with respect to log₁₀ of the light gives
+
+    ± ln 10 × γ × Vcc × R × R_LDR / (R_LDR + R)²
+
+per ×10 of light. Setting its derivative with respect to R to zero gives
+R = R_LDR.
+
+### Assumptions and limits
+
+- **The power law** is a straight-line fit through the datasheet's two
+  defining points, 10 lx and 100 lx. It is least reliable far from them.
+  Below about 1 lx the cell heads towards its dark resistance instead, and
+  the tool warns. The dark resistance is measured 10 s after
+  the light is switched off, so the cell also recovers slowly.
+- **Slow.** CdS cells take tens of milliseconds to respond (20–30 ms
+  here), so they suit day/night switching, not fast signals.
+- **Temperature and history.** The resistance also drifts with
+  temperature and with recent exposure. An LDR is not a precision light
+  meter.
+- **Light source.** The values are for an incandescent-like source
+  (2856 K). LEDs and daylight have different spectra, and the cell peaks
+  at 540 nm (green).
+- **No loading** — the circuit reading Vout is assumed to draw no current.
+
+### What it deliberately does not do
+
+- Photodiodes and phototransistors, which are faster and linear, are not
+  covered.
+- Switching thresholds with hysteresis belong to the Comparators tool.
+
+### How it was checked
+
+All at 5 V, with the GL5528's middle value, 15 kΩ at 10 lx, γ 0.6:
+- **On top, 100 lx, R = 10 kΩ:**
+  - LDR 3.768 kΩ, Vout 3.632 V;
+  - 3.33–4 V across the 10–20 kΩ spread;
+  - +1.373 V per ×10 of light, 363.2 µA.
+- **At the bottom, 10 lx, R = 15 kΩ:** exactly 2.5 V.
+- **300 lx:** 1.949 kΩ, and 2.532 V with R = 2 kΩ.
+- **GL5516 at 10 000 lx:** 237.2 Ω, and 4.884 V with R = 10 kΩ.
+
+The review made these changes:
+- It added the GL55 parts from their datasheet, with the spread shown in
+  the result and on the curve.
+- It added the choice of LDR on top or at the bottom.
+- It put Vout first and large.
+- It enlarged the curve's 8 px labels to 11 px.
+- It limited the units to real ones and remembers them.
+- It rewrote the note in plain words, with typical light levels, and
+  added the warning below 1 lx and examples.
 
 [↑ Index](#index)
 

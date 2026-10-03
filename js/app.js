@@ -16012,51 +16012,89 @@ function renderOpampDifferential(domain, tool, favId) {
   paint();
 }
 
+// GL55-series CdS photoresistors, from the series' datasheet ("GL55 Series
+// CdS Photoresistor Manual", light resistance measured at 10 lx under
+// standard light source A, 2856 K; γ = lg(R10 / R100)). The tool works with
+// the middle of each 2:1 resistance range and shows the spread separately.
+const LDR_PARTS = {
+  GL5516: { min: 5e3, max: 10e3, gamma: 0.5, dark: 0.5e6 },
+  GL5528: { min: 10e3, max: 20e3, gamma: 0.6, dark: 1e6 },
+  "GL5537-1": { min: 20e3, max: 30e3, gamma: 0.6, dark: 2e6 },
+  "GL5537-2": { min: 30e3, max: 50e3, gamma: 0.7, dark: 3e6 },
+  GL5539: { min: 50e3, max: 100e3, gamma: 0.8, dark: 5e6 },
+  GL5549: { min: 100e3, max: 200e3, gamma: 0.9, dark: 10e6 },
+};
+
 function renderPhotocellLDR(domain, tool, favId) {
+  const C = "photocell-ldr";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
+  const PARTS = [...Object.keys(LDR_PARTS), "custom"];
+  const partR10 = (p) => (LDR_PARTS[p].min + LDR_PARTS[p].max) / 2;
+
   const state = {
-    r10: 10, r10Unit: "kΩ",
-    gamma: 0.7,
+    part: pref(C, "part", "GL5528", PARTS),
+    place: pref(C, "place", "top", ["top", "bottom"]),
+    r10: 15, r10Unit: "kΩ",
+    gamma: 0.6,
     lux: 100,
-    rfixed: 10, rfixedUnit: "kΩ",
-    vcc: 5, vccUnit: "V",
+    rfixed: 10, rfixedUnit: pref(C, "rfixedUnit", "kΩ", R_UNITS),
+    vcc: 5,
   };
-
-  function si(name) {
-    if (name === "r10") return state.r10 * OHM_UNITS[state.r10Unit];
-    if (name === "rfixed") return state.rfixed * OHM_UNITS[state.rfixedUnit];
-    return state.vcc * VOLT_UNITS[state.vccUnit];
+  // A remembered part fills its own R at 10 lx and γ.
+  function loadPart() {
+    if (state.part === "custom") return;
+    const r = partR10(state.part);
+    state.r10 = r >= 1e6 ? r / 1e6 : r / 1e3;
+    state.r10Unit = r >= 1e6 ? "MΩ" : "kΩ";
+    state.gamma = LDR_PARTS[state.part].gamma;
   }
+  loadPart();
 
-  // R = R10 · (E/10)^−γ. Datasheets quote R at 10 lux and γ (or the R10/R100
-  // ratio, which IS 10^γ), because on log-log axes the power law is a straight
-  // line of slope −γ — the whole reason those plots are drawn that way.
+  const example = (part, place, lux, rfixed, rfixedUnit) => () => {
+    Object.assign(state, { part, place, lux, rfixed, rfixedUnit, vcc: 5 });
+    loadPart();
+    paint();
+  };
+  useExamples([
+    { title: "Night light, GL5528", note: "LDR at the bottom: Vout rises as it gets dark; with 15 k it crosses 2.5 V at 10 lx.",
+      apply: example("GL5528", "bottom", 10, 15, "kΩ") },
+    { title: "Room light on an ADC", note: "At 300 lx a GL5528 is about 1.95 kΩ; 2 k puts Vout mid-scale, where it is most sensitive.",
+      apply: example("GL5528", "top", 300, 2, "kΩ") },
+    { title: "Daylight, wrong resistor", note: "At 10 000 lx a GL5516 is about 240 Ω; with 10 k the output sits near 5 V and barely moves.",
+      apply: example("GL5516", "top", 10000, 10, "kΩ") },
+  ]);
+
+  // R = R10 · (E/10)^−γ: on log-log axes the power law is a straight line
+  // of slope −γ, which is why datasheets give R at 10 lx and γ.
   const rAt = (lux, r10, gamma) => r10 * Math.pow(lux / 10, -gamma);
+  const top = () => state.place === "top";
+  const vOut = (rl, rf, vcc) => vcc * (top() ? rf / (rl + rf) : rl / (rl + rf));
 
   function compute() {
-    const r10 = si("r10"), rfixed = si("rfixed"), vcc = si("vcc");
-    const gamma = state.gamma, lux = state.lux;
+    const r10 = state.r10 * DIVIDER_R_UNITS[state.r10Unit];
+    const rfixed = state.rfixed * DIVIDER_R_UNITS[state.rfixedUnit];
+    const { vcc, gamma, lux } = state;
     if (!(r10 > 0) || !(rfixed > 0) || !(vcc > 0)) {
-      return { problem: "R₁₀, the fixed resistor and Vcc must all be greater than zero." };
+      return { problem: "R at 10 lx, the fixed resistor and Vcc must all be greater than zero." };
     }
-    if (!(gamma > 0)) return { problem: "γ must be greater than zero — it is the slope of the log-log characteristic." };
-    if (!(lux > 0)) return { problem: "Illuminance must be greater than zero. A true dark reading is set by the cell's dark resistance, not by this curve." };
+    if (!(gamma > 0)) return { problem: "γ must be greater than zero: it is how steeply the resistance falls with light." };
+    if (!(lux > 0)) return { problem: "The light must be greater than zero. In full darkness the LDR sits at its dark resistance." };
 
     const rldr = rAt(lux, r10, gamma);
-    // LDR on top, fixed resistor to ground: brighter → lower R → higher Vout.
-    const vout = vcc * (rfixed / (rldr + rfixed));
+    const vout = vOut(rldr, rfixed, vcc);
     const idiv = vcc / (rldr + rfixed);
-    // dVout/d(log10 E), the slope of the response per decade of light. Setting
-    // d/dRfixed of this to zero gives Rfixed = Rldr, so the most sensitive
-    // divider is the one matched to the LDR at the light level you care about.
-    const perDecade = Math.LN10 * gamma * vcc * rfixed * rldr / Math.pow(rldr + rfixed, 2);
-    const ratio = Math.pow(10, gamma);
-
-    return { problem: "", rldr, vout, idiv, perDecade, bestR: rldr, ratio, vcc, rfixed, r10, gamma, lux };
+    // dVout / d(log10 E): the change for each ×10 of light. Largest when
+    // Rfixed = Rldr, so the best divider matches the LDR at the light level
+    // being watched. Positive with the LDR on top, negative at the bottom.
+    const perDecade = (top() ? 1 : -1) * Math.LN10 * gamma * vcc * rfixed * rldr / Math.pow(rldr + rfixed, 2);
+    const p = LDR_PARTS[state.part];
+    const spread = p ? [vOut(rAt(lux, p.min, gamma), rfixed, vcc), vOut(rAt(lux, p.max, gamma), rfixed, vcc)].sort((a, b) => a - b) : null;
+    return { problem: "", rldr, vout, idiv, perDecade, bestR: rldr, spread, r10, rfixed, vcc, gamma, lux, part: p };
   }
 
-  // A photoresistor is the ANSI zigzag with two arrows pointing in at it, and
-  // it is drawn where it is actually used: the top leg of a divider, so more
-  // light means less resistance and a higher tap. Leads are the family's 17px.
+  // A photoresistor is the ANSI zigzag with two arrows pointing in at it,
+  // drawn in a divider from +Vcc to ground: on top (brighter → higher
+  // Vout) or at the bottom (darker → higher). Leads are the family's 17px.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
@@ -16068,16 +16106,16 @@ function renderPhotocellLDR(domain, tool, favId) {
       const ax = (d) => (x2 - h * Math.cos(a + d)).toFixed(1), ay = (d) => (y2 - h * Math.sin(a + d)).toFixed(1);
       return `<path d="M${x1} ${y1} L${x2} ${y2} M${ax(-0.5)} ${ay(-0.5)} L${x2} ${y2} L${ax(0.5)} ${ay(0.5)}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     };
+    const part = (t, isLdr) => `
+      <path d="${zig(93, t)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      ${isLdr ? `${arrow(66, t + 4, 80, t + 14)}${arrow(66, t + 20, 80, t + 30)}` : ""}
+      <text x="108" y="${t + 22}" fill="${comp}" font-size="11" font-weight="600">${isLdr ? "LDR" : "R"}</text>`;
 
     return `<svg width="95" height="176" viewBox="59 -12 95 176" fill="none">
       ${port(93, 4)}
       <text x="105" y="8" fill="${comp}" font-size="12" font-weight="600">+Vcc</text>
       <path d="M93 7 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-
-      <path d="${zig(93, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      ${arrow(66, 28, 80, 38)}
-      ${arrow(66, 44, 80, 54)}
-      <text x="108" y="46" fill="${comp}" font-size="11" font-weight="600">LDR</text>
+      ${part(24, top())}
       <path d="M93 60 V77" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       <circle cx="93" cy="77" r="2.6" fill="${wire}"/>
@@ -16086,41 +16124,43 @@ function renderPhotocellLDR(domain, tool, favId) {
       <text x="121" y="81" fill="${comp}" font-size="12" font-weight="600">Vout</text>
 
       <path d="M93 77 V94" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(93, 94)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="108" y="116" fill="${comp}" font-size="11" font-weight="600">R</text>
+      ${part(94, !top())}
       <path d="M93 130 V147" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       ${ground(93, 147)}
     </svg>`;
   }
 
-  // Vout across four decades of light centred on the operating point, so the
-  // marker always sits mid-plot and you can see whether you are on the steep
-  // part of the curve or out on a flat end where the divider has stopped
-  // responding. The x axis is logarithmic because the device is.
+  // Vout across four decades of light centred on the operating point, on a
+  // logarithmic light axis because the device is logarithmic. With a part
+  // chosen, its 2:1 resistance spread is drawn as two faint curves.
   function curve(r) {
-    if (r.problem) return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none"></svg>`;
     const c = Math.log10(r.lux), lo = c - 2, hi = c + 2;
-    const x0 = 26, x1 = 194, yTop = 8, yBot = 50;
+    const x0 = 34, x1 = 206, yTop = 8, yBot = 52;
     const xf = (l) => x0 + ((l - lo) / (hi - lo)) * (x1 - x0);
     const yf = (v) => yBot - (v / r.vcc) * (yBot - yTop);
-    const pts = [];
-    for (let i = 0; i <= 120; i++) {
-      const l = lo + (i / 120) * (hi - lo);
-      const rr = rAt(Math.pow(10, l), r.r10, r.gamma);
-      pts.push(`${xf(l).toFixed(1)},${yf(r.vcc * (r.rfixed / (rr + r.rfixed))).toFixed(1)}`);
-    }
+    const line = (r10) => {
+      const pts = [];
+      for (let i = 0; i <= 120; i++) {
+        const l = lo + (i / 120) * (hi - lo);
+        pts.push(`${xf(l).toFixed(1)},${yf(vOut(rAt(Math.pow(10, l), r10, r.gamma), r.rfixed, r.vcc)).toFixed(1)}`);
+      }
+      return pts.join(" ");
+    };
     const mx = xf(c).toFixed(1), my = yf(r.vout).toFixed(1);
-    const fmt = (l) => { const v = Math.pow(10, l); return v >= 1000 ? `${trim(v / 1000)}k` : trim(v); };
-    return `<svg width="220" height="84" viewBox="0 0 220 84" fill="none">
+    const fmt = (l) => { const v = Math.pow(10, l); return v >= 1000 ? `${trim(Number((v / 1000).toPrecision(3)))}k` : trim(Number(v.toPrecision(3))); };
+    return `<svg width="220" height="80" viewBox="0 0 220 80" fill="none">
       <path d="M${x0},${yBot} H${x1}" stroke="#5A6169" stroke-width="1" stroke-dasharray="3 3"/>
       <path d="M${mx},${yTop} V${yBot}" stroke="#5A6169" stroke-width="1" stroke-dasharray="2 3"/>
-      <polyline points="${pts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      ${r.part ? `<polyline points="${line(r.part.min)}" stroke="#8FC1F5" stroke-opacity="0.35" stroke-width="1.2" fill="none"/>
+      <polyline points="${line(r.part.max)}" stroke="#8FC1F5" stroke-opacity="0.35" stroke-width="1.2" fill="none"/>` : ""}
+      <polyline points="${line(r.r10)}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
       <circle cx="${mx}" cy="${my}" r="3" fill="#8FC1F5"/>
-      <text x="22" y="${yTop + 4}" fill="#8A9099" font-size="8" font-weight="600" text-anchor="end">${trim(r.vcc)}V</text>
-      <text x="22" y="${yBot + 3}" fill="#8A9099" font-size="8" font-weight="600" text-anchor="end">0</text>
-      <text x="${x0}" y="62" fill="#5A6169" font-size="8" font-weight="600">${fmt(lo)} lx</text>
-      <text x="${x1}" y="62" fill="#5A6169" font-size="8" font-weight="600" text-anchor="end">${fmt(hi)} lx</text>
-      <text x="${(x0 + x1) / 2}" y="80" fill="#8FC1F5" font-size="8" font-weight="600" text-anchor="middle">Vout vs illuminance (log)</text>
+      <text x="30" y="${yTop + 4}" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">${trim(r.vcc)} V</text>
+      <text x="30" y="${yBot + 4}" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">0</text>
+      <text x="${x0}" y="70" fill="#8A9099" font-size="11" font-weight="600">${fmt(lo)} lx</text>
+      <text x="${mx}" y="70" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="middle">${fmt(c)} lx</text>
+      <text x="${x1}" y="70" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">${fmt(hi)} lx</text>
     </svg>`;
   }
 
@@ -16131,20 +16171,29 @@ function renderPhotocellLDR(domain, tool, favId) {
     </div>`;
   }
 
+  // Vout first and large, with the LDR's resistance and the part's spread,
+  // then how sensitive the divider is and what would make it more so.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const matched = Math.abs(Math.log10(r.rfixed / r.bestR)) < 0.05;
+    const v = (x) => trim(Number(x.toPrecision(3)));
+    const signedV = (x) => `${x >= 0 ? "+" : "−"}${siFormat(Math.abs(x), "V")}`;
     return `
-      <div class="section-label" style="color:#5DCAA5">Output
-        ${matched ? `<span class="badge-calc" style="background:var(--result-border);color:var(--result-text);float:right;">Most sensitive here</span>` : ""}
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Vout</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vout">${siFormat(r.vout, "V")}</span></div>
+        <div class="result-sub">LDR <span data-res="rldr">${siFormat(r.rldr, "Ω")}</span> at ${v(r.lux)} lx${r.spread
+          ? ` &nbsp;·&nbsp; <span data-res="spread">${v(r.spread[0])}–${v(r.spread[1])} V</span> across the part's spread` : ""}</div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="clear:both">
-        ${cell("Rldr", siFormat(r.rldr, "Ω"))}
-        ${cell("Vout", siFormat(r.vout, "V"))}
-        ${cell("I", siFormat(r.idiv, "A"))}
-        ${cell("ΔV/dec", siFormat(r.perDecade, "V"))}
-        ${cell("Best Rfixed", siFormat(r.bestR, "Ω"))}
-      </div>`;
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Per ×10 light", `<span data-res="dec">${signedV(r.perDecade)}</span>`)}
+        ${cell("Best R here", `<span data-res="best">${siFormat(r.bestR, "Ω")}</span>`)}
+        ${cell("Current", `<span data-res="idiv">${siFormat(r.idiv, "A")}</span>`)}
+      </div>
+      ${r.lux < 1 ? `<div class="error-text" data-res="dark">Below about 1 lx the cell no longer follows this curve: it heads towards its dark resistance${r.part ? ` (at least ${siFormat(r.part.dark, "Ω")} for this part)` : ""} and reacts slowly.</div>` : ""}`;
   }
 
   function refresh() {
@@ -16156,64 +16205,64 @@ function renderPhotocellLDR(domain, tool, favId) {
   function paint() {
     const r = compute();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Resistance falls as a power of light — R = R₁₀ (E/10)^−γ")}
+      ${calcHeader(tool, favId, top() ? "Brighter light, higher Vout" : "Darker, higher Vout")}
+
+      ${pillRow([["top", "LDR on top"], ["bottom", "LDR at bottom"]], state.place, domain.bg)}
 
       <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
-        <div>${diagram()}</div>
+        <div data-res="circuit">${diagram()}</div>
         <div data-res="curve">${curve(r)}</div>
       </div>
 
       <div class="field-pair">
         <div class="field">
-          <label>R at 10 lx</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ld-r10" value="${state.r10}" />
-            <select id="ld-r10-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r10Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
+          <label>Part</label>
+          <select id="ld-part">${PARTS.map((p) => `<option value="${p}" ${state.part === p ? "selected" : ""}>${p === "custom" ? "Custom" : p}</option>`).join("")}</select>
         </div>
-        <div class="field">
-          <label>γ (slope)</label>
-          <input type="number" inputmode="decimal" step="any" id="ld-gamma" value="${state.gamma}" />
-        </div>
-        <div class="field">
-          <label>Light (lx)</label>
-          <input type="number" inputmode="decimal" step="any" id="ld-lux" value="${state.lux}" />
-        </div>
+        ${opampField("Light", "ld-lux", state.lux, `<span class="unit-fixed">lx</span>`)}
+        ${opampField("Vcc", "ld-vcc", state.vcc, `<span class="unit-fixed">V</span>`)}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>Rfixed</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ld-rfixed" value="${state.rfixed}" />
-            <select id="ld-rfixed-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rfixedUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Vcc</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ld-vcc" value="${state.vcc}" />
-            <select id="ld-vcc-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vccUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("R at 10 lx", "ld-r10", state.r10, opampUnitSelect("ld-r10-unit", R_UNITS, state.r10Unit))}
+        ${opampField("γ", "ld-gamma", state.gamma, "")}
+        ${opampField("R fixed", "ld-rfixed", state.rfixed, opampUnitSelect("ld-rfixed-unit", R_UNITS, state.rfixedUnit))}
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Rldr = R₁₀ × (E / 10)^−γ", "I = Vcc / (Rldr + Rfixed),  Vout = I × Rfixed", "ΔV/dec = ln10 × γ × Vout × (Vcc − Vout) / Vcc", "Best Rfixed = Rldr, i.e. Vout at half of Vcc"],
-        "Datasheets give R at 10 lux and γ, the slope on log-log axes where the power law is a straight line. γ also equals log₁₀(R₁₀/R₁₀₀). The divider is most sensitive when the fixed resistor equals the LDR's resistance at the light level you are watching — the badge confirms it. Below about a lux the curve stops applying and the cell's dark resistance takes over; CdS cells are also slow, tens of ms."
+        ["R_LDR = R(10 lx) × (light / 10)^−γ", top() ? "Vout = Vcc × R / (R_LDR + R)" : "Vout = Vcc × R_LDR / (R_LDR + R)", "Per ×10 light = ±ln10 × γ × Vcc × R × R_LDR / (R_LDR + R)²", "Most sensitive when R = R_LDR"],
+        "An LDR (light-dependent resistor, or photocell) is a resistor whose value falls as light rises: thousands of ohms in a dim room, a few hundred in daylight, megohms in the dark. Its datasheet gives R at 10 lux and γ, how steeply it falls: each ×10 of light divides R by 10^γ. Light is measured in lux (lx): about 1 lx at deep twilight, 50–100 lx in a dim room, 300–500 lx in an office, 10 000 lx and more in daylight. With a fixed resistor R it makes a voltage divider whose output follows the light — upwards with the LDR on top, downwards with it at the bottom (a night light). The divider is most sensitive when R equals the LDR's resistance at the light level you care about. Choosing a part fills in its values; LDRs vary by 2:1 between pieces, so the result shows the range of Vout you may get. They are also slow (20–30 ms) and drift with temperature: good for day/night switching, not for precise measurement."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint);
+    wireCalc(favId, paint, (m) => { state.place = m; setPref(C, "place", m); paint(); });
 
-    [["ld-r10", "r10"], ["ld-gamma", "gamma"], ["ld-lux", "lux"], ["ld-rfixed", "rfixed"], ["ld-vcc", "vcc"]].forEach(([id, name]) => {
-      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    document.getElementById("ld-part").onchange = (e) => {
+      state.part = e.target.value;
+      setPref(C, "part", state.part);
+      loadPart();
+      paint();
+    };
+    // Typing a part's own values turns the choice into Custom.
+    const toCustom = () => {
+      if (state.part === "custom") return;
+      state.part = "custom";
+      setPref(C, "part", "custom");
+      document.getElementById("ld-part").value = "custom";
+    };
+    [["ld-r10", "r10", true], ["ld-gamma", "gamma", true], ["ld-lux", "lux"], ["ld-rfixed", "rfixed"], ["ld-vcc", "vcc"]].forEach(([id, name, own]) => {
+      document.getElementById(id).oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        state[name] = v;
+        if (own) toCustom();
+        refresh();
+      };
     });
-    [["ld-r10-unit", "r10Unit"], ["ld-rfixed-unit", "rfixedUnit"], ["ld-vcc-unit", "vccUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
-    });
+    document.getElementById("ld-r10-unit").onchange = (e) => { state.r10Unit = e.target.value; toCustom(); refresh(); };
+    document.getElementById("ld-rfixed-unit").onchange = (e) => { state.rfixedUnit = e.target.value; setPref(C, "rfixedUnit", state.rfixedUnit); refresh(); };
   }
 
   paint();
