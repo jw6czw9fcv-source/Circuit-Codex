@@ -56,6 +56,7 @@ will key on, since that is the id the app already holds for each tool.
 - Op-amps → [Buffer](#buffer)
 - Op-amps → [Comparators](#comparators)
 - Op-amps → [Integrator](#integrator)
+- Op-amps → [Differentiator](#differentiator)
 
 ### Digital
 
@@ -3320,6 +3321,140 @@ The review made several changes:
 - It rewrote the note in plain words and added examples.
 - On Pierre's request, it added the optional Rf across C, drawn as a
   second rung above C.
+
+[↑ Index](#index)
+
+---
+
+<a id="opamp-differentiator"></a>
+## Differentiator
+
+`calc: opamp-differentiator` · Active & semiconductor devices › Op-amps
+(formerly Op-amp differentiator)
+
+### What it computes
+
+For the op-amp differentiator, with a triangle or a sine wave at its
+input, it gives:
+- the output's peak;
+- for a triangle, the square's peak-to-peak, the input's slope and how
+  long each step lasts;
+- for a sine, the gain, as a ratio and in decibels, and the phase;
+- the time constant RC and the frequency f₀ where the gain is 1;
+- with the optional resistor Rs in series with C, its corner frequency fH
+  and the output it then gives;
+- where the output clips, from the supply and the op-amp's headroom.
+
+It draws the input and output waves.
+
+### Source
+
+No standard applies. The output is the derivative of the input, from the
+ideal op-amp model. The headroom figures come from the TL072, LM358 and
+MCP6002 datasheets, as listed in the Inverting section.
+
+### What it means
+
+To **differentiate** is to measure how fast something changes: the output
+follows the input's slope, not its level. It is the mirror image of the
+integrator.
+
+- **How the circuit does it** — a capacitor passes current only while its
+  voltage changes, so the current through C is C × (rate of change of
+  Vin). The op-amp holds its − input at 0 V and sends that current through
+  R, so Vout = −RC × slope. A rising input gives a negative output: the
+  circuit inverts.
+- **Triangle in, square out** — a triangle rises at one steady rate, then
+  falls at the same rate. The output is therefore a steady negative level,
+  then a steady positive one: a square. A triangle of peak Vp at
+  frequency f rises at 4 × Vp × f.
+- **Sine in** — a sine comes out as a sine a quarter cycle (90°) **behind**
+  the input, multiplied by the gain 2πfRC. The derivative of a sine is a
+  cosine, which is ahead, but the circuit's inversion turns it round. The
+  gain doubles each time the frequency doubles (+6 dB per octave).
+- **f₀** — the frequency where the gain is exactly 1.
+- **Headroom** — how close the output can get to the supply: about
+  1.5–2 V for a TL072 or LM358, 0 for a rail-to-rail op-amp. At high
+  frequencies the differentiator asks for large outputs and clips.
+- **Rs in series with C** (optional) — because the gain keeps rising with
+  frequency, a bare differentiator amplifies high-frequency noise
+  enormously and can oscillate. A small resistor in series with C stops
+  the rise. Leave the field empty for the ideal circuit.
+  - **fH, the Rs corner** — 1 / (2π × Rs × C). Above it the gain stops
+    rising, at R / Rs.
+  - The circuit differentiates well only below about fH / 10, and the
+    tool warns above that.
+
+The headroom is remembered for all the op-amp tools.
+
+### Why the formulas are these
+
+The current into the − node is C × dVin/dt, and it all flows through R:
+
+    Vout = −RC × dVin/dt
+
+- **Triangle** — the slope is ±4 × Vp × f, so the output is a square of
+  ±RC × 4 × Vp × f. Each level lasts half a period.
+- **Sine** — the derivative of Vp × sin(2πft) is 2πf × Vp × cos(2πft).
+  With the minus sign it becomes −2πfRC × Vp × cos: the same shape, a
+  quarter cycle behind, scaled by 2πfRC = f / f₀.
+- **With Rs** — Rs in series with C makes a first-order high-pass of top
+  gain R / Rs and corner fH.
+  - A sine sees a gain of 2πfRC / √(1 + (f / fH)²) and lags by
+    90° + atan(f / fH). Well below fH this is the ideal f / f₀ and 90°.
+  - A triangle's slope drives the input current towards C × slope with
+    time constant Rs × C, so the square gets exponential edges. Its peak
+    is
+
+        RC × slope × tanh(1 / (4 × f × Rs × C))
+
+    which becomes the ideal RC × slope as Rs shrinks.
+
+### Assumptions and limits
+
+- **Ideal circuit without Rs.** It is shown as drawn on the reference
+  sheet, but a real one needs Rs; fit it to model the practical circuit.
+- **Input source.** The source driving Vin is taken as having no
+  resistance of its own. A real source's resistance acts like part of Rs.
+- **Op-amp speed.** The op-amp's gain-bandwidth and slew rate also limit
+  the output at high frequencies. This is not calculated.
+- **Sharp triangle corners** are taken as perfect, so the square switches
+  instantly.
+
+### What it deliberately does not do
+
+- The small capacitor sometimes added across R, for more noise filtering,
+  is not modelled.
+- Other waveshapes are not offered.
+
+### How it was checked
+
+All with 10 kΩ, on ±12 V with 1.5 V headroom:
+- **Triangle**, 100 nF, 1 V, 100 Hz:
+  - RC 1 ms, slope 400 V/s;
+  - a ±400 mV square (800 mV p-p), each step 5 ms.
+- **Triangle**, 10 nF at 1 kHz: 4 V/ms, ±400 mV.
+- **Sine**, 100 nF at 1 kHz: gain 6.283 (15.96 dB), lags 90°.
+- **Sine** at 10 kHz: the ideal 62.83 V clips at 10.5 V.
+- **With Rs = 100 Ω**:
+  - fH 15.92 kHz;
+  - at 1 kHz the gain is 6.271 and the lag 93.6°.
+- **With Rs = 1 kΩ** at 1 kHz: above fH / 10 (159.2 Hz), so the tool warns
+  that the gain tends to R / Rs = 10.
+
+The review made these changes:
+- It fixed the subtitle, which said a sine comes out a quarter cycle
+  early; the output lags by 90°.
+- It moved clipping from the full supply to the supply less the headroom,
+  and put the output peak first and large.
+- It shows slopes in V/s, V/ms or V/µs.
+- It replaced a row with three fields squeezed into two places by two
+  rows of three.
+- It put an 11 px legend below the waves.
+- It limited the units to real ones and remembers them, rewrote the note
+  in plain words and added examples.
+- On Pierre's request, it added the optional Rs, drawn in series ahead of
+  C.
 
 [↑ Index](#index)
 

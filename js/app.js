@@ -15224,72 +15224,110 @@ function renderOpampIntegrator(domain, tool, favId) {
 }
 
 function renderOpampDifferentiator(domain, tool, favId) {
+  const C = "opamp-differentiator";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
+  const F_UNITS = { Hz: 1, kHz: 1e3 };
   const state = {
-    wave: "triangle",
-    r: 10, rUnit: "kΩ",
-    c: 100, cUnit: "nF",
-    vin: 1, vinUnit: "V",
-    freq: 100, freqUnit: "Hz",
-    vsupply: 12, vsupplyUnit: "V",
+    wave: pref(C, "wave", "triangle", ["triangle", "sine"]),
+    r: 10, rUnit: pref(C, "rUnit", "kΩ", R_UNITS),
+    c: 100, cUnit: pref(C, "cUnit", "nF", Object.keys(RCF_C_UNITS)),
+    // Optional resistor in series with C; 0 means not fitted (the ideal
+    // differentiator of the reference sheet).
+    rs: 0, rsUnit: pref(C, "rsUnit", "Ω", R_UNITS),
+    vin: 1, vinUnit: pref(C, "vinUnit", "V", Object.keys(OPAMP_VIN_UNITS)),
+    freq: 100, freqUnit: pref(C, "freqUnit", "Hz", Object.keys(F_UNITS)),
+    vsupply: 12,
+    headroom: pref(OPAMP_PREF, "headroom", 1.5),
   };
 
-  const F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+  const example = (wave, c, cUnit, freq, freqUnit, rs = 0) => () => {
+    Object.assign(state, { wave, r: 10, rUnit: "kΩ", c, cUnit, vin: 1, vinUnit: "V", freq, freqUnit, vsupply: 12, headroom: 1.5, rs, rsUnit: "Ω" });
+    paint();
+  };
+  useExamples([
+    { title: "Triangle to square, 1 kHz", note: "A 1 V, 1 kHz triangle rises at 4 V/ms; with RC = 100 µs the output is a ±0.4 V square.",
+      apply: example("triangle", 10, "nF", 1, "kHz") },
+    { title: "Sine above f₀", note: "f₀ is 159 Hz; at 1 kHz the gain is 6.28 and the output lags the input by 90°.",
+      apply: example("sine", 100, "nF", 1, "kHz") },
+    { title: "Too fast: clipping", note: "At 10 kHz the gain is 62.8: 1 V would need 62.8 V; the output flattens at ±10.5 V.",
+      apply: example("sine", 100, "nF", 10, "kHz") },
+    { title: "Practical, with Rs = 100 Ω", note: "Rs caps the gain at 100 above fH = 15.9 kHz, taming noise; at 1 kHz the gain is still 6.27.",
+      apply: example("sine", 100, "nF", 1, "kHz", 100) },
+  ]);
 
   function si(name) {
-    if (name === "r") return state.r * OHM_UNITS[state.rUnit];
-    if (name === "c") return state.c * CAP_UNITS[state.cUnit];
+    if (name === "r") return state.r * DIVIDER_R_UNITS[state.rUnit];
+    if (name === "rs") return (state.rs > 0 ? state.rs : 0) * DIVIDER_R_UNITS[state.rsUnit];
+    if (name === "c") return state.c * RCF_C_UNITS[state.cUnit];
     if (name === "freq") return state.freq * F_UNITS[state.freqUnit];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (name === "vin") return state.vin * OPAMP_VIN_UNITS[state.vinUnit];
+    return state[name];
   }
 
+  // C passes only change, so the current reaching the − input is C·dVin/dt
+  // and the output is the input's slope scaled by −RC: a triangle's fixed
+  // slopes give a square, a sine gives −cos, a quarter cycle behind. With
+  // Rs in series with C the circuit is a first-order high-pass of top gain
+  // R/Rs above fH = 1/(2π Rs C): a sine sees 2πfRC / √(1 + (f/fH)²) and
+  // lags by 90° + atan(f/fH); a triangle settles to a square with
+  // exponential edges of peak RC·slope·tanh(half period / 2RsC). Both tend
+  // to the ideal as Rs shrinks.
   function compute() {
-    const r = si("r"), c = si("c"), vin = si("vin"), vsupply = si("vsupply"), freq = si("freq");
+    const r = si("r"), c = si("c"), vin = si("vin"), vsupply = si("vsupply"), freq = si("freq"), headroom = si("headroom"), rs = si("rs");
     if (!(r > 0) || !(c > 0) || !(vsupply > 0) || !(freq > 0)) {
       return { problem: "R, C, the frequency and the supply must all be greater than zero." };
     }
-
-    // C passes only change, so the current reaching the summing node is
-    // C·dVin/dt and the output is the input's slope scaled by −RC. Everything
-    // below is that one fact: a triangle has a fixed slope each half cycle, a
-    // sine differentiates to a cosine scaled by ωRC.
+    if (!(headroom >= 0) || headroom >= vsupply) {
+      return { problem: "The headroom must be zero or more, and less than the supply." };
+    }
     const tri = state.wave === "triangle";
     const tau = r * c;
     const f0 = 1 / (2 * Math.PI * tau);
-    const gain = 2 * Math.PI * freq * tau;
     const vinPk = Math.abs(vin);
-    // A triangle covering 2·Vpk in half a period rises at 4·Vpk·f.
     const slope = 4 * vinPk * freq;
-    const voutPkIdeal = tri ? tau * slope : vinPk * gain;
-    const clipped = voutPkIdeal > vsupply;
-    const voutPk = clipped ? vsupply : voutPkIdeal;
-
-    return { problem: "", tri, tau, f0, gain, slope, vinPk, voutPkIdeal, voutPk, clipped, vsupply };
+    const hasRs = rs > 0;
+    const fH = hasRs ? 1 / (2 * Math.PI * rs * c) : 0;
+    const ideal = 2 * Math.PI * freq * tau;
+    const gain = hasRs ? ideal / Math.sqrt(1 + (freq / fH) ** 2) : ideal;
+    const lag = hasRs ? 90 + (Math.atan(freq / fH) * 180) / Math.PI : 90;
+    const squarePk = hasRs ? tau * slope * Math.tanh(1 / (4 * freq * rs * c)) : tau * slope;
+    const voutPkIdeal = tri ? squarePk : vinPk * gain;
+    const vmax = vsupply - headroom;
+    const clipped = voutPkIdeal > vmax;
+    const voutPk = clipped ? vmax : voutPkIdeal;
+    return { problem: "", tri, tau, f0, gain, lag, slope, vinPk, voutPkIdeal, voutPk, clipped, vmax,
+             hasRs, fH, maxGain: hasRs ? r / rs : Infinity, tauS: rs * c, freq, full: tau * slope };
   }
 
   // The inverting amplifier's schematic with C moved into the input arm, the
-  // exact mirror of the integrator and what the reference sheet draws: same
-  // 50x50 triangle, same Rf loop over the top, same node-to-node spans. The
-  // plates sit at the centre the input resistor used, so the runs either side
-  // are longer than a resistor's leads — a capacitor is narrower than a
-  // zigzag and keeping the span fixed is what keeps the family aligned.
-  function diagram() {
+  // mirror of the integrator and what the reference sheet draws. With Rs
+  // fitted it sits in series ahead of C, and the input port moves left to
+  // make room, so C keeps its place.
+  function diagram(hasRs) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
     const zigH = (y, t) => `M${t} ${y} L${t - 3} ${y - 7} L${t - 9} ${y + 7} L${t - 15} ${y - 7} L${t - 21} ${y + 7} L${t - 27} ${y - 7} L${t - 33} ${y + 7} L${t - 36} ${y}`;
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
     const cap = (x, y) => `M${x - 4} ${y - 9} V${y + 9} M${x + 4} ${y - 9} V${y + 9}`;
+    const px = hasRs ? -4 : 20;
+    const left = hasRs ? -42 : -16;
 
-    return `<svg width="258" height="128" viewBox="-16 -26 258 128" fill="none">
+    return `<svg width="${242 - left}" height="122" viewBox="${left} -20 ${242 - left} 122" fill="none">
       <path d="M110 25 L110 75 L160 50 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
       <text x="116" y="42" fill="${comp}" font-size="12" font-weight="700">−</text>
       <text x="116" y="66" fill="${comp}" font-size="12" font-weight="700">+</text>
       <path d="M93 38 H110" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M110 62 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
-      ${port(20, 38)}
-      <text x="8" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
-      <path d="M23 38 H54" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${port(px, 38)}
+      <text x="${px - 12}" y="42" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
+      ${hasRs
+        ? `<path d="M${px + 3} 38 H8" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+           <path d="${zigH(38, 44)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+           <text x="26" y="24" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Rs</text>
+           <path d="M44 38 H54" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`
+        : `<path d="M23 38 H54" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`}
       <path d="${cap(58, 38)}" stroke="${comp}" stroke-width="1.8" stroke-linecap="round" fill="none"/>
       <text x="58" y="22" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">C</text>
       <path d="M62 38 H93" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
@@ -15311,49 +15349,61 @@ function renderOpampDifferentiator(domain, tool, favId) {
     </svg>`;
   }
 
-  // Two cycles on one shared axis scaled to whichever signal is larger, same
-  // as the integrator so the mirror is visible when you switch between them.
-  // Both shapes in triangle mode are piecewise constant or linear, so they are
-  // drawn as explicit paths rather than sampled — sampling rounds a corner and
-  // slopes a vertical edge, which reads as the wrong waveform.
+  // Two cycles on one axis scaled to the larger signal, as on the
+  // integrator. The ideal triangle-to-square is drawn as explicit corners
+  // (sampling would slope the edges); with Rs the edges are exponential and
+  // are sampled. Legend under the plot.
   function waveDiagram(r) {
-    if (r.problem) return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none"></svg>`;
+    if (r.problem) return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none"></svg>`;
     const scale = Math.max(r.vinPk, r.voutPk, 1e-12);
-    const pxTop = 8, pxBottom = 58;
+    const pxTop = 4, pxBottom = 52;
     const mid = (pxTop + pxBottom) / 2, half = (pxBottom - pxTop) / 2;
     const toY = (v) => mid - (v / scale) * half;
-    const x0 = 10, width = 184, samples = 170;
-    const clamp = (v) => Math.max(-r.vsupply, Math.min(r.vsupply, v));
+    const x0 = 10, width = 190, samples = 170;
+    const clamp = (v) => Math.max(-r.vmax, Math.min(r.vmax, v));
 
-    let inPts = [], outPts = [];
+    const inPts = [], outPts = [];
     if (r.tri) {
       const q = width / 4;
       const lo = toY(-r.vinPk).toFixed(1), hi = toY(r.vinPk).toFixed(1);
-      // Rising then falling, twice: slope is what the output follows.
       [0, 1, 2, 3, 4].forEach((k) => inPts.push(`${(x0 + k * q).toFixed(1)},${k % 2 === 0 ? lo : hi}`));
-      const neg = toY(clamp(-r.voutPkIdeal)).toFixed(1), pos = toY(clamp(r.voutPkIdeal)).toFixed(1);
-      [0, 1, 2, 3].forEach((k) => {
-        const a = (x0 + k * q).toFixed(1), b = (x0 + (k + 1) * q).toFixed(1);
-        const y = k % 2 === 0 ? neg : pos;
-        outPts.push(`${a},${y}`, `${b},${y}`);
-      });
+      if (r.hasRs) {
+        // Rising input: from +A towards −RC·slope; falling: from −A back up.
+        const a = r.voutPkIdeal, p = r.full;
+        for (let i = 0; i <= samples; i++) {
+          const t = i / samples;
+          const ph = (t * 4 * Math.PI) % (2 * Math.PI);
+          const decay = Math.exp(-((ph % Math.PI) / Math.PI) / (2 * r.freq * r.tauS));
+          const v = ph < Math.PI ? -p + (a + p) * decay : p - (a + p) * decay;
+          outPts.push(`${(x0 + t * width).toFixed(1)},${toY(clamp(v)).toFixed(1)}`);
+        }
+      } else {
+        const neg = toY(clamp(-r.voutPkIdeal)).toFixed(1), pos = toY(clamp(r.voutPkIdeal)).toFixed(1);
+        [0, 1, 2, 3].forEach((k) => {
+          const a = (x0 + k * q).toFixed(1), b = (x0 + (k + 1) * q).toFixed(1);
+          const y = k % 2 === 0 ? neg : pos;
+          outPts.push(`${a},${y}`, `${b},${y}`);
+        });
+      }
     } else {
+      const lagRad = (r.lag * Math.PI) / 180;
       for (let i = 0; i <= samples; i++) {
         const t = i / samples;
         const th = t * 4 * Math.PI;
         const x = (x0 + t * width).toFixed(1);
         inPts.push(`${x},${toY(r.vinPk * Math.sin(th)).toFixed(1)}`);
-        outPts.push(`${x},${toY(clamp(-r.voutPkIdeal * Math.cos(th))).toFixed(1)}`);
+        outPts.push(`${x},${toY(clamp(r.voutPkIdeal * Math.sin(th - lagRad))).toFixed(1)}`);
       }
     }
-    const zeroY = toY(0);
-    return `<svg width="220" height="76" viewBox="0 0 220 76" fill="none">
-      <path d="M8,${zeroY.toFixed(1)} H196" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
+    const zeroY = toY(0).toFixed(1);
+    return `<svg width="220" height="72" viewBox="0 0 220 72" fill="none">
+      <path d="M8,${zeroY} H202" stroke="#5A6169" stroke-width="1.2" stroke-dasharray="3 3"/>
       <polyline points="${inPts.join(" ")}" stroke="#5A6169" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
       <polyline points="${outPts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round"/>
-      <text x="199" y="${(zeroY + 3).toFixed(1)}" fill="#8A9099" font-size="9" font-weight="600">0V</text>
-      <text x="10" y="72" fill="#5A6169" font-size="9" font-weight="600">Vin (${r.tri ? "triangle" : "sine"})</text>
-      <text x="${10 + `Vin (${r.tri ? "triangle" : "sine"})`.length * 6.6 + 10}" y="72" fill="#8FC1F5" font-size="9" font-weight="600">Vout (${r.tri ? "square" : "cosine"})</text>
+      <path d="M10,64 H22" stroke="#5A6169" stroke-width="1.4"/>
+      <text x="26" y="68" fill="#8A9099" font-size="11" font-weight="600">Vin</text>
+      <path d="M58,64 H70" stroke="#8FC1F5" stroke-width="2"/>
+      <text x="74" y="68" fill="#8FC1F5" font-size="11" font-weight="600">Vout</text>
     </svg>`;
   }
 
@@ -15364,79 +15414,78 @@ function renderOpampDifferentiator(domain, tool, favId) {
     </div>`;
   }
 
+  // A slope in the unit people read off a scope: V/s, V/ms or V/µs.
+  function rateText(v) {
+    if (v >= 1e6) return `${trim(Number((v / 1e6).toPrecision(4)))} V/µs`;
+    if (v >= 1e3) return `${trim(Number((v / 1e3).toPrecision(4)))} V/ms`;
+    return `${trim(Number(v.toPrecision(4)))} V/s`;
+  }
+
+  // Vout's peak first and large, then what sets it.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const sub = r.tri
+      ? `Square, <span data-res="vpp">${siFormat(2 * r.voutPk, "V")}</span> p-p &nbsp;·&nbsp; input slope <span data-res="slope">${rateText(r.slope)}</span>`
+      : `Gain <span data-res="gain">${trim(Number(r.gain.toPrecision(4)))}×</span> &nbsp;·&nbsp; lags the input by <span data-res="lag">${Number(r.lag.toFixed(1))}°</span>`;
     return `
-      <div class="section-label" style="color:#5DCAA5">Output
-        ${r.clipped ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Clipped at ±${siFormat(r.vsupply, "V")}</span>` : ""}
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Vout (peak)</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vout">${siFormat(r.voutPk, "V")}</span></div>
+        <div class="result-sub">${sub}</div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="clear:both">
-        ${cell("τ = RC", siFormat(r.tau, "s"))}
-        ${r.tri ? cell("Vin slope", siFormat(r.slope, "V/s")) : cell("Gain", `${trim(r.gain)}×`)}
-        ${cell("Vout pk", siFormat(r.voutPk, "V"))}
-        ${r.tri ? cell("Vout pp", siFormat(r.clipped ? 2 * r.vsupply : 2 * r.voutPkIdeal, "V")) : cell("Phase", "−90°")}
-        ${cell("f₀", siFormat(r.f0, "Hz"))}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(${r.hasRs ? 4 : 3},1fr);">
+        ${cell("RC", `<span data-res="tau">${siFormat(r.tau, "s")}</span>`)}
+        ${cell(r.hasRs ? "Gain 1 at" : "Gain 1 at (f₀)", `<span data-res="f0">${siFormat(r.f0, "Hz")}</span>`)}
+        ${r.hasRs ? cell("Rs corner", `<span data-res="fh">${siFormat(r.fH, "Hz")}</span>`) : ""}
+        ${r.tri
+          ? cell("Each step lasts", `<span data-res="half">${siFormat(1 / (2 * r.freq), "s")}</span>`)
+          : cell("Gain (dB)", `<span data-res="db">${Number((20 * Math.log10(r.gain)).toFixed(2))} dB</span>`)}
       </div>
-      ${r.clipped ? `<div class="error-text">Clipping — the derivative calls for ${siFormat(r.voutPkIdeal, "V")} peak, past the ±${siFormat(r.vsupply, "V")} rails. Lower f, lower RC, or lower Vin.</div>` : ""}`;
+      ${r.hasRs && r.freq > r.fH / 10 ? `<div class="error-text" data-res="highf">Above a tenth of the Rs corner (${siFormat(r.fH / 10, "Hz")}) the circuit differentiates poorly: it acts more and more as an inverting amplifier of gain R / Rs = ${trim(Number(r.maxGain.toPrecision(4)))}.</div>` : ""}
+      ${r.clipped ? `<div class="error-text" data-res="clip">Clipping — the ${r.tri ? "square" : "wave"} would need ${siFormat(r.voutPkIdeal, "V")} peak, but the output stops at ±${siFormat(r.vmax, "V")}${state.headroom > 0 ? `, ${trim(state.headroom)} V short of the rails` : ""}. Lower the frequency, RC or Vin.</div>` : ""}`;
   }
 
   function refresh() {
     const r = compute();
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
     app.querySelector('[data-res="wave"]').innerHTML = waveDiagram(r);
+    app.querySelector('[data-res="circuit"]').innerHTML = diagram(state.rs > 0);
   }
 
   function paint() {
     const r = compute();
     const tri = state.wave === "triangle";
+    const hasRs = state.rs > 0;
     app.innerHTML = `
-      ${calcHeader(tool, favId, tri
-        ? "Triangle in, square out — constant slope, constant output"
-        : "Differentiating a sine gives a cosine — a quarter cycle early")}
+      ${calcHeader(tool, favId, tri ? "Triangle in, square out" : "Sine in, sine out, a quarter cycle behind")}
 
       ${pillRow([["triangle", "Triangle in"], ["sine", "Sine in"]], state.wave, domain.bg)}
 
       <div class="diagram-box" style="padding:0px 6px; flex-direction:column; gap:0;">
-        <div>${diagram()}</div>
+        <div data-res="circuit">${diagram(hasRs)}</div>
         <div data-res="wave">${waveDiagram(r)}</div>
       </div>
 
       <div class="field-pair">
-        <div class="field">
-          <label>R</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="od-r" value="${state.r}" />
-            <select id="od-r-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>C</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="od-c" value="${state.c}" />
-            <select id="od-c-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.cUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("R", "od-r", state.r, opampUnitSelect("od-r-unit", R_UNITS, state.rUnit))}
+        ${opampField("C", "od-c", state.c, opampUnitSelect("od-c-unit", Object.keys(RCF_C_UNITS), state.cUnit))}
+        ${opampField("Frequency", "od-freq", state.freq, opampUnitSelect("od-freq-unit", Object.keys(F_UNITS), state.freqUnit))}
+      </div>
+      <div class="field-pair">
+        ${opampField("Vin (peak)", "od-vin", state.vin, opampUnitSelect("od-vin-unit", Object.keys(OPAMP_VIN_UNITS), state.vinUnit))}
+        ${opampField("Supply (±)", "od-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`)}
+        ${opampField("Headroom", "od-headroom", state.headroom, `<span class="unit-fixed">V</span>`)}
       </div>
       <div class="field-pair">
         <div class="field">
-          <label>Vin (pk)</label>
+          <label>Rs in series with C (optional)</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="od-vin" value="${state.vin}" />
-            <select id="od-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Frequency</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="od-freq" value="${state.freq}" />
-            <select id="od-freq-unit">${Object.keys(F_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Supply (±V)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="od-vsupply" value="${state.vsupply}" />
-            <select id="od-vsupply-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vsupplyUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="od-rs" placeholder="none" value="${hasRs ? trim(state.rs) : ""}" />
+            ${opampUnitSelect("od-rs-unit", R_UNITS, state.rsUnit)}
           </div>
         </div>
       </div>
@@ -15445,22 +15494,37 @@ function renderOpampDifferentiator(domain, tool, favId) {
 
       ${formulaSection(
         tri
-          ? ["Vout = −RC × dVin/dt", "Slope = 4 × Vin pk × f", "Vout pk = RC × Slope", "f₀ = 1 / (2π R C)"]
-          : ["Vout = −RC × dVin/dt", "Gain = 2π f R C", "Vout pk = Vin pk × Gain", "f₀ = 1 / (2π R C)"],
-        tri
-          ? `A triangle climbs at one fixed rate and falls at another, and the output is that slope scaled by −RC — so triangle in gives square out, the exact mirror of the integrator. <b style="color:${domain.color}">Used for:</b> turning an edge into a pulse, rate-of-change alarms on dV/dt or di/dt, and the D term of a PID. A bare differentiator amplifies noise without limit; real ones add a small resistor in series with C to stop the gain climbing.`
-          : `A sine differentiates to a cosine — a quarter cycle early, scaled by 2πfRC — so gain climbs 6dB per octave, passing unity at f₀. That is the integrator's response upside down; the two gains multiply to 1 at any frequency. <b style="color:${domain.color}">Used for:</b> high-pass shaping and rate detection. A bare differentiator amplifies noise without limit; real ones add a small resistor in series with C to stop the gain climbing.`
+          ? (hasRs
+            ? ["Slope = 4 × Vin peak × f", "Vout peak = RC × Slope × tanh(1 / (4 f Rs C))", "f₀ = 1 / (2π RC), Rs corner fH = 1 / (2π Rs C)"]
+            : ["Vout = −RC × dVin/dt", "Slope = 4 × Vin peak × f", "Vout peak = RC × Slope", "f₀ = 1 / (2π × RC)"])
+          : (hasRs
+            ? ["Gain = 2π f RC / √(1 + (f / fH)²)", "Lag = 90° + atan(f / fH)", "f₀ = 1 / (2π RC), Rs corner fH = 1 / (2π Rs C)"]
+            : ["Vout = −RC × dVin/dt", "Gain = 2π × f × RC = f / f₀", "Vout peak = Vin peak × Gain", "f₀ = 1 / (2π × RC)"]),
+        `To differentiate is to measure how fast something changes: the output follows the input's slope, not its level. A capacitor passes current only while its voltage changes, so the current through C is C × (rate of change of Vin). The op-amp holds its − input at 0 V and sends that current through R, which makes Vout = −RC × slope — negative for a rising input (the circuit inverts). ${tri
+          ? "A triangle rises at one steady rate, then falls at the same rate, so the output is a steady negative level, then a steady positive one: a square."
+          : "A sine comes out as a sine a quarter cycle (90°) behind, multiplied by the gain 2πfRC: the gain doubles each time the frequency doubles, and equals 1 at f₀."} The output stops short of the supply by the headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail). <b style="color:${domain.color}">Used for:</b> turning edges into pulses, rate-of-change alarms, the D term of a PID controller. Because the gain keeps rising with frequency, a bare differentiator amplifies noise and can oscillate. The cure is Rs, a small resistor in series with C: leave it empty for the ideal circuit. With Rs the gain stops rising at R / Rs above the corner fH = 1 / (2π Rs C); the circuit differentiates well only below about fH / 10. Headroom is remembered for all the op-amp tools.`
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.wave = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.wave = m; setPref(C, "wave", m); paint(); });
 
-    [["od-r", "r"], ["od-c", "c"], ["od-vin", "vin"], ["od-freq", "freq"], ["od-vsupply", "vsupply"]].forEach(([id, name]) => {
-      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    document.getElementById("od-rs").oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      state.rs = isFinite(v) && v > 0 ? v : 0;
+      refresh();
+    };
+    [["od-r", "r"], ["od-c", "c"], ["od-vin", "vin"], ["od-freq", "freq"], ["od-vsupply", "vsupply"], ["od-headroom", "headroom"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        state[name] = v;
+        if (name === "headroom") setPref(OPAMP_PREF, "headroom", v);
+        refresh();
+      };
     });
-    [["od-r-unit", "rUnit"], ["od-c-unit", "cUnit"], ["od-vin-unit", "vinUnit"], ["od-freq-unit", "freqUnit"], ["od-vsupply-unit", "vsupplyUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["od-r-unit", "rUnit"], ["od-c-unit", "cUnit"], ["od-rs-unit", "rsUnit"], ["od-vin-unit", "vinUnit"], ["od-freq-unit", "freqUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; setPref(C, name, state[name]); refresh(); };
     });
   }
 
