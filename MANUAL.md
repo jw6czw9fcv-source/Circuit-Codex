@@ -57,6 +57,7 @@ will key on, since that is the id the app already holds for each tool.
 - Op-amps → [Comparators](#comparators)
 - Op-amps → [Integrator](#integrator)
 - Op-amps → [Differentiator](#differentiator)
+- Op-amps → [Summing](#summing)
 
 ### Digital
 
@@ -3455,6 +3456,100 @@ The review made these changes:
   in plain words and added examples.
 - On Pierre's request, it added the optional Rs, drawn in series ahead of
   C.
+
+[↑ Index](#index)
+
+---
+
+<a id="opamp-summing"></a>
+## Summing
+
+`calc: opamp-summing` · Active & semiconductor devices › Op-amps
+(formerly Summing amplifier)
+
+### What it computes
+
+For the inverting summing amplifier with two inputs, it gives:
+- the output voltage;
+- each input's weight;
+- the current through Rf;
+- where the output clips, from the supply and the op-amp's headroom;
+- the bandwidth, from the op-amp's gain-bandwidth product.
+
+### Source
+
+No standard applies. The output comes from the ideal op-amp model. The
+headroom and gain-bandwidth figures come from the TL072, LM358 and MCP6002
+datasheets, as listed in the Inverting section.
+
+### What it means
+
+- **Virtual ground** — the op-amp holds its − input at 0 V. So each input
+  drives a current V / R through its own resistor, and is not affected by
+  the others.
+- **Adding** — those currents meet at the − input, add up, and all flow
+  on through Rf. Rf turns the total into the output voltage, upside down
+  (inverted).
+- **Weight** — each input's weight is −Rf divided by its own resistor:
+  - equal resistors give a plain sum;
+  - unequal ones mix channels at different levels, as in an audio mixer;
+  - Rf equal to half the input resistors gives the average;
+  - binary-weighted resistors (R, 2R, 4R…) make a simple
+    digital-to-analog converter.
+- **Headroom** — how close the output can get to the supply. It is about
+  1.5–2 V for a TL072 or LM358, and 0 for a rail-to-rail op-amp. Past
+  that, the output clips.
+- **Bandwidth** — the op-amp's gain-bandwidth product (GBW) is shared out
+  by the noise gain, 1 + Rf/R1 + Rf/R2. Every input resistor counts, so
+  the bandwidth is lower than either channel's gain alone would suggest.
+
+The headroom and GBW entered here are remembered for all the op-amp tools.
+
+### Why the formulas are these
+
+The − input is at 0 V, so input k drives Vk / Rk into it. No current
+enters the op-amp, so the sum flows through Rf, from the − node towards
+the output:
+
+    Vout = −Rf × (V1 / R1 + V2 / R2)
+
+The feedback network divides the output by 1 + Rf / (R1 ∥ R2) on its way
+back to the − input, which equals 1 + Rf/R1 + Rf/R2. That noise gain sets
+the bandwidth: GBW / (1 + Rf/R1 + Rf/R2).
+
+### Assumptions and limits
+
+- An ideal op-amp for the sum.
+- A symmetric supply, with the same headroom on both sides.
+- Each source is taken as having no resistance of its own. A source's
+  resistance adds to its input resistor and lowers its weight.
+- Two inputs are offered. More inputs work the same way, each adding its
+  own V / R term.
+
+### What it deliberately does not do
+
+- Non-inverting summing, with the inputs on the + side, is not covered.
+- Subtracting belongs to the Differential tool.
+
+### How it was checked
+
+All on ±12 V with 1.5 V headroom and a 1 MHz GBW:
+- 10 kΩ all round, 1 V + 2 V:
+  - −3 V, weights −1 and −1, 300 µA through Rf;
+  - bandwidth 333.3 kHz (1 MHz / 3).
+- Mixer, R2 = 20 kΩ, 0.5 V + 0.5 V: −750 mV, weight −0.5 on V2,
+  400 kHz.
+- Averager, Rf = 5 kΩ: −1.5 V.
+- 2-bit DAC, 10 kΩ / 20 kΩ, 5 V + 5 V: −7.5 V.
+- 6 V + 6 V: the ideal −12 V clips at −10.5 V.
+
+The review made these changes:
+- It moved clipping from the full supply to the supply less the headroom,
+  and added the bandwidth.
+- It put Vout first and large, replacing a row of six small cells.
+- It limited the units to real ones and remembers them.
+- It rewrote the subtitle and note in plain words, and added examples.
+- The tool was renamed Summing, on Pierre's request.
 
 [↑ Index](#index)
 

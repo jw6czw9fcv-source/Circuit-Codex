@@ -15532,25 +15532,52 @@ function renderOpampDifferentiator(domain, tool, favId) {
 }
 
 function renderOpampSumming(domain, tool, favId) {
+  const C = "opamp-summing";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
+  const V_UNITS = Object.keys(OPAMP_VIN_UNITS);
   const state = {
-    r1: 10, r1Unit: "kΩ",
-    r2: 10, r2Unit: "kΩ",
-    rf: 10, rfUnit: "kΩ",
-    v1: 1, v1Unit: "V",
-    v2: 2, v2Unit: "V",
-    vsupply: 12, vsupplyUnit: "V",
+    r1: 10, r1Unit: pref(C, "r1Unit", "kΩ", R_UNITS),
+    r2: 10, r2Unit: pref(C, "r2Unit", "kΩ", R_UNITS),
+    rf: 10, rfUnit: pref(C, "rfUnit", "kΩ", R_UNITS),
+    v1: 1, v1Unit: pref(C, "v1Unit", "V", V_UNITS),
+    v2: 2, v2Unit: pref(C, "v2Unit", "V", V_UNITS),
+    vsupply: 12,
+    headroom: pref(OPAMP_PREF, "headroom", 1.5),
+    gbw: pref(OPAMP_PREF, "gbw", 1), gbwUnit: pref(OPAMP_PREF, "gbwUnit", "MHz", Object.keys(OPAMP_GBW_UNITS)),
   };
+
+  // Mixing as it is used. Each example sets the three resistors (kΩ) and
+  // the two inputs (V).
+  const example = (r1, r2, rf, v1, v2) => () => {
+    Object.assign(state, { r1, r2, rf, r1Unit: "kΩ", r2Unit: "kΩ", rfUnit: "kΩ", v1, v2, v1Unit: "V", v2Unit: "V", vsupply: 12, headroom: 1.5 });
+    paint();
+  };
+  useExamples([
+    { title: "Plain sum", note: "Equal resistors add the inputs: 1 V + 2 V comes out as −3 V.",
+      apply: example(10, 10, 10, 1, 2) },
+    { title: "Two-channel mixer", note: "R2 = 2 × R1 mixes channel 2 at half level: 0.5 V + 0.5 V comes out as −0.75 V.",
+      apply: example(10, 20, 10, 0.5, 0.5) },
+    { title: "Averager", note: "Rf = R / 2 gives the average: (1 V + 2 V) / 2 comes out as −1.5 V.",
+      apply: example(10, 10, 5, 1, 2) },
+    { title: "2-bit DAC", note: "Binary weights R and 2R: two 5 V bits give −(5 + 2.5) = −7.5 V.",
+      apply: example(10, 20, 10, 5, 5) },
+  ]);
 
   const R_NAMES = ["r1", "r2", "rf"];
   function si(name) {
-    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (R_NAMES.includes(name)) return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    if (name === "v1" || name === "v2") return state[name] * OPAMP_VIN_UNITS[state[name + "Unit"]];
+    if (name === "gbw") return state.gbw * OPAMP_GBW_UNITS[state.gbwUnit];
+    return state[name];
   }
 
   function compute() {
-    const r1 = si("r1"), r2 = si("r2"), rf = si("rf"), v1 = si("v1"), v2 = si("v2"), vsupply = si("vsupply");
-    if (!(r1 > 0) || !(r2 > 0) || !(rf >= 0) || !(vsupply > 0)) {
-      return { problem: "R1, R2 and the supply must be greater than zero, and Rf must be zero or greater." };
+    const r1 = si("r1"), r2 = si("r2"), rf = si("rf"), v1 = si("v1"), v2 = si("v2"), vsupply = si("vsupply"), headroom = si("headroom"), gbw = si("gbw");
+    if (!(r1 > 0) || !(r2 > 0) || !(rf >= 0) || !(vsupply > 0) || !(gbw > 0)) {
+      return { problem: "R1, R2, the supply and GBW must be greater than zero, and Rf zero or greater." };
+    }
+    if (!(headroom >= 0) || headroom >= vsupply) {
+      return { problem: "The headroom must be zero or more, and less than the supply." };
     }
 
     // The virtual ground is the whole trick: V− sits at 0V whatever happens, so
@@ -15561,10 +15588,14 @@ function renderOpampSumming(domain, tool, favId) {
     const i1 = v1 / r1, i2 = v2 / r2;
     const isum = i1 + i2;
     const voutIdeal = -rf * isum;
-    const saturated = Math.abs(voutIdeal) > vsupply;
-    const vout = saturated ? Math.sign(voutIdeal) * vsupply : voutIdeal;
+    const vmax = vsupply - headroom;
+    const saturated = Math.abs(voutIdeal) > vmax;
+    const vout = saturated ? Math.sign(voutIdeal) * vmax : voutIdeal;
+    // Every input resistor loads the − node, so the noise gain that shares
+    // out GBW is 1 + Rf/R1 + Rf/R2, larger than either channel's gain.
+    const bandwidth = gbw / (1 + rf / r1 + rf / r2);
 
-    return { problem: "", a1, a2, i1, i2, isum, vout, voutIdeal, saturated, vsupply };
+    return { problem: "", a1, a2, i1, i2, isum, vout, voutIdeal, saturated, vmax, bandwidth };
   }
 
   // The reference sheet's summing amp: two input arms landing on one node, Rf
@@ -15630,21 +15661,27 @@ function renderOpampSumming(domain, tool, favId) {
 
   const signed = (v) => (v > 0 ? "+" : "") + siFormat(v, "V");
 
+  const gainText = (g) => `${trim(Number(g.toPrecision(4)))}×`;
+
+  // Vout first and large, then each channel's weight and the bandwidth.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     return `
-      <div class="section-label" style="color:#5DCAA5">Output
-        ${r.saturated ? `<span class="badge-calc" style="background:rgba(224,133,133,0.15);color:var(--danger);float:right;">Saturated at ${signed(r.vout)}</span>` : ""}
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Vout</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="vout">${siFormat(r.vout, "V")}</span></div>
+        <div class="result-sub">The inputs added, upside down &nbsp;·&nbsp; current through Rf <span data-res="isum">${siFormat(r.isum, "A")}</span></div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(6,1fr);clear:both">
-        ${cell("Vout", siFormat(r.vout, "V"))}
-        ${cell("Gain 1", `${trim(r.a1)}×`)}
-        ${cell("Gain 2", `${trim(r.a2)}×`)}
-        ${cell("I1", siFormat(r.i1, "A"))}
-        ${cell("I2", siFormat(r.i2, "A"))}
-        ${cell("Isum", siFormat(r.isum, "A"))}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("V1 weight", `<span data-res="a1">${gainText(r.a1)}</span>`)}
+        ${cell("V2 weight", `<span data-res="a2">${gainText(r.a2)}</span>`)}
+        ${cell("Bandwidth", `<span data-res="bw">${siFormat(r.bandwidth, "Hz")}</span>`)}
       </div>
-      ${r.saturated ? `<div class="error-text">Clipping — the sum calls for ${signed(r.voutIdeal)}, past the ${signed(r.vout)} rail. The output stops there, so the peaks of the signal flatten off.</div>` : ""}`;
+      ${r.saturated ? `<div class="error-text" data-res="clip">Clipping — the sum asks for ${signed(r.voutIdeal)}, but the output stops at ${signed(r.vout)}${state.headroom > 0 ? `, ${trim(state.headroom)} V short of the rail` : ", the rail"}.</div>` : ""}`;
   }
 
   function refresh() {
@@ -15652,51 +15689,50 @@ function renderOpampSumming(domain, tool, favId) {
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
   }
 
-  function numField(id, name, label, units, unitName) {
-    return `
-        <div class="field">
-          <label>${label}</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[unitName] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>`;
-  }
-
   function paint() {
     const r = compute();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Virtual ground adds the input currents — one weight per channel")}
+      ${calcHeader(tool, favId, "Adds its inputs, each with its own weight")}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
       <div class="field-pair">
-        ${numField("os-r1", "r1", "R1", OHM_UNITS, "r1Unit")}
-        ${numField("os-r2", "r2", "R2", OHM_UNITS, "r2Unit")}
-        ${numField("os-rf", "rf", "Rf", OHM_UNITS, "rfUnit")}
+        ${opampField("R1", "os-r1", state.r1, opampUnitSelect("os-r1-unit", R_UNITS, state.r1Unit))}
+        ${opampField("R2", "os-r2", state.r2, opampUnitSelect("os-r2-unit", R_UNITS, state.r2Unit))}
+        ${opampField("Rf", "os-rf", state.rf, opampUnitSelect("os-rf-unit", R_UNITS, state.rfUnit))}
       </div>
       <div class="field-pair">
-        ${numField("os-v1", "v1", "V1", VOLT_UNITS, "v1Unit")}
-        ${numField("os-v2", "v2", "V2", VOLT_UNITS, "v2Unit")}
-        ${numField("os-vsupply", "vsupply", "Supply (±V)", VOLT_UNITS, "vsupplyUnit")}
+        ${opampField("V1", "os-v1", state.v1, opampUnitSelect("os-v1-unit", V_UNITS, state.v1Unit))}
+        ${opampField("V2", "os-v2", state.v2, opampUnitSelect("os-v2-unit", V_UNITS, state.v2Unit))}
+        ${opampField("Supply (±)", "os-vsupply", state.vsupply, `<span class="unit-fixed">V</span>`)}
+      </div>
+      <div class="field-pair">
+        ${opampField("Headroom", "os-headroom", state.headroom, `<span class="unit-fixed">V</span>`)}
+        ${opampField("GBW", "os-gbw", state.gbw, opampUnitSelect("os-gbw-unit", Object.keys(OPAMP_GBW_UNITS), state.gbwUnit))}
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vout = −Rf × (V1/R1 + V2/R2)", "Gain 1 = −Rf / R1,  Gain 2 = −Rf / R2", "I1 = V1 / R1,  I2 = V2 / R2", "Isum = I1 + I2, all of it through Rf"],
-        "The virtual ground is what does the adding: V− sits at 0V whatever happens, so each input sees only its own resistor and pushes V/R into the node without knowing the others are there. The node stores nothing, so the currents add and the whole sum leaves through Rf. Equal resistors give a plain inverted sum; unequal ones weight each channel separately, which is how a mixer sets levels. Vout clips at the rails; a real op-amp saturates 1–2V short."
+        ["Vout = −Rf × (V1 / R1 + V2 / R2)", "Weights: −Rf / R1, −Rf / R2", "Current through Rf = V1 / R1 + V2 / R2", "|Vout| ≤ supply − headroom", "Bandwidth = GBW / (1 + Rf/R1 + Rf/R2)"],
+        "The op-amp holds its − input at 0 V (a \"virtual ground\"), so each input drives a current V / R through its own resistor, unaffected by the others. Those currents meet at the − input, add up, and all flow on through Rf, which turns the total into the output voltage — upside down (inverted). Each input's weight is Rf divided by its own resistor: equal resistors give a plain sum, unequal ones mix channels at different levels (an audio mixer), and R, 2R, 4R… make a simple DAC. The output stops short of the supply by the headroom (about 1.5–2 V for a TL072 or LM358, 0 for rail-to-rail); past that it clips. GBW, the op-amp's gain-bandwidth product, is shared out by 1 + Rf/R1 + Rf/R2, so every extra input lowers the bandwidth a little. Headroom and GBW are remembered for all the op-amp tools."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint);
 
-    [["os-r1", "r1"], ["os-r2", "r2"], ["os-rf", "rf"], ["os-v1", "v1"], ["os-v2", "v2"], ["os-vsupply", "vsupply"]].forEach(([id, name]) => {
-      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    [["os-r1", "r1"], ["os-r2", "r2"], ["os-rf", "rf"], ["os-v1", "v1"], ["os-v2", "v2"], ["os-vsupply", "vsupply"], ["os-headroom", "headroom"], ["os-gbw", "gbw"]].forEach(([id, name]) => {
+      document.getElementById(id).oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        state[name] = v;
+        if (name === "headroom" || name === "gbw") setPref(OPAMP_PREF, name, v);
+        refresh();
+      };
     });
-    [["os-r1", "r1Unit"], ["os-r2", "r2Unit"], ["os-rf", "rfUnit"], ["os-v1", "v1Unit"], ["os-v2", "v2Unit"], ["os-vsupply", "vsupplyUnit"]].forEach(([id, name]) => {
-      document.getElementById(id + "-unit").onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["os-r1", "r1Unit"], ["os-r2", "r2Unit"], ["os-rf", "rfUnit"], ["os-v1", "v1Unit"], ["os-v2", "v2Unit"], ["os-gbw", "gbwUnit"]].forEach(([id, name]) => {
+      document.getElementById(id + "-unit").onchange = (e) => { state[name] = e.target.value; setPref(name === "gbwUnit" ? OPAMP_PREF : C, name, state[name]); refresh(); };
     });
   }
 
