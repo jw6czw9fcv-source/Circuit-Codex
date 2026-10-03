@@ -335,6 +335,18 @@ const CHECK_CASES = {
     { name: "mode and units are remembered", do: [["pill", 2], ["set", "#oc-rin-unit", "MΩ"], ["set", "#oc-vin-unit", "mV"], ["reopen"]],
       expect: [[".pill.active", "Schmitt non-inv"], ["#oc-rin-unit", "MΩ"], ["#oc-vin-unit", "mV"]] },
   ],
+  "opamp-integrator": [
+    { name: "square, 10 k / 100 nF, 1 V, 100 Hz: 5 V p-p triangle", do: [],
+      expect: [['[data-res="vout"]', "2.5 V"], ['[data-res="vpp"]', "5 V"], ['[data-res="ramp"]', "1 V/ms"], ['[data-res="tau"]', "1 ms"], ['[data-res="f0"]', "159.2 Hz"], ['[data-res="half"]', "5 ms"]] },
+    { name: "example: 1 kHz square, 10 V/ms", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="vpp"]', "5 V"], ['[data-res="ramp"]', "10 V/ms"], ['[data-res="tau"]', "100 µs"]] },
+    { name: "example: sine at 100 Hz, gain 1.592", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="vout"]', "1.592 V"], ['[data-res="gain"]', "1.592×"], ['[data-res="db"]', "4.04 dB"]] },
+    { name: "example: 10 Hz clips at 10.5 V", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="vout"]', "10.5 V"], ['[data-res="clip"]', "/25 V.*10\\.5 V/"]] },
+    { name: "wave and units are remembered", do: [["pill", 1], ["set", "#oi-c-unit", "µF"], ["set", "#oi-freq-unit", "kHz"], ["reopen"]],
+      expect: [[".pill.active", "Sine in"], ["#oi-c-unit", "µF"], ["#oi-freq-unit", "kHz"]] },
+  ],
   "thyristor-firing": [
     { name: "TRIAC, 120 V, 144 Ω, α 90°: half power, 50 W", do: [],
       expect: [['[data-res="p"]', "50 W"], ['[data-res="pct"]', "50%"], ['[data-res="vrms"]', "84.85 V"], ['[data-res="delay"]', "4.167 ms"], ['[data-res="piv"]', "169.7 V"]] },

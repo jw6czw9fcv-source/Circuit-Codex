@@ -55,6 +55,7 @@ will key on, since that is the id the app already holds for each tool.
 - Op-amps → [Non-inverting](#non-inverting)
 - Op-amps → [Buffer](#buffer)
 - Op-amps → [Comparators](#comparators)
+- Op-amps → [Integrator](#integrator)
 
 ### Digital
 
@@ -3178,6 +3179,118 @@ The review made several changes:
 - Units are limited to real ones and remembered, the note is in plain
   words, and there are examples.
 - The tool was renamed Comparators to fit on one line on the phone.
+
+[↑ Index](#index)
+
+---
+
+<a id="opamp-integrator"></a>
+## Integrator
+
+`calc: opamp-integrator` · Active & semiconductor devices › Op-amps
+(formerly Op-amp integrator)
+
+### What it computes
+
+For the op-amp integrator, with a square or a sine wave at its input:
+- the output's peak;
+- for a square, the triangle's peak-to-peak, its ramp rate and how long
+  each ramp lasts;
+- for a sine, the gain, as a ratio and in decibels;
+- the time constant RC and the frequency f₀ where the gain is 1;
+- where the output clips, from the supply and the op-amp's headroom.
+
+It draws the input and output waves.
+
+### Source
+
+No standard applies. The output is the integral of the input, from the
+ideal op-amp model. The headroom figures come from the TL072, LM358 and
+MCP6002 datasheets, as listed in the Inverting section.
+
+### What it means
+
+To **integrate** is to keep adding up: the output is the running total of
+the input over time.
+
+- **How the circuit does it** — the op-amp holds its − input at 0 V, so the
+  current through R is Vin / R, and none of it enters the op-amp. All of it
+  charges C. A capacitor charged by a steady current changes its voltage at
+  a steady rate, so the output moves at Vin / RC volts per second. It moves
+  downwards for a positive input: the circuit inverts.
+- **RC** — the time constant, in seconds. A larger RC makes a slower ramp
+  and a smaller output.
+- **Square in, triangle out** — a square wave is a steady +Vin, then a
+  steady −Vin. The output ramps down, then up, which makes a triangle. Its
+  height is the ramp rate times half a period.
+- **Sine in** — a sine comes out as a sine moved a quarter cycle (90°)
+  earlier, its size multiplied by the **gain**, 1 / (2πfRC). The gain
+  halves each time the frequency doubles (−6 dB per octave).
+- **f₀** — the frequency where the gain is exactly 1. Below it the output
+  is larger than the input, and above it smaller.
+- **Headroom** — how close the output can get to the supply. It is about
+  1.5–2 V for a TL072 or LM358, and 0 for a rail-to-rail op-amp. At low
+  frequencies the integrator asks for large outputs and clips.
+
+The headroom is remembered for all the op-amp tools.
+
+### Why the formulas are these
+
+The current into C is Vin / R. A capacitor's voltage changes at
+I / C per second, and the output is the far side of C from the 0 V input:
+
+    Vout(t) = −(1 / RC) × ∫ Vin dt
+
+- **Square wave** — ±Vin holds for half a period, 1 / (2f), at the rate
+  Vin / RC. The swing is
+
+      Vout p-p = Vin / (2 × f × RC)
+
+  and the peak is half of it, with the triangle centred on 0 V.
+- **Sine** — integrating Vp × sin(2πft) gives −Vp × cos(2πft) / (2πf).
+  With the minus sign of the circuit, that becomes +Vp × cos / (2πfRC):
+  the same shape, a quarter cycle ahead, scaled by 1 / (2πfRC) = f₀ / f.
+
+### Assumptions and limits
+
+- **Drift.** A real op-amp has a small input offset voltage, and the
+  integrator adds it up too, so the output slowly runs into a rail. The
+  usual cure is a large resistor across C, around 100 × R. It limits the
+  gain at very low frequencies, below about f₀ / 100 for 100 × R. That
+  resistor is not modelled here; the tool shows the ideal integrator.
+- **Steady state.** The triangle is shown centred on 0 V, as it settles
+  once the drift resistor is present. Without one, its level depends on
+  where it started.
+- **Op-amp speed.** At high frequencies the op-amp's gain-bandwidth and
+  slew rate limit the output. This is not calculated.
+- The input is assumed to have no DC part. A DC input makes a ramp that
+  never stops.
+
+### What it deliberately does not do
+
+- The drift resistor and its low-frequency corner are not calculated.
+- Other waveshapes (pulses, ramps) are not offered.
+
+### How it was checked
+
+All on ±12 V with 1.5 V headroom:
+- Square, 10 kΩ, 100 nF, 1 V, 100 Hz: RC 1 ms, a 5 V p-p triangle
+  (2.5 V peak), ramping 1 V/ms, each ramp 5 ms. f₀ 159.2 Hz.
+- 10 nF at 1 kHz: RC 100 µs, 5 V p-p, 10 V/ms.
+- Sine at 100 Hz with 10 kΩ and 100 nF: gain 1.592 (4.04 dB), 1.592 V
+  peak.
+- Square at 10 Hz: the ideal 25 V peak clips at 10.5 V.
+
+The review made several changes:
+- It moved clipping from the full supply to the supply less the headroom.
+- It put the output peak first and large, with the triangle's size and
+  ramp beside it.
+- It shows the ramp in V/ms or V/µs instead of kV/s.
+- It replaced a row with three fields squeezed into two places by two
+  rows of three.
+- It moved the 11 px legend below the waves.
+- It limited the units to real ones and remembers them.
+- It rewrote the note in plain words and added examples.
 
 [↑ Index](#index)
 
