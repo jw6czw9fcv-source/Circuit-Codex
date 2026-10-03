@@ -53,7 +53,7 @@ will key on, since that is the id the app already holds for each tool.
 - Thyristors (SCR, TRIAC) & MOSFET → [AC phase control](#ac-phase-control)
 - Op-amps → [Inverting amp](#inverting-amp)
 - Op-amps → [Non-inverting amp](#non-inverting-amp)
-- Op-amps → [Voltage follower](#voltage-follower)
+- Op-amps → [Buffer](#buffer)
 - Op-amps → [Comparators](#comparators)
 
 ### Digital
@@ -2953,7 +2953,7 @@ definitions and examples.
 ---
 
 <a id="opamp-buffer"></a>
-## Voltage follower
+## Buffer
 
 `calc: opamp-buffer` · Active & semiconductor devices › Op-amps
 (formerly Buffer (voltage follower))

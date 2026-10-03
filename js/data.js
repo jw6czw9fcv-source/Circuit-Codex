@@ -81,7 +81,7 @@ const DOMAINS = [
       {
         title: "Op-amps",
         tools: [
-          { name: "Inverting amp", was: "Inverting amplifier", calc: "opamp-inverting" }, { name: "Non-inverting amp", was: "Non-inverting amplifier", calc: "opamp-noninverting" }, { name: "Voltage follower", was: "Buffer (voltage follower)", calc: "opamp-buffer" },
+          { name: "Inverting amp", was: "Inverting amplifier", calc: "opamp-inverting" }, { name: "Non-inverting amp", was: "Non-inverting amplifier", calc: "opamp-noninverting" }, { name: "Buffer", was: "Buffer (voltage follower)", calc: "opamp-buffer" },
           { name: "Comparators", was: "Comparator (± hysteresis / Schmitt trigger)", calc: "opamp-comparator" }, { name: "Op-amp integrator", was: "Integrator", calc: "opamp-integrator" }, { name: "Op-amp differentiator", was: "Differentiator", calc: "opamp-differentiator" },
           { name: "Summing amplifier", calc: "opamp-summing" }, { name: "Differential amplifier", calc: "opamp-differential" }, { name: "Sallen-Key filter" },
         ],
