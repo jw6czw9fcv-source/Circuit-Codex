@@ -16268,72 +16268,95 @@ function renderPhotocellLDR(domain, tool, favId) {
   paint();
 }
 
+// Phototransistor optocouplers from their datasheets. ctr is the MINIMUM,
+// the one to design on; vf is typical; vceSat is what the output pulls down
+// to.
+//   PC817: Sharp sheet D2-A03101EN — CTR by rank at IF 5 mA, VCE 5 V
+//     (A 80–160 %, B 130–260 %, C 200–400 %, D 300–600 %, unranked
+//     50–600 %); VF 1.2 V typ; VCE(sat) 0.2 V max at IF 20 mA, IC 1 mA.
+//   4N35: Vishay 81181 rev. 1.2 — CTR ≥ 100 % at IF 10 mA, VCE 10 V
+//     (≥ 40 % over −55 to +100 °C); VF 1.3 V typ at 10 mA; no VCE(sat)
+//     limit is given, its saturated-CTR curves are drawn at VCE 0.4 V.
+const OPTO_PARTS = {
+  "PC817": { label: "PC817", ctr: 50, vf: 1.2, vceSat: 0.2 },
+  "PC817A": { label: "PC817 A", ctr: 80, vf: 1.2, vceSat: 0.2 },
+  "PC817B": { label: "PC817 B", ctr: 130, vf: 1.2, vceSat: 0.2 },
+  "PC817C": { label: "PC817 C", ctr: 200, vf: 1.2, vceSat: 0.2 },
+  "PC817D": { label: "PC817 D", ctr: 300, vf: 1.2, vceSat: 0.2 },
+  "4N35": { label: "4N35", ctr: 100, vf: 1.3, vceSat: 0.4 },
+};
+
 function renderOptocoupler(domain, tool, favId) {
+  const C = "optocoupler";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
+  const PARTS = [...Object.keys(OPTO_PARTS), "custom"];
+  // Below this many times the needed current the output still pulls low on
+  // paper, but CTR is lower when saturated and falls with age and heat.
+  const MARGIN = 2;
+
   const state = {
-    vin: 5, vinUnit: "V",
-    vf: 1.2, vfUnit: "V",
-    ifwd: 10, ifwdUnit: "mA",
-    ctr: 50,
-    vcc: 5, vccUnit: "V",
-    rl: 10, rlUnit: "kΩ",
+    part: pref(C, "part", "PC817", PARTS),
+    vin: 5, ifwd: 10, ctr: 50, vf: 1.2, vceSat: 0.2,
+    vcc: 5, rl: 10, rlUnit: pref(C, "rlUnit", "kΩ", R_UNITS),
   };
-
-  // A phototransistor bottoms out around here; it is a constant rather than a
-  // field because six inputs is already a full screen, and the note says so.
-  const VCE_SAT = 0.3;
-
-  function si(name) {
-    if (name === "ifwd") return state.ifwd * AMP_UNITS[state.ifwdUnit];
-    if (name === "rl") return state.rl * OHM_UNITS[state.rlUnit];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+  function loadPart() {
+    const p = OPTO_PARTS[state.part];
+    if (p) Object.assign(state, { ctr: p.ctr, vf: p.vf, vceSat: p.vceSat });
   }
+  loadPart();
+
+  const example = (part, vin, ifwd, vcc, rl, rlUnit) => () => {
+    Object.assign(state, { part, vin, ifwd, vcc, rl, rlUnit });
+    loadPart();
+    paint();
+  };
+  useExamples([
+    { title: "3.3 V MCU into a 5 V input", note: "5 mA through 420 Ω; even at the worst 50 % CTR the 10 k pull-up is pulled hard low.",
+      apply: example("PC817", 3.3, 5, 5, 10, "kΩ") },
+    { title: "Pull-up too strong", note: "1 kΩ at 12 V needs 11.8 mA; 2 mA through a 50 % part gives only 1 mA: the output stays high.",
+      apply: example("PC817", 5, 2, 12, 1, "kΩ") },
+    { title: "4N35 at 10 mA", note: "370 Ω for 10 mA, 10× margin at 25 °C — but its CTR can fall to 40 % at the temperature extremes.",
+      apply: example("4N35", 5, 10, 5, 4.7, "kΩ") },
+  ]);
 
   function compute() {
-    const vin = si("vin"), vf = si("vf"), ifwd = si("ifwd"), vcc = si("vcc"), rl = si("rl");
-    const ctr = state.ctr;
+    const { vin, vf, vcc, ctr, vceSat } = state;
+    const ifwd = state.ifwd / 1000;
+    const rl = state.rl * DIVIDER_R_UNITS[state.rlUnit];
     if (!(ifwd > 0) || !(rl > 0) || !(vcc > 0)) {
       return { problem: "The LED current, RL and Vcc must all be greater than zero." };
     }
-    if (!(ctr > 0)) return { problem: "CTR must be greater than zero — it is the percentage of LED current the transistor can pass." };
-    if (!(vin > vf)) return { problem: "Vin has to exceed the LED's forward voltage, or the LED never conducts." };
+    if (!(ctr > 0)) return { problem: "CTR must be greater than zero: it is the share of LED current the transistor can pass." };
+    if (!(vin > vf)) return { problem: "Vin must be higher than the LED's forward voltage, or the LED never lights." };
+    if (!(vceSat >= 0) || vceSat >= vcc) return { problem: "Vce(sat) must be zero or more, and below Vcc." };
 
     const rin = (vin - vf) / ifwd;
-    const pin = (vin - vf) * ifwd;
-    // CTR is the whole point of the part: the collector current it can deliver
-    // for a given LED current. Whether that is enough is a separate question —
-    // the load decides how much is needed to bottom the transistor out.
+    const e24 = nearestESeries(rin, "E24").value;
+    // CTR is the whole specification: the collector current a given LED
+    // current buys. The load decides how much is needed to pull the output
+    // all the way down to Vce(sat).
     const icAvail = ifwd * (ctr / 100);
-    const icNeeded = (vcc - VCE_SAT) / rl;
-    const saturated = icAvail >= icNeeded;
-    const vout = saturated ? VCE_SAT : vcc - icAvail * rl;
+    const icNeeded = (vcc - vceSat) / rl;
     const margin = icAvail / icNeeded;
-
-    return { problem: "", rin, pin, icAvail, icNeeded, saturated, vout, margin, vceSat: VCE_SAT };
+    const pullsLow = margin >= 1;
+    const vout = pullsLow ? vceSat : vcc - icAvail * rl;
+    return { problem: "", rin, e24, ifE24: (vin - vf) / e24, pin: (vin - vf) * ifwd, icAvail, icNeeded, margin, pullsLow, vout };
   }
 
   // LED on the left, phototransistor on the right, and a dashed line between
-  // them because that gap is the entire reason the part exists — light gets
-  // across it, current does not. The transistor is the app's NPN symbol with
-  // its base lead removed, since the base is driven by light.
-  //
-  // The beams are straight arrows. IEC 60617-2 (05-06-08) draws optical
-  // coupling as zigzags and that was tried first, but at this size the
-  // zigzag read as a spring rather than as light, so Pierre called it back.
-  // Straight arrows are what most optocoupler datasheets use anyway. They
-  // sit either side of y=93, which is the optical centre of BOTH
-  // devices — the LED body is 14px tall and the transistor 32px, so getting
-  // their midpoints to line up costs a 26px run on the LED side instead of
-  // the usual 17px lead. That run is what buys the alignment, and the two
-  // ground symbols land on a common level for the same reason.
+  // them: light crosses that gap, current does not. The transistor is the
+  // app's NPN symbol without a base lead, since light drives the base. The
+  // beams are straight arrows, as most optocoupler datasheets draw them
+  // (IEC 60617's zigzags read as springs at this size). Rin, the part this
+  // tool calculates, is green.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
+    const calc = "#5DCAA5";
     const zig = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
     const ground = (x, y) => `<path d="M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
     const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
-    // Zigzag beam: six 6px steps of ±3px, then a head. Reads as radiation.
     const beam = (y) => `<path d="M94 ${y} H124 M119 ${y - 4} L124 ${y} L119 ${y + 4}" stroke="${comp}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
-    // Emitter arrow, same construction the NPN switch uses.
     const emitterArrow = (x1, y1, x2, y2) => {
       const t = 0.56, size = 7.5;
       let ux = x2 - x1, uy = y2 - y1;
@@ -16349,8 +16372,8 @@ function renderOptocoupler(domain, tool, favId) {
       ${port(76, 4)}
       <text x="64" y="8" fill="${comp}" font-size="12" font-weight="600" text-anchor="end">Vin</text>
       <path d="M76 7 V24" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="${zig(76, 24)}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <text x="62" y="45" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">Rin</text>
+      <path d="${zig(76, 24)}" stroke="${calc}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+      <text x="62" y="45" fill="${calc}" font-size="11" font-weight="600" text-anchor="end">Rin</text>
       <path d="M76 60 V86" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
 
       <path d="M69 86 L83 86 L76 100 Z" fill="none" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round"/>
@@ -16390,23 +16413,32 @@ function renderOptocoupler(domain, tool, favId) {
     </div>`;
   }
 
+  // Rin first and large — the part this tool sizes — then whether the
+  // output side can pull low, with how much to spare.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const info = r.saturated
-      ? { label: `Pulls low — ${trim(r.margin)}× over`, color: "var(--result-text)", bg: "var(--result-border)" }
-      : { label: "Won't pull low", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+    const m = trim(Number(r.margin.toPrecision(2)));
+    const verdict = !r.pullsLow
+      ? `<div class="error-text" data-res="verdict">Won't pull low: RL needs ${siFormat(r.icNeeded, "A")}, the LED current buys only ${siFormat(r.icAvail, "A")} at ${trim(state.ctr)} % CTR. The output stops at ${siFormat(r.vout, "V")}, between logic levels. Raise If, or use a larger RL.</div>`
+      : r.margin < MARGIN
+        ? `<div class="error-text" data-res="verdict">Pulls low, but only ${m}× over what RL needs. CTR is lower when the transistor is saturated and falls with age and heat: aim for ${MARGIN}× or more.</div>`
+        : `<div class="result-sub" style="margin:0 16px" data-res="verdict">Pulls the output down to ${siFormat(state.vceSat, "V")}, with ${m}× the current RL needs.</div>`;
     return `
-      <div class="section-label" style="color:#5DCAA5">Output
-        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      <div class="section-label" style="color:#5DCAA5">LED side</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Rin</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="rin">${formatOhms(r.rin)}</span></div>
+        <div class="result-sub">Nearest E24 <span data-res="e24">${formatOhms(r.e24)}</span> gives ${siFormat(r.ifE24, "A")} &nbsp;·&nbsp; dissipates ${siFormat(r.pin, "W")}</div>
       </div>
-      <div class="eseries-grid eseries-grid--tight" style="clear:both">
-        ${cell("Rin", siFormat(r.rin, "Ω"))}
-        ${cell("P in Rin", siFormat(r.pin, "W"))}
-        ${cell("Ic available", siFormat(r.icAvail, "A"))}
-        ${cell("Ic needed", siFormat(r.icNeeded, "A"))}
-        ${cell("Vout", siFormat(r.vout, "V"))}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Ic available", `<span data-res="avail">${siFormat(r.icAvail, "A")}</span>`)}
+        ${cell("Ic needed", `<span data-res="needed">${siFormat(r.icNeeded, "A")}</span>`)}
+        ${cell("Vout, LED on", `<span data-res="vout">${siFormat(r.vout, "V")}</span>`)}
       </div>
-      ${!r.saturated ? `<div class="error-text">Only ${siFormat(r.icAvail, "A")} available but RL needs ${siFormat(r.icNeeded, "A")} to reach ${siFormat(r.vceSat, "V")}, so the output stalls at ${siFormat(r.vout, "V")} — an undefined logic level. Raise If or RL.</div>` : ""}`;
+      ${verdict}`;
   }
 
   function refresh() {
@@ -16414,59 +16446,66 @@ function renderOptocoupler(domain, tool, favId) {
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
   }
 
-  function field(id, name, label, units) {
-    if (!units) {
-      return `
-        <div class="field">
-          <label>${label}</label>
-          <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-        </div>`;
-    }
-    return `
-        <div class="field">
-          <label>${label}</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            <select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>`;
-  }
-
   function paint() {
     const r = compute();
+    const v = (label, id, value) => opampField(label, id, value, `<span class="unit-fixed">V</span>`);
     app.innerHTML = `
-      ${calcHeader(tool, favId, "CTR sets how much collector current an LED current buys you")}
+      ${calcHeader(tool, favId, "Light carries the signal across; no wire does")}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
       <div class="field-pair">
-        ${field("op-vin", "vin", "Vin", VOLT_UNITS)}
-        ${field("op-vf", "vf", "LED Vf", VOLT_UNITS)}
-        ${field("op-ifwd", "ifwd", "If", AMP_UNITS)}
+        <div class="field">
+          <label>Part</label>
+          <select id="op-part">${PARTS.map((p) => `<option value="${p}" ${state.part === p ? "selected" : ""}>${p === "custom" ? "Custom" : OPTO_PARTS[p].label}</option>`).join("")}</select>
+        </div>
+        ${v("Vin", "op-vin", state.vin)}
+        ${opampField("LED If", "op-ifwd", state.ifwd, `<span class="unit-fixed">mA</span>`)}
       </div>
       <div class="field-pair">
-        ${field("op-ctr", "ctr", "CTR %", null)}
-        ${field("op-vcc", "vcc", "Vcc", VOLT_UNITS)}
-        ${field("op-rl", "rl", "RL", OHM_UNITS)}
+        ${opampField("CTR min", "op-ctr", state.ctr, `<span class="unit-fixed">%</span>`)}
+        ${v("LED Vf", "op-vf", state.vf)}
+        ${v("Vce(sat)", "op-vcesat", state.vceSat)}
+      </div>
+      <div class="field-pair">
+        ${v("Vcc", "op-vcc", state.vcc)}
+        ${opampField("RL (pull-up)", "op-rl", state.rl, opampUnitSelect("op-rl-unit", R_UNITS, state.rlUnit))}
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Rin = (Vin − Vf) / If", "P in Rin = (Vin − Vf) × If", "Ic available = If × CTR / 100", "Ic needed = (Vcc − Vce sat) / RL", "Vout = Vcc − Ic × RL, floored at Vce sat"],
-        `CTR is the part's whole specification: the collector current one milliamp of LED current buys. It is binned wide — a PC817 ships anywhere from 50% to 600% — and falls as the LED ages and at low If, so design on the worst-case minimum, not the typical. Vce sat is taken as ${VCE_SAT}V here. The barrier in the drawing is the point of the part: light crosses it, current cannot. A phototransistor opto is slow — microseconds — and a large RL makes it slower still, so trade margin against speed rather than maximising it.`
+        ["Rin = (Vin − Vf) / If", "Ic available = If × CTR / 100", "Ic needed = (Vcc − Vce(sat)) / RL", "Pulls low if available ≥ needed; aim for 2×"],
+        "An optocoupler is an LED and a light-sensitive transistor sealed in one package, facing each other across an insulating gap: the signal crosses as light, so the two circuits share no wire and can sit at different voltages (a microcontroller and mains equipment, say). Rin sets the LED current If, as for any LED. When the LED is on, the transistor can pass a collector current Ic = If × CTR (current transfer ratio, in %). With a pull-up RL from Vcc, the output reads high when the LED is off and low when it is on — if Ic is enough to pull it all the way down to Vce(sat), the transistor's leftover voltage. CTR varies widely: a PC817 is sold in ranks A–D (80 % minimum for A, 300 % for D) or unranked from 50 %, it is lower when the transistor is saturated, and it falls as the LED ages and with temperature, so design on the minimum with a margin of about 2×. Choosing a part fills in its minimum CTR, Vf and Vce(sat). These phototransistor parts are slow, a few microseconds, and a larger RL makes them slower."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint);
 
-    [["op-vin", "vin"], ["op-vf", "vf"], ["op-ifwd", "ifwd"], ["op-ctr", "ctr"], ["op-vcc", "vcc"], ["op-rl", "rl"]].forEach(([id, name]) => {
-      document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+    document.getElementById("op-part").onchange = (e) => {
+      state.part = e.target.value;
+      setPref(C, "part", state.part);
+      loadPart();
+      paint();
+    };
+    // Typing a part's own values turns the choice into Custom.
+    const toCustom = () => {
+      if (state.part === "custom") return;
+      state.part = "custom";
+      setPref(C, "part", "custom");
+      document.getElementById("op-part").value = "custom";
+    };
+    [["op-vin", "vin"], ["op-ifwd", "ifwd"], ["op-ctr", "ctr", true], ["op-vf", "vf", true], ["op-vcesat", "vceSat", true], ["op-vcc", "vcc"], ["op-rl", "rl"]].forEach(([id, name, own]) => {
+      document.getElementById(id).oninput = (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isFinite(val)) return;
+        state[name] = val;
+        if (own) toCustom();
+        refresh();
+      };
     });
-    [["op-vin-unit", "vinUnit"], ["op-vf-unit", "vfUnit"], ["op-ifwd-unit", "ifwdUnit"], ["op-vcc-unit", "vccUnit"], ["op-rl-unit", "rlUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
-    });
+    document.getElementById("op-rl-unit").onchange = (e) => { state.rlUnit = e.target.value; setPref(C, "rlUnit", state.rlUnit); refresh(); };
   }
 
   paint();
