@@ -509,6 +509,16 @@ html, body {
   max-width: 60%;
 }
 .field-pair .field-row input { min-width: 0; }
+/* Three fields to a row leave a number only ~32px beside a unit picker on a
+   375px phone, which cuts a three-digit value ("560") in half. A little less
+   padding, a tighter gap and an 18px number give it room; two-field rows
+   keep the full size. */
+.field-pair > .field:first-child:nth-last-child(3),
+.field-pair > .field:first-child:nth-last-child(3) ~ .field { padding: 8px 9px; }
+.field-pair > .field:first-child:nth-last-child(3) input,
+.field-pair > .field:first-child:nth-last-child(3) ~ .field input { font-size: 18px; }
+.field-pair > .field:first-child:nth-last-child(3) .field-row,
+.field-pair > .field:first-child:nth-last-child(3) ~ .field .field-row { gap: 4px; }
 .field input {
   background: none;
   border: none;

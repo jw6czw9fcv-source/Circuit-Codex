@@ -11932,78 +11932,92 @@ function renderTransistorExample(domain, tool, favId) {
 
 // ---------- MOSFET biasing (voltage-divider bias, N-channel enhancement) ----------
 function renderMosfetBias(domain, tool, favId) {
+  const C = "mosfet-bias";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
+  const ID_UNITS = { mA: 1e-3, A: 1 };
   const state = {
-    vdd: 15, vddUnit: "V",
-    vth: 2, vthUnit: "V",
-    vgson: 4, vgsonUnit: "V",
-    idon: 10, idonUnit: "mA",
-    r1: 560, r1Unit: "kΩ",
-    r2: 200, r2Unit: "kΩ",
-    rd: 2, rdUnit: "kΩ",
-    rs: 1, rsUnit: "kΩ",
+    vdd: 15, vth: 2, vgson: 4,
+    idon: 10, idonUnit: pref(C, "idonUnit", "mA", Object.keys(ID_UNITS)),
+    r1: 560, r1Unit: pref(C, "r1Unit", "kΩ", R_UNITS),
+    r2: 200, r2Unit: pref(C, "r2Unit", "kΩ", R_UNITS),
+    rd: 2, rdUnit: pref(C, "rdUnit", "kΩ", R_UNITS),
+    rs: 1, rsUnit: pref(C, "rsUnit", "kΩ", R_UNITS),
   };
 
-  const R_NAMES = ["r1", "r2", "rd", "rs"];
-  const I_NAMES = ["idon"];
+  // Each example sets the drain and source resistors (kΩ); the divider,
+  // supply and device stay at the defaults.
+  const example = (rd, rs) => () => {
+    Object.assign(state, { vdd: 15, vth: 2, vgson: 4, idon: 10, idonUnit: "mA",
+      r1: 560, r2: 200, rd, rs, r1Unit: "kΩ", r2Unit: "kΩ", rdUnit: "kΩ", rsUnit: "kΩ" });
+    paint();
+  };
+  useExamples([
+    { title: "Amplifier bias on 15 V", note: "The divider holds the gate at 3.95 V; Rs = 1 k settles Id at 1.24 mA, with 11.3 V across the MOSFET.",
+      apply: example(2, 1) },
+    { title: "No source resistor", note: "Rs = 0: 9.48 mA, and a threshold 0.5 V off swings it from 5.2 to 13.4 mA, 2.5:1 (1.9:1 with Rs = 1 k).",
+      apply: example(1, 0) },
+    { title: "Drain resistor too large", note: "Rd = 12 k leaves too little voltage: the MOSFET is fully on, acting as a resistor, not amplifying.",
+      apply: example(12, 1) },
+  ]);
 
   function si(name) {
-    if (R_NAMES.includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
-    if (I_NAMES.includes(name)) return state[name] * AMP_UNITS[state[name + "Unit"]];
-    return state[name] * VOLT_UNITS[state[name + "Unit"]];
+    if (["r1", "r2", "rd", "rs"].includes(name)) return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    if (name === "idon") return state.idon * ID_UNITS[state.idonUnit];
+    return state[name];
   }
 
-  // The gate draws no current, so — unlike the BJT's Thevenin-loaded base —
-  // Vg is a plain, unloaded divider. What makes this circuit harder is the
-  // square-law device equation itself: Id = k(Vgs−Vth)² together with
-  // Vgs = Vg − Id×Rs (the source resistor's feedback) is quadratic in Id,
-  // not linear. k isn't usually on a datasheet directly — it's derived
-  // from one on-state reference point, k = Id,on / (Vgs,on − Vth)².
+  // The gate draws no current, so Vg is a plain unloaded divider. The
+  // square law takes k from one datasheet point, k = Id,on / (Vgs,on − Vth)².
+  // In saturation Id = k (Vgs − Vth)²; in the triode region, where Vds is
+  // below Vgs − Vth, Id = k (2 (Vgs − Vth) Vds − Vds²) — the two meet at
+  // the boundary. Vgs = Vg − Id Rs and Vds = Vdd − Id (Rd + Rs) both fall
+  // as Id rises while the model current falls, so the operating point is
+  // the single crossing, found by bisection whichever region it lands in.
+  function solve(vg, vth, k, vdd, rd, rs) {
+    const model = (id) => {
+      const vov = vg - id * rs - vth;
+      if (vov <= 0) return 0;
+      const vds = vdd - id * (rd + rs);
+      if (vds <= 0) return 0;
+      return vds >= vov ? k * vov * vov : k * (2 * vov * vds - vds * vds);
+    };
+    const x = vg - vth;
+    if (x <= 0) return 0;
+    if (rs === 0 && rd === 0) return k * x * x;
+    let lo = 0, hi = Math.min(rs > 0 ? x / rs : Infinity, rd + rs > 0 ? vdd / (rd + rs) : Infinity);
+    for (let n = 0; n < 80; n++) {
+      const mid = (lo + hi) / 2;
+      if (mid - model(mid) > 0) hi = mid; else lo = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
   function compute() {
     const vdd = si("vdd"), vth = si("vth"), vgson = si("vgson"), idon = si("idon");
     const r1 = si("r1"), r2 = si("r2"), rd = si("rd"), rs = si("rs");
     const overdrive = vgson - vth;
-
-    if (!(vdd > 0) || !(r1 + r2 > 0) || !(overdrive > 0) || !(idon > 0) || rd < 0 || rs < 0) {
-      return { problem: "Vdd, R1 + R2, Rd, Rs, and (Vgs,on − Vth) must be valid positive values." };
+    if (!(vdd > 0) || !(r1 + r2 > 0) || !(idon > 0) || rd < 0 || rs < 0) {
+      return { problem: "Vdd, R1 + R2 and Id,on must be greater than zero, and Rd and Rs zero or more." };
     }
+    if (!(overdrive > 0)) return { problem: "Vgs,on must be above Vth: the datasheet's on-state point is where the MOSFET conducts." };
 
     const vg = vdd * r2 / (r1 + r2);
     const k = idon / (overdrive * overdrive);
-    const x = vg - vth;
-
-    if (x <= 0) {
-      return { problem: "", region: "cutoff", vg, k, id: 0, vgs: vg, vs: 0, vd: vdd, vds: vdd, vov: 0 };
+    // Another piece of the same type has its threshold somewhere else; the
+    // ±0.5 V cells show how much of that the source resistor absorbs.
+    const idLow = solve(vg, vth + 0.5, k, vdd, rd, rs);
+    const idHigh = solve(vg, vth - 0.5, k, vdd, rd, rs);
+    if (vg <= vth) {
+      return { problem: "", region: "cutoff", vg, k, id: 0, vgs: vg, vs: 0, vd: vdd, vds: vdd, vov: 0, idLow, idHigh };
     }
-
-    let id;
-    if (rs === 0) {
-      id = k * x * x;
-    } else {
-      const A = k * rs * rs, B = -(2 * k * x * rs + 1), C = k * x * x;
-      const disc = B * B - 4 * A * C;
-      const sq = Math.sqrt(Math.max(0, disc));
-      const id1 = (-B + sq) / (2 * A), id2 = (-B - sq) / (2 * A);
-      // Only one root keeps Vgs above Vth (equivalently Id < x/Rs); that's
-      // the physically real operating point — the other root implies a
-      // negative overdrive voltage, which isn't a valid saturation solution.
-      const valid = [id1, id2].filter((v) => isFinite(v) && v >= 0 && v < x / rs);
-      id = valid.length ? Math.min(...valid) : Math.max(0, Math.min(id1, id2));
-    }
-
+    const id = solve(vg, vth, k, vdd, rd, rs);
     const vgs = vg - id * rs;
     const vs = id * rs;
     const vd = vdd - id * rd;
     const vds = vd - vs;
     const vov = vgs - vth;
     const region = vds >= vov ? "active" : "triode";
-
-    return { problem: "", region, vg, k, id, vgs, vs, vd, vds, vov };
-  }
-
-  function regionInfo(region) {
-    if (region === "active") return { label: "Active (saturation) region", color: "var(--result-text)", bg: "var(--result-border)" };
-    if (region === "cutoff") return { label: "Cutoff — Vgs ≤ Vth, MOSFET is off", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
-    return { label: "Triode — Vds < Vov, not saturated", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+    return { problem: "", region, vg, k, id, vgs, vs, vd, vds, vov, idLow, idHigh };
   }
 
   // NMos symbol proportions (dashed channel = enhancement mode, gate plate
@@ -12088,20 +12102,42 @@ function renderMosfetBias(domain, tool, favId) {
     </div>`;
   }
 
+  // "1.19–1.34 mA": one unit for both ends when they share it.
+  function spanText(lo, hi) {
+    const a = siFormat(lo, "A", 3), b = siFormat(hi, "A", 3);
+    const [an, au] = a.split(" "), [, bu] = b.split(" ");
+    return au === bu ? `${an}–${b}` : `${a}–${b}`;
+  }
+
+  // Id first and large — the operating point the divider and Rs set — with
+  // Vds and the region in words, then the node voltages and how much a
+  // different threshold would move it.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const info = regionInfo(r.region);
+    const regionText = r.region === "active" ? "saturation: ready to amplify"
+      : r.region === "triode" ? "triode: fully on, acting as a resistor" : "off";
+    const warn = r.region === "triode"
+      ? `<div class="error-text" data-res="warn">Triode region: Vds (${siFormat(r.vds, "V")}) is below Vgs − Vth (${siFormat(r.vov, "V")}), so the MOSFET is fully on and cannot amplify. Make Rd or Rs smaller, or the gate voltage lower.</div>`
+      : r.region === "cutoff"
+        ? `<div class="error-text" data-res="warn">Off: the gate is at ${siFormat(r.vg, "V")}, not above the threshold Vth, so no drain current flows. Make R2 larger.</div>`
+        : "";
     return `
-      <div class="section-label" style="color:#5DCAA5">Operating point (Q-point)
-        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      <div class="section-label" style="color:#5DCAA5">Operating point</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Drain current Id</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="id">${siFormat(r.id, "A")}</span></div>
+        <div class="result-sub">Vds <span data-res="vds">${siFormat(r.vds, "V")}</span> &nbsp;·&nbsp; <span data-res="region">${regionText}</span></div>
       </div>
-      <div class="eseries-grid">
-        ${cell("Id", siFormat(r.id, "A"))}
-        ${cell("Vgs", siFormat(r.vgs, "V"))}
-        ${cell("Vs", siFormat(r.vs, "V"))}
-        ${cell("Vd", siFormat(r.vd, "V"))}
-        ${cell("Vds", siFormat(r.vds, "V"))}
-      </div>`;
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(4,1fr);">
+        ${cell("Vg", `<span data-res="vg">${siFormat(r.vg, "V")}</span>`)}
+        ${cell("Vgs", `<span data-res="vgs">${siFormat(r.vgs, "V")}</span>`)}
+        ${cell("Vd", `<span data-res="vd">${siFormat(r.vd, "V")}</span>`)}
+        ${cell("Id, Vth ±0.5 V", `<span data-res="spread">${spanText(r.idLow, r.idHigh)}</span>`)}
+      </div>
+      ${warn}`;
   }
 
   function refresh() {
@@ -12111,80 +12147,30 @@ function renderMosfetBias(domain, tool, favId) {
   function paint() {
     const r = compute();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "NMOS voltage-divider bias — DC operating point")}
+      ${calcHeader(tool, favId, "A divider and Rs set the MOSFET's resting current")}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
       <div class="field-pair">
-        <div class="field">
-          <label>Vdd</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="mb-vdd" value="${state.vdd}" />
-            <select id="mb-vdd-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vddUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Vth</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="mb-vth" value="${state.vth}" />
-            <select id="mb-vth-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vthUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("R1 (top)", "mb-r1", state.r1, opampUnitSelect("mb-r1-unit", R_UNITS, state.r1Unit))}
+        ${opampField("R2 (bottom)", "mb-r2", state.r2, opampUnitSelect("mb-r2-unit", R_UNITS, state.r2Unit))}
+        ${opampField("Vdd", "mb-vdd", state.vdd, `<span class="unit-fixed">V</span>`)}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>R1 — top</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="mb-r1" value="${state.r1}" />
-            <select id="mb-r1-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r1Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>R2 — bottom</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="mb-r2" value="${state.r2}" />
-            <select id="mb-r2-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r2Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("Rd", "mb-rd", state.rd, opampUnitSelect("mb-rd-unit", R_UNITS, state.rdUnit))}
+        ${opampField("Rs", "mb-rs", state.rs, opampUnitSelect("mb-rs-unit", R_UNITS, state.rsUnit))}
+        ${opampField("Vth", "mb-vth", state.vth, `<span class="unit-fixed">V</span>`)}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>Rd</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="mb-rd" value="${state.rd}" />
-            <select id="mb-rd-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rdUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Rs</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="mb-rs" value="${state.rs}" />
-            <select id="mb-rs-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rsUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-      </div>
-      <div class="field-pair">
-        <div class="field">
-          <label>Id,on (datasheet)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="mb-idon" value="${state.idon}" />
-            <select id="mb-idon-unit">${Object.keys(AMP_UNITS).map((u) => `<option ${state.idonUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>at Vgs,on</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="mb-vgson" value="${state.vgson}" />
-            <select id="mb-vgson-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vgsonUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("Id,on (datasheet)", "mb-idon", state.idon, opampUnitSelect("mb-idon-unit", Object.keys(ID_UNITS), state.idonUnit))}
+        ${opampField("at Vgs,on", "mb-vgson", state.vgson, `<span class="unit-fixed">V</span>`)}
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Vg = Vdd×R2/(R1+R2)", "k = Id,on / (Vgs,on−Vth)²", "Id = k×(Vgs−Vth)², Vgs = Vg − Id×Rs"],
-        "No gate current, so Vg is a plain divider — no Thevenin correction like a BJT base needs. Id and Vgs still depend on each other through Rs, so the Q-point comes from solving both together."
+        ["Vg = Vdd × R2 / (R1 + R2)", "k = Id,on / (Vgs,on − Vth)²", "Saturation: Id = k × (Vgs − Vth)²", "Triode: Id = k × (2 (Vgs − Vth) Vds − Vds²)", "Vgs = Vg − Id × Rs, Vds = Vdd − Id × (Rd + Rs)"],
+        "A MOSFET is controlled by the voltage on its gate, which draws no current. Above the threshold voltage Vth it starts to conduct, and the drain current Id grows with the square of how far the gate is above it. R1 and R2 divide the supply to set the gate voltage Vg; the source resistor Rs then pulls back: more current raises the source, which lowers Vgs, so the current settles at the operating point. That matters because Vth varies widely between pieces of one type — a 2N7000 is specified anywhere from 0.8 to 3 V — and the last cell shows how much Id moves if the threshold is 0.5 V off; Rs narrows that, more so with a higher gate voltage and a larger Rs. k comes from one point on the datasheet, a drain current Id,on at a gate voltage Vgs,on. Careful with the names: a MOSFET's saturation region is where it amplifies (the drain current set by the gate, not by Vds) — the opposite of a BJT's saturation. Its triode region is where it is fully on and acts as a resistor, which is what a switch wants and an amplifier does not."
       )}
       ${calcFooter()}
     `;
@@ -12194,8 +12180,8 @@ function renderMosfetBias(domain, tool, favId) {
     [["mb-vdd", "vdd"], ["mb-vth", "vth"], ["mb-r1", "r1"], ["mb-r2", "r2"], ["mb-rd", "rd"], ["mb-rs", "rs"], ["mb-idon", "idon"], ["mb-vgson", "vgson"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    [["mb-vdd-unit", "vddUnit"], ["mb-vth-unit", "vthUnit"], ["mb-r1-unit", "r1Unit"], ["mb-r2-unit", "r2Unit"], ["mb-rd-unit", "rdUnit"], ["mb-rs-unit", "rsUnit"], ["mb-idon-unit", "idonUnit"], ["mb-vgson-unit", "vgsonUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["mb-r1-unit", "r1Unit"], ["mb-r2-unit", "r2Unit"], ["mb-rd-unit", "rdUnit"], ["mb-rs-unit", "rsUnit"], ["mb-idon-unit", "idonUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; setPref(C, name, state[name]); refresh(); };
     });
   }
 

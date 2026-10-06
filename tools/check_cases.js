@@ -487,6 +487,18 @@ const CHECK_CASES = {
     { name: "mode and units are remembered", do: [["pill", 2], ["set", "#tx-ic-unit", "A"], ["reopen"]],
       expect: [[".pill.active", "Find hFE"], ["#tx-ic-unit", "A"]] },
   ],
+  "mosfet-bias": [
+    { name: "15 V, 560 k / 200 k, Rd 2 k, Rs 1 k: Id 1.242 mA, saturation", do: [],
+      expect: [['[data-res="id"]', "1.242 mA"], ['[data-res="vds"]', "11.27 V"], ['[data-res="vg"]', "3.947 V"], ['[data-res="region"]', "/saturation/"], ['[data-res="spread"]', "861 µA–1.64 mA"]] },
+    { name: "example: no Rs, 9.481 mA, 5.24–13.4 mA", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="id"]', "9.481 mA"], ['[data-res="spread"]', "5.24–13.4 mA"]] },
+    { name: "example: Rd 12 k, triode solved properly", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="region"]', "/triode/"], ['[data-res="id"]', "1.127 mA"], ['[data-res="vds"]', "349 mV"], ['[data-res="warn"]', "/Triode region/"]] },
+    { name: "gate below threshold (R2 50 k, Vg 1.23 V): off", do: [["set", "#mb-r2", "50"]],
+      expect: [['[data-res="region"]', "off"], ['[data-res="warn"]', "/Off/"]] },
+    { name: "units are remembered", do: [["set", "#mb-rd-unit", "Ω"], ["reopen"]],
+      expect: [["#mb-rd-unit", "Ω"]] },
+  ],
   "thyristor-firing": [
     { name: "TRIAC, 120 V, 144 Ω, α 90°: half power, 50 W", do: [],
       expect: [['[data-res="p"]', "50 W"], ['[data-res="pct"]', "50%"], ['[data-res="vrms"]', "84.85 V"], ['[data-res="delay"]', "4.167 ms"], ['[data-res="piv"]', "169.7 V"]] },

@@ -49,6 +49,7 @@ will key on, since that is the id the app already holds for each tool.
 - Transistors (BJT) → [BJT biasing](#bjt-biasing)
 - Transistors (BJT) → [BJT as a switch](#bjt-as-a-switch)
 - Transistors (BJT) → [BJT currents](#bjt-currents)
+- MOSFET / IGBT → [MOSFET biasing](#mosfet-biasing)
 - Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
@@ -2552,6 +2553,113 @@ The review made these changes:
 - It rewrote the note in plain words and added examples.
 - The tool was renamed BJT currents, on Pierre's choice, to fit beside the
   bulb.
+
+[↑ Index](#index)
+
+---
+
+<a id="mosfet-bias"></a>
+## MOSFET biasing
+
+`calc: mosfet-bias` · Active & semiconductor devices › MOSFET / IGBT
+
+### What it computes
+
+For an N-channel enhancement MOSFET biased by a voltage divider on its
+gate, with a drain resistor Rd and a source resistor Rs, it gives:
+- the drain current Id and the voltage across the MOSFET, Vds, which
+  together are the operating point;
+- the region: saturation (amplifying), triode (fully on) or off;
+- the gate, gate-source and drain voltages;
+- Id if the threshold voltage were 0.5 V lower or higher.
+
+### Source
+
+The device model is the textbook square law, solved for the circuit as
+drawn. Device data read from the datasheet itself:
+- **Zetex 2N7000** (issue 2, November 1994):
+  - gate threshold Vgs(th) 0.8 V minimum, 3.0 V maximum, at Id = 1 mA;
+  - on-state drain current Id(on) at least 75 mA at Vgs 4.5 V, Vds 10 V;
+  - Rds(on) at most 5 Ω at Vgs 10 V, 500 mA.
+
+The 3.7:1 threshold range is why the source resistor matters.
+
+### What it means
+
+A MOSFET is controlled by the voltage on its gate, which draws no current.
+
+- **Threshold Vth** — below it, no drain current flows. Above it, the
+  current grows with the square of how far the gate is above it.
+- **The divider** — R1 and R2 divide the supply to set the gate voltage
+  Vg. No gate current loads them, unlike a BJT's base.
+- **The source resistor Rs** — pulls back: more current raises the
+  source, which lowers Vgs, so the current settles at the operating point.
+  - This feedback reduces how much a different threshold moves the
+    current. The "Id, Vth ±0.5 V" cell shows it.
+  - It works better with a higher gate voltage and a larger Rs.
+- **k** — the device's square-law constant. It comes from one datasheet
+  point: a drain current Id,on at a gate voltage Vgs,on.
+- **The names are a trap:**
+  - **saturation** is where a MOSFET *amplifies*: its drain current is set
+    by the gate, not by Vds. That is the opposite of a BJT's saturation;
+  - **triode** (or ohmic, or linear) is where it is fully on and acts as a
+    resistor. A switch wants this; an amplifier does not;
+  - **off** — the gate is below the threshold.
+
+### Why the formulas are these
+
+    Vg = Vdd × R2 / (R1 + R2)
+    k = Id,on / (Vgs,on − Vth)²
+    Saturation (Vds ≥ Vgs − Vth):   Id = k × (Vgs − Vth)²
+    Triode     (Vds < Vgs − Vth):   Id = k × (2 (Vgs − Vth) Vds − Vds²)
+    Vgs = Vg − Id × Rs,   Vds = Vdd − Id × (Rd + Rs)
+
+The two device equations meet at the boundary Vds = Vgs − Vth. As Id
+rises, Vgs and Vds both fall, and the device current falls with them, so
+there is exactly one crossing. The tool finds it by bisection, in
+whichever region it lies.
+
+### Assumptions and limits
+
+- **The square law is an approximation.** Real MOSFETs follow it only
+  roughly, and power MOSFETs poorly. Use it for understanding and first
+  values, then measure.
+- **k from one datasheet point.** Datasheet Id(on) figures are often
+  minimums, measured in pulses.
+- **Ignored effects.** Channel-length modulation (the slight rise of Id
+  with Vds) and temperature are not modelled.
+- **N-channel only.** A P-channel circuit is the mirror image.
+
+### What it deliberately does not do
+
+- Small-signal gain is not calculated.
+- MOSFET switches have their own tool.
+
+### How it was checked
+
+All on 15 V with a 560 k / 200 k divider (Vg 3.947 V), Vth 2 V and
+10 mA at Vgs,on 4 V (k = 2.5 mA/V²). The figures were also computed in a
+separate script.
+- **Rd 2 kΩ, Rs 1 kΩ:**
+  - Id 1.242 mA, Vds 11.27 V, saturation;
+  - 861 µA–1.64 mA for Vth ±0.5 V.
+- **Rd 1 kΩ, no Rs:**
+  - Id 9.481 mA;
+  - 5.24–13.4 mA for Vth ±0.5 V (the top end limited by the triode
+    region).
+- **Rd 12 kΩ, Rs 1 kΩ:** triode, Id 1.127 mA, Vds 349 mV. The old version
+  applied the saturation formula there.
+- **R2 50 kΩ (Vg 1.23 V):** off.
+
+The review made these changes:
+- It fixed the triode region. The current and voltages were computed with
+  the saturation equation even there; now each region uses its own.
+- It explains the region names in plain words.
+- It put Id first and large, and added the Vth ±0.5 V cell.
+- It limited the units to real ones and remembers them.
+- It rewrote the note and added examples.
+- A global layout fix made three-to-a-row fields slightly tighter, so a
+  three-digit value beside a unit is no longer cut on a 375 px phone.
 
 [↑ Index](#index)
 
