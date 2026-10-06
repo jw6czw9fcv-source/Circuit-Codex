@@ -11224,22 +11224,40 @@ function renderPpmConverter(domain, tool, favId) {
 
 // ---------- Transistor biasing (voltage divider bias) ----------
 function renderTransistorBias(domain, tool, favId) {
+  const C = "transistor-bias";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
   const state = {
-    mode: "npn",
-    vcc: 12, vccUnit: "V",
-    vbe: 0.7, vbeUnit: "V",
+    mode: pref(C, "mode", "npn", ["npn", "pnp"]),
+    vcc: 12,
+    vbe: 0.7,
     hfe: 100,
-    r1: 47, r1Unit: "kΩ",
-    r2: 10, r2Unit: "kΩ",
-    rc: 2.2, rcUnit: "kΩ",
-    re: 1, reUnit: "kΩ",
+    r1: 47, r1Unit: pref(C, "r1Unit", "kΩ", R_UNITS),
+    r2: 10, r2Unit: pref(C, "r2Unit", "kΩ", R_UNITS),
+    rc: 2.2, rcUnit: pref(C, "rcUnit", "kΩ", R_UNITS),
+    re: 1, reUnit: pref(C, "reUnit", "kΩ", R_UNITS),
   };
+  // A remembered PNP starts from the mirrored divider, as the pill does.
+  if (state.mode === "pnp") [state.r1, state.r2] = [state.r2, state.r1];
 
-  const R_NAMES = ["r1", "r2", "rc", "re"];
+  // Each example sets the mode and the four resistors (kΩ).
+  const example = (mode, r1, r2, rc, re) => () => {
+    Object.assign(state, { mode, r1, r2, rc, re, r1Unit: "kΩ", r2Unit: "kΩ", rcUnit: "kΩ", reUnit: "kΩ", vcc: 12, vbe: 0.7, hfe: 100 });
+    paint();
+  };
+  useExamples([
+    { title: "Amplifier stage on 12 V", note: "47 k / 10 k set the base at 2.1 V: 1.29 mA flows, and halving or doubling hFE moves it under 10 %.",
+      apply: example("npn", 47, 10, 2.2, 1) },
+    { title: "Vce near half the supply", note: "Rc = 3.3 k puts Vce at 6.46 V, near the middle, leaving room for the output to swing both ways.",
+      apply: example("npn", 47, 10, 3.3, 1) },
+    { title: "PNP mirror", note: "The same circuit upside down: the divider swapped, the emitter near +12 V, and the same 1.29 mA.",
+      apply: example("pnp", 10, 47, 2.2, 1) },
+    { title: "Saturated by mistake", note: "Rc = 10 k asks for more than the supply can give: the transistor saturates.",
+      apply: example("npn", 47, 10, 10, 1) },
+  ]);
 
   function si(name) {
-    const units = R_NAMES.includes(name) ? OHM_UNITS : VOLT_UNITS;
-    return state[name] * units[state[name + "Unit"]];
+    if (["r1", "r2", "rc", "re"].includes(name)) return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    return state[name];
   }
 
   // Standard self-biasing (Thevenin) analysis: R1/R2 form a voltage divider
@@ -11253,13 +11271,13 @@ function renderTransistorBias(domain, tool, favId) {
   // NPN. Working through the loop equation for that mirrored topology lands
   // on the exact same formula shape, just with Vth replaced by (Vcc − Vth)
   // — so one code path covers both, rather than a separate PNP formula set.
-  function compute() {
-    const vcc = si("vcc"), vbe = si("vbe"), hfe = state.hfe;
+  function compute(hfeOver) {
+    const vcc = si("vcc"), vbe = si("vbe"), hfe = hfeOver || state.hfe;
     const r1 = si("r1"), r2 = si("r2"), rc = si("rc"), re = si("re");
     const isPnp = state.mode === "pnp";
 
     if (!(vcc > 0) || !(r1 + r2 > 0) || !(hfe > 0) || rc < 0 || re < 0) {
-      return { problem: "Vcc, R1 + R2, and hFE must be greater than zero." };
+      return { problem: "Vcc, R1 + R2 and hFE must be greater than zero, and Rc and Re zero or more." };
     }
 
     const vth = vcc * r2 / (r1 + r2);
@@ -11270,7 +11288,7 @@ function renderTransistorBias(domain, tool, favId) {
     if (vthEff <= vbe) {
       const ve = isPnp ? vcc : 0;
       const vc = isPnp ? 0 : vcc;
-      return { problem: "", region: "cutoff", vth, rth, ib: 0, ic: 0, ie: 0, vb: vth, ve, vc, vce: vcc };
+      return { problem: "", region: "cutoff", vth, rth, ib: 0, ic: 0, ie: 0, vb: vth, ve, vc, vce: vcc, lowIc: 0, highIc: 0, stiffness: Infinity };
     }
 
     const ib = (vthEff - vbe) / (rth + (hfe + 1) * re);
@@ -11298,13 +11316,16 @@ function renderTransistorBias(domain, tool, favId) {
       vb = ve + vbe;
     }
 
-    return { problem: "", region, vth, rth, ib, ic, ie, vb, ve, vc, vce };
-  }
-
-  function regionInfo(region, isPnp) {
-    if (region === "active") return { label: "Active region", color: "var(--result-text)", bg: "var(--result-border)" };
-    if (region === "saturation") return { label: "Saturated — not a usable linear bias point", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
-    return { label: `Cutoff — Vth ${isPnp ? "≥ Vcc − Vbe" : "≤ Vbe"}, transistor is off`, color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+    // Ic if hFE were half or twice what was entered: the spread between
+    // transistors of one type is about 3:1 (100–300 for a 2N3904 at 10 mA),
+    // and a well-designed divider bias barely notices it.
+    const lowIc = hfeOver ? null : compute(hfe / 2).ic;
+    const highIc = hfeOver ? null : compute(hfe * 2).ic;
+    // How firmly the divider holds the base: the current in its weaker leg
+    // (R2 for NPN, which the base current is taken from; R1 for PNP, which
+    // it adds to) against the base current. Ten times or more is the usual rule of thumb.
+    const stiffness = ib > 0 ? (isPnp ? (vcc - vb) / r1 : vb / r2) / ib : Infinity;
+    return { problem: "", region, vth, rth, ib, ic, ie, vb, ve, vc, vce, lowIc, highIc, stiffness };
   }
 
   // Same 6-peak ANSI/IEEE 315 zigzag body used everywhere else in the app —
@@ -11395,22 +11416,45 @@ function renderTransistorBias(domain, tool, favId) {
     </div>`;
   }
 
+  // "1.19–1.34 mA": one unit for both ends when they share it, so the
+  // range fits its cell.
+  function spanText(lo, hi) {
+    const a = siFormat(lo, "A", 3), b = siFormat(hi, "A", 3);
+    const [an, au] = a.split(" "), [, bu] = b.split(" ");
+    return au === bu ? `${an}–${b}` : `${a}–${b}`;
+  }
+
+  // Ic first and large — the operating point the divider sets — with Vce
+  // and the region in words, then the node voltages and how robust it is.
   function resultsHTML(r, isPnp) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const info = regionInfo(r.region, isPnp);
+    const vceName = isPnp ? "Vec" : "Vce";
+    const regionText = r.region === "active" ? "active: ready to amplify"
+      : r.region === "saturation" ? "saturated" : "off (cut off)";
+    const warn = r.region === "saturation"
+      ? `<div class="error-text" data-res="warn">Saturated: Rc and Re cannot pass the current the divider asks for, so the transistor is fully on with only ${siFormat(r.vce, "V")} across it. Not a usable bias for an amplifier — lower Rc or Re, or the base voltage.</div>`
+      : r.region === "cutoff"
+        ? `<div class="error-text" data-res="warn">Off: the divider gives the base ${isPnp ? "less than Vbe below Vcc" : "less than Vbe"}, so no current flows. Make ${isPnp ? "R1" : "R2"} larger.</div>`
+        : r.stiffness < 10
+          ? `<div class="error-text" data-res="warn">The divider carries only ${trim(Number(r.stiffness.toPrecision(2)))}× the base current; the usual rule is 10× or more, or Ic follows hFE more than it should. Use smaller R1 and R2.</div>`
+          : "";
     return `
-      <div class="section-label" style="color:#5DCAA5">Operating point (Q-point)
-        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      <div class="section-label" style="color:#5DCAA5">Operating point</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Collector current Ic</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="ic">${siFormat(r.ic, "A")}</span></div>
+        <div class="result-sub">${vceName} <span data-res="vce">${siFormat(r.vce, "V")}</span> &nbsp;·&nbsp; <span data-res="region">${regionText}</span></div>
       </div>
-      <div class="eseries-grid">
-        ${cell("Ib", siFormat(r.ib, "A"))}
-        ${cell("Ic", siFormat(r.ic, "A"))}
-        ${cell("Ie", siFormat(r.ie, "A"))}
-        ${cell("Vb", siFormat(r.vb, "V"))}
-        ${cell("Ve", siFormat(r.ve, "V"))}
-        ${cell("Vc", siFormat(r.vc, "V"))}
-        ${cell(isPnp ? "Vec" : "Vce", siFormat(r.vce, "V"))}
-      </div>`;
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(4,1fr);">
+        ${cell("Vb", `<span data-res="vb">${siFormat(r.vb, "V")}</span>`)}
+        ${cell("Ve", `<span data-res="ve">${siFormat(r.ve, "V")}</span>`)}
+        ${cell("Vc", `<span data-res="vc">${siFormat(r.vc, "V")}</span>`)}
+        ${cell("Ic, hFE ½–2×", `<span data-res="spread">${r.region === "cutoff" ? "—" : spanText(r.lowIc, r.highIc)}</span>`)}
+      </div>
+      ${warn}`;
   }
 
   function refresh() {
@@ -11421,63 +11465,26 @@ function renderTransistorBias(domain, tool, favId) {
     const r = compute();
     const isPnp = state.mode === "pnp";
     app.innerHTML = `
-      ${calcHeader(tool, favId, isPnp ? "PNP voltage-divider (self) bias — DC operating point" : "NPN voltage-divider (self) bias — DC operating point")}
-
-      ${pillRow([["npn", "NPN"], ["pnp", "PNP"]], state.mode, domain.bg)}
+      ${calcHeader(tool, favId, "A divider sets the transistor's resting current")}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram(isPnp)}</div>
 
       <div class="field-pair">
         <div class="field">
-          <label>Vcc</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tb-vcc" value="${state.vcc}" />
-            <select id="tb-vcc-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vccUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
+          <label>Type</label>
+          <select id="tb-type">${[["npn", "NPN"], ["pnp", "PNP"]].map(([v, t]) => `<option value="${v}" ${state.mode === v ? "selected" : ""}>${t}</option>`).join("")}</select>
         </div>
-        <div class="field">
-          <label>Vbe</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tb-vbe" value="${state.vbe}" />
-            <select id="tb-vbe-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vbeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>hFE (β)</label>
-          <input type="number" inputmode="decimal" step="any" id="tb-hfe" value="${state.hfe}" />
-        </div>
+        ${opampField("Vcc", "tb-vcc", state.vcc, `<span class="unit-fixed">V</span>`)}
+        ${opampField("Vbe", "tb-vbe", state.vbe, `<span class="unit-fixed">V</span>`)}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>R1 — top</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tb-r1" value="${state.r1}" />
-            <select id="tb-r1-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r1Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>R2 — bottom</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tb-r2" value="${state.r2}" />
-            <select id="tb-r2-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.r2Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("R1 (top)", "tb-r1", state.r1, opampUnitSelect("tb-r1-unit", R_UNITS, state.r1Unit))}
+        ${opampField("R2 (bottom)", "tb-r2", state.r2, opampUnitSelect("tb-r2-unit", R_UNITS, state.r2Unit))}
+        ${opampField("hFE", "tb-hfe", state.hfe, "")}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>Rc</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tb-rc" value="${state.rc}" />
-            <select id="tb-rc-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rcUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Re</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="tb-re" value="${state.re}" />
-            <select id="tb-re-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.reUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("Rc", "tb-rc", state.rc, opampUnitSelect("tb-rc-unit", R_UNITS, state.rcUnit))}
+        ${opampField("Re", "tb-re", state.re, opampUnitSelect("tb-re-unit", R_UNITS, state.reUnit))}
       </div>
 
       <div data-res="results">${resultsHTML(r, isPnp)}</div>
@@ -11486,14 +11493,16 @@ function renderTransistorBias(domain, tool, favId) {
         isPnp
           ? ["Vth = Vcc×R2/(R1+R2), Rth = R1∥R2", "Ib = (Vcc−Vth − Vbe) / (Rth + (hFE+1)×Re)", "Ic = hFE×Ib, Ie = Ic+Ib, Vec = Vcc−Ic×Rc−Ie×Re"]
           : ["Vth = Vcc×R2/(R1+R2), Rth = R1∥R2", "Ib = (Vth − Vbe) / (Rth + (hFE+1)×Re)", "Ic = hFE×Ib, Ie = Ic+Ib, Vce = Vcc−Ic×Rc−Ie×Re"],
-        isPnp
-          ? "PNP mirror — emitter near Vcc, collector near ground."
-          : "Called 'universal' bias — barely depends on hFE."
+        "A transistor amplifies only if it already carries a steady resting current — its operating point, or Q-point (Ic and Vce with no signal). R1 and R2 divide the supply to hold the base at a fixed voltage, Vth; the emitter sits one Vbe (about 0.6–0.7 V for silicon) away from it, so Re fixes the emitter current, and Ic is almost the same. hFE (or β), the current gain Ic / Ib, varies a lot between transistors of one type — a 2N3904 is specified from 100 to 300 at 10 mA — but here it only enters through the small base current, which is why this circuit is so widely used: the last cell shows Ic barely moving when hFE halves or doubles. Keep the divider's current at least 10 times the base current. Active means the transistor can amplify; saturated means it is fully on (Vce about 0.2 V) and off means no current flows — both useless for an amplifier. Vce near half the supply leaves the most room for the signal to swing. The PNP version is the same circuit upside down."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => {
+    wireCalc(favId, paint);
+
+    document.getElementById("tb-type").onchange = (e) => {
+      const m = e.target.value;
+      setPref(C, "mode", m);
       // A real PNP redesign swaps the divider ratio (R1/R2 trade places) so
       // the base sits near Vcc instead of near ground — without that swap,
       // reusing the NPN numbers as-is drives most PNP circuits straight
@@ -11504,15 +11513,13 @@ function renderTransistorBias(domain, tool, favId) {
       }
       state.mode = m;
       paint();
-    });
+    };
 
-    [["tb-vcc", "vcc"], ["tb-vbe", "vbe"], ["tb-r1", "r1"], ["tb-r2", "r2"], ["tb-rc", "rc"], ["tb-re", "re"]].forEach(([id, name]) => {
+    [["tb-vcc", "vcc"], ["tb-vbe", "vbe"], ["tb-hfe", "hfe"], ["tb-r1", "r1"], ["tb-r2", "r2"], ["tb-rc", "rc"], ["tb-re", "re"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    document.getElementById("tb-hfe").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.hfe = v; refresh(); } };
-
-    [["tb-vcc-unit", "vccUnit"], ["tb-vbe-unit", "vbeUnit"], ["tb-r1-unit", "r1Unit"], ["tb-r2-unit", "r2Unit"], ["tb-rc-unit", "rcUnit"], ["tb-re-unit", "reUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["tb-r1-unit", "r1Unit"], ["tb-r2-unit", "r2Unit"], ["tb-rc-unit", "rcUnit"], ["tb-re-unit", "reUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; setPref(C, name, state[name]); refresh(); };
     });
   }
 

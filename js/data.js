@@ -74,7 +74,7 @@ const DOMAINS = [
     icon: "transistor",
     sections: [
       { title: "Diodes", tools: [{ name: "Diode forward voltage", was: "Forward voltage / biasing", calc: "diode-biasing" }, { name: "Zener regulation" }, { name: "LED series resistor", calc: "led-series-resistor" }] },
-      { title: "Transistors (BJT)", tools: [{ name: "BJT biasing (voltage divider)", was: "Biasing (voltage divider bias)", calc: "transistor-bias" }, { name: "BJT as a switch", was: "NPN/PNP as a switch", calc: "transistor-switch" }, { name: "BJT currents (hFE, IC)", was: "Example calculation (hFE, IC)", calc: "transistor-example" }] },
+      { title: "Transistors (BJT)", tools: [{ name: "BJT biasing", was: "BJT biasing (voltage divider)", calc: "transistor-bias" }, { name: "BJT as a switch", was: "NPN/PNP as a switch", calc: "transistor-switch" }, { name: "BJT currents (hFE, IC)", was: "Example calculation (hFE, IC)", calc: "transistor-example" }] },
       { title: "MOSFET / IGBT", tools: [{ name: "MOSFET biasing", was: "Biasing", calc: "mosfet-bias" }, { name: "MOSFET switching", was: "Switching calculation", calc: "mosfet-switch" }] },
       { title: "Rectifiers", tools: [{ name: "Half-wave rectifier", was: "Half-wave", calc: "rectifier-halfwave" }, { name: "Bridge rectifier", was: "Full-wave (bridge)", calc: "rectifier-bridge" }, { name: "Center-tap rectifier", was: "Full-wave with center tap", calc: "rectifier-centertap" }, { name: "Rectifier ripple", was: "Half-wave with capacitor (ripple)", calc: "rectifier-halfwave-cap" }] },
       { title: "Thyristors (SCR, TRIAC) & MOSFET", tools: [{ name: "AC phase control", was: "Firing angle basics", calc: "thyristor-firing" }] },
@@ -265,7 +265,7 @@ const TOOL_KEYWORDS = {
   "smd-package-sizes": "footprint 0402 0603 0805 1206 imperial metric",
   "diode-biasing": "diode forward voltage vf",
   "led-series-resistor": "led resistor current limiting",
-  "transistor-bias": "bjt npn bias divider operating point",
+  "transistor-bias": "bjt npn bias divider operating point voltage divider bias q-point operating point",
   "transistor-switch": "bjt npn pnp saturation base resistor",
   "transistor-example": "hfe beta collector current",
   "mosfet-bias": "fet gate bias",

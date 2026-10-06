@@ -46,6 +46,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Diodes → [Diode forward voltage](#diode-forward-voltage)
 - Diodes → [LED series resistor](#led-series-resistor)
+- Transistors (BJT) → [BJT biasing](#bjt-biasing)
 - Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
@@ -2208,6 +2209,134 @@ standard value rounded to the nearest (so the current could exceed the one
 asked), and a green preset of 2.2 V that fits only the old GaP LEDs — a
 bright green LED is 3.3 V. The presets now follow the datasheets, the value
 rounds up, and the drawing is laid out like the diode screen's.
+
+[↑ Index](#index)
+
+---
+
+<a id="transistor-bias"></a>
+## BJT biasing
+
+`calc: transistor-bias` · Active & semiconductor devices › Transistors (BJT)
+(formerly BJT biasing (voltage divider))
+
+### What it computes
+
+For an NPN or PNP bipolar transistor biased by a voltage divider with an
+emitter resistor, it gives:
+- the collector current Ic and the voltage across the transistor (Vce,
+  or Vec for a PNP), which together are the operating point;
+- whether the transistor is active, saturated or off;
+- the voltages at the base, emitter and collector;
+- Ic if the current gain hFE were half or twice the value entered;
+- a warning when the divider is too weak.
+
+### Source
+
+The analysis is the standard Thevenin treatment of the divider, found in
+every electronics textbook. Transistor data read from the datasheets
+themselves:
+- **Diodes Inc. MMBT3904** (DS30036 rev. 27, 2025), the SOT-23 version of
+  the 2N3904:
+  - hFE at least 40 at 0.1 mA and 70 at 1 mA, 100–300 at 10 mA, at least
+    60 at 50 mA;
+  - VCE(sat) 0.2 V maximum at 10 mA (with IB = 1 mA);
+  - VBE(sat) 0.65–0.85 V at 10 mA.
+- **ST 2N3906 PNP** (2003): hFE at least 80 at 1 mA, 100–300 at 10 mA;
+  VCE(sat) 0.25 V maximum at 10 mA.
+
+The tool uses 0.2 V for Vce in saturation.
+
+### What it means
+
+A transistor amplifies only if it already carries a steady resting
+current. That current, and the voltage across the transistor with no
+signal, are its **operating point** (or Q-point).
+
+- **The divider** — R1 and R2 divide the supply and hold the base near a
+  fixed voltage, Vth.
+- **Vbe** — the emitter sits one base-emitter voltage away from the base:
+  about 0.6–0.7 V for silicon. So the emitter voltage is fixed, Re fixes
+  the emitter current, and Ic is almost the same.
+- **hFE** (or β) — the current gain, Ic / Ib. It varies a lot between
+  transistors of one type: 100 to 300 for a 2N3904 at 10 mA. Here it only
+  enters through the small base current. That is why this circuit is used
+  so widely: the "hFE ½–2×" cell shows how little Ic moves when hFE halves
+  or doubles.
+- **Regions:**
+  - **active** — the transistor can amplify;
+  - **saturated** — fully on, with Vce about 0.2 V;
+  - **off** (cut off) — no current flows.
+
+  Saturated and off are both useless for an amplifier.
+- **Vce near half the supply** — leaves the most room for the signal to
+  swing both ways.
+- **Stiff divider** — the current in the divider should be at least 10
+  times the base current, or the base voltage sags with hFE. This is a
+  rule of thumb, and the tool warns below it.
+- **PNP** — the same circuit upside down: the emitter and Re near the
+  supply, the collector and Rc near ground. Switching the type swaps R1
+  and R2, so the base lands near the supply as a PNP needs.
+
+### Why the formulas are these
+
+The divider seen from the base is a source Vth = Vcc × R2 / (R1 + R2) with
+a resistance Rth = R1 ∥ R2. Around the loop through the base and emitter,
+
+    Vth = Ib × Rth + Vbe + (hFE + 1) × Ib × Re
+
+so
+
+    Ib = (Vth − Vbe) / (Rth + (hFE + 1) × Re),   Ic = hFE × Ib
+
+For a PNP, Vth is replaced by Vcc − Vth. Then Vce = Vcc − Ic × Rc − Ie × Re.
+
+If that would leave less than the saturation voltage, the transistor is
+saturated instead. Ic is then (Vcc − 0.2 V) / (Rc + Re). If Vth does not
+exceed Vbe, it is off.
+
+When (hFE + 1) × Re is much larger than Rth, Ib × hFE ≈ (Vth − Vbe) / Re:
+hFE drops out. That is the design aim.
+
+### Assumptions and limits
+
+- **Fixed Vbe.** Vbe also falls as the transistor warms, about 2 mV per °C
+  (a textbook figure, not from these datasheets).
+  Re keeps the effect small, but it is not calculated.
+- **Constant hFE.** hFE is taken as constant; really it changes with Ic
+  and temperature.
+- **DC only.** Signal gain, coupling capacitors and the emitter bypass
+  capacitor are not covered.
+- **Simple saturation.** The saturation current neglects the base
+  current's share of the emitter current.
+
+### What it deliberately does not do
+
+- It does not design the divider for a target current; enter values and
+  adjust.
+- Small-signal gain and input impedance are not calculated.
+
+### How it was checked
+
+All on 12 V, with Vbe 0.7 V and hFE 100:
+- **NPN, 47 k / 10 k divider, Rc 2.2 k, Re 1 k:**
+  - Ic 1.286 mA, Vce 7.871 V, Vb 1.999 V, Ve 1.299 V, Vc 9.17 V;
+  - 1.19–1.34 mA for hFE 50–200.
+- **Rc 3.3 kΩ:** Vce 6.456 V.
+- **PNP with the divider swapped (10 k / 47 k):** the same 1.286 mA.
+- **Rc 10 kΩ:** saturated, Ic (12 − 0.2) / 11 kΩ = 1.073 mA.
+- **470 k / 100 k divider:** only about 2× the base current, so the tool
+  warns.
+
+The review made these changes:
+- It put Ic first and large, with Vce and the region in words.
+- It added the hFE ½–2× robustness cell and the stiff-divider check.
+- It limited the units to real ones and remembers them.
+- It replaced the NPN/PNP pills with a Type choice in the fields, so the
+  result stays above the tab bar on a smaller phone.
+- It rewrote the note in plain words and added examples.
+- The tool was renamed BJT biasing, on Pierre's choice, to fit beside the
+  bulb.
 
 [↑ Index](#index)
 
