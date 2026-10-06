@@ -475,6 +475,18 @@ const CHECK_CASES = {
     { name: "type and units are remembered", do: [["set", "#ts-type", "pnp"], ["set", "#ts-rb-unit", "Ω"], ["reopen"]],
       expect: [["#ts-type", "pnp"], ["#ts-rb-unit", "Ω"]] },
   ],
+  "transistor-example": [
+    { name: "hFE 100, Ib 50 µA: Ic 5 mA, Ie 5.05 mA, α 0.9901", do: [],
+      expect: [['[data-res="solved"]', "5 mA"], ['[data-res="ie"]', "5.05 mA"], ['[data-res="alpha"]', "0.9901"]] },
+    { name: "example: BC547B minimum, 2 mA", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="solved"]', "2 mA"], ['[data-res="alpha"]', "0.995"]] },
+    { name: "example: 50 mA at hFE 60 needs 833.3 µA", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="solved"]', "833.3 µA"], [".pill.active", "Find Ib"]] },
+    { name: "example: measured gain 260", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="solved"]', "260"], ['[data-res="alpha"]', "0.9962"]] },
+    { name: "mode and units are remembered", do: [["pill", 2], ["set", "#tx-ic-unit", "A"], ["reopen"]],
+      expect: [[".pill.active", "Find hFE"], ["#tx-ic-unit", "A"]] },
+  ],
   "thyristor-firing": [
     { name: "TRIAC, 120 V, 144 Ω, α 90°: half power, 50 W", do: [],
       expect: [['[data-res="p"]', "50 W"], ['[data-res="pct"]', "50%"], ['[data-res="vrms"]', "84.85 V"], ['[data-res="delay"]', "4.167 ms"], ['[data-res="piv"]', "169.7 V"]] },

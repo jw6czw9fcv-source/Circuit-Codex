@@ -48,6 +48,7 @@ will key on, since that is the id the app already holds for each tool.
 - Diodes → [LED series resistor](#led-series-resistor)
 - Transistors (BJT) → [BJT biasing](#bjt-biasing)
 - Transistors (BJT) → [BJT as a switch](#bjt-as-a-switch)
+- Transistors (BJT) → [BJT currents](#bjt-currents)
 - Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
@@ -2461,6 +2462,96 @@ The review made these changes:
 - It replaced the NPN/PNP pills with a Type choice in the fields.
 - It limited the units to real ones and remembers them.
 - It rewrote the note in plain words and added examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="transistor-example"></a>
+## BJT currents
+
+`calc: transistor-example` · Active & semiconductor devices › Transistors (BJT)
+(formerly BJT currents (hFE, IC))
+
+### What it computes
+
+For a bipolar transistor, enter two of base current Ib, collector current
+Ic and current gain hFE, and it gives the third. It also gives the emitter
+current Ie and α, the share of the emitter current that comes through the
+collector.
+
+### Source
+
+The relations are the definitions of the DC current gain and Kirchhoff's
+current law. The gain figures are read from the datasheets themselves:
+- **Fairchild BC546–BC550** (rev. A2, 2002):
+  - hFE 110–800 at VCE 5 V, IC 2 mA, sold in classes A 110–220,
+    B 200–450 and C 420–800;
+  - collector current at most 100 mA.
+- **Diodes Inc. MMBT3904** (the SOT-23 2N3904, DS30036 rev. 27, 2025):
+  hFE at least 40 at 0.1 mA, 70 at 1 mA, 100–300 at 10 mA, at least 60 at
+  50 mA and 30 at 100 mA.
+
+### What it means
+
+A bipolar transistor lets a small current into its base control a much
+larger one through its collector.
+
+- **hFE** (also written β) — the DC current gain: Ic = hFE × Ib.
+- **Ie** — both currents leave through the emitter of an NPN, so
+  Ie = Ib + Ic. For a PNP, all three currents flow the other way.
+- **α** — Ic / Ie, the fraction of the emitter current that comes through
+  the collector. It is just under 1: 0.990 for hFE 100.
+- **hFE is not a fixed number.** It differs between pieces of the same
+  type, changes with the current and with temperature. That is why
+  datasheets give a range at a stated current, and why the BC547 is
+  sorted and sold in gain classes.
+- **Design on the minimum.** To be sure of a collector current, supply
+  the base current the *minimum* gain needs, at the current you will use.
+  A 2N3904 is 100–300 at 10 mA but only 60 or more at 50 mA.
+- **Saturated transistors.** A transistor used as a fully-on switch
+  passes less than hFE × Ib, because the load sets the current; see BJT as
+  a switch. Circuits that must not depend on hFE use the divider bias of
+  BJT biasing.
+
+The current being solved for is drawn green in the diagram.
+
+### Why the formulas are these
+
+    hFE = Ic / Ib      (the definition)
+    Ie = Ib + Ic       (the current in equals the current out)
+    α = Ic / Ie = hFE / (hFE + 1)
+
+### Assumptions and limits
+
+- **Active region.** The transistor is assumed to work in the active
+  region, where Ic = hFE × Ib holds.
+- **DC gain only.** The DC gain hFE is used. The small-signal gain hfe
+  is similar but not identical.
+- **Leakage ignored.** Leakage currents (nanoamps for these parts) are
+  neglected.
+
+### What it deliberately does not do
+
+- Bias networks and switching are covered by the other two BJT tools.
+
+### How it was checked
+
+- **hFE 100, Ib 50 µA:** Ic 5 mA, Ie 5.05 mA, α 0.9901.
+- **hFE 200 (BC547B minimum), Ib 10 µA:** Ic 2 mA, α 0.995.
+- **50 mA at hFE 60 (2N3904 minimum at 50 mA):** Ib 833.3 µA.
+- **20 µA in, 5.2 mA out:** hFE 260, α 0.9962.
+
+The review made these changes:
+- It replaced an unchecked 2N2222 figure with gain data read from the
+  BC547 and 2N3904 datasheets.
+- It added α and colours the solved current green in the diagram.
+- It limited the units to µA and mA for Ib, and µA, mA and A for Ic, and
+  remembers them.
+- It labels the choice as "Find Ic / Ib / hFE".
+- It rewrote the note in plain words and added examples.
+- The tool was renamed BJT currents, on Pierre's choice, to fit beside the
+  bulb.
 
 [↑ Index](#index)
 

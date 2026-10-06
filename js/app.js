@@ -11772,66 +11772,56 @@ function renderTransistorSwitch(domain, tool, favId) {
 // a companion to the biasing and switch calculators above, for the basic
 // "given two of Ib/Ic/hFE, find the third" question those two skip past.
 function renderTransistorExample(domain, tool, favId) {
-  const state = { mode: "ic", hfe: 100, ib: 50, ibUnit: "µA", ic: 5, icUnit: "mA" };
-
-  function si(name) {
-    if (name === "hfe") return state.hfe;
-    return state[name] * AMP_UNITS[state[name + "Unit"]];
-  }
-
-  function inputsFor(mode) {
-    if (mode === "ic") return ["hfe", "ib"];
-    if (mode === "ib") return ["hfe", "ic"];
-    return ["ib", "ic"];
-  }
-
-  function compute() {
-    const hfeV = si("hfe"), ibV = si("ib"), icV = si("ic");
-    let hfe, ib, ic;
-    if (state.mode === "ic") { hfe = hfeV; ib = ibV; ic = hfe * ib; }
-    else if (state.mode === "ib") { hfe = hfeV; ic = icV; ib = hfe !== 0 ? ic / hfe : NaN; }
-    else { ib = ibV; ic = icV; hfe = ib !== 0 ? ic / ib : NaN; }
-    return { hfe, ib, ic, ie: ib + ic };
-  }
-
-  const FIELD = {
-    hfe: { label: "hFE (β)" },
-    ib: { label: "Ib" },
-    ic: { label: "Ic" },
+  const C = "transistor-example";
+  const IB_UNITS = { "µA": 1e-6, mA: 1e-3 };
+  const IC_UNITS = { "µA": 1e-6, mA: 1e-3, A: 1 };
+  const state = {
+    mode: pref(C, "mode", "ic", ["ic", "ib", "hfe"]),
+    hfe: 100,
+    ib: 50, ibUnit: pref(C, "ibUnit", "µA", Object.keys(IB_UNITS)),
+    ic: 5, icUnit: pref(C, "icUnit", "mA", Object.keys(IC_UNITS)),
   };
 
-  function fieldHTML(name) {
-    if (name === "hfe") {
-      return `<div class="field"><label>${FIELD.hfe.label}</label><input type="number" inputmode="decimal" step="any" data-var="hfe" value="${state.hfe}" /></div>`;
+  // Each example picks what to solve for and sets the two known values.
+  const example = (mode, vals) => () => {
+    Object.assign(state, { mode }, vals);
+    paint();
+  };
+  useExamples([
+    { title: "BC547B at its minimum gain", note: "Class B is sold as hFE 200–450 at 2 mA: 10 µA of base current gives at least 2 mA.",
+      apply: example("ic", { hfe: 200, ib: 10, ibUnit: "µA" }) },
+    { title: "Base current for 50 mA", note: "A 2N3904 is only sure of hFE 60 at 50 mA: 833 µA of base current is the least that works.",
+      apply: example("ib", { hfe: 60, ic: 50, icUnit: "mA" }) },
+    { title: "Gain measured on the bench", note: "20 µA in and 5.2 mA out: hFE 260, inside the BC547 B class (200–450).",
+      apply: example("hfe", { ib: 20, ibUnit: "µA", ic: 5.2, icUnit: "mA" }) },
+  ]);
+
+  const ibOf = () => state.ib * IB_UNITS[state.ibUnit];
+  const icOf = () => state.ic * IC_UNITS[state.icUnit];
+
+  // Ic = hFE × Ib, solved for whichever of the three is unknown; Ie is the
+  // sum of the other two (Kirchhoff at the transistor), and α = Ic / Ie is
+  // the share of the emitter current that reaches the collector.
+  function compute() {
+    let hfe, ib, ic;
+    if (state.mode === "ic") { hfe = state.hfe; ib = ibOf(); ic = hfe * ib; }
+    else if (state.mode === "ib") { hfe = state.hfe; ic = icOf(); ib = ic / hfe; }
+    else { ib = ibOf(); ic = icOf(); hfe = ic / ib; }
+    if (!(hfe > 0) || !(ib > 0) || !(ic > 0) || !isFinite(hfe) || !isFinite(ib)) {
+      return { problem: "The values entered must be greater than zero." };
     }
-    return `<div class="field">
-      <label>${FIELD[name].label}</label>
-      <div class="field-row">
-        <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${state[name]}" />
-        <select data-unit="${name}">${Object.keys(AMP_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-      </div>
-    </div>`;
+    return { problem: "", hfe, ib, ic, ie: ib + ic, alpha: ic / (ib + ic) };
   }
 
-  function solvedLabel() {
-    return { ic: "Ic", ib: "Ib", hfe: "hFE (β)" }[state.mode];
-  }
-
-  function solvedValueText(r) {
-    if (state.mode === "hfe") return isFinite(r.hfe) ? trim(r.hfe) : "—";
-    return siFormat(state.mode === "ic" ? r.ic : r.ib, "A");
-  }
-
-  // Simple illustrative symbol — no bias network, just the transistor and
-  // the three currents meeting Kirchhoff's current law at its terminals
-  // (Ib in + Ic in = Ie out). Reuses the same base-bar/45°-lead geometry
-  // as the biasing and switch tools' transistors.
+  // The transistor and the three currents meeting at its terminals (Ib in
+  // + Ic in = Ie out, for an NPN). The current being solved for is drawn
+  // green, as the calculated part is in every tool; when hFE is solved the
+  // transistor's own label is.
   function diagram() {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
-    // Same computed arrowhead as the biasing/switch tools' transistors —
-    // not hand-placed this time either, after the emitter arrow's
-    // direction came out wrong from eyeballing it once already.
+    const calc = "#5DCAA5";
+    const col = (name) => (state.mode === name ? calc : wire);
     function arrow(x1, y1, x2, y2, inward) {
       const t = 0.56, size = 7.5;
       let ux = x2 - x1, uy = y2 - y1;
@@ -11845,23 +11835,22 @@ function renderTransistorExample(domain, tool, favId) {
       const b2x = px - ux * size * 0.5 - perpX * size * 0.42, b2y = py - uy * size * 0.5 - perpY * size * 0.42;
       return `${tipX.toFixed(1)},${tipY.toFixed(1)} ${b1x.toFixed(1)},${b1y.toFixed(1)} ${b2x.toFixed(1)},${b2y.toFixed(1)}`;
     }
-    // NPN: current flows OUT of the emitter, so the arrow points outward
-    // (away from the base bar, toward the tip) — never PNP's inward arrow.
+    // NPN: current flows out of the emitter, so its arrow points outward.
     const emitterArrow = arrow(70, 47, 80, 57, false);
     return `<svg width="150" height="90" viewBox="0 0 150 90" fill="none">
       <path d="M70 25 V57" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
       <path d="M70 35 L80 25" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
       <path d="M70 47 L80 57" stroke="${comp}" stroke-width="1.8" stroke-linecap="round"/>
       <polygon points="${emitterArrow}" fill="${comp}"/>
-      <text x="96" y="45" fill="${comp}" font-size="12" font-weight="600">Q1</text>
+      <text x="96" y="45" fill="${state.mode === "hfe" ? calc : comp}" font-size="12" font-weight="600">${state.mode === "hfe" ? "hFE" : "Q1"}</text>
 
-      <path d="M80 6 V25" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <polygon points="80,25 74,15 86,15" fill="${wire}"/>
-      <text x="88" y="14" fill="${wire}" font-size="12" font-weight="600">Ic</text>
+      <path d="M80 6 V25" stroke="${col("ic")}" stroke-width="1.6" stroke-linecap="round"/>
+      <polygon points="80,25 74,15 86,15" fill="${col("ic")}"/>
+      <text x="88" y="14" fill="${col("ic")}" font-size="12" font-weight="600">Ic</text>
 
-      <path d="M28 41 H68" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <polygon points="70,41 60,35 60,47" fill="${wire}"/>
-      <text x="30" y="33" fill="${wire}" font-size="12" font-weight="600">Ib</text>
+      <path d="M28 41 H68" stroke="${col("ib")}" stroke-width="1.6" stroke-linecap="round"/>
+      <polygon points="70,41 60,35 60,47" fill="${col("ib")}"/>
+      <text x="30" y="33" fill="${col("ib")}" font-size="12" font-weight="600">Ib</text>
 
       <path d="M80 57 V76" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <polygon points="80,78 74,68 86,68" fill="${wire}"/>
@@ -11869,52 +11858,72 @@ function renderTransistorExample(domain, tool, favId) {
     </svg>`;
   }
 
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const label = { ic: "Collector current Ic", ib: "Base current Ib", hfe: "Current gain hFE" }[state.mode];
+    const value = state.mode === "hfe" ? trim(Number(r.hfe.toPrecision(4))) : siFormat(state.mode === "ic" ? r.ic : r.ib, "A");
+    return `
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${label}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="solved">${value}</span></div>
+        <div class="result-sub">Ib ${siFormat(r.ib, "A")} &nbsp;·&nbsp; Ic ${siFormat(r.ic, "A")} &nbsp;·&nbsp; hFE ${trim(Number(r.hfe.toPrecision(4)))}</div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(2,1fr);">
+        ${cell("Emitter current Ie", `<span data-res="ie">${siFormat(r.ie, "A")}</span>`)}
+        ${cell("α = Ic / Ie", `<span data-res="alpha">${Number(r.alpha.toFixed(4))}</span>`)}
+      </div>`;
+  }
+
   function refresh() {
-    const r = compute();
-    app.querySelector('[data-res="solved"]').textContent = solvedValueText(r);
-    app.querySelector('[data-res="ie"]').textContent = `Ie = ${siFormat(r.ie, "A")}`;
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
   }
 
   function paint() {
     const r = compute();
+    const fields = {
+      hfe: opampField("hFE (current gain)", "tx-hfe", state.hfe, ""),
+      ib: opampField("Base current Ib", "tx-ib", state.ib, opampUnitSelect("tx-ib-unit", Object.keys(IB_UNITS), state.ibUnit)),
+      ic: opampField("Collector current Ic", "tx-ic", state.ic, opampUnitSelect("tx-ic-unit", Object.keys(IC_UNITS), state.icUnit)),
+    };
+    const known = ["hfe", "ib", "ic"].filter((k) => k !== state.mode);
     app.innerHTML = `
       ${calcHeader(tool, favId, "Ic = hFE × Ib, and Ie = Ib + Ic")}
 
-      ${pillRow([["ic", "Ic"], ["ib", "Ib"], ["hfe", "hFE"]], state.mode, domain.bg)}
+      ${pillRow([["ic", "Find Ic"], ["ib", "Find Ib"], ["hfe", "Find hFE"]], state.mode, domain.bg)}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
-      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
-      ${inputsFor(state.mode).map(fieldHTML).join("")}
+      <div class="field-pair">${known.map((k) => fields[k]).join("")}</div>
 
-      <div class="section-label" style="color:#5DCAA5">Result</div>
-      <div class="result-field">
-        <div class="result-head">
-          <span class="label">${solvedLabel()}</span>
-          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
-        </div>
-        <div class="result-value"><span class="num" data-res="solved">${solvedValueText(r)}</span></div>
-        <div class="result-sub" data-res="ie">Ie = ${siFormat(r.ie, "A")}</div>
-      </div>
+      <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["hFE = Ic / Ib", "Ic = hFE × Ib", "Ie = Ib + Ic"],
-        "hFE (also called β) varies a lot even within one part number — a 2N2222 datasheet spans roughly 100–300, a BC547 spans 110–800 across its gain grades. Use the datasheet's guaranteed minimum for design margin, not a typical figure."
+        ["Ic = hFE × Ib", "Ie = Ib + Ic", "α = Ic / Ie = hFE / (hFE + 1)"],
+        "A bipolar transistor lets a small current into its base (Ib) control a much larger one through its collector (Ic). The ratio is the DC current gain, hFE (also written β): Ic = hFE × Ib. Both currents leave through the emitter, so Ie = Ib + Ic, and α = Ic / Ie is the fraction of it that comes through the collector — just under 1. For a PNP the same holds with all three currents reversed. hFE is not a fixed number: it varies between pieces of the same type, with the current and with temperature, so datasheets give a range at a stated current. A BC547 (Fairchild) is sold in classes A 110–220, B 200–450 and C 420–800 at 2 mA; a 2N3904 is 100–300 at 10 mA but only 60 or more at 50 mA. Design on the minimum: to be sure of a collector current, supply the base current the minimum gain needs. A transistor that is fully on (saturated, as a switch) passes less than hFE × Ib, set by its load instead."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.mode = m; setPref(C, "mode", m); paint(); });
 
-    app.querySelectorAll("input[data-var]").forEach((input) => {
-      input.oninput = () => {
-        const name = input.dataset.var;
-        const v = parseFloat(input.value);
-        if (isFinite(v)) { state[name] = v; refresh(); }
-      };
+    [["tx-hfe", "hfe"], ["tx-ib", "ib"], ["tx-ic", "ic"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = () => { const v = parseFloat(el.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    app.querySelectorAll("select[data-unit]").forEach((sel) => {
-      sel.onchange = () => { state[sel.dataset.unit + "Unit"] = sel.value; refresh(); };
+    [["tx-ib-unit", "ibUnit"], ["tx-ic-unit", "icUnit"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.onchange = () => { state[name] = el.value; setPref(C, name, el.value); refresh(); };
     });
   }
 
