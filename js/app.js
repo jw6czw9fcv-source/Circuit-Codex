@@ -12199,79 +12199,93 @@ function renderMosfetBias(domain, tool, favId) {
 // story that made MOSFET biasing's Vg divider simpler than a BJT's — here
 // that means no Rb at all, just a plain wire to the gate.
 function renderMosfetSwitch(domain, tool, favId) {
-  const state = {
-    device: "mosfet",
-    vdd: 12, vddUnit: "V",
-    vdrive: 10, vdriveUnit: "V",
-    vth: 2, vthUnit: "V",
-    rload: 100, rloadUnit: "Ω",
-    rdson: 50, rdsonUnit: "mΩ",
-    vce0: 0.8, vce0Unit: "V",
-    rce: 150, rceUnit: "mΩ",
+  const C = "mosfet-switch";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
+  const RON_UNITS = { "mΩ": 1e-3, "Ω": 1 };
+  // From the datasheets, read for this review: the guaranteed (maximum)
+  // Rds(on) and the gate voltage it is guaranteed at, the highest threshold
+  // a piece may have, and the junction-to-ambient thermal resistance with
+  // no heatsink where the sheet gives it.
+  //   2N7000: Zetex, issue 2 (1994) — 5 Ω at 10 V, Vgs(th) 0.8–3.0 V.
+  //   IRLZ44: Vishay 91328 rev. D (2021) — 28 mΩ at 5 V (39 mΩ at 4 V),
+  //     Vgs(th) 1.0–2.0 V, 62 °C/W.
+  //   IRF540N: Infineon rev. 2.1 — 44 mΩ at 10 V, Vgs(th) 2.0–4.0 V,
+  //     62 °C/W.
+  const PARTS = {
+    "2N7000": { rds: 5, rdsUnit: "Ω", at: 10, vthMax: 3.0, rthja: null },
+    IRLZ44: { rds: 28, rdsUnit: "mΩ", at: 5, vthMax: 2.0, rthja: 62 },
+    IRF540N: { rds: 44, rdsUnit: "mΩ", at: 10, vthMax: 4.0, rthja: 62 },
   };
+  const PART_KEYS = [...Object.keys(PARTS), "custom"];
 
-  const R_NAMES = ["rload", "rdson", "rce"];
-
-  function si(name) {
-    const units = R_NAMES.includes(name) ? OHM_UNITS : VOLT_UNITS;
-    return state[name] * units[state[name + "Unit"]];
+  const state = {
+    device: pref(C, "device", "mosfet", ["mosfet", "igbt"]),
+    part: pref(C, "part", "IRF540N", PART_KEYS),
+    vdd: 12, vdrive: 10,
+    rload: 12, rloadUnit: pref(C, "rloadUnit", "Ω", R_UNITS),
+    rdson: 44, rdsonUnit: "mΩ", rated: 10,
+    vge: 15, vce0: 0.8, rce: 150, rceUnit: "mΩ", ratedGe: 15,
+  };
+  function loadPart() {
+    const p = PARTS[state.part];
+    if (p) Object.assign(state, { rdson: p.rds, rdsonUnit: p.rdsUnit, rated: p.at });
   }
+  loadPart();
 
-  // MOSFET: Rds(on) is a plain resistance, so I = Vdd/(Rload+Rds,on) solves
-  // directly. IGBT: the datasheet Vce–Ic curve is linearized as a knee
-  // voltage plus a slope — Vce = V0 + Ic×Rce — the standard tangent-line
-  // model used in Infineon/ST application notes; that's still linear in Ic,
-  // so it also solves directly (no quadratic like biasing's square law).
+  // Each example picks a part and sets the supply, the load and the drive.
+  const example = (part, vdd, rload, vdrive) => () => {
+    Object.assign(state, { device: "mosfet", part, vdd, rload, rloadUnit: "Ω", vdrive });
+    loadPart();
+    paint();
+  };
+  useExamples([
+    { title: "1 A load with an IRF540N", note: "44 mΩ at 10 V of drive: 1 A loses only 44 mW in the MOSFET, about 3 °C of warming.",
+      apply: example("IRF540N", 12, 12, 10) },
+    { title: "IRF540N from a 3.3 V pin", note: "Its threshold can be as high as 4 V: a 3.3 V output may not turn it on at all.",
+      apply: example("IRF540N", 12, 12, 3.3) },
+    { title: "Logic-level IRLZ44 at 6 A", note: "Rated 28 mΩ at 5 V: 5.9 A loses 0.98 W, about 61 °C above the air without a heatsink.",
+      apply: example("IRLZ44", 12, 2, 5) },
+  ]);
+
+  // A switch that is fully on is a small resistance (MOSFET: Rds(on)) or a
+  // small knee voltage plus a resistance (IGBT: Vce = V0 + Ic × Rce, the
+  // usual straight-line fit of the datasheet's Vce–Ic curve). Either way
+  // the current follows directly. Those on-state figures are guaranteed
+  // only at the gate voltage the datasheet states — not just above the
+  // threshold, which is where the device merely starts to conduct.
   function compute() {
-    const vdd = si("vdd"), rload = si("rload"), vdrive = si("vdrive"), vth = si("vth");
     const isIgbt = state.device === "igbt";
-
-    if (!(vdd > 0) || !(rload > 0)) {
-      return { problem: "Vdd and Rload must be greater than zero." };
-    }
-
-    if (vdrive <= vth) {
-      return { problem: "", region: "off", i: 0, von: vdd, pDevice: 0, pLoad: 0, eff: 0, margin: vdrive - vth };
-    }
-
+    const vdd = state.vdd, vdrive = isIgbt ? state.vge : state.vdrive;
+    const rload = state.rload * DIVIDER_R_UNITS[state.rloadUnit];
+    if (!(vdd > 0) || !(rload > 0)) return { problem: "Vdd and the load must be greater than zero." };
+    if (!(vdrive >= 0)) return { problem: "The gate drive must be zero or more." };
     let i, von, pDevice;
+    const rated = isIgbt ? state.ratedGe : state.rated;
     if (isIgbt) {
-      const v0 = si("vce0"), rce = si("rce");
-      if (!(v0 >= 0) || !(rce >= 0)) return { problem: "V0 and Rce must be zero or greater." };
-      if (vdd <= v0) {
-        // Supply can't even clear the device's own knee voltage — no current
-        // path exists, so the full Vdd sits across the device, same as the
-        // gate-undriven "off" case above.
-        return { problem: "", region: "off", i: 0, von: vdd, pDevice: 0, pLoad: 0, eff: 0, margin: vdrive - vth };
-      }
+      const v0 = state.vce0, rce = state.rce * RON_UNITS[state.rceUnit];
+      if (!(v0 >= 0) || !(rce >= 0)) return { problem: "V0 and Rce must be zero or more." };
+      if (vdd <= v0) return { problem: "Vdd must be above the IGBT's knee voltage V0, or no current can flow." };
       i = (vdd - v0) / (rload + rce);
       von = v0 + i * rce;
       pDevice = von * i;
     } else {
-      const rdson = si("rdson");
-      if (!(rdson >= 0)) return { problem: "Rds(on) must be zero or greater." };
+      const rdson = state.rdson * RON_UNITS[state.rdsonUnit];
+      if (!(rdson >= 0)) return { problem: "Rds(on) must be zero or more." };
       i = vdd / (rload + rdson);
       von = i * rdson;
       pDevice = i * i * rdson;
     }
-
+    const part = !isIgbt ? PARTS[state.part] : null;
+    // Drive level: at or above the rated voltage the on-state figure holds;
+    // below it the device conducts less well than that; at or below the
+    // highest threshold a piece may have, it may not turn on at all.
+    const drive = part && vdrive <= part.vthMax ? "none" : vdrive >= rated ? "full" : "partial";
     const pLoad = i * i * rload;
-    const eff = pLoad + pDevice > 0 ? (pLoad / (pLoad + pDevice)) * 100 : 0;
-    const margin = vdrive - vth;
-    // Rule of thumb, not a computed physical limit (like the BJT switch
-    // tool's 5–10× overdrive note): datasheet Rds(on)/Vce(sat) numbers are
-    // measured at a stated drive voltage, several volts above threshold —
-    // too little headroom and the real on-state number runs higher than
-    // this figure assumes.
-    const region = i <= 0 ? "off" : margin < 2 ? "marginal" : "on";
-
-    return { problem: "", region, i, von, pDevice, pLoad, eff, margin };
-  }
-
-  function regionInfo(region) {
-    if (region === "on") return { label: "ON — fully enhanced", color: "var(--result-text)", bg: "var(--result-border)" };
-    if (region === "marginal") return { label: "ON — marginal gate drive", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
-    return { label: "OFF", color: "var(--text-secondary)", bg: "var(--card-border)" };
+    return {
+      problem: "", isIgbt, i, von, pDevice, pLoad, drive, rated, part, vdrive,
+      eff: (pLoad / (pLoad + pDevice)) * 100,
+      rise: part && part.rthja ? pDevice * part.rthja : null,
+    };
   }
 
   // MOSFET core reuses the biasing tool's channel/body-arrow geometry
@@ -12367,19 +12381,36 @@ function renderMosfetSwitch(domain, tool, favId) {
     </div>`;
   }
 
+  // The load current first and large, with whether the gate drive makes
+  // the on-state figure hold, then where the power goes.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const info = regionInfo(r.region);
+    const gate = r.isIgbt ? "Vge" : "Vgs";
+    const stateText = r.drive === "full" ? "fully on" : r.drive === "partial" ? "on, but not fully" : "may not turn on";
+    const warn = r.drive === "none"
+      ? `<div class="error-text" data-res="warn">A ${trim(r.vdrive)} V drive is not above the highest threshold this part may have (${trim(r.part.vthMax)} V): some pieces would not turn on at all, and the rest only barely. Use a logic-level MOSFET, or a gate driver.</div>`
+      : r.drive === "partial"
+        ? `<div class="error-text" data-res="warn">The ${r.isIgbt ? "Vce(sat)" : "Rds(on)"} entered is guaranteed only at ${gate} = ${trim(r.rated)} V; at ${trim(r.vdrive)} V it is higher, so the switch heats more than shown. Drive the gate to ${trim(r.rated)} V, or choose a part rated at your drive voltage.</div>`
+        : r.rise !== null && r.rise > 100
+          ? `<div class="error-text" data-res="warn">Without a heatsink the MOSFET would run about ${Math.round(r.rise)} °C above the surrounding air: it needs a heatsink.</div>`
+          : "";
     return `
-      <div class="section-label" style="color:#5DCAA5">Switch state
-        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      <div class="section-label" style="color:#5DCAA5">Switch</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Load current</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="i">${siFormat(r.i, "A")}</span></div>
+        <div class="result-sub"><span data-res="state">${stateText}</span> &nbsp;·&nbsp; ${r.isIgbt ? "Vce" : "Vds"} <span data-res="von">${siFormat(r.von, "V")}</span></div>
       </div>
-      <div class="eseries-grid">
-        ${cell("I", siFormat(r.i, "A"))}
-        ${cell("Von", siFormat(r.von, "V"))}
-        ${cell("P (device)", siFormat(r.pDevice, "W"))}
-        ${cell("Efficiency", `${trim(r.eff)}%`)}
-      </div>`;
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(4,1fr);">
+        ${cell("Switch heat", `<span data-res="pdev">${siFormat(r.pDevice, "W")}</span>`)}
+        ${cell("Load power", `<span data-res="pload">${siFormat(r.pLoad, "W")}</span>`)}
+        ${cell("Efficiency", `<span data-res="eff">${Number(r.eff.toFixed(2))}%</span>`)}
+        ${cell("No heatsink", `<span data-res="rise">${r.rise === null ? "—" : `+${Number(r.rise.toPrecision(2))} °C`}</span>`)}
+      </div>
+      ${warn}`;
   }
 
   function refresh() {
@@ -12389,99 +12420,81 @@ function renderMosfetSwitch(domain, tool, favId) {
   function paint() {
     const r = compute();
     const isIgbt = state.device === "igbt";
-    const gateLabel = isIgbt ? "Vge (drive)" : "Vgs (drive)";
-    const thLabel = isIgbt ? "Vge(th)" : "Vgs(th)";
-
+    const vField = (label, id, value) => opampField(label, id, value, `<span class="unit-fixed">V</span>`);
+    const loadField = opampField("Load", "ms-rload", state.rload, opampUnitSelect("ms-rload-unit", R_UNITS, state.rloadUnit));
     app.innerHTML = `
-      ${calcHeader(tool, favId, isIgbt ? "IGBT low-side switch — driving a resistive load" : "MOSFET low-side switch — driving a resistive load")}
+      ${calcHeader(tool, favId, isIgbt ? "An IGBT switching the ground side of a load" : "A MOSFET switching the ground side of a load")}
 
       ${pillRow([["mosfet", "MOSFET"], ["igbt", "IGBT"]], state.device, domain.bg)}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram(isIgbt)}</div>
 
+      ${isIgbt ? `
       <div class="field-pair">
-        <div class="field">
-          <label>Vdd</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ms-vdd" value="${state.vdd}" />
-            <select id="ms-vdd-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vddUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Rload</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ms-rload" value="${state.rload}" />
-            <select id="ms-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${vField("Vdd", "ms-vdd", state.vdd)}
+        ${loadField}
+        ${vField("Vge (drive)", "ms-vge", state.vge)}
       </div>
       <div class="field-pair">
+        ${vField("V0 (knee)", "ms-vce0", state.vce0)}
+        ${opampField("Rce", "ms-rce", state.rce, opampUnitSelect("ms-rce-unit", Object.keys(RON_UNITS), state.rceUnit))}
+        ${vField("rated at Vge", "ms-ratedge", state.ratedGe)}
+      </div>` : `
+      <div class="field-pair">
         <div class="field">
-          <label>${gateLabel}</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ms-vdrive" value="${state.vdrive}" />
-            <select id="ms-vdrive-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vdriveUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
+          <label>Part</label>
+          <select id="ms-part">${PART_KEYS.map((k) => `<option value="${k}" ${state.part === k ? "selected" : ""}>${k === "custom" ? "Custom" : k}</option>`).join("")}</select>
         </div>
-        <div class="field">
-          <label>${thLabel}</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ms-vth" value="${state.vth}" />
-            <select id="ms-vth-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vthUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${vField("Vdd", "ms-vdd", state.vdd)}
+        ${loadField}
       </div>
-      ${isIgbt
-        ? `<div class="field-pair">
-            <div class="field">
-              <label>V0 (Vce0)</label>
-              <div class="field-row">
-                <input type="number" inputmode="decimal" step="any" id="ms-vce0" value="${state.vce0}" />
-                <select id="ms-vce0-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vce0Unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-              </div>
-            </div>
-            <div class="field">
-              <label>Rce</label>
-              <div class="field-row">
-                <input type="number" inputmode="decimal" step="any" id="ms-rce" value="${state.rce}" />
-                <select id="ms-rce-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rceUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-              </div>
-            </div>
-          </div>`
-        : `<div class="field-pair">
-            <div class="field">
-              <label>Rds(on)</label>
-              <div class="field-row">
-                <input type="number" inputmode="decimal" step="any" id="ms-rdson" value="${state.rdson}" />
-                <select id="ms-rdson-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rdsonUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-              </div>
-            </div>
-          </div>`
-      }
+      <div class="field-pair">
+        ${vField("Vgs (drive)", "ms-vdrive", state.vdrive)}
+        ${opampField("Rds(on)", "ms-rdson", state.rdson, opampUnitSelect("ms-rdson-unit", Object.keys(RON_UNITS), state.rdsonUnit))}
+        ${vField("rated at Vgs", "ms-rated", state.rated)}
+      </div>`}
 
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
         isIgbt
-          ? ["I = (Vdd − V0) / (Rload + Rce)", "Von = V0 + I×Rce", "P = Von × I"]
-          : ["I = Vdd / (Rload + Rds,on)", "Von = I × Rds,on", "P = I² × Rds,on"],
+          ? ["I = (Vdd − V0) / (Rload + Rce)", "Vce = V0 + I × Rce", "Switch heat = Vce × I"]
+          : ["I = Vdd / (Rload + Rds(on))", "Vds = I × Rds(on)", "Switch heat = I² × Rds(on)", "Rise without heatsink = heat × RθJA"],
         isIgbt
-          ? "V0 and Rce come from linearizing the datasheet Vce–Ic curve — a good fit near rated current, less so well below it. Like a MOSFET, the gate draws no DC current; the drive voltage just needs to comfortably clear Vge(th)."
-          : "Gate draws no DC current, so unlike a BJT's base there's no series resistor setting the drive — but Rds(on) is only valid near the Vgs it was datasheet-tested at; too little overdrive above Vgs(th) and the real on-resistance runs higher than this number."
+          ? "An IGBT, like a MOSFET, is turned on by its gate voltage and draws no steady gate current; it suits high voltages. When fully on it drops a knee voltage V0 plus a small resistance Rce — a straight-line fit of the datasheet's Vce–Ic curve, good near its rated current. That on-state voltage is specified at a stated gate voltage, usually 15 V: drive below it and the IGBT drops more and heats more. A coil load needs a diode across it."
+          : "A MOSFET used as a switch is turned on by the voltage on its gate, which draws no steady current. Fully on, it behaves as a small resistance, Rds(on), so the load current is Vdd / (Rload + Rds(on)) and the MOSFET turns I² × Rds(on) into heat. The trap is the gate voltage: the threshold Vgs(th) is only where the MOSFET starts to conduct (a fraction of a milliamp), while Rds(on) is guaranteed only at a stated, higher gate voltage — 10 V for a standard part, 4.5 or 5 V for a logic-level one. A 3.3 V microcontroller pin therefore needs a logic-level MOSFET rated at that voltage, or a gate driver. Choosing a part fills in its datasheet figures. Without a heatsink a TO-220 part warms by about 62 °C per watt (its RθJA); much above that it needs one. A relay or motor coil needs a diode across it."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.device = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.device = m; setPref(C, "device", m); paint(); });
 
-    [["ms-vdd", "vdd"], ["ms-rload", "rload"], ["ms-vdrive", "vdrive"], ["ms-vth", "vth"], ["ms-vce0", "vce0"], ["ms-rce", "rce"], ["ms-rdson", "rdson"]].forEach(([id, name]) => {
+    const partSel = document.getElementById("ms-part");
+    if (partSel) partSel.onchange = () => { state.part = partSel.value; setPref(C, "part", state.part); loadPart(); paint(); };
+    // Typing a part's own figures turns the choice into Custom.
+    const toCustom = () => {
+      if (state.part === "custom" || !partSel) return;
+      state.part = "custom";
+      setPref(C, "part", "custom");
+      partSel.value = "custom";
+    };
+    [["ms-vdd", "vdd"], ["ms-rload", "rload"], ["ms-vdrive", "vdrive"], ["ms-rdson", "rdson", true], ["ms-rated", "rated", true],
+      ["ms-vge", "vge"], ["ms-vce0", "vce0"], ["ms-rce", "rce"], ["ms-ratedge", "ratedGe"]].forEach(([id, name, own]) => {
       const el = document.getElementById(id);
-      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+      if (el) el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (!isFinite(v)) return;
+        state[name] = v;
+        if (own) toCustom();
+        refresh();
+      };
     });
-    [["ms-vdd-unit", "vddUnit"], ["ms-rload-unit", "rloadUnit"], ["ms-vdrive-unit", "vdriveUnit"], ["ms-vth-unit", "vthUnit"], ["ms-vce0-unit", "vce0Unit"], ["ms-rce-unit", "rceUnit"], ["ms-rdson-unit", "rdsonUnit"]].forEach(([id, name]) => {
-      const el = document.getElementById(id);
-      if (el) el.onchange = (e) => { state[name] = e.target.value; refresh(); };
-    });
+    const rl = document.getElementById("ms-rload-unit");
+    rl.onchange = () => { state.rloadUnit = rl.value; setPref(C, "rloadUnit", rl.value); refresh(); };
+    const ru = document.getElementById("ms-rdson-unit");
+    if (ru) ru.onchange = () => { state.rdsonUnit = ru.value; toCustom(); refresh(); };
+    const rc = document.getElementById("ms-rce-unit");
+    if (rc) rc.onchange = () => { state.rceUnit = rc.value; refresh(); };
   }
 
   paint();

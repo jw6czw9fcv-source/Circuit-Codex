@@ -50,6 +50,7 @@ will key on, since that is the id the app already holds for each tool.
 - Transistors (BJT) → [BJT as a switch](#bjt-as-a-switch)
 - Transistors (BJT) → [BJT currents](#bjt-currents)
 - MOSFET / IGBT → [MOSFET biasing](#mosfet-biasing)
+- MOSFET / IGBT → [MOSFET switching](#mosfet-switching)
 - Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
@@ -2660,6 +2661,127 @@ The review made these changes:
 - It rewrote the note and added examples.
 - A global layout fix made three-to-a-row fields slightly tighter, so a
   three-digit value beside a unit is no longer cut on a 375 px phone.
+
+[↑ Index](#index)
+
+---
+
+<a id="mosfet-switch"></a>
+## MOSFET switching
+
+`calc: mosfet-switch` · Active & semiconductor devices › MOSFET / IGBT
+
+### What it computes
+
+For a MOSFET or an IGBT switching the ground side of a resistive load,
+fully on, it gives:
+- the load current and the voltage left across the switch;
+- the heat in the switch, the power in the load and the efficiency;
+- for parts whose datasheet gives it, how much the switch warms without a
+  heatsink;
+- whether the gate drive is enough for the on-state figures to hold.
+
+### Source
+
+Device data read from the datasheets themselves:
+
+| Part | Rds(on) max | at Vgs | Vgs(th) | RθJA (no heatsink) |
+|---|---|---|---|---|
+| 2N7000 (Zetex, issue 2, 1994) | 5 Ω | 10 V | 0.8–3.0 V at 1 mA | not used |
+| IRLZ44 (Vishay 91328 rev. D, 2021) | 28 mΩ | 5 V | 1.0–2.0 V at 250 µA | 62 °C/W |
+| IRF540N (Infineon rev. 2.1) | 44 mΩ | 10 V | 2.0–4.0 V at 250 µA | 62 °C/W |
+
+The IRLZ44 is also specified at 39 mΩ at Vgs 4 V. The IGBT model, a knee
+voltage V0 plus a slope resistance Rce, is the usual straight-line fit of
+an IGBT datasheet's Vce–Ic curve. Its default values are illustrative,
+not from a particular part.
+
+### What it means
+
+A MOSFET used as a switch is turned on by the voltage on its gate, which
+draws no steady current.
+
+- **Fully on** — it behaves as a small resistance, Rds(on). The load
+  current is set almost entirely by the load, and the MOSFET turns
+  I² × Rds(on) into heat.
+- **The gate-voltage trap:**
+  - the **threshold** Vgs(th) is only where the MOSFET *starts* to
+    conduct: 250 µA for the IRF540N, 1 mA for the 2N7000;
+  - **Rds(on) is guaranteed only at a stated, higher gate voltage** —
+    10 V for a standard part, 4.5 or 5 V for a logic-level one;
+  - a 3.3 V microcontroller pin cannot properly drive an IRF540N. Its
+    threshold alone may be up to 4 V, so some pieces would not turn on at
+    all. Use a logic-level part rated at your drive voltage, or a gate
+    driver.
+- **The three drive verdicts:**
+  - **fully on** — the drive reaches the voltage the on-resistance is
+    rated at;
+  - **on, but not fully** — the drive is above the highest threshold but
+    below that voltage, so the real resistance and heat are higher than
+    shown;
+  - **may not turn on** — the drive does not exceed the highest
+    threshold the part may have.
+- **Heat without a heatsink** — the heat × RθJA: about 62 °C per watt for
+  these TO-220 parts. The tool warns above 100 °C of rise, a rule of thumb
+  that leaves room for warm surroundings. The IRF540N's datasheet allows
+  175 °C at the junction; check each part's own limit.
+- **IGBT** — like a MOSFET, driven by its gate voltage, and suited to
+  high voltages. Fully on, it drops a knee voltage plus a small
+  resistance. That figure is specified at a stated gate voltage, usually
+  15 V.
+- **Coils** — a relay or motor coil needs a diode across it, as with any
+  switch.
+
+Choosing a part fills in its datasheet figures. Typing your own switches
+it to Custom.
+
+### Why the formulas are these
+
+    MOSFET:  I = Vdd / (Rload + Rds(on)),   Vds = I × Rds(on),
+             heat = I² × Rds(on)
+    IGBT:    I = (Vdd − V0) / (Rload + Rce), Vce = V0 + I × Rce,
+             heat = Vce × I
+    Rise without heatsink = heat × RθJA
+
+### Assumptions and limits
+
+- **Fully-on state only.** Switching losses, the energy lost during each
+  turn-on and turn-off, are not calculated. They matter at high switching
+  frequencies (PWM).
+- **Rds(on) at 25 °C.** It rises as the MOSFET warms (each datasheet
+  plots it against temperature), so a hot switch dissipates more than
+  shown.
+- **A resistive load** on the ground side (low-side switch).
+
+### What it deliberately does not do
+
+- Gate-driver design, gate charge and switching speed are not covered.
+- High-side switching (P-channel, or N-channel with a driver) is not
+  covered.
+
+### How it was checked
+
+These figures were also computed in a separate calculation.
+- **IRF540N, 12 V, 12 Ω load, 10 V drive:** 996.3 mA, 43.68 mW in the
+  MOSFET, +2.7 °C, 99.63 % efficient.
+- **The same from a 3.3 V pin:** may not turn on.
+- **6 V of drive:** on, but not fully.
+- **IRLZ44, 12 V, 2 Ω, 5 V drive:** 5.917 A, 980.4 mW, +61 °C.
+- **IRF540N with a 1 Ω load:** about 5.8 W, so the tool says a heatsink
+  is needed.
+- **IGBT, 12 V, 12 Ω, V0 0.8 V, Rce 150 mΩ, 15 V drive:** 921.8 mA, Vce
+  938.3 mV.
+
+The review made these changes:
+- The on-state check called the switch fine once the drive was 2 V above
+  the threshold. It now compares the drive with the gate voltage the
+  datasheet guarantees Rds(on) or Vce(sat) at, and with the part's highest
+  threshold.
+- It added datasheet parts, and the temperature rise without a heatsink.
+- It put the load current first and large.
+- It gives the IGBT its own 15 V drive.
+- It limited the units to real ones and remembers them.
+- It rewrote the note in plain words and added examples.
 
 [↑ Index](#index)
 
