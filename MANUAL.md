@@ -47,6 +47,7 @@ will key on, since that is the id the app already holds for each tool.
 - Diodes → [Diode forward voltage](#diode-forward-voltage)
 - Diodes → [LED series resistor](#led-series-resistor)
 - Transistors (BJT) → [BJT biasing](#bjt-biasing)
+- Transistors (BJT) → [BJT as a switch](#bjt-as-a-switch)
 - Rectifiers → [Half-wave rectifier](#half-wave-rectifier)
 - Rectifiers → [Bridge rectifier](#bridge-rectifier)
 - Rectifiers → [Center-tap rectifier](#center-tap-rectifier)
@@ -2337,6 +2338,129 @@ The review made these changes:
 - It rewrote the note in plain words and added examples.
 - The tool was renamed BJT biasing, on Pierre's choice, to fit beside the
   bulb.
+
+[↑ Index](#index)
+
+---
+
+<a id="transistor-switch"></a>
+## BJT as a switch
+
+`calc: transistor-switch` · Active & semiconductor devices › Transistors (BJT)
+
+### What it computes
+
+For a bipolar transistor switching a load, it gives:
+- the load current and whether the transistor is fully on, partly on or
+  off;
+- the voltage left across the transistor and the heat it produces;
+- the base current;
+- the overdrive, which is how much spare base drive there is;
+- the largest base resistor that drives the transistor the way datasheets
+  test it.
+
+The transistor is an NPN on the ground side of the load, or a PNP on the
+supply side.
+
+### Source
+
+Saturation data read from the datasheets themselves:
+- **Diodes Inc. MMBT3904** (DS30036 rev. 27, 2025):
+  - VCE(sat) at most 0.2 V at IC = 10 mA with IB = 1 mA, and 0.3 V at
+    50 mA with 5 mA;
+  - hFE 100–300 at 10 mA;
+  - collector current at most 200 mA.
+- **ST 2N3906 PNP** (2003): VCE(sat) at most 0.25 V at 10 mA with 1 mA.
+
+The saturation figures are given with the base current at a **tenth** of
+the collector current. The tool's "Rb for Ib = Ic/10" applies that same
+condition, and it uses 0.2 V for Vce when the transistor is fully on.
+
+### What it means
+
+A transistor used as a switch should be either fully off or fully on,
+never in between.
+
+- **Base current** — Vin, through Rb, drives a small current into the
+  base: (Vin − Vbe) / Rb, with Vbe about 0.6–0.7 V.
+- **Gain (hFE)** — the transistor then allows up to hFE times that
+  current through the load. The load can be a relay coil, a lamp or an
+  LED string, entered as its resistance.
+- **Fully on (saturated)** — the load would accept less current than
+  that, so the transistor drops only about 0.2 V and stays cool. The load
+  current is then set by the load alone: (Vcc − 0.2 V) / R.
+- **Partly on** — there is not enough base current. The transistor drops
+  a large voltage and turns the difference into heat. This is the fault to
+  avoid.
+- **Overdrive** — hFE × Ib divided by the current the load needs.
+  - hFE varies about 3:1 between transistors of one type, and falls when
+    cold, so the design needs spare base drive.
+  - The tool flags overdrive below 2×. That threshold is a rule of thumb.
+  - The surest design follows the datasheet test condition: base current
+    at a tenth of the collector current, whatever the gain. The "Rb for
+    Ib = Ic/10" cell gives the largest Rb that achieves it.
+- **Coils** — a relay or motor coil needs a diode across it. Otherwise
+  the voltage spike when the current stops can destroy the transistor.
+- **NPN or PNP:**
+  - **NPN** — switches the ground side of the load, and turns on with a
+    high Vin.
+  - **PNP** — switches the supply side, and turns on when its base is
+    pulled low. To turn it off, the base must come back up to Vcc. A
+    3.3 V or 5 V logic pin cannot do that on a higher supply; drive the
+    PNP's base with an NPN instead.
+
+### Why the formulas are these
+
+    Ib = (Vin − Vbe) / Rb                (NPN)
+    Ib = (Vcc − Vin − Vbe) / Rb          (PNP)
+    Ic(sat) = (Vcc − 0.2 V) / Rload
+
+- **Fully on** — if hFE × Ib ≥ Ic(sat), the transistor is saturated and
+  Ic = Ic(sat).
+- **Partly on** — otherwise Ic = hFE × Ib, and Vce = Vcc − Ic × Rload.
+- **Heat** — the transistor dissipates Vce × Ic.
+- **Largest Rb** — Rb = (Vin − Vbe) / (Ic(sat) / 10), and the same with
+  Vcc − Vin − Vbe for a PNP.
+
+### Assumptions and limits
+
+- **A resistive load.** For a coil, use its DC resistance, and fit the
+  diode.
+- **Steady state.** Switching speed is not calculated, and neither is the
+  storage time a saturated transistor takes to turn off.
+- **Ratings.** The transistor's own limits are not checked: a 2N3904 or
+  MMBT3904 is rated 200 mA. Heavier loads need a bigger transistor or a
+  MOSFET.
+
+### What it deliberately does not do
+
+- MOSFET switches have their own tool.
+- Darlington pairs are not covered.
+
+### How it was checked
+
+All with Vbe 0.7 V and hFE 100:
+- **12 V, 400 Ω load, 3.3 V through 2.2 kΩ:**
+  - 29.5 mA, fully on, 5.9 mW of heat;
+  - Ib 1.182 mA, 4× overdrive, Rb ≤ 881.4 Ω for Ic/10.
+- **120 Ω on 12 V from 5 V through 1 kΩ:** 98.33 mA, 4.4× overdrive.
+- **47 kΩ base resistor:** partly on, 5.532 mA, with 9.787 V across the
+  transistor.
+- **PNP on 5 V, 100 Ω, base pulled to 0 V through 1 kΩ:** 48 mA, with
+  the turn-off note.
+- **5.6 kΩ base resistor:** on, but with under 2× overdrive, so the tool
+  flags it.
+
+The review made these changes:
+- It put the load current first and large, with the state, Vce and the
+  transistor's heat in words.
+- It added the "Rb for Ib = Ic/10" design value, from the datasheets' own
+  test condition.
+- It added the partly-on, low-overdrive and PNP turn-off notes, and the
+  coil diode in the note.
+- It replaced the NPN/PNP pills with a Type choice in the fields.
+- It limited the units to real ones and remembers them.
+- It rewrote the note in plain words and added examples.
 
 [↑ Index](#index)
 

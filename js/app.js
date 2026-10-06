@@ -11528,21 +11528,34 @@ function renderTransistorBias(domain, tool, favId) {
 
 // ---------- NPN/PNP as a switch ----------
 function renderTransistorSwitch(domain, tool, favId) {
+  const C = "transistor-switch";
+  const R_UNITS = Object.keys(DIVIDER_R_UNITS);
   const state = {
-    mode: "npn",
-    vcc: 12, vccUnit: "V",
-    vin: 3.3, vinUnit: "V",
-    vbe: 0.7, vbeUnit: "V",
-    hfe: 100,
-    rb: 2.2, rbUnit: "kΩ",
-    rload: 400, rloadUnit: "Ω",
+    mode: pref(C, "mode", "npn", ["npn", "pnp"]),
+    vcc: 12, vin: 3.3, vbe: 0.7, hfe: 100,
+    rb: 2.2, rbUnit: pref(C, "rbUnit", "kΩ", R_UNITS),
+    rload: 400, rloadUnit: pref(C, "rloadUnit", "Ω", R_UNITS),
   };
 
-  const R_NAMES = ["rb", "rload"];
+  // Each example sets the type, both supplies and both resistors.
+  const example = (mode, vcc, vin, rb, rbUnit, rload, rloadUnit) => () => {
+    Object.assign(state, { mode, vcc, vin, rb, rbUnit, rload, rloadUnit, vbe: 0.7, hfe: 100 });
+    paint();
+  };
+  useExamples([
+    { title: "12 V relay from a 3.3 V pin", note: "A 400 Ω coil draws 29.5 mA; 2.2 k gives 4× overdrive. Put a diode across the coil.",
+      apply: example("npn", 12, 3.3, 2.2, "kΩ", 400, "Ω") },
+    { title: "100 mA load from 5 V logic", note: "120 Ω on 12 V takes 98 mA; 1 k from a 5 V output gives 4.3 mA of base current, 4.4× overdrive.",
+      apply: example("npn", 12, 5, 1, "kΩ", 120, "Ω") },
+    { title: "Rb too large: partly on", note: "47 k lets only 5.5 mA through: the transistor drops 9.8 V and warms up instead of switching.",
+      apply: example("npn", 12, 3.3, 47, "kΩ", 400, "Ω") },
+    { title: "PNP on the supply side", note: "On 5 V it turns on with the base at 0 V, and off only when the base is back at 5 V.",
+      apply: example("pnp", 5, 0, 1, "kΩ", 100, "Ω") },
+  ]);
 
   function si(name) {
-    const units = R_NAMES.includes(name) ? OHM_UNITS : VOLT_UNITS;
-    return state[name] * units[state[name + "Unit"]];
+    if (name === "rb" || name === "rload") return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    return state[name];
   }
 
   // Low-side (NPN) vs high-side (PNP) switch — genuinely different
@@ -11560,7 +11573,7 @@ function renderTransistorSwitch(domain, tool, favId) {
     const isPnp = state.mode === "pnp";
 
     if (!(vcc > 0) || !(rb > 0) || !(rload > 0) || !(hfe > 0)) {
-      return { problem: "Vcc, Rb, Rload, and hFE must be greater than zero." };
+      return { problem: "Vcc, Rb, the load resistance and hFE must be greater than zero." };
     }
 
     const vceSat = 0.2;
@@ -11583,17 +11596,12 @@ function renderTransistorSwitch(domain, tool, favId) {
     const ie = ib + ic;
     const vce = region === "cutoff" ? vcc : region === "saturation" ? vceSat : vcc - ic * rload;
     const overdrive = ib > 0 && icSat > 0 ? icActive / icSat : 0;
-
-    return { problem: "", region, ib, ic, ie, vce, overdrive };
-  }
-
-  // Unlike the biasing calculator, cutoff and saturation are the two
-  // GOOD states here (that's the whole point of a switch) — "active" is
-  // the one to flag, since it means neither fully off nor fully on.
-  function regionInfo(region) {
-    if (region === "saturation") return { label: "ON — saturated", color: "var(--result-text)", bg: "var(--result-border)" };
-    if (region === "cutoff") return { label: "OFF — cutoff", color: "var(--text-secondary)", bg: "var(--card-border)" };
-    return { label: "Partial — not fully switched", color: "var(--danger)", bg: "rgba(224,133,133,0.15)" };
+    // Datasheets give Vce(sat) with the base driven at a tenth of the
+    // collector current (a 2N3904's 0.2 V is at Ic 10 mA, Ib 1 mA), so the
+    // safe design is Ib = Ic(sat) / 10, whatever hFE says. This is the
+    // largest Rb that delivers it.
+    const rbMax = driveV > 0 ? driveV / (icSat / 10) : 0;
+    return { problem: "", region, ib, ic, ie, vce, overdrive, rbMax, pq: vce * ic, isPnp, driveV };
   }
 
   function diagram(isPnp) {
@@ -11672,20 +11680,37 @@ function renderTransistorSwitch(domain, tool, favId) {
     </div>`;
   }
 
+  // The load current first and large, with the switch state in words —
+  // here fully on and fully off are the good states, half on is the fault.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const info = regionInfo(r.region);
+    const state1 = r.region === "saturation" ? "fully on" : r.region === "cutoff" ? "off" : "only partly on";
+    const od = trim(Number(r.overdrive.toPrecision(2)));
+    const warn = r.region === "active"
+      ? `<div class="error-text" data-res="warn">Not enough base current: the transistor passes only ${siFormat(r.ic, "A")} and drops ${siFormat(r.vce, "V")}, wasting ${siFormat(r.pq, "W")} as heat. Make Rb ${formatOhms(r.rbMax)} or less.</div>`
+      : r.region === "cutoff"
+        ? `<div class="error-text" data-res="warn">Off: ${r.isPnp ? "Vin is not low enough below Vcc" : "Vin is below Vbe"}, so no base current flows.</div>`
+        : r.overdrive < 2
+          ? `<div class="error-text" data-res="warn">On, but with only ${od}× the base current needed: a transistor with lower gain, or a cold one, may not switch fully. Aim for Rb ${formatOhms(r.rbMax)} or less.</div>`
+          : "";
+    const pnpNote = r.isPnp && r.region !== "cutoff"
+      ? `<div class="result-sub" style="margin:4px 16px 0" data-res="pnp">To switch it off, the base must be pulled back up to Vcc (${trim(state.vcc)} V). A logic pin at a lower voltage cannot: drive the base with an NPN instead.</div>` : "";
     return `
-      <div class="section-label" style="color:#5DCAA5">Switch state
-        <span class="badge-calc" style="background:${info.bg};color:${info.color};float:right;">${info.label}</span>
+      <div class="section-label" style="color:#5DCAA5">Switch</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Load current</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="ic">${siFormat(r.ic, "A")}</span></div>
+        <div class="result-sub"><span data-res="state">${state1}</span> &nbsp;·&nbsp; ${r.isPnp ? "Vec" : "Vce"} <span data-res="vce">${siFormat(r.vce, "V")}</span> &nbsp;·&nbsp; transistor heat <span data-res="pq">${siFormat(r.pq, "W")}</span></div>
       </div>
-      <div class="eseries-grid">
-        ${cell("Ib", siFormat(r.ib, "A"))}
-        ${cell("Ic", siFormat(r.ic, "A"))}
-        ${cell("Ie", siFormat(r.ie, "A"))}
-        ${cell("Vce", siFormat(r.vce, "V"))}
-        ${cell("Overdrive", r.overdrive > 0 ? `${trim(r.overdrive)}×` : "—")}
-      </div>`;
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Base current", `<span data-res="ib">${siFormat(r.ib, "A")}</span>`)}
+        ${cell("Overdrive", `<span data-res="od">${r.overdrive > 0 ? `${od}×` : "—"}</span>`)}
+        ${cell("Rb for Ib = Ic/10", `<span data-res="rbmax">${r.rbMax > 0 ? `≤ ${formatOhms(r.rbMax)}` : "—"}</span>`)}
+      </div>
+      ${warn}${pnpNote}`;
   }
 
   function refresh() {
@@ -11696,56 +11721,25 @@ function renderTransistorSwitch(domain, tool, favId) {
     const r = compute();
     const isPnp = state.mode === "pnp";
     app.innerHTML = `
-      ${calcHeader(tool, favId, isPnp ? "PNP high-side switch — Vin pulls the base low to turn on" : "NPN low-side switch — Vin pulls the base high to turn on")}
-
-      ${pillRow([["npn", "NPN"], ["pnp", "PNP"]], state.mode, domain.bg)}
+      ${calcHeader(tool, favId, isPnp ? "PNP on the supply side: a low Vin turns it on" : "NPN on the ground side: a high Vin turns it on")}
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram(isPnp)}</div>
 
       <div class="field-pair">
         <div class="field">
-          <label>Vcc (load supply)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ts-vcc" value="${state.vcc}" />
-            <select id="ts-vcc-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vccUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
+          <label>Type</label>
+          <select id="ts-type">${[["npn", "NPN"], ["pnp", "PNP"]].map(([v, t]) => `<option value="${v}" ${state.mode === v ? "selected" : ""}>${t}</option>`).join("")}</select>
         </div>
-        <div class="field">
-          <label>Vin (control)</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ts-vin" value="${state.vin}" />
-            <select id="ts-vin-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vinUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("Vcc", "ts-vcc", state.vcc, `<span class="unit-fixed">V</span>`)}
+        ${opampField("Vin (on)", "ts-vin", state.vin, `<span class="unit-fixed">V</span>`)}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>Rb</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ts-rb" value="${state.rb}" />
-            <select id="ts-rb-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rbUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
-        <div class="field">
-          <label>Rload</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ts-rload" value="${state.rload}" />
-            <select id="ts-rload-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.rloadUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("Rb", "ts-rb", state.rb, opampUnitSelect("ts-rb-unit", R_UNITS, state.rbUnit))}
+        ${opampField("Load", "ts-rload", state.rload, opampUnitSelect("ts-rload-unit", R_UNITS, state.rloadUnit))}
       </div>
       <div class="field-pair">
-        <div class="field">
-          <label>hFE (β)</label>
-          <input type="number" inputmode="decimal" step="any" id="ts-hfe" value="${state.hfe}" />
-        </div>
-        <div class="field">
-          <label>Vbe</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="ts-vbe" value="${state.vbe}" />
-            <select id="ts-vbe-unit">${Object.keys(VOLT_UNITS).map((u) => `<option ${state.vbeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-        </div>
+        ${opampField("hFE", "ts-hfe", state.hfe, "")}
+        ${opampField("Vbe", "ts-vbe", state.vbe, `<span class="unit-fixed">V</span>`)}
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
@@ -11754,20 +11748,19 @@ function renderTransistorSwitch(domain, tool, favId) {
         isPnp
           ? ["Ib = (Vcc − Vin − Vbe) / Rb", "Ic(sat) = (Vcc − Vce,sat) / Rload", "Overdrive = (hFE×Ib) / Ic(sat)"]
           : ["Ib = (Vin − Vbe) / Rb", "Ic(sat) = (Vcc − Vce,sat) / Rload", "Overdrive = (hFE×Ib) / Ic(sat)"],
-        "Design target is usually 5–10× overdrive — enough spare base drive that the switch stays fully saturated even with a weaker part or a hot day, since hFE varies a lot part to part and with temperature."
+        "A transistor used as a switch should be either fully off or fully on, never in between. Vin through Rb drives a small base current; the transistor then lets up to hFE times that current flow through the load (a relay coil, a lamp, an LED string — given here as its resistance). Fully on (saturated) means the load would accept less current than that, so the transistor drops only about 0.2 V and stays cool; the load current is then set by the load alone. Overdrive is how much spare base current there is. hFE varies between transistors and with temperature, so datasheets test saturation with the base current at a tenth of the collector current: an Rb at or below the value shown gives that, whatever the gain. A relay or motor coil needs a diode across it, or the voltage spike when it switches off can destroy the transistor. NPN switches the ground side of the load; PNP switches the supply side and turns on when its base is pulled low."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    wireCalc(favId, paint);
 
-    [["ts-vcc", "vcc"], ["ts-vin", "vin"], ["ts-rb", "rb"], ["ts-rload", "rload"], ["ts-vbe", "vbe"]].forEach(([id, name]) => {
+    document.getElementById("ts-type").onchange = (e) => { state.mode = e.target.value; setPref(C, "mode", state.mode); paint(); };
+    [["ts-vcc", "vcc"], ["ts-vin", "vin"], ["ts-rb", "rb"], ["ts-rload", "rload"], ["ts-vbe", "vbe"], ["ts-hfe", "hfe"]].forEach(([id, name]) => {
       document.getElementById(id).oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
     });
-    document.getElementById("ts-hfe").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.hfe = v; refresh(); } };
-
-    [["ts-vcc-unit", "vccUnit"], ["ts-vin-unit", "vinUnit"], ["ts-rb-unit", "rbUnit"], ["ts-rload-unit", "rloadUnit"], ["ts-vbe-unit", "vbeUnit"]].forEach(([id, name]) => {
-      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; refresh(); };
+    [["ts-rb-unit", "rbUnit"], ["ts-rload-unit", "rloadUnit"]].forEach(([id, name]) => {
+      document.getElementById(id).onchange = (e) => { state[name] = e.target.value; setPref(C, name, state[name]); refresh(); };
     });
   }
 
