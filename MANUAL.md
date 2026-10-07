@@ -73,6 +73,7 @@ will key on, since that is the id the app already holds for each tool.
 - Logic gates → [Logic gates](#logic-gates)
 - Logic gates → [Karnaugh map](#karnaugh-map)
 - Sequential logic → [Flip-flops](#flip-flops)
+- Sequential logic → [Multivibrators](#multivibrators)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
@@ -5001,6 +5002,134 @@ The review made these changes:
 - It added plain-word explanations and examples, and remembers the type.
 - The tool was renamed Flip-flops, on Pierre's choice, to fit beside the
   bulb.
+
+[↑ Index](#index)
+
+---
+
+<a id="multivibrator"></a>
+## Multivibrators
+
+`calc: multivibrator` · Digital & logic circuits › Sequential logic
+(formerly Multivibrators (astable/monostable))
+
+### What it computes
+
+For the classic two-transistor multivibrator, the tool works in two modes.
+
+**Astable (free-running):**
+- the frequency and duty cycle from the two resistor–capacitor pairs, or
+  the resistors from a frequency and duty you type;
+- the period and its two halves;
+- the same circuit in standard E-series values, with a suggested
+  collector resistor.
+
+**Monostable (one-shot):**
+- the pulse width from R and C, or R from the width you type;
+- the capacitor's recovery time;
+- the shortest time between triggers and the highest trigger rate;
+- the E-series value of R.
+
+Every field works in both directions, and the timing diagrams are drawn to
+the computed times.
+
+### Source
+
+- **The timing** is the standard textbook analysis of the circuit. Each
+  half-cycle is one RC time constant times ln 2, about 0.693 RC, with Vbe
+  and Vce(sat) neglected as the references do.
+- **The emitter–base limit** is read from the datasheets: VEBO is 6 V
+  for a 2N3904 (Diodes Inc. MMBT3904, DS30036) and a BC547 (Fairchild,
+  rev. A2), and 5 V for the BC548–BC550 (same Fairchild sheet).
+
+### What it means
+
+A **multivibrator** is two transistors that switch each other on and off
+through capacitors.
+
+- **Astable** — it has no stable state, so it oscillates by itself: an
+  LED flasher, a tone.
+- **Monostable** — it has one stable state. A trigger flips it for one
+  timed pulse, and it returns by itself: a one-shot.
+- **T1 and T2** — the two halves of the astable's cycle, set by R1·C1
+  and R2·C2.
+- **Duty** — the share of the period spent in the first half, T1.
+- **How a half-cycle works** — when one transistor switches on, its
+  collector drops and pulls the other transistor's base, through the
+  coupling capacitor, to about −Vcc. That base then climbs back through
+  its resistor toward +Vcc and switches on as it passes zero, after
+  ln 2 × R × C. The supply voltage cancels out, so the frequency does not
+  depend on it.
+- **The catch with high supplies** — the reversed base reaches about
+  −Vcc. A small transistor's emitter–base junction withstands only 5–6 V
+  in reverse (VEBO). On a higher supply it breaks down, and the circuit
+  runs faster than the formula says.
+- **The collector resistor Rc** — squeezed from both sides:
+  - at least R / β (β, or hFE, is the current gain), or the transistor
+    stops switching fully on;
+  - at most about R / 10, or the collector's rising edge softens.
+
+  The tool suggests R / 10 in your E-series.
+- **Monostable recovery** — after each pulse the capacitor must
+  recharge through Rc, about 5 × Rc × C, before the next trigger does
+  anything useful. Triggering faster gives short pulses, not more of
+  them. The large result is that shortest interval.
+- **Rb** (monostable) only holds Q1's base low while Q2 is on. It sets no
+  timing, so it is not calculated.
+
+### Why the formulas are these
+
+    T1 = ln 2 × R1 × C1,   T2 = ln 2 × R2 × C2
+    Frequency = 1 / (T1 + T2),   Duty = T1 / (T1 + T2)
+    Pulse width = ln 2 × R × C,   Recovery ≈ 5 × Rc × C
+    Shortest time between triggers = Pulse width + Recovery
+
+- **ln 2** — a capacitor charging toward +Vcc from −Vcc crosses zero
+  when half the 2·Vcc swing is done. That takes RC × ln 2.
+- **Typing a frequency** — scales both resistors and keeps the duty and
+  the capacitors.
+- **Typing a duty** — shares the period between them and keeps the
+  frequency.
+- **The capacitors are never rewritten**, since they are the part you
+  have in the drawer.
+
+### Assumptions and limits
+
+- **Ideal switches.** Vbe and Vce(sat) are neglected. With them, the base
+  starts at about Vbe − (Vcc − Vce(sat)) and switches on at Vbe rather
+  than 0 V, so each half takes a little longer: about 0.72 RC instead of
+  0.693 RC on 9 V, and 0.74 RC on 5 V. The real frequency is therefore a
+  few percent lower than calculated, more so on low supplies.
+- **The 5 RC recovery** is a rule of thumb (99 % recharged).
+- **Capacitor tolerance**, often ±20 % for electrolytics, matters more
+  than the resistors' tolerance for the timing.
+
+### What it deliberately does not do
+
+- The 555 timer versions have their own tool.
+- Bistable multivibrators, which are flip-flops, have their own tool.
+
+### How it was checked
+
+- **47 k / 10 µF on both sides:** period 651.6 ms (T1 = T2 = 325.8 ms),
+  1.535 Hz, Rc 4.7 kΩ suggested.
+- **68 k / 10 µF:** 1.061 Hz.
+- **10 k and 100 k with 10 µF:** T1 69.31 ms, T2 693.1 ms, duty
+  9.091 %.
+- **10 k / 68 nF:** 1.061 kHz.
+- **Monostable, 68 k / 10 µF with Rc 6.8 k:**
+  - pulse 471.3 ms;
+  - recovery 340 ms;
+  - shortest interval 811.3 ms, up to 1.233 Hz.
+- **Typing 2 Hz:** both 10 µF resistors become 36.067 kΩ.
+
+The review made these changes:
+- It put the period, or the shortest trigger interval, first and large.
+- It limited the units to real ones (Ω–MΩ, pF–µF, µs–s).
+- It enlarged the timing labels to 11 px.
+- It added plain definitions, with the VEBO figures from datasheets.
+- It added examples, and remembers the mode and the tolerance.
+- The tool was renamed Multivibrators, on Pierre's choice.
 
 [↑ Index](#index)
 

@@ -98,7 +98,7 @@ const DOMAINS = [
     icon: "binary",
     sections: [
       { title: "Logic gates", tools: [{ name: "Logic gates", was: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)", calc: "logic-gates" }, { name: "Karnaugh map", was: "Karnaugh map simplification", calc: "karnaugh" }] },
-      { title: "Sequential logic", tools: [{ name: "Flip-flops", was: "Flip-flops (SR, D, JK, T)", calc: "flip-flops" }, { name: "Multivibrators (astable/monostable)", calc: "multivibrator" }, { name: "555 Timer (astable/monostable)", calc: "555-timer" }] },
+      { title: "Sequential logic", tools: [{ name: "Flip-flops", was: "Flip-flops (SR, D, JK, T)", calc: "flip-flops" }, { name: "Multivibrators", was: "Multivibrators (astable/monostable)", calc: "multivibrator" }, { name: "555 Timer (astable/monostable)", calc: "555-timer" }] },
       { title: "Number systems", tools: [{ name: "DEC / HEX / OCT / BIN conversion", calc: "dec-hex-bin" }, { name: "ASCII table", calc: "ascii-table" }] },
       {
         title: "Timing & interfaces",
@@ -289,7 +289,7 @@ const TOOL_KEYWORDS = {
   "logic-gates": "basic gates and or not nand nor xor xnor inverter truth table boolean 74hc00 74hc08",
   "karnaugh": "k-map kmap boolean minimise simplify logic simplification sop pos sum of products product of sums",
   "flip-flops": "flip flop latch sr d jk t register clock edge 74hc74 74hc112",
-  "multivibrator": "astable monostable transistor oscillator",
+  "multivibrator": "astable monostable transistor oscillator flasher one-shot multivibrators",
   "555-timer": "ne555 timer astable monostable oscillator",
   "dec-hex-bin": "binary hexadecimal octal decimal base conversion",
   "ascii-table": "ascii characters code table",

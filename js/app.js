@@ -17009,17 +17009,36 @@ function renderMultivibrator(domain, tool, favId) {
   // edit is pushed back into the others rather than one direction being a
   // separate mode. The parts are the store of record — fd, duty and tdp are
   // derived from them on every paint — so the two can never drift apart.
+  const C = "multivibrator";
   const state = {
-    mode: "astable",
+    mode: pref(C, "mode", "astable", ["astable", "mono"]),
     r1: 47, r1Unit: "kΩ", c1: 10, c1Unit: "µF",
     r2: 47, r2Unit: "kΩ", c2: 10, c2Unit: "µF",
     r: 100, rUnit: "kΩ", c: 10, cUnit: "µF",
     rc: 1, rcUnit: "kΩ",
     fd: 1.535, fdUnit: "Hz", duty: 50,
     tdp: 693.1, tdpUnit: "ms",
-    tol: 5,
+    tol: pref(C, "tol", 5, [0.1, 0.5, 1, 2, 5, 10, 20]),
   };
   const F_UNITS = { Hz: 1, kHz: 1e3 };
+  const TP_UNITS = { "µs": 1e-6, ms: 1e-3, s: 1 };
+
+  // Each example sets the parts (kΩ, and the capacitor with its unit); the
+  // spec fields follow from them on the next paint.
+  const astableEx = (r1, r2, c, cUnit) => () => {
+    Object.assign(state, { mode: "astable", r1, r1Unit: "kΩ", r2, r2Unit: "kΩ", c1: c, c1Unit: cUnit, c2: c, c2Unit: cUnit });
+    paint();
+  };
+  useExamples([
+    { title: "LED flasher, about 1 Hz", note: "68 k and 10 µF on each side: each LED lights for 0.47 s, about once a second.",
+      apply: astableEx(68, 68, 10, "µF") },
+    { title: "Short flash, long pause", note: "10 k on one side, 100 k on the other: a 69 ms flash every 0.76 s (9 % duty).",
+      apply: astableEx(10, 100, 10, "µF") },
+    { title: "Tone near 1 kHz", note: "10 k and 68 nF on each side give 1.06 kHz, an audible tone for a small speaker or buzzer.",
+      apply: astableEx(10, 10, 68, "nF") },
+    { title: "Half-second one-shot", note: "68 k and 10 µF give a 0.47 s pulse; then C needs 0.34 s to recharge before the next trigger.",
+      apply: () => { Object.assign(state, { mode: "mono", r: 68, rUnit: "kΩ", c: 10, cUnit: "µF", rc: 6.8, rcUnit: "kΩ" }); paint(); } },
+  ]);
 
   // Writing a computed number back into a field means choosing its unit too,
   // or a 72135 Ω answer lands in a box labelled kΩ.
@@ -17043,10 +17062,10 @@ function renderMultivibrator(domain, tool, favId) {
   const LN2 = Math.LN2;
 
   function si(name) {
-    if (["r1", "r2", "r", "rc"].includes(name)) return state[name] * OHM_UNITS[state[name + "Unit"]];
-    if (name === "tdp") return state[name] * RC_TIME_UNITS[state[name + "Unit"]];
+    if (["r1", "r2", "r", "rc"].includes(name)) return state[name] * DIVIDER_R_UNITS[state[name + "Unit"]];
+    if (name === "tdp") return state[name] * TP_UNITS[state[name + "Unit"]];
     if (name === "fd") return state[name] * F_UNITS[state[name + "Unit"]];
-    return state[name] * CAP_UNITS[state[name + "Unit"]];
+    return state[name] * RCF_C_UNITS[state[name + "Unit"]];
   }
 
   const seriesName = () => eSeriesForTolerance(state.tol);
@@ -17073,7 +17092,7 @@ function renderMultivibrator(domain, tool, favId) {
       state.duty = +((t1 / period) * 100).toPrecision(4);
     } else {
       const t = LN2 * si("r") * si("c");
-      if (t > 0) setScaled("tdp", t, RC_TIME_UNITS, 4);
+      if (t > 0) setScaled("tdp", t, TP_UNITS, 4);
     }
   }
 
@@ -17085,13 +17104,13 @@ function renderMultivibrator(domain, tool, favId) {
     const period = 1 / si("fd"), duty = state.duty;
     if (!(period > 0) || !(duty > 0) || !(duty < 100)) return;
     const c1 = si("c1"), c2 = si("c2");
-    if (c1 > 0) setScaled("r1", (period * duty) / 100 / LN2 / c1, OHM_UNITS);
-    if (c2 > 0) setScaled("r2", (period * (100 - duty)) / 100 / LN2 / c2, OHM_UNITS);
+    if (c1 > 0) setScaled("r1", (period * duty) / 100 / LN2 / c1, DIVIDER_R_UNITS);
+    if (c2 > 0) setScaled("r2", (period * (100 - duty)) / 100 / LN2 / c2, DIVIDER_R_UNITS);
   }
 
   function resistorFromPulse() {
     const t = si("tdp"), c = si("c");
-    if (t > 0 && c > 0) setScaled("r", t / LN2 / c, OHM_UNITS);
+    if (t > 0 && c > 0) setScaled("r", t / LN2 / c, DIVIDER_R_UNITS);
   }
 
   function compute() {
@@ -17223,20 +17242,20 @@ function renderMultivibrator(domain, tool, favId) {
       const per = W / 2.5, w1 = per * (r.t1 / r.period), w2 = per - w1;
       return `<svg width="308" height="62" viewBox="0 0 308 62" fill="none">
         <path d="${level(w1, w2, 8, 22, 1)}" stroke="${wire}" stroke-width="1.6" fill="none"/>
-        <text x="26" y="18" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">Vc1</text>
+        <text x="26" y="19" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">Vc1</text>
         <path d="${level(w1, w2, 36, 50, 0)}" stroke="${comp}" stroke-width="2.2" fill="none"/>
-        <text x="26" y="46" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Vc2</text>
+        <text x="26" y="47" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">Vc2</text>
       </svg>`;
     }
     const span = r.minPeriod * 2.2;
     const tw = (r.t / span) * W, rw = (r.recovery / span) * W, lead = W * 0.08;
     return `<svg width="308" height="62" viewBox="0 0 308 62" fill="none">
       <path d="M${x0} 22 H${(x0 + lead).toFixed(1)} V8 H${(x0 + lead + 6).toFixed(1)} V22 H${x1}" stroke="${wire}" stroke-width="1.6" fill="none"/>
-      <text x="26" y="18" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">Trig</text>
+      <text x="26" y="19" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">Trig</text>
       <path d="M${x0} 50 H${(x0 + lead).toFixed(1)} V36 H${(x0 + lead + tw).toFixed(1)} V50 H${x1}" stroke="${comp}" stroke-width="2.2" fill="none"/>
-      <text x="26" y="46" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Out</text>
+      <text x="26" y="47" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">Out</text>
       <path d="M${(x0 + lead + tw).toFixed(1)} 54 H${(x0 + lead + tw + rw).toFixed(1)}" stroke="#E08585" stroke-width="1.6" stroke-dasharray="3 2"/>
-      <text x="${(x0 + lead + tw + rw + 4).toFixed(1)}" y="58" fill="#E08585" font-size="9" font-weight="600">recovery</text>
+      <text x="${Math.min(x0 + lead + tw + rw + 4, x1 - 50).toFixed(1)}" y="60" fill="#E08585" font-size="11" font-weight="600">recovery</text>
     </svg>`;
   }
 
@@ -17247,26 +17266,36 @@ function renderMultivibrator(domain, tool, favId) {
     </div>`;
   }
 
+  // The period (astable) or the shortest re-trigger interval (monostable)
+  // large — the figures the editable fields do not already show — then the
+  // same circuit in values you can buy.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight">${cells}</div>`;
-    // Frequency, duty and pulse width are fields now, so they are not repeated
-    // here. What the fields cannot show is the buildable version of the same
-    // circuit, which is what these cells are for.
     const e = seriesName();
+    const big = (label, value, sub) => `
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${label}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main">${value}</span></div>
+        <div class="result-sub">${sub}</div>
+      </div>`;
+    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells}</div>`;
     if (r.astable) {
-      return grid(`
-          ${cell("T1", siFormat(r.t1, "s"))}
-          ${cell("T2", siFormat(r.t2, "s"))}
-          ${cell(`R1 (${e})`, siFormat(r.r1e, "Ω"))}
-          ${cell(`R2 (${e})`, siFormat(r.r2e, "Ω"))}
-          ${cell(`Rc (${e})`, siFormat(r.rce, "Ω"))}`);
+      return big("Period", siFormat(r.period, "s"),
+          `T1 <span data-res="t1">${siFormat(r.t1, "s")}</span>, then T2 <span data-res="t2">${siFormat(r.t2, "s")}</span>`)
+        + grid(`
+          ${cell(`R1 (${e})`, `<span data-res="r1e">${formatOhms(r.r1e)}</span>`)}
+          ${cell(`R2 (${e})`, `<span data-res="r2e">${formatOhms(r.r2e)}</span>`)}
+          ${cell(`Rc (${e})`, `<span data-res="rce">${formatOhms(r.rce)}</span>`)}`);
     }
-    return grid(`
-        ${cell(`R (${e})`, siFormat(r.re, "Ω"))}
+    return big("Shortest time between triggers", siFormat(r.minPeriod, "s"),
+        `the pulse, ${siFormat(r.t, "s")}, plus the recovery, <span data-res="rec">${siFormat(r.recovery, "s")}</span>`)
+      + grid(`
+        ${cell(`R (${e})`, `<span data-res="re">${formatOhms(r.re)}</span>`)}
         ${cell("Recovery", siFormat(r.recovery, "s"))}
-        ${cell("Min period", siFormat(r.minPeriod, "s"))}
-        ${cell("Max rate", siFormat(r.maxRate, "Hz"))}`);
+        ${cell("Max trigger rate", `<span data-res="rate">${siFormat(r.maxRate, "Hz")}</span>`)}`);
   }
 
   function refresh() {
@@ -17281,7 +17310,7 @@ function renderMultivibrator(domain, tool, favId) {
           <label>${label}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            <select id="${id}-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <select id="${id}-unit">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>`;
   }
@@ -17310,7 +17339,7 @@ function renderMultivibrator(domain, tool, favId) {
           <label>${label}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            <select id="${id}-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <select id="${id}-unit">${Object.keys(RCF_C_UNITS).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>`;
   }
@@ -17355,8 +17384,8 @@ function renderMultivibrator(domain, tool, favId) {
     const astable = state.mode === "astable";
     app.innerHTML = `
       ${calcHeader(tool, favId, astable
-        ? "Free-running: each half-cycle is one RC climb"
-        : "One shot: a trigger flips it out, RC flips it back")}
+        ? "Two transistors that flip each other, forever"
+        : "A trigger flips it; R and C flip it back")}
 
       ${pillRow([["astable", "Astable"], ["mono", "Monostable"]], state.mode, domain.bg)}
 
@@ -17379,7 +17408,7 @@ function renderMultivibrator(domain, tool, favId) {
         ${cap("mv-c2", "c2", "C2")}
       </div>` : `
       <div class="field-pair">
-        ${picker("mv-tdp", "tdp", "Pulse width", RC_TIME_UNITS)}
+        ${picker("mv-tdp", "tdp", "Pulse width", TP_UNITS)}
       </div>
       <div class="field-pair">
         ${ohm("mv-r", "r", "R")}
@@ -17401,16 +17430,16 @@ function renderMultivibrator(domain, tool, favId) {
           ? ["T1 = ln2 × R1 × C1,  T2 = ln2 × R2 × C2", "Frequency = 1 / (T1 + T2)", "Duty = T1 / (T1 + T2)", "Rc ≈ R / 10,  and Rc ≥ R / β to saturate"]
           : ["Pulse width = ln2 × R × C", "Recovery ≈ 5 × Rc × C", "Min period = Pulse width + Recovery", "Max rate = 1 / Min period", "Rc ≈ R / 10,  and Rc ≥ R / β to saturate"],
         astable
-          ? "Every box is live in both directions: type a frequency and both resistors scale, type a duty and they redistribute, type a resistor or a capacitor and the frequency follows. The capacitors are never rewritten for you, because they are the part you actually have in a drawer. The E-series cells are the same circuit in values you can buy, on whichever grid you pick beside Output. Each half-cycle is one coupling capacitor climbing from −Vcc toward +Vcc until the base it feeds turns on, at ln2 × RC. Vcc cancels out of that, so the frequency is supply-independent — but every flip pulls the off base to about −Vcc, and a small-signal Vebo is only 5–6 V, so past that it breaks down and the circuit runs fast. Rc is squeezed from both sides: at least R / β or the transistor stops saturating, at most about R / 10 or the collector edge softens."
-          : "The pulse width and R are live in both directions — type the width you want and R follows, type R or C and the width follows. C is never rewritten for you, and the E-series cell is the same circuit in a value you can buy, on whichever grid you pick beside Output. The monostable is the astable with one cross-coupling made DC: one arm is a resistor, so it has a state it rests in and a trigger kicks it out for one timing period. What catches people is the second number — the capacitor has to recharge through Rc before the next trigger means anything, so triggering faster than the min period gives a short pulse rather than a fast one. Rc has the same window as in the astable, at least R / β and at most about R / 10. Rb is not derived because nothing derives it: it only holds Q1's base down at Q2's saturation voltage and sets no timing."
+          ? "A multivibrator is two transistors that switch each other on and off through capacitors. Astable means it has no stable state: it oscillates by itself — an LED flasher, a tone. Duty is the share of each period spent in the first half (T1). Every box is live in both directions: type a frequency and both resistors scale, type a duty and they redistribute, type a resistor or a capacitor and the frequency follows. The capacitors are never rewritten for you, because they are the part you actually have in a drawer. The E-series cells are the same circuit in values you can buy, on whichever grid you pick beside Output. Each half-cycle is one coupling capacitor climbing from −Vcc toward +Vcc until the base it feeds turns on, at ln2 × RC. Vcc cancels out of that, so the frequency is supply-independent — but every flip pulls the off base to about −Vcc, and a small transistor's emitter-base junction only withstands 5–6 V in reverse (Vebo: 6 V for a 2N3904 or BC547, 5 V for a BC548–550), so on a higher supply it breaks down and the circuit runs faster than the formula says. Rc is squeezed from both sides: at least R / β (β, or hFE, is the transistor's current gain) or the transistor stops switching fully on, at most about R / 10 or the collector edge softens."
+          : "Monostable means it has one stable state: a trigger flips it for one timed pulse, and it returns by itself — a one-shot. The pulse width and R are live in both directions — type the width you want and R follows, type R or C and the width follows. C is never rewritten for you, and the E-series cell is the same circuit in a value you can buy, on whichever grid you pick beside Output. The monostable is the astable with one cross-coupling made DC: one arm is a resistor, so it has a state it rests in and a trigger kicks it out for one timing period. What catches people is the second number — the capacitor has to recharge through Rc before the next trigger means anything, so triggering faster than the min period gives a short pulse rather than a fast one. Rc has the same window as in the astable, at least R / β and at most about R / 10. Rb is not derived because nothing derives it: it only holds Q1's base down at Q2's saturation voltage and sets no timing."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.mode = m; setPref(C, "mode", m); paint(); });
 
     // A full paint, not a refresh: the cell labels carry the series name.
-    document.getElementById("mv-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); paint(); };
+    document.getElementById("mv-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
 
     [["mv-r1", "r1"], ["mv-c1", "c1"], ["mv-r2", "r2"], ["mv-c2", "c2"],
      ["mv-r", "r"], ["mv-c", "c"], ["mv-rc", "rc"],
