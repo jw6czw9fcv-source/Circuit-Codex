@@ -16811,9 +16811,24 @@ const FLIPFLOPS = {
 };
 
 function renderFlipFlops(domain, tool, favId) {
-  const state = { type: "d" };
+  const C = "flip-flops";
+  // The input sequences can be edited by tapping; each type keeps its own.
+  const fresh = (type) => FLIPFLOPS[type].seq.map((row) => row.slice());
+  const state = { type: pref(C, "type", "d", Object.keys(FLIPFLOPS)), seqs: {} };
+  const seqOf = (type) => state.seqs[type] || (state.seqs[type] = fresh(type));
 
-  // Next state from the current inputs. Returns null for SR's undefined
+  // Each example picks a type and the inputs to play through it.
+  const example = (type, seq) => () => { state.type = type; state.seqs[type] = seq.map((r) => r.slice()); paint(); };
+  useExamples([
+    { title: "Divide the clock by two", note: "Hold T at 1 and Q flips on every rising edge: a square wave at half the clock frequency.",
+      apply: example("t", [[1], [1], [1], [1], [1], [1], [1], [1]]) },
+    { title: "Store a bit (D)", note: "Q copies D at each rising edge and ignores it in between: one bit of a register.",
+      apply: example("d", [[1], [1], [0], [1], [0], [0], [1], [1]]) },
+    { title: "SR: the forbidden input", note: "S = R = 1, then both released: Q is unknown until the next set or reset (dashed).",
+      apply: example("sr", [[1, 0], [0, 0], [1, 1], [0, 0], [0, 0], [0, 1], [0, 0], [1, 0]]) },
+  ]);
+
+  // Next state from the current inputs. Returns null for SR's forbidden
   // corner rather than inventing an answer for it.
   function nextQ(type, ins, q) {
     if (type === "sr") { const [S, R] = ins; if (S && R) return null; return S ? 1 : R ? 0 : q; }
@@ -16823,14 +16838,20 @@ function renderFlipFlops(domain, tool, favId) {
   }
 
   // Q is computed by running the sequence, not drawn by hand, so the trace
-  // cannot disagree with the truth table above it.
+  // cannot disagree with the truth table. After SR's forbidden input the
+  // state is unknown (null) until a set or reset defines it again; holding
+  // or toggling an unknown keeps it unknown.
   function qTrace(type, seq) {
     const out = [];
     let q = 0;
     for (const ins of seq) {
       out.push(q);
-      const n = nextQ(type, ins, q);
-      q = n === null ? q : n;
+      if (q === null) {
+        const n = nextQ(type, ins, 0), m = nextQ(type, ins, 1);
+        q = n !== null && n === m ? n : null;
+      } else {
+        q = nextQ(type, ins, q);
+      }
     }
     return out;
   }
@@ -16857,14 +16878,16 @@ function renderFlipFlops(domain, tool, favId) {
     </svg>`;
   }
 
-  // Eight cycles. Inputs hold across a whole cycle and Q updates on the rising
-  // edge that ends it, so every step in Q lines up with an edge you can see.
+  // Eight cycles. Inputs hold across a whole cycle and Q updates on the
+  // rising edge that ends it, so every step in Q lines up with an edge you
+  // can see. Every input cycle is a tap target that flips that bit.
   function timing(ff) {
     const wire = "#5A6169";
     const comp = "#8FC1F5";
-    const n = ff.seq.length, x0 = 30, x1 = 298, w = (x1 - x0) / n;
+    const seq = seqOf(state.type);
+    const n = seq.length, x0 = 34, x1 = 302, w = (x1 - x0) / n;
     const rows = 2 + ff.ins.length;
-    const top = (i) => 8 + i * 22;
+    const top = (i) => 8 + i * 24;
 
     const level = (vals, i) => {
       const hi = top(i), lo = hi + 12;
@@ -16889,18 +16912,38 @@ function renderFlipFlops(domain, tool, favId) {
       edges.push(`<path d="M${x} 6 V${top(rows - 1) + 14}" stroke="#3A4048" stroke-width="1" stroke-dasharray="2 3"/>`);
     }
 
-    const q = qTrace(state.type, ff.seq);
     const inputRows = ff.ins.map((name, i) => `
-      <path d="${level(ff.seq.map((v) => v[i]), i + 1)}" stroke="${wire}" stroke-width="1.5" fill="none"/>
-      <text x="26" y="${top(i + 1) + 10}" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">${name}</text>`).join("");
+      <path d="${level(seq.map((v) => v[i]), i + 1)}" stroke="${wire}" stroke-width="1.6" fill="none"/>
+      <text x="28" y="${top(i + 1) + 11}" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">${name}</text>
+      ${seq.map((_, k) => `<rect x="${(x0 + k * w).toFixed(1)}" y="${top(i + 1) - 5}" width="${w.toFixed(1)}" height="22" fill="transparent" data-ff="${i},${k}" style="cursor:pointer"/>`).join("")}`).join("");
 
-    return `<svg width="308" height="${top(rows - 1) + 18}" viewBox="0 0 308 ${top(rows - 1) + 18}" fill="none">
+    // Q: known stretches as one level line; unknown ones as both levels
+    // dashed, with a question mark.
+    const q = qTrace(state.type, seq);
+    const qi = rows - 1, qHi = top(qi), qLo = qHi + 12;
+    let qPath = "", unknown = "";
+    for (let k = 0; k < n; k++) {
+      const xa = (x0 + k * w).toFixed(1), xb = (x0 + (k + 1) * w).toFixed(1);
+      if (q[k] === null) {
+        unknown += `<path d="M${xa} ${qHi} H${xb} M${xa} ${qLo} H${xb}" stroke="${comp}" stroke-width="1.6" stroke-dasharray="3 3"/>
+          <text x="${((+xa + +xb) / 2).toFixed(1)}" y="${qLo - 2}" fill="${comp}" font-size="11" font-weight="700" text-anchor="middle">?</text>`;
+        continue;
+      }
+      const y = q[k] ? qHi : qLo;
+      const prev = k > 0 ? q[k - 1] : null;
+      qPath += prev === null || k === 0 ? ` M${xa} ${y}` : prev !== q[k] ? ` V${y}` : "";
+      qPath += ` H${xb}`;
+    }
+
+    return `<svg width="312" height="${top(rows - 1) + 18}" viewBox="0 0 312 ${top(rows - 1) + 18}" fill="none">
       ${edges.join("")}
-      <path d="${clk}" stroke="${wire}" stroke-width="1.5" fill="none"/>
-      <text x="26" y="${top(0) + 10}" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">CLK</text>
+      <path d="${clk}" stroke="${wire}" stroke-width="1.6" fill="none"/>
+      <text x="28" y="${top(0) + 11}" fill="#8A9099" font-size="11" font-weight="600" text-anchor="end">CLK</text>
       ${inputRows}
-      <path d="${level(q, rows - 1)}" stroke="${comp}" stroke-width="2.2" fill="none"/>
-      <text x="26" y="${top(rows - 1) + 10}" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Q</text>
+      <path d="${qPath.trim()}" stroke="${comp}" stroke-width="2.2" fill="none"/>
+      ${unknown}
+      <text x="28" y="${top(rows - 1) + 11}" fill="${comp}" font-size="11" font-weight="600" text-anchor="end">Q</text>
+      <desc data-res="qseq">${q.map((v) => (v === null ? "?" : v)).join(" ")}</desc>
     </svg>`;
   }
 
@@ -16913,25 +16956,49 @@ function renderFlipFlops(domain, tool, favId) {
       </div>`;
   }
 
+  function refreshTiming() {
+    const ff = FLIPFLOPS[state.type];
+    app.querySelector('[data-res="timing"]').innerHTML = timing(ff);
+    wireTiming();
+  }
+
+  function wireTiming() {
+    app.querySelectorAll("[data-ff]").forEach((el) => {
+      el.onclick = () => {
+        const [i, k] = el.dataset.ff.split(",").map(Number);
+        const seq = seqOf(state.type);
+        seq[k][i] = 1 - seq[k][i];
+        refreshTiming();
+      };
+    });
+  }
+
   function paint() {
     const ff = FLIPFLOPS[state.type];
     app.innerHTML = `
-      ${calcHeader(tool, favId, "What the next clock edge does with the state you are in")}
+      ${calcHeader(tool, favId, "Tap an input at any clock to change it")}
 
       ${pillRow(Object.keys(FLIPFLOPS).map((k) => [k, FLIPFLOPS[k].label]), state.type, domain.bg)}
 
       <div class="diagram-box" style="padding:2px 6px; flex-direction:column; gap:0;">
         <div>${symbol(ff)}</div>
-        <div>${timing(ff)}</div>
+        <div data-res="timing">${timing(ff)}</div>
       </div>
 
+      <div class="section-label split" style="color:#8FC1F5">
+        <span>Truth table</span>
+        <span></span>
+        <button class="label-btn" id="ff-reset">Reset inputs</button>
+      </div>
       ${tableHTML(ff)}
 
-      ${formulaSection(ff.eq, ff.note + " Q⁺ is the state after the next active clock edge; the input has to be steady across it, which is what a datasheet's setup and hold times are telling you.")}
+      ${formulaSection(ff.eq, `A flip-flop stores one bit, Q (Q̄ is its opposite). It changes only at the clock's active edge — here the rising edge, where Q⁺ is the state after it — and holds still in between, which is what lets many of them march in step. ${ff.note} The inputs must be steady for a short time before and after the edge: on a 74HC74 at 4.5 V, at least 15 ns before (setup) and 3 ns after (hold); otherwise the result is not guaranteed. Chips: 74HC74 (two D flip-flops, rising edge), 74HC112 (two JK, falling edge), 74HC279 (four SR latches, no clock); a T flip-flop is a JK with J and K tied high, or a D with Q̄ fed back to D.`)}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.type = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.type = m; setPref(C, "type", m); paint(); });
+    document.getElementById("ff-reset").onclick = () => { state.seqs[state.type] = fresh(state.type); refreshTiming(); };
+    wireTiming();
   }
 
   paint();

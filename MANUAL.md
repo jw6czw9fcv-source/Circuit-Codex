@@ -72,6 +72,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Logic gates → [Logic gates](#logic-gates)
 - Logic gates → [Karnaugh map](#karnaugh-map)
+- Sequential logic → [Flip-flops](#flip-flops)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
@@ -4883,6 +4884,122 @@ The review made these changes:
 - It added plain definitions, examples, and remembers the number of
   variables.
 - The tool was renamed Karnaugh map, on Pierre's choice, to fit beside the
+  bulb.
+
+[↑ Index](#index)
+
+---
+
+<a id="flip-flops"></a>
+## Flip-flops
+
+`calc: flip-flops` · Digital & logic circuits › Sequential logic
+(formerly Flip-flops (SR, D, JK, T))
+
+### What it computes
+
+For the four flip-flop types (SR, D, JK and T), it shows:
+- the symbol;
+- the truth table: what the next clock edge does in each input case;
+- the characteristic equation;
+- an eight-clock timing diagram, with the output Q computed by running
+  the inputs through the flip-flop.
+
+Tap an input at any clock in the timing diagram to flip it, and Q is
+recomputed. "Reset inputs" brings back the demonstration sequence. The
+chosen type is remembered.
+
+### Source
+
+The behaviour of each type is textbook logic. The chips and timing figures
+were read from manufacturers' documents:
+- **Nexperia 74HC74** (rev. 9, 2 April 2024):
+  - a dual D flip-flop, triggered on the rising clock edge, with
+    asynchronous active-low set and reset;
+  - at 4.5 V and 25 °C, D must be steady at least 15 ns before the edge
+    (setup) and 3 ns after it (hold);
+  - the clock runs up to at least 24 MHz.
+- **Nexperia 74HC112** — a dual JK flip-flop, triggered on the *falling*
+  edge, with set and reset.
+- **ST M74HC279** — four SR latches, with no clock.
+
+### What it means
+
+A **flip-flop** stores one bit, Q; Q̄ is its opposite. It changes only at
+the clock's active edge, here the rising edge, and holds still in between.
+That is what lets many of them, such as the bits of a register or a
+counter, change in step. **Q⁺** is the state after the next edge.
+
+- **SR** (set / reset):
+  - S = 1 sets Q to 1, R = 1 resets it to 0, and both at 0 holds it;
+  - S = R = 1 is forbidden: both outputs are driven the same way, and when
+    the inputs are released together the state is unpredictable. The
+    timing diagram draws that unknown stretch dashed with a "?", until
+    the next set or reset defines Q again;
+  - on its own, without a clock, the circuit is an SR *latch*.
+- **D** (data) — Q takes the value D had at the edge and ignores D in
+  between. One D flip-flop is one bit of a register.
+- **JK** — like SR, but J = K = 1 toggles Q instead of being forbidden.
+  It is the general-purpose type: D and T are both a JK with its inputs
+  tied.
+- **T** (toggle) — T = 1 flips Q at every edge, so Q is a square wave at
+  half the clock frequency, with a 50 % duty cycle whatever the clock's.
+  - Chained, n stages divide by 2ⁿ: a ripple counter.
+  - It is built from a JK with J and K tied high, or a D with Q̄ fed back
+    to D.
+- **Setup and hold** — the inputs must be steady for a short time before
+  and after the edge, or the result is not guaranteed. A datasheet gives
+  both, as above for the 74HC74.
+
+### Why the formulas are these
+
+The characteristic equations follow from the truth tables:
+
+    SR:  Q⁺ = S + R̄ · Q        (with S · R = 0)
+    D:   Q⁺ = D
+    JK:  Q⁺ = J · Q̄ + K̄ · Q
+    T:   Q⁺ = T ⊕ Q
+
+In the timing diagram, each input holds across a whole clock cycle, and Q
+updates on the rising edge that ends it. Q starts at 0. After SR's
+forbidden input, Q is unknown. A hold or toggle keeps an unknown unknown,
+and only a set or reset ends it.
+
+### Assumptions and limits
+
+- **One edge for all four.** All four types are drawn edge-triggered on
+  the rising edge. Some chips act on the falling edge (74HC112), and latches
+  are level-sensitive instead.
+- **Ideal timing.** Propagation delay, setup and hold violations and
+  metastability are not simulated; the inputs are taken as meeting the
+  setup and hold times.
+- **No set or reset pins.** The asynchronous set and reset inputs of real
+  chips are not drawn.
+
+### What it deliberately does not do
+
+- Counters and shift registers built from several flip-flops are not
+  simulated.
+
+### How it was checked
+
+- **D, demonstration inputs:** Q runs 0 0 1 1 0 1 0 0.
+- **Tapping D high at the first clock** makes it 0 1 1 1 0 1 0 0, and
+  "Reset inputs" restores it.
+- **T held at 1:** 0 1 0 1 0 1 0 1, half the clock frequency.
+- **SR with set, hold, S = R = 1, two holds, reset, hold:** 0 1 1 ? ? ? 0 0.
+  Q is unknown from the forbidden input until the reset.
+
+The review made these changes:
+- It fixed the forbidden SR input. The old diagram quietly kept Q
+  unchanged, as if the state were known; it now shows it unknown until
+  the next set or reset.
+- It made the inputs tappable, with a reset.
+- It enlarged the 10 px labels to 11 px.
+- It added setup and hold times and the chips from Nexperia and ST
+  documents.
+- It added plain-word explanations and examples, and remembers the type.
+- The tool was renamed Flip-flops, on Pierre's choice, to fit beside the
   bulb.
 
 [↑ Index](#index)

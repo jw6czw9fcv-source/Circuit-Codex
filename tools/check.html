@@ -56,7 +56,8 @@ async function play(doc, steps) {
     }
     const el = doc.querySelector(a);
     if (!el) throw new Error(`no element ${a}`);
-    if (kind === "click") { el.click(); await wait(30); continue; }
+    // SVG shapes (map cells, timing taps) have no click() of their own.
+    if (kind === "click") { if (el.click) el.click(); else el.dispatchEvent(new MouseEvent("click", { bubbles: true })); await wait(30); continue; }
     el.value = b;
     fire(el, "input");
     fire(el, "change");
