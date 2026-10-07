@@ -533,6 +533,18 @@ const CHECK_CASES = {
     { name: "gate is remembered", do: [["click", '[data-gate="NOR"]'], ["reopen"]],
       expect: [[".filter-btn.active", "NOR"]] },
   ],
+  "karnaugh": [
+    { name: "example: majority of three, 3 terms, 6 of 12 literals, POS (A + B)…", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="terms"]', "3"], ['[data-res="lits"]', "6 of 12"], ['[data-res="sop"]', "/(?=.*AB)(?=.*AC)(?=.*BC)/"], ['[data-res="pos"]', "(A + B)(A + C)(B + C)"]] },
+    { name: "example: BCD ≥ 5 with don't-cares, A + BC + BD", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="sop"]', "F = BD + BC + A"], ['[data-res="ones"]', "5 + 6 X"], ['[data-res="lits"]', "5 of 20"]] },
+    { name: "example: 4-input parity, 8 terms, XOR form", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="terms"]', "8"], ['[data-res="xor"]', "A ⊕ B ⊕ C ⊕ D"]] },
+    { name: "example: corners wrap, F = B̄D̄", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="3"]']],
+      expect: [['[data-res="sop"]', "F = B̄D̄"], ['[data-res="terms"]', "1"]] },
+    { name: "variables are remembered", do: [["pill", 0], ["reopen"]],
+      expect: [[".pill.active", "2 vars"]] },
+  ],
   "thyristor-firing": [
     { name: "TRIAC, 120 V, 144 Ω, α 90°: half power, 50 W", do: [],
       expect: [['[data-res="p"]', "50 W"], ['[data-res="pct"]', "50%"], ['[data-res="vrms"]', "84.85 V"], ['[data-res="delay"]', "4.167 ms"], ['[data-res="piv"]', "169.7 V"]] },

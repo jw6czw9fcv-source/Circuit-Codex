@@ -17909,7 +17909,29 @@ function kmRects(t, n) {
 }
 
 function renderKarnaugh(domain, tool, favId) {
-  const state = { vars: 4, cells: {} };
+  const C = "karnaugh";
+  const state = { vars: pref(C, "vars", 4, [2, 3, 4]), cells: {} };
+
+  // Each example sets the number of variables, the cells that are 1, and
+  // the don't-cares.
+  const example = (vars, ones, xs = []) => () => {
+    const v = new Array(1 << vars).fill(0);
+    ones.forEach((m) => { v[m] = 1; });
+    xs.forEach((m) => { v[m] = 2; });
+    state.vars = vars;
+    state.cells[vars] = v;
+    paint();
+  };
+  useExamples([
+    { title: "Majority vote of three", note: "F is 1 when at least two inputs are 1: three groups of two give AB + AC + BC.",
+      apply: example(3, [3, 5, 6, 7]) },
+    { title: "BCD digit 5 or more", note: "Codes 10–15 never occur in BCD, so they are X: the test shrinks to A + BC + BD.",
+      apply: example(4, [5, 6, 7, 8, 9], [10, 11, 12, 13, 14, 15]) },
+    { title: "Parity, the blind spot", note: "A checkerboard has no neighbours to group: 8 long terms for just A ⊕ B ⊕ C ⊕ D.",
+      apply: example(4, [1, 2, 4, 7, 8, 11, 13, 14]) },
+    { title: "The corners are neighbours", note: "The map wraps around, so the four corners make one group: F = B̄D̄.",
+      apply: example(4, [0, 2, 8, 10]) },
+  ]);
   const values = () => {
     const N = 1 << state.vars;
     const v = state.cells[state.vars] || (state.cells[state.vars] = new Array(N).fill(0));
@@ -17927,7 +17949,7 @@ function renderKarnaugh(domain, tool, favId) {
     const heads = (count) => (count === 2 ? ["0", "1"] : ["00", "01", "11", "10"]);
     const W = GX + C * CELL, H = GY + R * CELL;
 
-    const cells = [];
+    const cells = [], indices = [];
     for (let r = 0; r < R; r++) {
       for (let c = 0; c < C; c++) {
         const idx = kmIndex(r, c, n);
@@ -17936,8 +17958,10 @@ function renderKarnaugh(domain, tool, favId) {
         const fill = val === 1 ? "#E6ECF3" : val === 2 ? "#E0A85E" : "#5A6169";
         cells.push(`
           <rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" fill="#1B1F24" stroke="${wire}" stroke-width="1.2" data-km="${idx}" style="cursor:pointer"/>
-          <text x="${x + CELL / 2}" y="${y + CELL / 2 + 6}" fill="${fill}" font-size="17" font-weight="700" text-anchor="middle" pointer-events="none">${val === 2 ? "X" : val}</text>
-          <text x="${x + 4}" y="${y + 12}" fill="#858B93" font-size="9" pointer-events="none">${idx}</text>`);
+          <text x="${x + CELL / 2}" y="${y + CELL / 2 + 6}" fill="${fill}" font-size="17" font-weight="700" text-anchor="middle" pointer-events="none">${val === 2 ? "X" : val}</text>`);
+        // The cell's number goes in last, over any group outline, so a
+        // group passing through the corner cannot hide it.
+        indices.push(`<text x="${x + 3}" y="${y + 12}" fill="#858B93" font-size="11" pointer-events="none">${idx}</text>`);
       }
     }
 
@@ -17969,6 +17993,7 @@ function renderKarnaugh(domain, tool, favId) {
       ${heads(R).map((h, r) => `<text x="${GX - 7}" y="${GY + r * CELL + CELL / 2 + 4}" fill="#5A6169" font-size="11" font-weight="600" text-anchor="end">${h}</text>`).join("")}
       ${cells.join("")}
       ${groups}
+      ${indices.join("")}
     </svg>`;
   }
 
@@ -17978,6 +18003,26 @@ function renderKarnaugh(domain, tool, favId) {
     if (result.constant === 1) return `F = <span style="color:#5DCAA5">1</span>`;
     return "F = " + result.terms.map((t, i) =>
       `<span style="color:${KM_COLOURS[i % KM_COLOURS.length]}">${kmTermText(t, n)}</span>`).join(" + ");
+  }
+
+  // The product of sums: minimise the zeros (the complement, with the same
+  // don't-cares), then De Morgan turns each product of F̄ into a sum of
+  // complemented literals of F.
+  function posHTML() {
+    const n = state.vars;
+    const comp = values().map((x) => (x === 2 ? 2 : x === 1 ? 0 : 1));
+    const r = kmMinimise(comp, n);
+    if (r.constant === 0) return "1";
+    if (r.constant === 1) return "0";
+    return r.terms.map((t) => {
+      const lits = [];
+      for (let i = 0; i < n; i++) {
+        const bit = 1 << (n - 1 - i);
+        if (t.dash & bit) continue;
+        lits.push(KM_NAMES[i] + ((t.bits & bit) ? "\u0304" : ""));
+      }
+      return lits.length > 1 ? `(${lits.join(" + ")})` : lits[0];
+    }).join("");
   }
 
   function cell(label, value) {
@@ -17994,6 +18039,8 @@ function renderKarnaugh(domain, tool, favId) {
     return kmParity(values(), state.vars);
   }
 
+  // The simplest sum of products first and large, with the product of sums
+  // and, where it is shorter, the exclusive-OR form under it.
   function resultsHTML(result) {
     const n = state.vars, v = values();
     const ones = v.filter((x) => x === 1).length;
@@ -18002,21 +18049,26 @@ function renderKarnaugh(domain, tool, favId) {
     const after = result.constant === null ? result.terms.reduce((a, t) => a + kmLiterals(t, n), 0) : 0;
     const par = parityOf(result);
     return `
-      <div class="formula-card formula-card--static" style="margin:0 16px 10px; font-size:15px;">
-        <div class="formula-line" style="font-size:15px">${expressionHTML(result)}</div>
-        ${par ? `<div class="formula-line" style="font-size:15px;color:${KM_XOR_COLOUR}">F = ${kmParityText(par, n)}</div>` : ""}
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Simplest sum of products</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" style="font-size:22px;line-height:1.35" data-res="sop">${expressionHTML(result)}</span></div>
+        ${result.constant === null ? `<div class="result-sub">Product of sums: F = <span data-res="pos">${posHTML()}</span></div>` : ""}
+        ${par ? `<div class="result-sub" style="color:${KM_XOR_COLOUR}">As exclusive-OR: F = <span data-res="xor">${kmParityText(par, n)}</span></div>` : ""}
       </div>
-      <div class="eseries-grid eseries-grid--tight">
-        ${cell("Minterms", `${ones}${dcs ? ` + ${dcs} X` : ""}`)}
-        ${cell("Terms", result.constant === null ? result.terms.length : result.constant === 1 ? "1" : "0")}
-        ${cell("Literals", before ? `${after} of ${before}` : `${after}`)}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Minterms", `<span data-res="ones">${ones}${dcs ? ` + ${dcs} X` : ""}</span>`)}
+        ${cell("Terms", `<span data-res="terms">${result.constant === null ? result.terms.length : result.constant === 1 ? "1" : "0"}</span>`)}
+        ${cell("Literals", `<span data-res="lits">${before ? `${after} of ${before}` : `${after}`}</span>`)}
       </div>`;
   }
 
   function formulaBlock(result) {
     return formulaSection(
       ["Group 2^k cells → k variables drop out", "Groups may overlap and wrap at the edges"],
-      "Neighbouring cells differ in exactly one variable — that is what the 00 01 11 10 order along the edges is for — so a rectangle of 2, 4, 8 or 16 cells is a term with that many variables cancelled. An X is a don't-care: it joins a group when that makes the group bigger, and is ignored otherwise."
+      "A Karnaugh map is a truth table drawn as a grid: each cell is one combination of the inputs (its number is the binary value of A B C D), and holds the output, 1 or 0. Neighbouring cells differ in exactly one variable — that is what the 00 01 11 10 order along the edges is for — so a rectangle of 2, 4, 8 or 16 ones is one term with that many variables cancelled. The answer is the fewest, largest groups covering every 1: a sum of products (terms ANDed, then ORed). A bar over a letter means the inverted variable. A minterm is a cell that is 1; a literal is one letter in a term, so fewer literals means fewer gate inputs. An X is a don't-care, an input combination that never happens: it joins a group when that makes the group bigger, and is ignored otherwise. The product of sums is the same function grouped on the zeros, written as ORs ANDed together — sometimes it is the cheaper one to build."
       + (parityOf(result) ? " The second line is the same function written as exclusive-OR. A checkerboard of ones has no two cells adjacent, so every group is a single cell and the map gives its worst answer — parity is the one thing it cannot see. Two XOR gates beat four ANDs and an OR." : "")
     );
   }
@@ -18045,7 +18097,7 @@ function renderKarnaugh(domain, tool, favId) {
   function paint() {
     const result = kmMinimise(values(), state.vars);
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Tap a cell to cycle 0 · 1 · X, and read the groups")}
+      ${calcHeader(tool, favId, "Tap a cell to cycle 0 · 1 · X, then read the groups")}
 
       ${pillRow([[2, "2 vars"], [3, "3 vars"], [4, "4 vars"]].map(([k, l]) => [String(k), l]), String(state.vars), domain.bg)}
 
@@ -18064,7 +18116,7 @@ function renderKarnaugh(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.vars = +m; paint(); });
+    wireCalc(favId, paint, (m) => { state.vars = +m; setPref(C, "vars", state.vars); paint(); });
     document.getElementById("km-clear").onclick = () => {
       state.cells[state.vars] = new Array(1 << state.vars).fill(0);
       refresh();

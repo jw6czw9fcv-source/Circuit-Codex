@@ -71,7 +71,7 @@ will key on, since that is the id the app already holds for each tool.
 ### Digital
 
 - Logic gates → [Logic gates](#logic-gates)
-- Logic gates → [Karnaugh map simplification](#karnaugh-map-simplification)
+- Logic gates → [Karnaugh map](#karnaugh-map)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
@@ -4735,15 +4735,33 @@ The review made these changes:
 ---
 
 <a id="karnaugh"></a>
-## Karnaugh map simplification
+## Karnaugh map
 
 `calc: karnaugh` · Digital › Logic gates
+(formerly Karnaugh map simplification)
 
 ### What it computes
 
-Takes a truth table for 2, 3 or 4 variables — each cell either 0, 1 or a
-don't-care — and returns the minimum sum-of-products expression, with each
-product term drawn as a group on the map in its own colour.
+Takes a truth table for 2, 3 or 4 variables, where each cell is 0, 1 or a
+don't-care. It returns:
+- the minimum sum-of-products expression, with each product term drawn as
+  a group on the map in its own colour;
+- the minimum product of sums, under the expression;
+- the exclusive-OR form, when the function is a parity.
+
+Tap a cell to cycle it through 0, 1 and X. The number of variables is
+remembered, and four examples in the bulb load ready-made maps.
+
+**Plain words:**
+- **Cell** — one combination of the inputs. Its small number is the binary
+  value of A B C D, and it holds the output.
+- **Minterm** — a cell that is 1.
+- **Literal** — one letter in a term, plain or barred. A bar means the
+  inverted variable.
+- **Sum of products** — terms ANDed, then ORed together.
+- **Product of sums** — ORs ANDed together.
+- **Don't-care (X)** — an input combination that never happens, so its
+  output may be whatever helps.
 
 ### Source
 
@@ -4818,9 +4836,6 @@ from the map, whether the function is the parity of any subset of its variables
 
 ### What it deliberately does not do
 
-- **Product of sums.** The minimal POS is the same procedure applied to the
-  zeros, then inverted. It would double the interface for a form that is asked
-  for far less often.
 - **More than four variables**, as above.
 - **Hazard-free covers.** Adding the redundant terms is a different objective
   from minimisation and would make the answers disagree with what a textbook
@@ -4842,6 +4857,33 @@ literals. A correct minimum by term count, and still not the printed answer.
 The parity detector was checked exhaustively over all 256 three-variable
 functions: exactly eight are parity forms (three pairs and one triple, each with
 its complement), and each one's exclusive-OR form reproduces its truth table.
+
+**The product of sums** (added in the 2026 review) is the same exact
+minimisation run on the zeros, keeping the same don't-cares. De Morgan's law
+then turns each group of zeros into a sum of inverted letters:
+
+    F̄ = A̅B̅ + …   →   F = (A + B)(…)
+
+It was checked in the browser over 6000 random functions of 2 to 4
+variables, with don't-cares. At all 47,615 positions that are not
+don't-cares, the product of sums reproduced the truth table.
+
+**The examples:**
+- **Majority of three** — AB + AC + BC, with the product of sums
+  (A + B)(A + C)(B + C).
+- **BCD digit 5 or more** — with codes 10–15 as don't-cares, A + BC + BD.
+- **4-input parity** — eight terms of four letters, and A ⊕ B ⊕ C ⊕ D.
+- **The four corners** — they wrap around into the single term B̄D̄.
+
+The review made these changes:
+- It added the product of sums, which an earlier version left out as not
+  worth a second screen. It needs only one line.
+- It put the answer first and large.
+- It moved the cells' numbers above the group outlines, at 11 px.
+- It added plain definitions, examples, and remembers the number of
+  variables.
+- The tool was renamed Karnaugh map, on Pierre's choice, to fit beside the
+  bulb.
 
 [↑ Index](#index)
 
