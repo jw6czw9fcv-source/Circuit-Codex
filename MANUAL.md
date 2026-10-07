@@ -70,6 +70,7 @@ will key on, since that is the id the app already holds for each tool.
 
 ### Digital
 
+- Logic gates → [Logic gates](#logic-gates)
 - Logic gates → [Karnaugh map simplification](#karnaugh-map-simplification)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
@@ -4631,6 +4632,107 @@ The review made these changes:
 ---
 
 # Digital
+
+<a id="logic-gates"></a>
+## Logic gates
+
+`calc: logic-gates` · Digital & logic circuits › Logic gates
+(formerly Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR))
+
+### What it computes
+
+For each of the seven basic gates (AND, OR, NOT, NAND, NOR, XOR and XNOR),
+it shows:
+- the gate's symbol;
+- its truth table;
+- its Boolean expression;
+- the same operation written in code;
+- a common chip that contains it.
+
+Tap a row of the truth table to set the inputs. The symbol then shows the
+levels on its wires, and the output Y appears large.
+
+### Source
+
+- **Symbols** — these are the "distinctive shape" symbols: a D for AND, a
+  shield for OR, a triangle for NOT. Wikipedia's "Logic gate" article
+  says ANSI/IEEE Std 91-1984 (and its supplement 91a-1991) defines both
+  these and the rectangular IEC-style symbols, and that the distinctive
+  shapes come from MIL-STD-806. The standard itself was not read. The app
+  uses the distinctive shapes throughout, as it uses zigzag resistors.
+- **Chips** — Texas Instruments' product pages confirm the SN74HC00 (four
+  NAND gates), SN74HC04 (six inverters), SN74HC08 (four AND) and SN74HC32
+  (four OR), all for 2–6 V. Distributor listings of TI parts confirm the
+  74HC02 (four NOR) and 74HC86 (four XOR).
+  - The 74HC7266 (four XNOR) is in a Philips/Nexperia datasheet listed by
+    a distributor. TI's own version is obsolete.
+
+### What it means
+
+A logic gate works on two levels, 0 and 1. In a 5 V circuit these are a
+voltage near 0 V and one near 5 V. The truth table lists every combination
+of inputs and the output each gives. A bar over an expression means
+"inverted".
+
+| Gate | Output is 1 when… | Expression | In C / Python |
+|---|---|---|---|
+| AND | A and B are both 1 | Y = A · B | a & b |
+| OR | A or B, or both, is 1 | Y = A + B | a \| b |
+| NOT | A is 0 (it inverts) | Y = Ā | !a / not a |
+| NAND | not both are 1 | Y = (A · B)‾ | !(a & b) / not (a & b) |
+| NOR | both are 0 | Y = (A + B)‾ | !(a \| b) / not (a \| b) |
+| XOR | A and B differ | Y = A ⊕ B | a ^ b |
+| XNOR | A and B are the same | Y = (A ⊕ B)‾ | !(a ^ b) / not (a ^ b) |
+
+- **NAND and NOR are universal** — any logic, however complex, can be
+  built from either one alone. A NAND with its inputs tied together is a
+  NOT.
+- **XOR and AND add two bits** — XOR gives the sum and AND the carry,
+  which makes a half adder.
+- **Unused inputs** — on CMOS chips such as the 74HC series, an input left
+  floating can make the gate switch at random and draw extra current. Tie
+  every unused input to 0 V or to the supply.
+
+### Why the formulas are these
+
+Each truth table is computed from the gate's function, so a row cannot
+disagree with the symbol. The code forms use the bitwise operators on the
+values 0 and 1. In Python, `not` returns True or False rather than 1 or 0.
+
+### Assumptions and limits
+
+- **Ideal logic levels.** Real gates have input thresholds, output drive
+  limits and a propagation delay, given on each chip's datasheet. They
+  are not modelled.
+- **Two-input versions.** Chips with three or more inputs per gate exist
+  (for example triple 3-input AND); the logic extends the same way.
+
+### What it deliberately does not do
+
+- Simplifying a larger expression belongs to Karnaugh map simplification.
+- Flip-flops, which remember, have their own tool.
+
+### How it was checked
+
+- **AND:** with A = 1, B = 1, Y = 1; tapping the 0 1 row gives 0.
+- **XOR:** 1 0 gives 1, and 1 1 gives 0, the sum bit of a half adder.
+- **NOT:** A = 1 gives Y = 0.
+- **NAND:** with both inputs at 1, Y = 0 (the NOT example).
+- **Remembered:** the chosen gate comes back when the tool reopens.
+
+The review made these changes:
+- It corrected the standard cited ("ANSI/IEEE 315") to IEEE Std 91.
+- It made the truth table tappable, with the levels shown on the symbol
+  and Y large.
+- For each gate, it added the description in plain words, the code form
+  and a common 74HC chip, with the CMOS unused-input advice.
+- It added examples and remembers the chosen gate.
+- The tool was renamed Logic gates, on Pierre's choice, to fit on one
+  line.
+
+[↑ Index](#index)
+
+---
 
 <a id="karnaugh"></a>
 ## Karnaugh map simplification

@@ -97,7 +97,7 @@ const DOMAINS = [
     bg: "#1F3B33",
     icon: "binary",
     sections: [
-      { title: "Logic gates", tools: [{ name: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)", calc: "logic-gates" }, { name: "Karnaugh map simplification", calc: "karnaugh" }] },
+      { title: "Logic gates", tools: [{ name: "Logic gates", was: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)", calc: "logic-gates" }, { name: "Karnaugh map simplification", calc: "karnaugh" }] },
       { title: "Sequential logic", tools: [{ name: "Flip-flops (SR, D, JK, T)", calc: "flip-flops" }, { name: "Multivibrators (astable/monostable)", calc: "multivibrator" }, { name: "555 Timer (astable/monostable)", calc: "555-timer" }] },
       { title: "Number systems", tools: [{ name: "DEC / HEX / OCT / BIN conversion", calc: "dec-hex-bin" }, { name: "ASCII table", calc: "ascii-table" }] },
       {
@@ -286,7 +286,7 @@ const TOOL_KEYWORDS = {
   "photocell-ldr": "ldr light sensor photoresistor lux",
   "optocoupler": "opto isolator ctr",
   "spectrum-chart": "light color colour nm wavelength led spectrum chart photon energy ev uv infrared",
-  "logic-gates": "and or not nand nor xor truth table",
+  "logic-gates": "basic gates and or not nand nor xor xnor inverter truth table boolean 74hc00 74hc08",
   "karnaugh": "k-map boolean minimise simplify logic",
   "flip-flops": "latch sr d jk t flip flop",
   "multivibrator": "astable monostable transistor oscillator",

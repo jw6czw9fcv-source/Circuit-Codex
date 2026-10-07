@@ -7037,29 +7037,53 @@ function renderResistorPowerRating(domain, tool, favId) {
   paint();
 }
 
-// ---------- Basic logic gates ----------
-// ANSI/IEEE 315 distinctive shapes (D-shaped AND, shield-shaped OR, triangle
-// NOT), same convention choice as every zigzag resistor in the app — US
-// shape symbols, never IEC rectangles. NAND/NOR/XNOR are their un-negated
+// ---------- Logic gates ----------
+// Distinctive-shape symbols (D-shaped AND, shield-shaped OR, triangle NOT),
+// the set ANSI/IEEE Std 91-1984 defines beside the rectangular one and that
+// comes from MIL-STD-806 — the app's US-shape convention, as with every
+// zigzag resistor, never IEC rectangles. NAND/NOR/XNOR are their un-negated
 // body plus a bubble at the output; XOR/XNOR add the extra curved line
-// behind an OR body rather than being a shape of their own — that's the
-// real ANSI convention, not a simplification made here. Truth tables are
-// computed from each gate's boolean function rather than hand-typed, so
-// there's no way for a row to disagree with the symbol above it.
+// behind an OR body. Truth tables are computed from each gate's function,
+// so no row can disagree with the symbol above it. Chips: TI's SN74HC00,
+// 04, 08, 32 (product pages), 74HC02 and 74HC86 (TI), and the 74HC7266
+// quad XNOR (Philips/Nexperia; TI's is obsolete).
 const LOGIC_GATES = {
-  AND: { inputs: 2, family: "and", fn: (a, b) => a & b, expr: "Y = A · B" },
-  OR: { inputs: 2, family: "or", fn: (a, b) => a | b, expr: "Y = A + B" },
-  NOT: { inputs: 1, family: "not", bubble: true, fn: (a) => a ^ 1, expr: `Y = <span style="text-decoration:overline">A</span>` },
-  NAND: { inputs: 2, family: "and", bubble: true, fn: (a, b) => 1 - (a & b), expr: `Y = <span style="text-decoration:overline">A · B</span>` },
-  NOR: { inputs: 2, family: "or", bubble: true, fn: (a, b) => 1 - (a | b), expr: `Y = <span style="text-decoration:overline">A + B</span>` },
-  XOR: { inputs: 2, family: "or", extra: true, fn: (a, b) => a ^ b, expr: "Y = A ⊕ B" },
-  XNOR: { inputs: 2, family: "or", extra: true, bubble: true, fn: (a, b) => 1 - (a ^ b), expr: `Y = <span style="text-decoration:overline">A ⊕ B</span>` },
+  AND: { inputs: 2, family: "and", fn: (a, b) => a & b, expr: "Y = A · B",
+    words: "Y is 1 only when A and B are both 1.", code: "a & b", chip: "74HC08 (four AND gates)" },
+  OR: { inputs: 2, family: "or", fn: (a, b) => a | b, expr: "Y = A + B",
+    words: "Y is 1 when A or B, or both, is 1.", code: "a | b", chip: "74HC32 (four OR gates)" },
+  NOT: { inputs: 1, family: "not", bubble: true, fn: (a) => a ^ 1, expr: `Y = <span style="text-decoration:overline">A</span>`,
+    words: "Y is the opposite of A. Also called an inverter.", code: "C: !a · Python: not a", chip: "74HC04 (six inverters)" },
+  NAND: { inputs: 2, family: "and", bubble: true, fn: (a, b) => 1 - (a & b), expr: `Y = <span style="text-decoration:overline">A · B</span>`,
+    words: "Y is 0 only when A and B are both 1: an AND, then inverted.", code: "C: !(a & b) · Python: not (a & b)", chip: "74HC00 (four NAND gates)" },
+  NOR: { inputs: 2, family: "or", bubble: true, fn: (a, b) => 1 - (a | b), expr: `Y = <span style="text-decoration:overline">A + B</span>`,
+    words: "Y is 1 only when A and B are both 0: an OR, then inverted.", code: "C: !(a | b) · Python: not (a | b)", chip: "74HC02 (four NOR gates)" },
+  XOR: { inputs: 2, family: "or", extra: true, fn: (a, b) => a ^ b, expr: "Y = A ⊕ B",
+    words: "Y is 1 when A and B are different (exclusive OR).", code: "a ^ b", chip: "74HC86 (four XOR gates)" },
+  XNOR: { inputs: 2, family: "or", extra: true, bubble: true, fn: (a, b) => 1 - (a ^ b), expr: `Y = <span style="text-decoration:overline">A ⊕ B</span>`,
+    words: "Y is 1 when A and B are the same: an XOR, then inverted.", code: "C: !(a ^ b) · Python: not (a ^ b)", chip: "74HC7266 (four XNOR gates)" },
 };
 const LOGIC_GATE_ROWS = [["AND", "OR", "NOT"], ["NAND", "NOR", "XOR", "XNOR"]];
 
 function renderLogicGates(domain, tool, favId) {
-  const state = { gate: "AND" };
+  const C = "logic-gates";
+  const state = { gate: pref(C, "gate", "AND", Object.keys(LOGIC_GATES)), a: 1, b: 1 };
 
+  // Each example picks a gate and the inputs to show.
+  const example = (gate, a, b) => () => { Object.assign(state, { gate, a, b }); paint(); };
+  useExamples([
+    { title: "Staircase light (XOR)", note: "Two switches, one lamp: flipping either switch changes the lamp. The lamp follows A XOR B.",
+      apply: example("XOR", 1, 0) },
+    { title: "NAND wired as a NOT", note: "Tie both NAND inputs together and it inverts: 1 in, 0 out. NAND alone can build any logic.",
+      apply: example("NAND", 1, 1) },
+    { title: "Adding two bits", note: "1 + 1 = 10 in binary: XOR gives the sum bit (0) and AND the carry (1) — a half adder.",
+      apply: example("XOR", 1, 1) },
+  ]);
+
+  const outOf = (g) => (g.inputs === 1 ? g.fn(state.a) : g.fn(state.a, state.b));
+
+  // The gate, with the chosen input levels written on its input wires and
+  // the output on its output wire — green, as the calculated value is.
   function gateSymbol(type) {
     const g = LOGIC_GATES[type];
     const color = "#8FC1F5"; // the part, in the part blue
@@ -7083,34 +7107,40 @@ function renderLogicGates(domain, tool, favId) {
     const outStartX = g.bubble ? tipX + bubbleR * 2 : tipX;
     const bubbleSvg = g.bubble ? `<circle cx="${tipX + bubbleR}" cy="55" r="${bubbleR}" stroke="${color}" stroke-width="2" fill="var(--card)"/>` : "";
     const outputLine = `<path d="M${outStartX},55 H185" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
-    const inputLines = g.inputs === 1
-      ? `<path d="M15,55 H${inLeftX}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`
-      : `<path d="M15,35 H${inLeftX} M15,75 H${inLeftX}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
-    const labels = g.inputs === 1
-      ? `<text x="4" y="59" fill="#8FC1F5" font-size="13" font-weight="600">A</text>`
-      : `<text x="4" y="39" fill="#8FC1F5" font-size="13" font-weight="600">A</text><text x="4" y="79" fill="#8FC1F5" font-size="13" font-weight="600">B</text>`;
+    const level = (x, y, v, fill) => `<text x="${x}" y="${y}" fill="${fill}" font-size="12" font-weight="700" text-anchor="middle">${v}</text>`;
+    const inputs = g.inputs === 1
+      ? `<path d="M15,55 H${inLeftX}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         <text x="4" y="59" fill="${color}" font-size="13" font-weight="600">A</text>
+         ${level(34, 49, state.a, color)}`
+      : `<path d="M15,35 H${inLeftX} M15,75 H${inLeftX}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+         <text x="4" y="39" fill="${color}" font-size="13" font-weight="600">A</text>
+         <text x="4" y="79" fill="${color}" font-size="13" font-weight="600">B</text>
+         ${level(34, 29, state.a, color)}${level(34, 69, state.b, color)}`;
 
     return `<svg width="220" height="110" viewBox="0 0 200 110" fill="none">
-      ${inputLines}${extra}${body}${bubbleSvg}${outputLine}${labels}
+      ${inputs}${extra}${body}${bubbleSvg}${outputLine}
+      ${level(168, 49, outOf(g), "#5DCAA5")}
       <text x="192" y="59" fill="#5DCAA5" font-size="13" font-weight="600">Y</text>
     </svg>`;
   }
 
-  function truthRows(type) {
-    const g = LOGIC_GATES[type];
+  function truthRows(g) {
     const rows = [];
     if (g.inputs === 1) { for (const a of [0, 1]) rows.push([a, g.fn(a)]); }
     else { for (const a of [0, 1]) for (const b of [0, 1]) rows.push([a, b, g.fn(a, b)]); }
     return rows;
   }
 
-  function truthTableHTML(type) {
-    const g = LOGIC_GATES[type];
+  // Every row can be tapped to set the inputs; the chosen one is lit.
+  function truthTableHTML(g) {
     const heads = g.inputs === 1 ? ["A", "Y"] : ["A", "B", "Y"];
     return `
       <div class="truth-table" style="--tt-cols:${heads.length}">
         <div class="tt-row tt-head">${heads.map((l) => `<span>${l}</span>`).join("")}</div>
-        ${truthRows(type).map((r) => `<div class="tt-row">${r.map((v, i) => `<span${i === r.length - 1 ? ' class="tt-out"' : ""}>${v}</span>`).join("")}</div>`).join("")}
+        ${truthRows(g).map((r) => {
+          const sel = r[0] === state.a && (g.inputs === 1 || r[1] === state.b);
+          return `<button type="button" class="tt-row tt-pick${sel ? " tt-sel" : ""}" data-a="${r[0]}" data-b="${g.inputs === 1 ? state.b : r[1]}">${r.map((v, i) => `<span${i === r.length - 1 ? ' class="tt-out"' : ""}>${v}</span>`).join("")}</button>`;
+        }).join("")}
       </div>`;
   }
 
@@ -7125,32 +7155,48 @@ function renderLogicGates(domain, tool, favId) {
 
   function paint() {
     const g = LOGIC_GATES[state.gate];
+    const y = outOf(g);
     app.innerHTML = `
-      ${calcHeader(tool, favId, "ANSI/IEEE 315 shapes + truth table")}
+      ${calcHeader(tool, favId, "Pick a gate, then tap a row to try it")}
 
-      <div class="diagram-box">${gateSymbol(state.gate)}</div>
+      <div class="diagram-box" data-res="diagram">${gateSymbol(state.gate)}</div>
 
       ${filterRow("lg-basic", LOGIC_GATE_ROWS[0])}
       ${filterRow("lg-derived", LOGIC_GATE_ROWS[1])}
 
-      <div class="section-label" style="color:#8FC1F5">Boolean expression</div>
-      <div class="field"><div class="formula-line" style="margin:0">${g.expr}</div></div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Y</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="y">${y}</span></div>
+        <div class="result-sub">A = ${state.a}${g.inputs === 2 ? `, B = ${state.b}` : ""} &nbsp;·&nbsp; ${g.expr}</div>
+      </div>
 
-      <div class="section-label" style="color:#5DCAA5">Truth table</div>
-      ${truthTableHTML(state.gate)}
+      <div class="section-label" style="color:#8FC1F5">Truth table</div>
+      ${truthTableHTML(g)}
 
+      ${formulaSection(
+        [g.expr.replace(/<[^>]+>/g, ""), `In code: ${g.code}`, `Chip: ${g.chip}`],
+        `${g.words} A logic gate works on two levels, 0 and 1 (in a 5 V circuit, near 0 V and near 5 V). The truth table lists every combination of inputs and the output it gives; the bar over an expression means “inverted”. NAND and NOR are universal: any logic, however complex, can be built from either one alone. The 74HC chips run from 2 to 6 V; leave no input of an unused gate floating — tie it to 0 V or the supply.`
+      )}
       ${calcFooter()}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+    wireCalc(favId, paint);
 
     ["lg-basic", "lg-derived"].forEach((id) => {
       document.getElementById(id).addEventListener("click", (e) => {
         const btn = e.target.closest(".filter-btn");
         if (!btn) return;
         state.gate = btn.dataset.gate;
+        setPref(C, "gate", state.gate);
         paint();
       });
+    });
+    app.querySelectorAll(".tt-pick").forEach((row) => {
+      row.onclick = () => { state.a = +row.dataset.a; state.b = +row.dataset.b; paint(); };
     });
   }
 

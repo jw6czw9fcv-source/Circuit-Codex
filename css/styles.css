@@ -1085,6 +1085,19 @@ html, body {
   padding: 10px 4px 6px;
 }
 .tt-out { color: #5DCAA5; font-weight: 600; }
+/* A row you can tap to set the inputs (Logic gates): a full-width button
+   that keeps the row's grid look, lit when it is the one chosen. */
+.tt-pick {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.tt-row.tt-sel { background: var(--result-bg); }
+.tt-row.tt-sel span { color: var(--result-text); font-weight: 700; }
 
 /* Link from a tool's formula card to its section of the manual. */
 .manual-link {
