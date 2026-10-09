@@ -17459,6 +17459,7 @@ function renderMultivibrator(domain, tool, favId) {
 // and the supply cancels out of every time constant. Vcc is still an input
 // here because those two fractions are the voltages you actually probe.
 function render555(domain, tool, favId) {
+  const C = "555-timer";
   const LN2 = Math.LN2;
   const LN3 = Math.log(3);
 
@@ -17468,20 +17469,46 @@ function render555(domain, tool, favId) {
   // charge path. It is driven by the duty rather than by a pill, so the
   // limitation shows up exactly when it is the thing blocking you.
   const state = {
-    mode: "astable", diode: false, tol: 5,
+    mode: pref(C, "mode", "astable", ["astable", "mono"]),
+    diode: false,
+    tol: pref(C, "tol", 5, [0.1, 0.5, 1, 2, 5, 10, 20]),
     fd: 1, fdUnit: "kHz", duty: 60,
     r1: 4.7, r1Unit: "kΩ", r2: 4.7, r2Unit: "kΩ", c: 100, cUnit: "nF",
     tdp: 1.1, tdpUnit: "ms", rm: 10, rmUnit: "kΩ", cm: 100, cmUnit: "nF",
     vcc: 5, vccUnit: "V",
   };
-  const F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+  // Real units only: TI rates the NE555 to 100 kHz and 10 µs, timing
+  // resistors run from about 1 kΩ to a few MΩ, and the supply is always volts.
+  const F_UNITS = { Hz: 1, kHz: 1e3 };
+  const TP_UNITS = { "µs": 1e-6, ms: 1e-3, s: 1 };
 
   const UNITS = {
-    r1: OHM_UNITS, r2: OHM_UNITS, rm: OHM_UNITS,
-    c: CAP_UNITS, cm: CAP_UNITS,
-    fd: F_UNITS, tdp: RC_TIME_UNITS, vcc: VOLT_UNITS,
+    r1: DIVIDER_R_UNITS, r2: DIVIDER_R_UNITS, rm: DIVIDER_R_UNITS,
+    c: RCF_C_UNITS, cm: RCF_C_UNITS,
+    fd: F_UNITS, tdp: TP_UNITS, vcc: { V: 1 },
   };
   const si = (name) => state[name] * UNITS[name][state[name + "Unit"]];
+
+  // Each example sets the parts, or the spec for the 50% one; the other side
+  // follows on the paint.
+  useExamples([
+    { title: "LED blinker, about 1 Hz", note: "10 k, 680 k and 1 µF: on for 0.48 s, off for 0.47 s, about one blink a second.",
+      apply: () => {
+        Object.assign(state, { mode: "astable", diode: false, r1: 10, r1Unit: "kΩ", r2: 680, r2Unit: "kΩ", c: 1, cUnit: "µF" });
+        paint();
+      } },
+    { title: "1 kHz square wave", note: "50 % needs the diode across R2; with 10 nF, R1 = R2 = 72.1 k.",
+      apply: () => {
+        Object.assign(state, { mode: "astable", c: 10, cUnit: "nF", fd: 1, fdUnit: "kHz", duty: 50 });
+        partsFromSpec();
+        paint();
+      } },
+    { title: "10-second timer", note: "91 k and 100 µF give 10.0 s; the electrolytic's ±20 % sets the real accuracy.",
+      apply: () => {
+        Object.assign(state, { mode: "mono", rm: 91, rmUnit: "kΩ", cm: 100, cmUnit: "µF" });
+        paint();
+      } },
+  ]);
 
   const seriesName = () => eSeriesForTolerance(state.tol);
   const snap = (ohms) => (ohms > 0 && isFinite(ohms) ? nearestESeries(ohms, seriesName()).value : NaN);
@@ -17560,7 +17587,7 @@ function render555(domain, tool, favId) {
   const zigV = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
   const capV = (x, y) => `${part(`M${x - 9} ${y} H${x + 9}`)}${part(`M${x - 9} ${y + 6} H${x + 9}`)}`;
   const lbl = (x, y, t, anchor, size) => `<text x="${x}" y="${y}" fill="${comp}" font-size="${size || 11}" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
-  const pin = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="${wire}" font-size="9" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
+  const pin = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="#8A9099" font-size="11" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
 
   // Laid out on one symmetric grid rather than by eye. The box is 84 x 80 with
   // its centre at (124, 84); the three left pins sit 28 apart about that
@@ -17579,13 +17606,13 @@ function render555(domain, tool, favId) {
     return `
       <rect x="82" y="44" width="84" height="80" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
       ${lbl(124, 89, "555", "middle", 13)}
-      ${pin(86, 60, "DIS")}${pin(86, 88, "THR")}${pin(86, 116, "TRG")}
-      ${pin(162, 60, "OUT", "end")}${pin(162, 116, "CTL", "end")}
+      ${pin(86, 61, "DIS")}${pin(86, 89, "THR")}${pin(86, 117, "TRG")}
+      ${pin(162, 61, "OUT", "end")}${pin(162, 117, "CTL", "end")}
 
       ${pin(76, 52, "7", "end")}${pin(76, 80, "6", "end")}${pin(76, 108, "2", "end")}
       ${pin(172, 52, "3")}${pin(172, 108, "5")}
       ${pin(100, 40, "8", "end")}${pin(148, 40, "4")}
-      ${pin(130, 139, "1")}
+      ${pin(130, 140, "1")}
 
       ${w("M106 44 V0")}${w("M142 44 V0")}
       ${w("M124 124 V148")}${ground(124, 148)}
@@ -17593,12 +17620,12 @@ function render555(domain, tool, favId) {
 
       ${w("M166 56 H193")}${port(196, 56)}${lbl(196, 44, "Out", "middle")}
       ${w("M166 112 H196")}${w("M196 112 V128")}${capV(196, 128)}${w("M196 134 V148")}${ground(196, 148)}
-      ${lbl(208, 134, "10n", "start", 9)}`;
+      ${lbl(208, 135, "10 nF")}`;
   }
 
   function diagram(astable) {
     if (astable) {
-      return `<svg width="244" height="186" viewBox="-12 -22 244 186" fill="none">
+      return `<svg width="250" height="186" viewBox="-12 -22 250 186" fill="none">
         ${chip()}
         ${w("M82 56 H20")}
         ${w("M82 84 H62")}${w("M62 84 V112")}${w("M82 112 H62")}${dot(62, 112)}
@@ -17614,7 +17641,7 @@ function render555(domain, tool, favId) {
           ${w("M44 90 V112")}${dot(44, 112)}${lbl(44, 50, "D", "middle")}` : ""}
       </svg>`;
     }
-    return `<svg width="244" height="186" viewBox="-12 -22 244 186" fill="none">
+    return `<svg width="250" height="186" viewBox="-12 -22 250 186" fill="none">
       ${chip()}
       ${w("M82 56 H20")}
       ${w("M82 84 H62")}${w("M62 84 V56")}${dot(62, 56)}
@@ -17630,27 +17657,54 @@ function render555(domain, tool, favId) {
   function timing(r) {
     if (r.problem) return `<svg width="308" height="56" viewBox="0 0 308 56" fill="none"></svg>`;
     const x0 = 34, x1 = 300, W = x1 - x0;
+    // C's voltage, in units of Vcc. Each stretch is a fraction s of its own
+    // time, and because every time is ln2 or ln3 times its RC, the curves
+    // need no RC at all: charging from ⅓ toward Vcc gives 1 − ⅔·2^−s,
+    // draining from ⅔ toward 0 gives ⅔·2^−s, and the monostable's charge
+    // from empty gives 1 − 3^−s. Each lands exactly on ⅔ or ⅓ at s = 1.
+    const curve = (x, width, f, y) => {
+      let d = "";
+      for (let i = 1; i <= 12; i++) d += ` L${(x + (width * i) / 12).toFixed(1)} ${y(f(i / 12)).toFixed(1)}`;
+      return d;
+    };
+    const label = (y, t, fill) => `<text x="30" y="${y}" fill="${fill}" font-size="11" font-weight="600" text-anchor="end">${t}</text>`;
     if (r.astable) {
+      // C between ⅓ (y 30) and ⅔ (y 6); the output below, high 44, low 70.
+      const yc = (v) => 30 - ((v - 1 / 3) / (1 / 3)) * 24;
       const per = W / 2.4, wh = per * (r.tHigh / r.period), wl = per - wh;
-      let d = `M${x0} 36`, x = x0, hi = false;
+      let d = `M${x0} 70`, c = `M${x0} ${yc(2 / 3)}`, x = x0, hi = false;
       while (x < x1) {
-        const step = hi ? wh : wl;
+        const step = Math.min(hi ? wh : wl, x1 - x);
+        const frac = step / (hi ? wh : wl);
+        c += curve(x, step, (s) => (hi ? 1 - (2 / 3) * 2 ** -(s * frac) : (2 / 3) * 2 ** -(s * frac)), yc);
         if (x + step >= x1) { d += ` H${x1}`; break; }
         x += step;
-        d += ` H${x.toFixed(1)} V${hi ? 36 : 8}`;
+        d += ` H${x.toFixed(1)} V${hi ? 70 : 44}`;
         hi = !hi;
       }
-      return `<svg width="308" height="56" viewBox="0 0 308 56" fill="none">
+      return `<svg width="318" height="78" viewBox="0 0 318 78" fill="none">
+        <path d="M${x0} 6 H${x1} M${x0} 30 H${x1}" stroke="#3A4048" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="${x1 + 3}" y="9" fill="#8A9099" font-size="10" font-weight="600">⅔</text>
+        <text x="${x1 + 3}" y="33" fill="#8A9099" font-size="10" font-weight="600">⅓</text>
+        <path d="${c}" stroke="${wire}" stroke-width="1.6" fill="none"/>
+        ${label(22, "C", "#8A9099")}
         <path d="${d}" stroke="${comp}" stroke-width="2.2" fill="none"/>
-        <text x="30" y="26" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Out</text>
+        ${label(61, "Out", comp)}
       </svg>`;
     }
+    // Trig on top, then C from 0 (y 54) up to ⅔ (y 30), then the output.
     const span = r.width * 2.6, pw = (r.width / span) * W, lead = W * 0.1;
-    return `<svg width="308" height="56" viewBox="0 0 308 56" fill="none">
-      <path d="M${x0} 16 H${(x0 + lead).toFixed(1)} V6 H${(x0 + lead + 5).toFixed(1)} V16 H${x1}" stroke="${wire}" stroke-width="1.6" fill="none"/>
-      <text x="30" y="14" fill="${wire}" font-size="10" font-weight="600" text-anchor="end">Trig</text>
-      <path d="M${x0} 46 H${(x0 + lead).toFixed(1)} V30 H${(x0 + lead + pw).toFixed(1)} V46 H${x1}" stroke="${comp}" stroke-width="2.2" fill="none"/>
-      <text x="30" y="42" fill="${comp}" font-size="10" font-weight="600" text-anchor="end">Out</text>
+    const ts = x0 + lead, te = ts + pw;
+    const yc = (v) => 54 - (v / (2 / 3)) * 24;
+    return `<svg width="318" height="90" viewBox="0 0 318 90" fill="none">
+      <path d="M${x0} 16 H${ts.toFixed(1)} V6 H${(ts + 5).toFixed(1)} V16 H${x1}" stroke="${wire}" stroke-width="1.6" fill="none"/>
+      ${label(15, "Trig", "#8A9099")}
+      <path d="M${x0} 30 H${x1}" stroke="#3A4048" stroke-width="1" stroke-dasharray="2 3"/>
+      <text x="${x1 + 3}" y="33" fill="#8A9099" font-size="10" font-weight="600">⅔</text>
+      <path d="M${x0} 54 H${ts.toFixed(1)}${curve(ts, pw, (s) => 1 - 3 ** -s, yc)} V54 H${x1}" stroke="${wire}" stroke-width="1.6" fill="none"/>
+      ${label(46, "C", "#8A9099")}
+      <path d="M${x0} 84 H${ts.toFixed(1)} V66 H${te.toFixed(1)} V84 H${x1}" stroke="${comp}" stroke-width="2.2" fill="none"/>
+      ${label(79, "Out", comp)}
     </svg>`;
   }
 
@@ -17661,42 +17715,63 @@ function render555(domain, tool, favId) {
     </div>`;
   }
 
-  // Pin 7 sinks Vcc/R1 the instant the discharge transistor turns on, so the
-  // datasheets set 1 kΩ as the floor; at the top end the threshold pin's bias
-  // current, tens of nanoamps, starts to rival the charging current and the
-  // timing wanders. Neither is an error — both are reachable from a perfectly
-  // reasonable-looking spec — so they read as a caution, not a refusal.
+  // The limits are TI's (NE555, SLFS022K). The threshold pin draws up to
+  // 250 nA, which caps the charging resistance: TI gives R1 + R2 about
+  // 3.4 MΩ at 5 V and 10 MΩ at 15 V, joined here by a straight line. With
+  // the diode only R1 charges C, so only R1 counts; the monostable's R sees
+  // the same pin and the same limit. At the low end TI's figures and test
+  // circuits start at 1 kΩ, and below it pin 7 sinks Vcc / R1 for the whole
+  // low time. None of these is an error, so they read as a caution.
   function caution(r) {
     const msgs = [];
+    const vcc = si("vcc");
     const low = r.astable ? si("r1") : si("rm");
-    const high = r.astable ? si("r1") + 2 * si("r2") : si("rm");
+    const charge = r.astable ? (state.diode ? si("r1") : si("r1") + si("r2")) : si("rm");
+    const rMax = 3.4e6 + (vcc - 5) * 0.66e6;
+    const name = r.astable ? "R1" : "R";
+    if (vcc < 4.5 || vcc > 16) msgs.push("The NE555 runs from 4.5 to 16 V (TI).");
     if (low > 0 && low < 1000) {
-      msgs.push(r.astable
-        ? "R1 is under 1 kΩ, which overloads the discharge pin. Raise C, or move the duty further from 50%."
-        : "R is under 1 kΩ, which overloads the discharge pin. Raise C instead.");
+      msgs.push(`${name} is under 1 kΩ, where TI's figures start: pin 7 would sink ${siFormat(vcc / low, "A", 3)} ${r.astable ? "during every low time" : "the whole time the timer waits"}. Raise ${name} and lower C.`);
     }
-    if (high > 10e6) {
-      msgs.push("Past about 10 MΩ the threshold pin's bias current rivals the charging current and the timing drifts. Raise C instead.");
+    if (rMax > 0 && charge > rMax) {
+      const what = r.astable ? (state.diode ? "R1" : "R1 + R2") : "R";
+      msgs.push(`${what} is over about ${siFormat(rMax, "Ω", 2)}, TI's limit at this supply: the threshold pin's current (up to 250 nA) would upset the timing. Raise C instead.`);
     }
+    if (r.astable && r.freq > 100e3) msgs.push("TI advises 100 kHz or below for the NE555; above that, use a CMOS TLC555.");
+    if (!r.astable && r.width < 10e-6) msgs.push("TI puts the shortest pulse at about 10 µs.");
     return msgs.length ? `<div class="error-text" style="color:#E0A85E">${msgs.join(" ")}</div>` : "";
   }
 
+  // The period (astable) or the pulse width (monostable) large, then the same
+  // circuit in values you can buy and the two levels C turns around at.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     const e = seriesName();
-    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight">${cells}</div>`;
+    const big = (label, value, sub) => `
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${label}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main">${value}</span></div>
+        <div class="result-sub">${sub}</div>
+      </div>`;
+    const grid = (n, cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(${n},1fr);">${cells}</div>`;
     if (r.astable) {
-      return grid(`
-        ${cell("t high", siFormat(r.tHigh, "s"))}
-        ${cell("t low", siFormat(r.tLow, "s"))}
-        ${cell(`R1 (${e})`, siFormat(r.r1e, "Ω"))}
-        ${cell(`R2 (${e})`, siFormat(r.r2e, "Ω"))}
-        ${cell("Threshold", siFormat(r.thr, "V"))}`) + caution(r);
+      return big("Period", siFormat(r.period, "s"),
+          `high <span data-res="th">${siFormat(r.tHigh, "s")}</span>, then low <span data-res="tl">${siFormat(r.tLow, "s")}</span>`)
+        + grid(4, `
+          ${cell(`R1 (${e})`, `<span data-res="r1e">${formatOhms(r.r1e)}</span>`)}
+          ${cell(`R2 (${e})`, `<span data-res="r2e">${formatOhms(r.r2e)}</span>`)}
+          ${cell("Trigger", `<span data-res="trig">${siFormat(r.trig, "V")}</span>`)}
+          ${cell("Threshold", `<span data-res="thr">${siFormat(r.thr, "V")}</span>`)}`) + caution(r);
     }
-    return grid(`
-      ${cell(`R (${e})`, siFormat(r.re, "Ω"))}
-      ${cell("Threshold", siFormat(r.thr, "V"))}
-      ${cell("Trigger", siFormat(r.trig, "V"))}`) + caution(r);
+    return big("Pulse width", siFormat(r.width, "s"),
+        "Trig must be back high 10 µs before it ends")
+      + grid(3, `
+        ${cell(`R (${e})`, `<span data-res="re">${formatOhms(r.re)}</span>`)}
+        ${cell("Trigger", `<span data-res="trig">${siFormat(r.trig, "V")}</span>`)}
+        ${cell("Threshold", `<span data-res="thr">${siFormat(r.thr, "V")}</span>`)}`) + caution(r);
   }
 
   function refresh() {
@@ -17707,13 +17782,19 @@ function render555(domain, tool, favId) {
     app.querySelector('[data-res="formula"]').innerHTML = formulaBlock(state.mode === "astable");
   }
 
-  function field(id, name, label, units) {
+  // units: a picker's unit table, a string for a fixed unit, or nothing.
+  // flex: a share of the row other than equal, so a frequency with its kHz
+  // picker is not cut off beside a Vcc that only ever holds a digit or two.
+  function field(id, name, label, units, flex) {
+    const unit = !units ? ""
+      : typeof units === "string" ? `<span class="unit-fixed">${units}</span>`
+      : `<select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     return `
-        <div class="field">
+        <div class="field"${flex ? ` style="flex:${flex}"` : ""}>
           <label>${label}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            ${units ? `<select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>` : ""}
+            ${unit}
           </div>
         </div>`;
   }
@@ -17752,14 +17833,14 @@ function render555(domain, tool, favId) {
                "t low = ln2 × R2 × C",
                "Frequency = 1 / (t high + t low)",
                state.diode ? "Duty = R1 / (R1 + R2)" : "Duty = (R1 + R2) / (R1 + 2 × R2)",
-               "Threshold = ⅔ Vcc,  Trigger = ⅓ Vcc"]
-            : ["Pulse width = ln3 × R × C = 1.0986 × R × C",
-               "Threshold = ⅔ Vcc,  Trigger = ⅓ Vcc"],
+               "Trigger = ⅓ Vcc,  Threshold = ⅔ Vcc"]
+            : ["Pulse width = ln3 × R × C ≈ 1.1 × R × C",
+               "Trigger = ⅓ Vcc,  Threshold = ⅔ Vcc"],
           astable
-            ? `Every box is live in both directions: type a frequency and both resistors scale, type a duty and they redistribute, type a part and the frequency follows. The capacitor is never rewritten for you. ${state.diode
-                ? "You asked for 50% or less, so the drawing has grown a diode across R2. It has to: the plain circuit charges through R1 + R2 and discharges through R2 alone, so t high always exceeds t low and the duty can never reach half. The diode takes R2 out of the charge path. Its forward drop is ignored here, as datasheets ignore it, so expect the real duty a little off."
-                : "The duty here cannot go below 50%, because the charge path is R1 + R2 and the discharge path is R2 alone. Ask for 50% or less and a diode appears across R2 to take it out of the charge path."} The timing holds no Vcc term at all — the comparators sit on three equal internal resistors, so they trip at fractions of whatever the supply is and it cancels. Vcc is here only to tell you the two voltages you would probe. Pin 5 wants the 10 nF shown, not for timing but because the divider node is high impedance and picks up the supply glitch the output stage makes when it switches.`
-            : `Pulse width and R are live in both directions, and C is never rewritten for you. The constant is ln3, not ln2: the capacitor starts from empty and has to reach ⅔ Vcc, which is 1.0986 RC, the 1.1 RC every datasheet quotes. Two things catch people. The trigger pulse has to be shorter than the output pulse, or the 555 holds its output high as long as pin 2 stays low. And the timing carries no Vcc term — the comparators trip at fractions of the supply, so it cancels; Vcc is here only to give you the two voltages you would probe. Pin 5 wants the 10 nF shown, not for timing but because that divider node is high impedance.`
+            ? `A 555 is a timer chip: two comparators, a latch and a discharge switch. Astable means it has no stable state, so it runs by itself and makes a square wave. C charges through R1 + R2 until it reaches the threshold, ⅔ Vcc, on pin 6 (THR); the output then goes low and the discharge pin, pin 7 (DIS), drains C through R2 down to the trigger level, ⅓ Vcc, on pin 2 (TRG), and the output goes high again. Duty is the share of each period the output spends high. Every box is live in both directions: type a frequency and both resistors scale, type a duty and they redistribute, type a part and the frequency follows. C is never rewritten for you. ${state.diode
+                ? "You asked for 50% or less, so a diode now sits across R2. It has to: without it C charges through R1 + R2 but discharges through R2 alone, so the high time always wins. The diode takes R2 out of the charge path. Its forward drop is ignored, as datasheets ignore it, so expect the real duty a little off."
+                : "The duty cannot go below 50% here, because C charges through R1 + R2 but discharges through R2 alone. Ask for 50% or less and a diode appears across R2 to take it out of the charge path."} Vcc cancels out of the timing, since both levels are fractions of it; it only sets the two voltages you would probe and the resistor limits. Pin 4 (reset) is tied to Vcc so it never resets, and pin 5 (CTL, control voltage) gets 10 nF to ground to keep the two levels steady. TI's NE555 runs from 4.5 to 16 V and up to 100 kHz.`
+            : `Monostable means it has one stable state: the output rests low, with C held empty by pin 7 (DIS). Pulling Trig, pin 2 (TRG), below ⅓ Vcc sends the output high and lets C charge through R; when C reaches ⅔ Vcc on pin 6 (THR), the output drops and C is emptied again. Starting from empty, reaching ⅔ takes ln3 × R × C, the 1.1 RC every datasheet quotes. Pulse width and R are live in both directions, and C is never rewritten for you. Two things catch people. Trig must be back high at least 10 µs before the pulse ends, or the output stays high for as long as Trig is held low (TI). And triggers that arrive during the pulse are ignored: it cannot be stretched by triggering again. Vcc cancels out of the timing. Pin 4 (reset) is tied to Vcc, and pin 5 (CTL) gets 10 nF to keep the levels steady.`
         );
   }
 
@@ -17769,8 +17850,8 @@ function render555(domain, tool, favId) {
     const astable = state.mode === "astable";
     app.innerHTML = `
       ${calcHeader(tool, favId, astable
-        ? "Free-running square wave, duty always above half"
-        : "One shot: 1.1 RC, trigger shorter than the pulse")}
+        ? "Runs by itself: a square wave from R1, R2 and C"
+        : "One pulse per trigger, 1.1 × R × C long")}
 
       ${pillRow([["astable", "Astable"], ["mono", "Monostable"]], state.mode, domain.bg)}
 
@@ -17781,24 +17862,22 @@ function render555(domain, tool, favId) {
 
       ${astable ? `
       <div class="field-pair">
-        ${field("t5-fd", "fd", "Frequency", F_UNITS)}
+        ${field("t5-fd", "fd", "Frequency", F_UNITS, 1.4)}
         ${field("t5-duty", "duty", "Duty %")}
+        ${field("t5-vcc", "vcc", "Vcc", "V", 0.6)}
       </div>
       <div class="field-pair">
-        ${field("t5-r1", "r1", "R1", OHM_UNITS)}
-        ${field("t5-r2", "r2", "R2", OHM_UNITS)}
-      </div>
-      <div class="field-pair">
-        ${field("t5-c", "c", "C", CAP_UNITS)}
-        ${field("t5-vcc", "vcc", "Vcc", VOLT_UNITS)}
+        ${field("t5-r1", "r1", "R1", DIVIDER_R_UNITS)}
+        ${field("t5-r2", "r2", "R2", DIVIDER_R_UNITS)}
+        ${field("t5-c", "c", "C", RCF_C_UNITS)}
       </div>` : `
       <div class="field-pair">
-        ${field("t5-tdp", "tdp", "Pulse width", RC_TIME_UNITS)}
+        ${field("t5-tdp", "tdp", "Pulse width", TP_UNITS)}
+        ${field("t5-vcc", "vcc", "Vcc", "V")}
       </div>
       <div class="field-pair">
-        ${field("t5-rm", "rm", "R", OHM_UNITS)}
-        ${field("t5-cm", "cm", "C", CAP_UNITS)}
-        ${field("t5-vcc", "vcc", "Vcc", VOLT_UNITS)}
+        ${field("t5-rm", "rm", "R", DIVIDER_R_UNITS)}
+        ${field("t5-cm", "cm", "C", RCF_C_UNITS)}
       </div>`}
 
       <div class="section-label split" style="color:#5DCAA5">
@@ -17814,8 +17893,9 @@ function render555(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
-    document.getElementById("t5-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); paint(); };
+    wireCalc(favId, paint, (m) => { state.mode = m; setPref(C, "mode", m); paint(); });
+    // A full paint, not a refresh: the cell labels carry the series name.
+    document.getElementById("t5-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
 
     [["t5-fd", "fd"], ["t5-duty", "duty"], ["t5-r1", "r1"], ["t5-r2", "r2"], ["t5-c", "c"],
      ["t5-tdp", "tdp"], ["t5-rm", "rm"], ["t5-cm", "cm"], ["t5-vcc", "vcc"]].forEach(([id, name]) => {

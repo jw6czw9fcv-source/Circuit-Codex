@@ -74,6 +74,7 @@ will key on, since that is the id the app already holds for each tool.
 - Logic gates → [Karnaugh map](#karnaugh-map)
 - Sequential logic → [Flip-flops](#flip-flops)
 - Sequential logic → [Multivibrators](#multivibrators)
+- Sequential logic → [555 timer](#555-timer)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
@@ -5130,6 +5131,169 @@ The review made these changes:
 - It added plain definitions, with the VEBO figures from datasheets.
 - It added examples, and remembers the mode and the tolerance.
 - The tool was renamed Multivibrators, on Pierre's choice.
+
+[↑ Index](#index)
+
+---
+
+﻿<a id="555-timer"></a>
+## 555 timer
+
+`calc: 555-timer` · Digital & logic circuits › Sequential logic
+(formerly 555 Timer (astable/monostable))
+
+### What it computes
+
+The tool covers the 555 timer chip in its two classic circuits.
+
+**Astable (free-running):**
+- the frequency and duty cycle from R1, R2 and C, or the resistors from a
+  frequency and duty you type;
+- the period, with its high and low times;
+- the two resistors in standard E-series values;
+- the trigger and threshold voltages, ⅓ and ⅔ of Vcc.
+
+**Monostable (one-shot):**
+- the pulse width from R and C, or R from the width you type;
+- R in standard E-series values;
+- the trigger and threshold voltages.
+
+Every field works in both directions. The timing diagram, with the
+capacitor's voltage above the output, is drawn to the computed times. The
+mode and the tolerance are remembered.
+
+### Source
+
+Texas Instruments, **NA555 / NE555 / SA555 / SE555 datasheet, SLFS022K**
+(revised March 2026), was read for:
+- **the formulas**:
+  - astable: tH ≈ 0.693 (RA + RB) C, tL ≈ 0.693 RB C,
+    f ≈ 1.44 / ((RA + 2 RB) C), duty (RA + RB) / (RA + 2 RB);
+  - monostable: tw ≈ 1.1 RA C.
+
+  RA and RB are R1 and R2 here.
+- **the levels**: trigger about ⅓ Vcc and threshold about ⅔ Vcc. At 5 V
+  the trigger level is 1.1–2.2 V (1.67 V typical).
+- **the supply**: 4.5 to 16 V for the NE555.
+- **the frequency**: TI advises 100 kHz or below, to reduce distortion,
+  and the CMOS TLC555 above that.
+- **the pulse**: the shortest monostable pulse is about 10 µs.
+  - Trig must be back high at least 10 µs before the pulse ends, or the
+    output stays high.
+  - Retriggering cannot happen during the timing cycle.
+- **the largest resistors**: the threshold pin draws up to 250 nA (30 nA
+  typical). TI gives the resulting limit as RA + RB ≈ 3.4 MΩ at 5 V and
+  ≈ 10 MΩ at 15 V.
+- **the smallest resistors**: TI's timing figures and test circuits start
+  at RA = 1 kΩ. No explicit minimum is stated. The discharge switch is
+  specified at 0.4 V maximum while sinking 8 mA, at 5 V.
+- **the pins**: RESET is tied to Vcc when it is not used. The CONT pin
+  may be decoupled with a capacitor, 0.01 µF in TI's figure.
+
+### What it means
+
+A **555** is a timer chip, with two comparators, a latch and a discharge
+switch inside. The pins in the drawing are:
+- **TRG**, pin 2, the trigger: a voltage below ⅓ Vcc starts a high
+  output;
+- **THR**, pin 6, the threshold: a voltage above ⅔ Vcc ends it;
+- **DIS**, pin 7, the discharge: shorted to ground while the output is
+  low, which empties C;
+- **CTL**, pin 5, the control voltage: it sets the two levels, and
+  10 nF to ground keeps them steady;
+- **pin 4**, reset, tied to Vcc so it never resets.
+
+The modes work like this:
+- **Astable** — C charges through R1 + R2 up to ⅔ Vcc. The output then
+  goes low, and pin 7 drains C through R2 down to ⅓ Vcc, when the output
+  goes high again.
+- **Duty** — the share of each period the output spends high. Since C
+  charges through R1 + R2 but drains through R2 alone, the duty is always
+  above 50 %.
+  - Ask for 50 % or less, and a diode appears across R2 to take it out of
+    the charge path.
+  - Its forward drop is ignored, as datasheets ignore it, so the real
+    duty is a little off.
+- **Monostable** — the output rests low, with C held empty. A trigger
+  sends the output high, and C charges through R until it reaches ⅔ Vcc,
+  which ends the pulse.
+- **Vcc cancels out** of every time, because both levels are fractions
+  of it. It only sets the voltages you would probe and the resistor
+  limits.
+
+### Why the formulas are these
+
+    Astable:    t high = ln 2 × (R1 + R2) × C    (with the diode: ln 2 × R1 × C)
+                t low  = ln 2 × R2 × C
+                Frequency = 1 / (t high + t low)
+    Monostable: Pulse width = ln 3 × R × C ≈ 1.1 × R × C
+
+- **ln 2** — charging from ⅓ toward Vcc, C reaches ⅔ when half the
+  remaining gap is closed, which takes RC × ln 2. Draining from ⅔ toward
+  0, it reaches ⅓ at half, again RC × ln 2.
+- **ln 3** — the monostable starts from an empty C and must reach ⅔ of
+  the way, leaving a third: RC × ln 3 = 1.0986 RC, TI's 1.1 RC.
+- **The timing diagram** uses the same curves, so they need no RC. Each
+  stretch is drawn as 1 − ⅔ × 2^−s rising, ⅔ × 2^−s falling, and
+  1 − 3^−s for the monostable, where s runs from 0 to 1 across it.
+- **Typing a frequency** scales both resistors. **Typing a duty**
+  redistributes them. C is never rewritten, since it is the part you
+  have in the drawer.
+
+### Assumptions and limits
+
+The tool cautions, without refusing, when:
+- **R1 (or R) is under 1 kΩ**, where TI's figures start. Pin 7 then
+  sinks Vcc / R1 during every low time, or the whole time a monostable
+  waits; the caution shows that current.
+- **The charging resistance is too large.** That is R1 + R2, R1 alone
+  with the diode, or the monostable's R, against TI's limit: 3.4 MΩ at
+  5 V and 10 MΩ at 15 V, joined by a straight line.
+  - The line keeps the charging current at the threshold around 500 nA,
+    twice the pin's 250 nA maximum.
+  - Applying it to the monostable's R is this tool's extension: TI states
+    it for the astable, but it is the same pin sensing the same capacitor.
+- **The frequency is over 100 kHz**, or **the pulse is under 10 µs**.
+- **Vcc is outside 4.5–16 V.**
+
+Beyond those:
+- **The levels are typical.** The real trigger and threshold levels
+  spread, as above, so the real times do too.
+- **Capacitor tolerance**, often ±20 % for electrolytics, usually
+  matters more than the resistors'.
+- **The bipolar NE555 is modelled.** CMOS versions such as the TLC555 use
+  the same formulas, but have their own limits.
+
+### What it deliberately does not do
+
+- Two-transistor multivibrators have their own tool.
+- Switch debouncing has its own tool, Debounce / RC timing.
+
+### How it was checked
+
+- **4.7 k, 4.7 k, 100 nF:** period 977.3 µs (1.023 kHz), duty 66.67 %,
+  levels 1.667 V and 3.333 V at 5 V.
+- **10 k, 680 k, 1 µF:** 949.6 ms (1.053 Hz), high 478.3 ms, duty
+  50.36 %.
+- **1 kHz at 50 % with 10 nF:** the diode switches in, and
+  R1 = R2 = 72.135 kΩ.
+- **Monostable, 91 k and 100 µF:** 9.997 s.
+- **Monostable, 1 s with 100 nF:** R = 9.1024 MΩ, cautioned at 5 V
+  (over 3.4 MΩ), not at 15 V (under 10 MΩ).
+- **R1 = 470 Ω at 5 V:** the caution shows 10.6 mA into pin 7.
+
+The review made these changes:
+- It put the period, or the pulse width, first and large.
+- It added the capacitor's voltage to the timing diagram.
+- It replaced the fixed 10 MΩ caution with TI's supply-dependent limit.
+  The old wording claimed a 1 kΩ minimum "set by datasheets", which TI
+  does not state, and the 1 kΩ caution now says what it rests on.
+- It added TI's 100 kHz, 10 µs and 4.5–16 V cautions.
+- It limited the units to real ones (Ω–MΩ, pF–µF, Hz–kHz, µs–s, Vcc in V).
+- It enlarged the 9–10 px labels to 11 px, and wrote the 10 nF out.
+- It added plain definitions of every pin, and examples.
+- It remembers the mode and the tolerance.
+- The tool was renamed 555 timer, on Pierre's choice.
 
 [↑ Index](#index)
 
