@@ -76,6 +76,7 @@ will key on, since that is the id the app already holds for each tool.
 - Sequential logic → [Multivibrators](#multivibrators)
 - Sequential logic → [555 timer](#555-timer)
 - Number systems → [Number bases](#number-bases)
+- Number systems → [ASCII table](#ascii-table)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
@@ -5411,6 +5412,133 @@ The review made these changes:
   the sign bit marked.
 - It added plain definitions, examples and remembered settings.
 - The tool was renamed Number bases, on Pierre's choice.
+
+[↑ Index](#index)
+
+---
+
+<a id="ascii-table"></a>
+## ASCII table
+
+`calc: ascii-table` · Digital & logic circuits › Number systems
+
+### What it computes
+
+The 128 ASCII characters on one screen, as the classic chart of 8 columns
+by 16 rows. Tap a character, or type it in one of the three live boxes:
+- **Char** takes a character, or a control character's name (LF, ESC,
+  XOFF, TAB, SP…);
+- **Dec** takes the decimal code, 0–127;
+- **Hex** takes the hex code, 00–7F.
+
+The card shows, for the chosen character:
+- its name, with the standard mnemonic for a control character;
+- its codes in octal and in binary, the binary grouped as column and row;
+- the C escape (\n, \t, \0…) and the Ctrl key that sends it, where there
+  is one;
+- in plain words, what a control character does, how a letter relates to
+  its other case, or a digit to its value.
+
+### Source
+
+**RFC 20, ASCII format for Network Interchange** (October 1969), was read
+for this. It is based on USAS X3.4-1968, the US standard ASCII, and gives:
+- **the mnemonics and full names** of the 33 control characters, NUL to
+  US and DEL. Code 9 is HT, horizontal tabulation, so the tool no longer
+  calls it TAB (it still finds it by that name);
+- **the definitions** behind each plain-word meaning;
+- **the chart:** bits b7–b5 give the column (0–7), and b4–b1 the row
+  (0–15).
+
+The modern uses are common knowledge, not from RFC 20:
+- C's escapes;
+- XON/XOFF serial flow control on DC1/DC3;
+- Ctrl+C sending ETX and Ctrl+D sending EOT in a terminal;
+- CR LF line endings;
+- ESC starting a terminal control sequence.
+
+### What it means
+
+ASCII (American Standard Code for Information Interchange) gives 128
+characters a 7-bit code.
+- **Codes 0–31 and 127 are control characters:** commands for a terminal,
+  printer or modem rather than symbols. RFC 20 groups some of them:
+  - communication controls frame and acknowledge messages: SOH, STX, ETX,
+    EOT, ENQ, ACK, NAK, SYN, ETB;
+  - format effectors move the print position: BS, HT, LF, VT, FF, CR;
+  - information separators split data, from the largest unit to the
+    smallest: FS, GS, RS, US.
+- **Codes 32–126 are printed characters.** 32, the space, is a printed
+  character that prints nothing.
+- **Codes above 127 are not ASCII.** Different 8-bit sets give them
+  different characters (Latin-1, Windows-1252…). In UTF-8 they only appear
+  inside multi-byte characters.
+
+Uses worth knowing in electronics:
+- **CR LF** ends a line on Windows and on many serial devices. Linux and
+  macOS end a line with LF alone.
+- **XOFF (DC3) and XON (DC1)** pause and resume a serial sender: software
+  flow control, Ctrl+S and Ctrl+Q.
+- **ESC [** starts a terminal control sequence, which sets colours and
+  moves the cursor.
+- **SOH, EOT, ACK, NAK and CAN** run XMODEM, a simple serial
+  file-transfer protocol.
+
+### Why the formulas are these
+
+    Hex code      = column digit, then row digit
+    Lower case    = upper case + 0x20        (bit 5)
+    Digit value   = code − 0x30              (48)
+    Ctrl + key    = key's code AND 0x1F      (bits 5 and 6 cleared)
+
+- **The chart's columns are the top three bits** and its rows the low
+  four. A column is one hex digit, 0–7, and a row is the other, 0–F. So
+  A, column 4 and row 1, is 0x41.
+- **Letters were placed so the two cases differ in one bit.** A to Z run
+  0x41–0x5A, and a to z run 0x61–0x7A: setting bit 5 lowers the case.
+- **Digits were placed so the low four bits are the value.** 0 to 9 run
+  0x30–0x39, so subtracting 0x30 (or masking with 0x0F) gives the number.
+- **Ctrl clears bits 5 and 6.** Ctrl+C is C (0x43) AND 0x1F, which is 3,
+  ETX; Ctrl+[ is ESC.
+
+### Assumptions and limits
+
+- **US ASCII only.** The national variants of ISO 646 replace a few
+  printed characters, such as # or [, and are not shown.
+- **Uses, not rules.** The modern uses in the card say what a code
+  usually does today. A particular device may assign its own meanings.
+
+### What it deliberately does not do
+
+- Numbers in other bases have their own tool, Number bases.
+- Turning text into bytes, for example "AT\r\n" into 41 54 0D 0A, was
+  left out on Pierre's choice. It could become a tool of its own.
+
+### How it was checked
+
+- **A:** 65, 0x41, octal 101, binary 100 0001; column 4, row 1.
+- **Code 9:** HT, Horizontal tab (RFC 20's name).
+- **LF:** 10, 0x0A, octal 012, binary 000 1010, \n, Ctrl+J.
+- **Hex 7E:** 126, the tilde.
+- **XOFF typed by name:** 19, DC3.
+- **ESC:** octal 033, binary 001 1011, Ctrl+[.
+- **127:** DEL.
+- **Out of range:** 200 and é are reported as not ASCII.
+- **<:** shown as a character, and named less-than sign.
+- **Space:** shown as SP.
+- **7:** 55; value = 55 − 48 = 7.
+- **The chart's height:** constant for all 128 characters. At 375 × 812
+  it ends 21 px above the tab bar.
+
+The review made these changes:
+- It replaced the searchable list with RFC 20's chart, and the search
+  with three live boxes.
+- It named code 9 HT, after the standard, instead of TAB.
+- It added names and plain meanings for the 33 control codes, C escapes,
+  Ctrl keys, and the case and digit relations.
+- It escaped <, > and &, which were inserted as raw HTML.
+- It added examples: CR LF, XOFF/XON, a digit to its number, upper and
+  lower case.
 
 [↑ Index](#index)
 

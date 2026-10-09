@@ -1001,32 +1001,35 @@ html, body {
 .calc-key--fn { color: var(--text-secondary); }
 .calc-key--op { background: var(--result-bg); border-color: var(--result-border); color: var(--result-text); }
 
-/* ASCII table — 128 rows is too many to spend a whole formula-card on each,
-   so this is a plain compact grid instead: four columns, one row per code
-   point, monospace for the numeric columns so they line up. */
-.ascii-list { margin: 0 16px 12px; }
-.ascii-row {
+/* ASCII table: RFC 20's chart, eight columns (the top three bits) by sixteen
+   rows (the low four), so the hex code is the column digit, then the row
+   digit. Monospace, so 0 and O, 1 and l, ` and ' are told apart. */
+.ascii-chart {
   display: grid;
-  grid-template-columns: 40px 36px 74px 1fr;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 4px;
-  border-bottom: 1px solid var(--card-border);
-  font-size: 13px;
+  grid-template-columns: 16px repeat(8, 1fr);
+  gap: 2px;
+  margin: 0 16px 12px;
 }
-.ascii-row.head {
-  color: var(--text-muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--card-border);
-}
-.ascii-dec, .ascii-hex, .ascii-bin {
+.ac-head { color: var(--text-muted); font-size: 11px; font-weight: 600; text-align: center; align-self: center; }
+.ac-head.on { color: var(--result-text); }
+.ac-cell {
+  height: 21px;
+  padding: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 5px;
+  background: var(--card);
+  color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
 }
-.ascii-char { color: var(--text); font-weight: 600; }
-.ascii-char.muted { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+.ac-cell.ctl { color: var(--text-muted); font-family: inherit; font-size: 11px; }
+.ac-cell.sel { background: var(--result-bg); border-color: var(--result-text); color: var(--result-text); }
+.ascii-glyph { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* Two lines kept for the meaning whatever is picked, so the chart does not
+   jump between a letter (one line) and a control code (two). */
+.ascii-meaning { min-height: calc(2 * 1.3em); line-height: 1.3; }
 
 .tap-select { cursor: pointer; }
 .tap-select:active { background: var(--card); }

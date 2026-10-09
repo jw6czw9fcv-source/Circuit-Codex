@@ -4878,75 +4878,239 @@ function renderDecHexBin(domain, tool, favId) {
 }
 
 // ---------- ASCII table ----------
-const ASCII_CONTROL_NAMES = {
-  0: "NUL", 1: "SOH", 2: "STX", 3: "ETX", 4: "EOT", 5: "ENQ", 6: "ACK", 7: "BEL",
-  8: "BS", 9: "TAB", 10: "LF", 11: "VT", 12: "FF", 13: "CR", 14: "SO", 15: "SI",
-  16: "DLE", 17: "DC1", 18: "DC2", 19: "DC3", 20: "DC4", 21: "NAK", 22: "SYN", 23: "ETB",
-  24: "CAN", 25: "EM", 26: "SUB", 27: "ESC", 28: "FS", 29: "GS", 30: "RS", 31: "US",
-  127: "DEL",
+// The control characters with the mnemonics and names of RFC 20 (ASCII format
+// for network interchange, 1969, after USAS X3.4-1968), each with what it
+// does in plain words and what it is still used for. HT, not "TAB": that is
+// the standard's name for code 9.
+const ASCII_CONTROLS = {
+  0: ["NUL", "Null", "Fills time or tape; in C it ends every string."],
+  1: ["SOH", "Start of heading", "Starts a message's header; XMODEM starts each block with it."],
+  2: ["STX", "Start of text", "Starts the text of a message, after any header."],
+  3: ["ETX", "End of text", "Ends that text. Ctrl+C sends it, and a terminal then interrupts the running program."],
+  4: ["EOT", "End of transmission", "Ends a transmission. Ctrl+D sends it: end of input in a Unix terminal."],
+  5: ["ENQ", "Enquiry", "Asks the other end for a response."],
+  6: ["ACK", "Acknowledge", "The receiver's yes: received correctly."],
+  7: ["BEL", "Bell", "Calls for attention: the terminal beeps."],
+  8: ["BS", "Backspace", "Moves back one space."],
+  9: ["HT", "Horizontal tab", "Moves on to the next tab stop: the Tab key."],
+  10: ["LF", "Line feed", "Moves down one line. Linux and macOS end each line with it."],
+  11: ["VT", "Vertical tab", "Moves down to the next vertical tab stop."],
+  12: ["FF", "Form feed", "Starts a new page on a printer."],
+  13: ["CR", "Carriage return", "Returns to the start of the line. Windows and many serial devices end lines with CR LF."],
+  14: ["SO", "Shift out", "Switches to another character set."],
+  15: ["SI", "Shift in", "Switches back to the standard set."],
+  16: ["DLE", "Data link escape", "Changes the meaning of the next few characters, so a protocol can send control codes as data."],
+  17: ["DC1", "Device control 1", "XON: lets a paused serial sender resume (Ctrl+Q)."],
+  18: ["DC2", "Device control 2", "Controls an attached device."],
+  19: ["DC3", "Device control 3", "XOFF: asks a serial sender to pause (Ctrl+S)."],
+  20: ["DC4", "Device control 4", "Controls an attached device."],
+  21: ["NAK", "Negative acknowledge", "The receiver's no: send it again."],
+  22: ["SYN", "Synchronous idle", "Keeps a synchronous line in step when there is nothing to send."],
+  23: ["ETB", "End of transmission block", "Ends one block of data."],
+  24: ["CAN", "Cancel", "The data just sent is in error: disregard it."],
+  25: ["EM", "End of medium", "Marks the physical end of a tape or card."],
+  26: ["SUB", "Substitute", "Stands in for a character received in error. Ctrl+Z: end of file in DOS."],
+  27: ["ESC", "Escape", "Starts an escape sequence: ESC [ … sets a terminal's colours and cursor."],
+  28: ["FS", "File separator", "Separates data: the largest of the four separators."],
+  29: ["GS", "Group separator", "Separates data inside a file."],
+  30: ["RS", "Record separator", "Separates data inside a group."],
+  31: ["US", "Unit separator", "Separates data: the smallest of the four separators."],
+  127: ["DEL", "Delete", "Erased a character on punched tape by punching all seven holes."],
 };
+const ASCII_NAMES = {
+  32: "Space", 33: "Exclamation mark", 34: "Quotation mark", 35: "Number sign (hash)", 36: "Dollar sign",
+  37: "Percent sign", 38: "Ampersand", 39: "Apostrophe", 40: "Left parenthesis", 41: "Right parenthesis",
+  42: "Asterisk", 43: "Plus sign", 44: "Comma", 45: "Hyphen-minus", 46: "Full stop (period)", 47: "Slash",
+  58: "Colon", 59: "Semicolon", 60: "Less-than sign", 61: "Equals sign", 62: "Greater-than sign",
+  63: "Question mark", 64: "At sign", 91: "Left square bracket", 92: "Backslash", 93: "Right square bracket",
+  94: "Caret", 95: "Underscore", 96: "Grave accent (backtick)", 123: "Left curly bracket", 124: "Vertical bar",
+  125: "Right curly bracket", 126: "Tilde",
+};
+// Names typed in the Char box: every mnemonic, plus the names people say.
+const ASCII_ALIASES = { SP: 32, SPACE: 32, TAB: 9, XON: 17, XOFF: 19 };
+Object.keys(ASCII_CONTROLS).forEach((c) => { ASCII_ALIASES[ASCII_CONTROLS[c][0]] = +c; });
 
-// Generated rather than hand-listed — 128 entries hand-typed is 128 chances
-// to get a code point wrong, where String.fromCharCode can't.
-function asciiEntries() {
-  const rows = [];
-  for (let i = 0; i <= 127; i++) {
-    const printable = i >= 32 && i <= 126;
-    const glyph = i === 32 ? "Space" : printable ? String.fromCharCode(i) : (ASCII_CONTROL_NAMES[i] || "?");
-    rows.push({
-      dec: i,
-      hex: i.toString(16).toUpperCase().padStart(2, "0"),
-      bin: i.toString(2).padStart(7, "0"),
-      glyph,
-      printable,
-    });
-  }
-  return rows;
+// C's escapes, built from a char code so no backslash has to survive in the
+// source. Ctrl with a key sends that key's code with bits 5 and 6 cleared, so
+// codes 0–31 are Ctrl with the character 64 places up (Ctrl+J is LF).
+const BSL = String.fromCharCode(92);
+const ASCII_C_ESCAPES = { 0: "0", 7: "a", 8: "b", 9: "t", 10: "n", 11: "v", 12: "f", 13: "r", 34: '"', 39: "'", 92: BSL };
+
+const htmlEsc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const hex2 = (n) => n.toString(16).toUpperCase().padStart(2, "0");
+
+function asciiInfo(code) {
+  const ctl = ASCII_CONTROLS[code];
+  const ch = String.fromCharCode(code);
+  const name = ctl ? `${ctl[1]} (${ctl[0]})`
+    : code >= 48 && code <= 57 ? `Digit ${ch}`
+    : code >= 65 && code <= 90 ? `Capital letter ${ch}`
+    : code >= 97 && code <= 122 ? `Small letter ${ch}`
+    : ASCII_NAMES[code];
+  const meaning = ctl ? ctl[2]
+    : code === 32 ? "Separates words: a printed character that prints nothing."
+    : code >= 48 && code <= 57 ? `Its value is the code minus 48 (0x30): ${ch}.`
+    : code >= 65 && code <= 90 ? `Its small letter, ${ch.toLowerCase()}, is 0x${hex2(code + 32)}: only bit 5 (0x20) differs.`
+    : code >= 97 && code <= 122 ? `Its capital, ${ch.toUpperCase()}, is 0x${hex2(code - 32)}: only bit 5 (0x20) differs.`
+    : "";
+  const bin = code.toString(2).padStart(7, "0");
+  const extras = [`Oct ${code.toString(8).padStart(3, "0")}`, `Bin ${bin.slice(0, 3)} ${bin.slice(3)}`];
+  if (ASCII_C_ESCAPES[code] !== undefined) extras.push(`C ${BSL}${ASCII_C_ESCAPES[code]}`);
+  if (code < 32) extras.push(`Ctrl+${String.fromCharCode(code + 64)}`);
+  return { code, ctl: !!ctl || code === 32, label: ctl ? ctl[0] : code === 32 ? "SP" : ch, name, meaning, extras: extras.join(" · ") };
 }
-const ASCII_ENTRIES = asciiEntries();
 
 function renderAsciiTable(domain, tool, favId) {
-  function row(e) {
+  const state = { code: 65, notice: "" };
+
+  const pick = (code) => () => { state.code = code; state.notice = ""; paint(); };
+  useExamples([
+    { title: "CR LF line ending", note: "Windows and many serial devices end each line with CR (0x0D), then LF (0x0A).",
+      apply: pick(13) },
+    { title: "XOFF and XON", note: "XOFF (DC3, 0x13, Ctrl+S) pauses a serial sender; XON (DC1, 0x11, Ctrl+Q) resumes it.",
+      apply: pick(19) },
+    { title: "Digit to number", note: "'0' is 48 (0x30): subtract 48 from a received digit to get its value.",
+      apply: pick(48) },
+    { title: "Upper and lower case", note: "'A' is 0x41 and 'a' is 0x61: the two cases differ only in bit 5 (0x20).",
+      apply: pick(97) },
+  ]);
+
+  const NOT_ASCII = "ASCII stops at 127 (0x7F). Codes 128–255 mean different characters in different 8-bit sets (Latin-1, Windows-1252…), and in UTF-8 they only appear inside multi-byte characters.";
+
+  const boxText = {
+    char: () => asciiInfo(state.code).label,
+    dec: () => String(state.code),
+    hex: () => hex2(state.code),
+  };
+
+  // A box's text to a code, or undefined while it is not one yet. The Char
+  // box takes one character, or a control's name (LF, ESC, XOFF…).
+  function fromBox(box, raw) {
+    if (box === "char") {
+      if (raw.length === 1) {
+        const c = raw.charCodeAt(0);
+        if (c > 127) { state.notice = `${raw} is not ASCII (it is U+${c.toString(16).toUpperCase().padStart(4, "0")}). ${NOT_ASCII}`; return; }
+        return c;
+      }
+      return ASCII_ALIASES[raw.trim().toUpperCase()];
+    }
+    if (raw === "") return;
+    const v = parseInt(raw, box === "dec" ? 10 : 16);
+    if (v > 127) { state.notice = NOT_ASCII; return; }
+    return v;
+  }
+
+  function cardHTML() {
+    const i = asciiInfo(state.code);
     return `
-      <div class="ascii-row tap-select">
-        <span class="ascii-dec">${e.dec}</span>
-        <span class="ascii-hex">${e.hex}</span>
-        <span class="ascii-bin">${e.bin}</span>
-        <span class="ascii-char${e.printable ? "" : " muted"}">${e.glyph}</span>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label" data-res="name">${htmlEsc(i.name)}</span>
+        </div>
+        <div class="result-value"><span class="num ascii-glyph${i.ctl ? " ctl" : ""}" data-res="main">${htmlEsc(i.label)}</span></div>
+        <div class="result-sub" data-res="extras">${htmlEsc(i.extras)}</div>
+        <div class="result-sub ascii-meaning" data-res="meaning">${htmlEsc(i.meaning)}</div>
       </div>`;
   }
 
-  function matches(e, q) {
-    return String(e.dec).includes(q) || e.hex.toLowerCase().includes(q) || e.glyph.toLowerCase().includes(q);
+  // RFC 20's chart: the top three bits pick the column and the low four the
+  // row, so the hex code is the column digit, then the row digit.
+  function chartHTML() {
+    const col = state.code >> 4, row = state.code & 15;
+    let h = `<span></span>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<span class="ac-head${k === col ? " on" : ""}">${k}</span>`).join("")}`;
+    for (let r = 0; r < 16; r++) {
+      h += `<span class="ac-head${r === row ? " on" : ""}">${r.toString(16).toUpperCase()}</span>`;
+      for (let k = 0; k < 8; k++) {
+        const i = asciiInfo(k * 16 + r);
+        h += `<button class="ac-cell${i.ctl ? " ctl" : ""}${i.code === state.code ? " sel" : ""}" data-code="${i.code}" aria-label="${htmlEsc(i.name)}">${htmlEsc(i.label)}</button>`;
+      }
+    }
+    return h;
   }
 
-  function renderList(list, emptyQuery) {
-    const results = document.getElementById("at-results");
-    results.innerHTML = list.length
-      ? `<div class="ascii-row head"><span>Dec</span><span>Hex</span><span>Bin</span><span>Char</span></div>${list.map(row).join("")}`
-      : `<div class="placeholder">${ICONS.search}<div>No character for "${emptyQuery}".</div></div>`;
+  function syncBoxes() {
+    Object.keys(boxText).forEach((b) => {
+      const el = document.getElementById(`as-${b}`);
+      if (el && document.activeElement !== el) el.value = boxText[b]();
+    });
+  }
+
+  function refresh() {
+    syncBoxes();
+    app.querySelector('[data-res="card"]').innerHTML = cardHTML();
+    app.querySelector('[data-res="chart"]').innerHTML = chartHTML();
+    const n = app.querySelector('[data-res="notice"]');
+    n.textContent = state.notice;
+    n.hidden = !state.notice;
+    wireChart();
+  }
+
+  function wireChart() {
+    app.querySelectorAll("[data-code]").forEach((el) => {
+      el.onclick = () => { state.code = +el.dataset.code; state.notice = ""; refresh(); };
+    });
+  }
+
+  const FILTERS = {
+    char: (v) => v,
+    dec: (v) => v.replace(/[^0-9]/g, ""),
+    hex: (v) => v.replace(/[^0-9a-fA-F]/g, "").toUpperCase(),
+  };
+
+  function box(id, label, mode) {
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input id="as-${id}" type="text" ${mode} autocomplete="off" spellcheck="false" value="${htmlEsc(boxText[id]())}" />
+          </div>
+        </div>`;
   }
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, "128 characters, codes 0-127")}
+      ${calcHeader(tool, favId, "Tap a character, or type it or its code")}
 
-      <div class="search-box">
-        ${ICONS.search}
-        <input id="at-input" type="text" placeholder="Search a character, decimal or hex code" autocapitalize="off" spellcheck="false" />
+      <div class="field-pair">
+        ${box("char", "Char", 'inputmode="text" autocapitalize="off"')}
+        ${box("dec", "Dec", 'inputmode="numeric"')}
+        ${box("hex", "Hex", 'inputmode="text" autocapitalize="characters"')}
       </div>
-      <div class="ascii-list" id="at-results"></div>
-      ${tabbarHTML("")}
+      <div class="error-text" data-res="notice" style="color:#E0A85E"${state.notice ? "" : " hidden"}>${htmlEsc(state.notice)}</div>
+      <div data-res="card">${cardHTML()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Hex code = column, then row</div>
+      <div class="ascii-chart" data-res="chart">${chartHTML()}</div>
+
+      ${formulaSection(
+        ["Hex code = column digit, then row digit",
+         "Lower case = upper case + 0x20 (bit 5)",
+         "Digit value = code − 0x30 (48)",
+         "Ctrl + key = key's code AND 0x1F"],
+        "ASCII (American Standard Code for Information Interchange) gives 128 characters a 7-bit code, 0 to 127. Codes 0–31 and 127 are control characters: commands for a terminal, printer or modem rather than symbols, named as in RFC 20. Codes 32–126 are printed characters, 32 being the space. The chart puts the top three bits in the column and the low four in the row, so the hex code reads straight off it: A is column 4, row 1, 0x41. Ctrl with a key sends that key's code with bits 5 and 6 cleared, so Ctrl+C is 3, ETX. Codes above 127 are not ASCII."
+      )}
+      ${calcFooter("")}
     `;
 
-    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
-
-    const input = document.getElementById("at-input");
-    renderList(ASCII_ENTRIES, "");
-    input.oninput = () => {
-      const q = input.value.trim().toLowerCase();
-      renderList(q ? ASCII_ENTRIES.filter((e) => matches(e, q)) : ASCII_ENTRIES, q);
-    };
+    wireCalc(favId, paint);
+    Object.keys(FILTERS).forEach((b) => {
+      const el = document.getElementById(`as-${b}`);
+      // Typing replaces the box's content rather than adding to it.
+      el.onfocus = () => el.select();
+      el.oninput = () => {
+        const v = FILTERS[b](el.value);
+        if (v !== el.value) el.value = v;
+        state.notice = "";
+        const code = fromBox(b, v);
+        if (code !== undefined && !isNaN(code)) state.code = code;
+        refresh();
+      };
+      el.onblur = () => {
+        el.value = boxText[b]();
+        if (state.notice) { state.notice = ""; refresh(); }
+      };
+    });
+    wireChart();
   }
 
   paint();
