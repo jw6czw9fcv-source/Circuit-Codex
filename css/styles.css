@@ -1098,6 +1098,51 @@ html, body {
 }
 .tt-row.tt-sel { background: var(--result-bg); }
 .tt-row.tt-sel span { color: var(--result-text); font-weight: 700; }
+/* Number bases: each base on one row, its name beside the number. */
+.nb-field { padding: 6px 12px; margin-bottom: 8px; }
+.nb-field .field-row { gap: 6px; }
+.nb-field label { margin: 0; flex: 0 0 52px; font-size: 13px; }
+.nb-field input { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+/* Number bases: one button per bit, bit 0 at the right, sixteen to a row,
+   a gap every four bits with that nibble's hex digit under it. */
+.bit-grid { margin: 0 16px 4px; }
+.bit-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 6px; }
+.bit-nib {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  column-gap: 3px;
+  row-gap: 2px;
+  width: calc((100% - 24px) / 4);
+}
+.bit-idx { color: var(--text-muted); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
+.bit-idx.bit-sign { color: #E08585; font-weight: 700; }
+.bit-cell {
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bit-cell.on { background: var(--result-bg); border-color: var(--result-border); color: var(--result-text); }
+/* A byte has the room for finger-sized bits: two nibbles across the row. */
+.bit-grid--byte .bit-nib { width: calc((100% - 8px) / 2); }
+.bit-grid--byte .bit-cell { height: 36px; font-size: 17px; }
+.bit-hex {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #8FC1F5;
+  border-top: 1.5px solid var(--card-border);
+  margin-top: 2px;
+  padding-top: 1px;
+}
+.bit-legend { margin: 0 16px 12px; color: var(--text-secondary); font-size: 12.5px; line-height: 1.35; }
 
 /* Link from a tool's formula card to its section of the manual. */
 .manual-link {

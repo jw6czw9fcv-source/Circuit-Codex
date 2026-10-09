@@ -99,7 +99,7 @@ const DOMAINS = [
     sections: [
       { title: "Logic gates", tools: [{ name: "Logic gates", was: "Basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR)", calc: "logic-gates" }, { name: "Karnaugh map", was: "Karnaugh map simplification", calc: "karnaugh" }] },
       { title: "Sequential logic", tools: [{ name: "Flip-flops", was: "Flip-flops (SR, D, JK, T)", calc: "flip-flops" }, { name: "Multivibrators", was: "Multivibrators (astable/monostable)", calc: "multivibrator" }, { name: "555 timer", was: "555 Timer (astable/monostable)", calc: "555-timer" }] },
-      { title: "Number systems", tools: [{ name: "DEC / HEX / OCT / BIN conversion", calc: "dec-hex-bin" }, { name: "ASCII table", calc: "ascii-table" }] },
+      { title: "Number systems", tools: [{ name: "Number bases", was: "DEC / HEX / OCT / BIN conversion", calc: "dec-hex-bin" }, { name: "ASCII table", calc: "ascii-table" }] },
       {
         title: "Timing & interfaces",
         tools: [
@@ -291,7 +291,7 @@ const TOOL_KEYWORDS = {
   "flip-flops": "flip flop latch sr d jk t register clock edge 74hc74 74hc112",
   "multivibrator": "astable monostable transistor oscillator flasher one-shot multivibrators",
   "555-timer": "ne555 timer astable monostable oscillator",
-  "dec-hex-bin": "binary hexadecimal octal decimal base conversion",
+  "dec-hex-bin": "binary hexadecimal octal decimal base conversion dec hex oct bin two's complement signed unsigned bits register",
   "ascii-table": "ascii characters code table",
   "pwm-duty": "pulse width modulation duty cycle",
   "debounce-rc": "switch bounce button rc filter",

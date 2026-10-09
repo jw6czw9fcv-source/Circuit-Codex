@@ -75,6 +75,7 @@ will key on, since that is the id the app already holds for each tool.
 - Sequential logic → [Flip-flops](#flip-flops)
 - Sequential logic → [Multivibrators](#multivibrators)
 - Sequential logic → [555 timer](#555-timer)
+- Number systems → [Number bases](#number-bases)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
@@ -5136,7 +5137,7 @@ The review made these changes:
 
 ---
 
-﻿<a id="555-timer"></a>
+<a id="555-timer"></a>
 ## 555 timer
 
 `calc: 555-timer` · Digital & logic circuits › Sequential logic
@@ -5294,6 +5295,122 @@ The review made these changes:
 - It added plain definitions of every pin, and examples.
 - It remembers the mode and the tolerance.
 - The tool was renamed 555 timer, on Pierre's choice.
+
+[↑ Index](#index)
+
+---
+
+<a id="dec-hex-bin"></a>
+## Number bases
+
+`calc: dec-hex-bin` · Digital & logic circuits › Number systems
+(formerly DEC / HEX / OCT / BIN conversion)
+
+### What it computes
+
+One value, shown in decimal, hexadecimal, octal and binary at once.
+- **Four live boxes.** Type in any of them, and the other three follow.
+- **A register width:** 8, 16, 32 or 64 bits.
+- **Unsigned or signed.** Signed numbers are read as two's complement,
+  the way processors store negative numbers: FFF6 in 16 bits is −10.
+- **One button per bit.** Each is numbered from bit 0 on the right, and
+  tapping one flips it. The hex digit of each group of four bits sits
+  under it.
+
+The width and the signed choice are remembered.
+
+### Source
+
+The arithmetic is standard: positional notation and two's complement. No
+datasheet is involved. The four widths are those of the usual fixed-size
+integer types (uint8 to uint64, int8 to int64).
+
+### What it means
+
+- **A base** is how many values one digit can take:
+  - decimal, 10 (0–9);
+  - hexadecimal, 16 (0–9, then A–F for 10–15);
+  - octal, 8 (0–7);
+  - binary, 2 (0 and 1).
+
+  Each place is worth the base times the place to its right.
+- **A bit** is one binary digit. Four bits are a **nibble**, which is
+  exactly one hex digit, and eight bits are a **byte**: two hex digits.
+  That is why registers and memory are written in hex.
+- **Octal** groups bits by three. It survives mostly in Unix file
+  permissions (chmod 755), rarely in electronics.
+- **Bit 0**, on the right, is the least significant bit (LSB), worth 1.
+  The top bit is the most significant (MSB).
+- **Two's complement** — in a signed number the top bit, the **sign
+  bit**, counts −2ʷ⁻¹ instead of +2ʷ⁻¹, where w is the width.
+  - All ones is therefore −1.
+  - To negate a number, flip every bit and add 1.
+  - Adding and subtracting work the same for signed and unsigned values,
+    which is why processors use it.
+
+### Why the formulas are these
+
+    Value    = Σ digit × baseⁿ          (n = 0 at the right)
+    Unsigned:  0 … 2ʷ − 1
+    Signed:    −2ʷ⁻¹ … 2ʷ⁻¹ − 1,   value = bits − 2ʷ when the top bit is 1
+
+- **One hex digit is four bits** because 16 = 2⁴, and one octal digit
+  is three bits because 8 = 2³. So hex and octal are read straight off
+  the binary, four or three bits at a time.
+- **A negative decimal** is stored as 2ʷ plus the value: −10 in 16 bits
+  is 65 536 − 10 = 65 526 = FFF6.
+
+### Assumptions and limits
+
+- **Whole numbers only, up to 64 bits.** Every value is an exact big
+  integer, not a JavaScript number, so all 64 bits are exact. Typing
+  more than 64 bits is refused, and the box goes back to the last value.
+- **Widening.** A value too big for the chosen width moves up to the next
+  width that holds it (8 → 16 → 32 → 64). Choosing a wider width keeps
+  the value, and a negative one is sign-extended (FFF6 → FFFFFFF6).
+- **Narrowing.** Choosing a narrower width keeps only the bits it can
+  hold, as the register would, and the tool says so.
+- **No padding.** The boxes show no leading zeros, so 165 in 16 bits
+  reads A5, not 00A5. The bit row shows every bit of the width.
+
+### What it deliberately does not do
+
+- Characters and their codes have their own tool, the ASCII table.
+- Fractions, floating point (IEEE 754), BCD and Gray code are not
+  converted.
+
+### How it was checked
+
+- **165:** A5, 245, 1010 0101.
+- **FFFFFFFFFFFFFFFF:** 18446744073709551615 and
+  1777777777777777777777.
+  - Before the review this came back as 10000000000000000 in hex, and as
+    18446744073709552000 in decimal.
+  - JavaScript numbers hold integers exactly only up to 2⁵³.
+- **9007199254740993** (2⁵³ + 1): 20000000000001.
+- **300** typed at 8 bits widens to 16 bits: 12C, 0001 0010 1100.
+- **Signed 8-bit FF:** −1.
+- **Signed 32-bit −1:** FFFFFFFF, 37777777777.
+- **Signed −10 at 8 bits, widened to 16:** FFF6, still −10.
+- **1A5 narrowed to 8 bits:** A5, with a note that the upper bits were
+  dropped.
+- **Examples:**
+  - 0x88 = 136 (bits 7 and 3);
+  - FFF6 as int16 = −10;
+  - FFFFFFFF = 4,294,967,295. As a 32-bit millisecond counter, that is
+    49.7 days before it wraps.
+
+The review made these changes:
+- It fixed the conversion of values above 2⁵³, which were silently
+  wrong. Values are now exact BigInts.
+- It replaced the base pills, the input and the four separate results
+  with four live boxes.
+- It added the register width and signed (two's complement) reading,
+  with a ± key for typing negatives.
+- It added the tappable bit row, with the hex digit under each nibble and
+  the sign bit marked.
+- It added plain definitions, examples and remembered settings.
+- The tool was renamed Number bases, on Pierre's choice.
 
 [↑ Index](#index)
 

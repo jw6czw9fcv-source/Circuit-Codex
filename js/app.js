@@ -4620,9 +4620,17 @@ function renderSiUnits(domain, tool, favId) {
   paint();
 }
 
-// ---------- DEC / HEX / OCT / BIN conversion ----------
-const BASE_RADIX = { dec: 10, hex: 16, oct: 8, bin: 2 };
-const BASE_CHARS = { dec: /[^0-9]/g, hex: /[^0-9a-fA-F]/g, oct: /[^0-7]/g, bin: /[^01]/g };
+// ---------- Number bases (DEC / HEX / OCT / BIN) ----------
+// Every value is a BigInt bit pattern, never a JavaScript number: a number
+// holds integers exactly only up to 2^53, so a full 64-bit register such as
+// FFFFFFFFFFFFFFFF came back as 10000000000000000.
+const NB_WIDTHS = [8, 16, 32, 64];
+const NB_BASES = {
+  dec: { radix: 10, label: "Decimal" },
+  hex: { radix: 16, label: "Hex" },
+  oct: { radix: 8, label: "Octal" },
+  bin: { radix: 2, label: "Binary" },
+};
 
 // Binary reads better broken into nibbles — pad on the left so the grouping
 // lines up from the right, the same way you'd read it off a byte boundary.
@@ -4631,83 +4639,239 @@ function groupNibbles(bin) {
   return ("0".repeat(pad) + bin).match(/.{1,4}/g).join(" ");
 }
 
-function renderDecHexBin(domain, tool, favId) {
-  const state = { base: "dec", raw: "255" };
+const NB_SUP = { 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" };
+const nbPow = (n) => `2${String(n).split("").map((d) => NB_SUP[d]).join("")}`;
 
-  function parsedValue() {
-    if (state.raw === "") return NaN;
-    return parseInt(state.raw, BASE_RADIX[state.base]);
+function renderDecHexBin(domain, tool, favId) {
+  const C = "dec-hex-bin";
+  // bits: the pattern as an unsigned BigInt below 2^width. signed only changes
+  // how the decimal box reads it (two's complement), never the bits.
+  const state = {
+    width: pref(C, "width", 8, NB_WIDTHS),
+    signed: pref(C, "signed", false, [true, false]),
+    bits: 0xA5n,
+    notice: "",
+  };
+
+  const mask = (w) => (1n << BigInt(w)) - 1n;
+  const topBit = (w) => 1n << BigInt(w - 1);
+  // The decimal reading: the top bit counts −2^(w−1) when signed.
+  const decimal = () => (state.signed && state.bits & topBit(state.width) ? state.bits - (1n << BigInt(state.width)) : state.bits);
+  const text = {
+    dec: () => decimal().toString(),
+    hex: () => state.bits.toString(16).toUpperCase(),
+    oct: () => state.bits.toString(8),
+    bin: () => groupNibbles(state.bits.toString(2)),
+  };
+
+  const example = (width, signed, bits) => () => { Object.assign(state, { width, signed, bits, notice: "" }); paint(); };
+  useExamples([
+    { title: "Bits 7 and 3 set", note: "A control register with bits 7 and 3 set reads 0x88: 136 in decimal.",
+      apply: example(8, false, 0x88n) },
+    { title: "Signed reading, FFF6", note: "A 16-bit register reads FFF6; read as signed (two's complement), that is −10.",
+      apply: example(16, true, 0xFFF6n) },
+    { title: "32-bit millisecond counter", note: "Its last value is FFFFFFFF, 4,294,967,295 ms (49.7 days); the next tick wraps it to 0.",
+      apply: example(32, false, 0xFFFFFFFFn) },
+  ]);
+
+  // Typing a value too big for the width widens it to the next width that
+  // holds it. Returns false past 64 bits.
+  function fitWidth(fits) {
+    const w = NB_WIDTHS.find((x) => x >= state.width && fits(x));
+    if (!w) return false;
+    state.width = w;
+    return true;
+  }
+
+  // A box's text, already filtered to its base's digits. Empty or a lone
+  // minus is a value still being typed: nothing changes until it is a number.
+  function fromBox(base, raw) {
+    const digits = raw.replace(/ /g, "");
+    if (digits === "" || digits === "-") return;
+    let ok;
+    if (base === "dec") {
+      const v = BigInt(digits);
+      if (v < 0n) {
+        ok = fitWidth((w) => v >= -topBit(w));
+        if (ok) state.bits = v & mask(state.width);
+      } else {
+        ok = fitWidth((w) => v <= (state.signed ? topBit(w) - 1n : mask(w)));
+        if (ok) state.bits = v;
+      }
+    } else {
+      const v = BigInt(`0${base === "hex" ? "x" : base === "oct" ? "o" : "b"}${digits}`);
+      ok = fitWidth((w) => v <= mask(w));
+      if (ok) state.bits = v;
+    }
+    state.notice = ok ? "" : "Up to 64 bits, the widest common register.";
+    return ok;
+  }
+
+  // Push the value into every box but the one being typed in — rewriting a
+  // box under the caret is how two-way forms go wrong.
+  function syncBoxes() {
+    Object.keys(NB_BASES).forEach((b) => {
+      const el = document.getElementById(`nb-${b}`);
+      if (el && document.activeElement !== el) el.value = text[b]();
+    });
   }
 
   function refresh() {
-    const v = parsedValue();
-    const ok = isFinite(v) && !isNaN(v);
-    app.querySelector('[data-res="dec"]').textContent = ok ? v.toString(10) : "—";
-    app.querySelector('[data-res="hex"]').textContent = ok ? v.toString(16).toUpperCase() : "—";
-    app.querySelector('[data-res="oct"]').textContent = ok ? v.toString(8) : "—";
-    app.querySelector('[data-res="bin"]').textContent = ok ? groupNibbles(v.toString(2)) : "—";
+    syncBoxes();
+    app.querySelectorAll(".pill").forEach((p) => {
+      const on = +p.dataset.pill === state.width;
+      p.classList.toggle("active", on);
+      p.style.background = on ? domain.bg : "";
+      p.style.color = on ? "#8FC1F5" : "";
+    });
+    const grid = app.querySelector('[data-res="bits"]');
+    grid.classList.toggle("bit-grid--byte", state.width === 8);
+    grid.innerHTML = bitsHTML();
+    app.querySelector('[data-res="legend"]').innerHTML = legend();
+    const n = app.querySelector('[data-res="notice"]');
+    n.textContent = state.notice;
+    n.hidden = !state.notice;
+    wireBits();
   }
 
-  // Switching base re-reads the field's digits under the OLD base and
-  // re-writes them in the new one, so the underlying value survives the
-  // switch instead of the field just going blank or keeping stale digits.
-  function switchBase(newBase) {
-    const v = parsedValue();
-    state.base = newBase;
-    state.raw = isFinite(v) && !isNaN(v) ? v.toString(BASE_RADIX[newBase]).toUpperCase() : "";
+  // Sixteen bits to a row, bit 0 at the right, a gap every four with that
+  // nibble's hex digit under it: one hex digit is exactly those four bits.
+  function bitsHTML() {
+    const w = state.width;
+    const rows = [];
+    for (let top = w - 1; top >= 0; top -= 16) {
+      const nibbles = [];
+      for (let hi = top; hi > top - 16 && hi >= 0; hi -= 4) {
+        const ks = [hi, hi - 1, hi - 2, hi - 3];
+        const hex = ((state.bits >> BigInt(hi - 3)) & 15n).toString(16).toUpperCase();
+        nibbles.push(`<div class="bit-nib">
+          ${ks.map((k) => `<span class="bit-idx${state.signed && k === w - 1 ? " bit-sign" : ""}">${k}</span>`).join("")}
+          ${ks.map((k) => { const on = (state.bits >> BigInt(k)) & 1n; return `<button class="bit-cell${on ? " on" : ""}" data-bit="${k}" aria-label="Bit ${k}">${on}</button>`; }).join("")}
+          <span class="bit-hex">${hex}</span>
+        </div>`);
+      }
+      rows.push(`<div class="bit-row">${nibbles.join("")}</div>`);
+    }
+    return rows.join("");
+  }
+
+  function legend() {
+    const w = state.width;
+    const weight = w <= 32 ? ` (${(2 ** (w - 1)).toLocaleString("en-US")})` : "";
+    return state.signed
+      ? `Bit ${w - 1} is the sign bit: it counts −${nbPow(w - 1)}${weight}, so a 1 there makes the value negative.`
+      : `Bit n is worth 2ⁿ: bit 0, on the right, is worth 1; bit ${w - 1} is worth ${nbPow(w - 1)}${weight}.`;
+  }
+
+  function wireBits() {
+    app.querySelectorAll("[data-bit]").forEach((el) => {
+      el.onclick = () => {
+        state.bits ^= 1n << BigInt(+el.dataset.bit);
+        state.notice = "";
+        refresh();
+      };
+    });
+  }
+
+  // A wider register keeps the value (a negative one is sign-extended); a
+  // narrower one keeps only the bits it can hold, as the register would.
+  function setWidth(w) {
+    if (w > state.width && state.signed && state.bits & topBit(state.width)) {
+      state.bits |= mask(w) ^ mask(state.width);
+    }
+    const kept = state.bits & mask(w);
+    state.notice = kept !== state.bits ? `Narrowed to ${w} bits: the bits above bit ${w - 1} were dropped.` : "";
+    state.bits = kept;
+    state.width = w;
+    setPref(C, "width", w);
     paint();
   }
 
+  // One full-width row per base, its name beside the number rather than
+  // above it: a 64-bit value is 16 hex or 22 octal digits, which two boxes to
+  // a row cut off, and four stacked rows of the usual height do not fit.
+  function box(base) {
+    const dec = base === "dec";
+    const mode = dec
+      ? (state.signed ? 'inputmode="decimal" data-signed' : 'inputmode="numeric"')
+      : base === "hex" ? 'inputmode="text" autocapitalize="characters"' : 'inputmode="numeric"';
+    return `
+        <div class="field nb-field">
+          <div class="field-row">
+            <label for="nb-${base}">${NB_BASES[base].label}</label>
+            <input id="nb-${base}" type="text" ${mode} autocomplete="off" spellcheck="false" value="${text[base]()}" />
+          </div>
+        </div>`;
+  }
+
+  const FILTERS = {
+    dec: (v) => v.replace(/[^0-9-]/g, "").replace(/(?!^)-/g, ""),
+    hex: (v) => v.replace(/[^0-9a-fA-F]/g, "").toUpperCase(),
+    oct: (v) => v.replace(/[^0-7]/g, ""),
+    bin: (v) => v.replace(/[^01 ]/g, ""),
+  };
+
   function paint() {
-    const v = parsedValue();
-    const ok = isFinite(v) && !isNaN(v);
-
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Enter a value in one base, read it in all four")}
+      ${calcHeader(tool, favId, "Type in any box; the others follow")}
 
-      ${pillRow([["dec", "DEC"], ["hex", "HEX"], ["oct", "OCT"], ["bin", "BIN"]], state.base, domain.bg)}
+      ${pillRow(NB_WIDTHS.map((w) => [w, `${w}-bit`]), state.width, domain.bg)}
 
-      <div class="field">
-        <label>Value (${state.base.toUpperCase()})</label>
-        <input id="dhb-value" type="text" inputmode="${state.base === "dec" ? "numeric" : "text"}" autocapitalize="characters" spellcheck="false" value="${state.raw}" />
+      <div class="section-label split" style="color:#5DCAA5">
+        <span>Value</span>
+        <span></span>
+        <select id="nb-signed" class="label-select">
+          <option value="u" ${state.signed ? "" : "selected"}>Unsigned</option>
+          <option value="s" ${state.signed ? "selected" : ""}>Signed · two's complement</option>
+        </select>
       </div>
-
-      <div class="section-label" style="color:#5DCAA5">Decimal</div>
-      <div class="result-field">
-        <div class="result-value"><span class="num" data-res="dec">${ok ? v.toString(10) : "—"}</span></div>
+      <div data-res="results">
+        ${Object.keys(NB_BASES).map(box).join("")}
       </div>
+      <div class="error-text" data-res="notice" style="color:#E0A85E"${state.notice ? "" : " hidden"}>${state.notice}</div>
 
-      <div class="section-label" style="color:#5DCAA5">Hexadecimal</div>
-      <div class="result-field">
-        <div class="result-value"><span class="num" data-res="hex">${ok ? v.toString(16).toUpperCase() : "—"}</span></div>
-      </div>
-
-      <div class="section-label" style="color:#5DCAA5">Octal</div>
-      <div class="result-field">
-        <div class="result-value"><span class="num" data-res="oct">${ok ? v.toString(8) : "—"}</span></div>
-      </div>
-
-      <div class="section-label" style="color:#5DCAA5">Binary</div>
-      <div class="result-field">
-        <div class="result-value" style="font-size:22px;"><span class="num" data-res="bin">${ok ? groupNibbles(v.toString(2)) : "—"}</span></div>
-      </div>
+      <div class="section-label" style="color:#8FC1F5">Bits — tap one to flip it</div>
+      <div class="bit-grid${state.width === 8 ? " bit-grid--byte" : ""}" data-res="bits">${bitsHTML()}</div>
+      <div class="bit-legend" data-res="legend">${legend()}</div>
 
       ${formulaSection(
-        ["Decimal: each digit × 10ⁿ", "Hexadecimal: each digit × 16ⁿ (a-f = 10-15)", "Octal: each digit × 8ⁿ (0-7)", "Binary: each digit × 2ⁿ — one hex digit is exactly 4 binary digits, one octal digit is exactly 3"],
-        "Hex groups bits by 4, which is why registers and memory are shown in hex, not decimal. Octal groups by 3 — mostly a Unix file-permissions thing (chmod 755), not electronics."
+        ["Value = Σ digit × baseⁿ   (n = 0 at the right)",
+         "1 hex digit = 4 bits,  1 octal digit = 3 bits",
+         "Unsigned: 0 … 2ʷ − 1",
+         "Signed: −2ʷ⁻¹ … 2ʷ⁻¹ − 1,  value = bits − 2ʷ when the top bit is 1"],
+        "A base is how many values one digit can take: decimal 10 (0–9), hexadecimal 16 (0–9, then A–F for 10–15), octal 8 (0–7), binary 2 (0 and 1). Each place is worth the base times the place to its right. A bit is one binary digit; four bits are a nibble, exactly one hex digit, and eight a byte, which is why registers and memory are written in hex. Octal groups bits by three and survives mostly in Unix file permissions (chmod 755). w is the width in bits. Signed numbers use two's complement, as processors do: the top bit, the sign bit, counts −2ʷ⁻¹ instead of +2ʷ⁻¹, so all ones is −1; to negate, flip every bit and add 1. A value too big for the width widens it; a narrower width keeps only the bits it can hold."
       )}
       ${calcFooter("")}
     `;
 
-    wireCalc(favId, paint, switchBase);
-
-    const field = document.getElementById("dhb-value");
-    field.oninput = () => {
-      const filtered = field.value.replace(BASE_CHARS[state.base], "").toUpperCase();
-      if (filtered !== field.value) field.value = filtered;
-      state.raw = filtered;
-      refresh();
+    wireCalc(favId, paint, (w) => setWidth(+w));
+    document.getElementById("nb-signed").onchange = (e) => {
+      state.signed = e.target.value === "s";
+      setPref(C, "signed", state.signed);
+      state.notice = "";
+      paint();
     };
+
+    Object.keys(NB_BASES).forEach((base) => {
+      const el = document.getElementById(`nb-${base}`);
+      el.oninput = () => {
+        let v = FILTERS[base](el.value);
+        if (base === "dec" && !state.signed) v = v.replace(/-/g, "");
+        if (v !== el.value) el.value = v;
+        const before = state.width;
+        if (fromBox(base, v) === false) { refresh(); return; }
+        // A widened register re-draws the pills, the bits and the ± key.
+        if (state.width !== before) setPref(C, "width", state.width);
+        refresh();
+      };
+      // Leaving a box tidies it (grouped binary, no leading zeros) and puts
+      // back the last value if what was typed went past 64 bits.
+      el.onblur = () => {
+        el.value = text[base]();
+        if (state.notice.startsWith("Up to")) { state.notice = ""; refresh(); }
+      };
+    });
+    wireBits();
   }
 
   paint();
