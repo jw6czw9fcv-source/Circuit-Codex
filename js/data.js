@@ -293,7 +293,7 @@ const TOOL_KEYWORDS = {
   "555-timer": "ne555 timer astable monostable oscillator",
   "dec-hex-bin": "binary hexadecimal octal decimal base conversion dec hex oct bin two's complement signed unsigned bits register",
   "ascii-table": "ascii characters code table control characters cr lf xon xoff escape ctrl",
-  "pwm-duty": "pulse width modulation duty cycle",
+  "pwm-duty": "pulse width modulation duty cycle ton toff pulse average rms servo motor fan dimming",
   "debounce-rc": "switch bounce button rc filter",
   "i2c-pullup": "i2c pull up resistor bus capacitance",
   "uart-baud": "serial baud rate divisor error",

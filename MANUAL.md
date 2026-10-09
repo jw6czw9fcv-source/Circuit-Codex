@@ -77,6 +77,7 @@ will key on, since that is the id the app already holds for each tool.
 - Sequential logic → [555 timer](#555-timer)
 - Number systems → [Number bases](#number-bases)
 - Number systems → [ASCII table](#ascii-table)
+- Timing & interfaces → [PWM (duty cycle)](#pwm-duty-cycle)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
@@ -5539,6 +5540,132 @@ The review made these changes:
 - It escaped <, > and &, which were inserted as raw HTML.
 - It added examples: CR LF, XOFF/XON, a digit to its number, upper and
   lower case.
+
+[↑ Index](#index)
+
+---
+
+<a id="pwm-duty"></a>
+## PWM (duty cycle)
+
+`calc: pwm-duty` · Digital & logic circuits › Timing & interfaces
+
+### What it computes
+
+For a pulse-width-modulated signal, the tool links six live boxes:
+- **Frequency** and **Duty**, the usual way to specify a PWM signal;
+- **Ton** (the pulse) and **Toff** (the gap), the way it is read off a
+  scope;
+- **High level** and **Low level**, in volts.
+
+From them it computes:
+- **the average voltage**, shown large;
+- **the RMS voltage**;
+- **the period**.
+
+The waveform shows two periods, with the average as a dashed line. The
+slider under it sets the duty. The high and low levels are remembered.
+
+### Source
+
+The formulas follow from the definitions. Two examples were checked
+against documents:
+- **The Arduino reference for analogWrite()** (reference-en, read on
+  GitHub), which gives:
+  - the PWM frequency: 490 Hz on most Uno, Nano and Mini pins, and
+    980 Hz on pins 5 and 6;
+  - the value range: 0 (always off) to 255 (always on).
+- **An ebm-papst DC fan catalogue page** (speed setting, p. 175). It
+  states a four-wire interface "in accordance with Intel specifications
+  for 12 VDC fans, PWM frequency 25 kHz". Intel's own 4-wire PWM fan
+  specification could not be opened (the copies found refused access),
+  so it was not read.
+
+The hobby-servo figures are the common convention, not a standard:
+- a pulse every 20 ms (50 Hz);
+- 1 ms to 2 ms wide, with 1.5 ms at the centre.
+
+### What it means
+
+**PWM**, pulse-width modulation, switches a signal fully on and off,
+fast, and sets how long it stays on.
+- **Ton** — the pulse, how long the signal stays high.
+- **Toff** — the gap, how long it stays low.
+- **T** — the period, Ton + Toff. **f = 1 / T** is the frequency.
+- **The duty cycle D** — the share of each period spent high, from 0 %
+  (always off) to 100 % (always on).
+- **The average** — a load too slow to follow the switching responds to
+  the average. That load can be a motor, a heater, the eye watching an
+  LED, or a low-pass filter. This is how PWM sets a speed, a brightness or
+  a DC level with a switch that wastes almost nothing: it is either fully
+  on or fully off.
+- **The RMS** — the steady voltage that would heat a resistor the same.
+  With a low level of 0 V, the power into a resistor is D times the full
+  power.
+- **A negative low level** — an H-bridge switching between +V and −V.
+  The average then goes from −V to +V as the duty goes from 0 to 100 %.
+
+The boxes work like this:
+- **Typing a frequency** rescales the pulse and keeps the duty.
+- **Typing a duty** redistributes it and keeps the frequency.
+- **Ton and Toff** are independent, so two readings off a scope can be
+  typed one after the other.
+
+### Why the formulas are these
+
+    D = Ton / T,   T = Ton + Toff = 1 / f
+    Average = Vlow + D × (Vhigh − Vlow)
+    RMS     = √(Vlow² × (1 − D) + Vhigh² × D)
+
+- **The average** is the time-weighted mean of the two levels: Vhigh for
+  a share D of the time and Vlow for the rest.
+- **The RMS** is the square root of the time-weighted mean of the
+  squares, by definition.
+
+### Assumptions and limits
+
+- **Ideal edges.** The rise and fall times are taken as zero. With real
+  edges the average shifts a little, most at very short pulses.
+- **Ideal averaging.** The average is what a perfect filter, or an
+  infinitely slow load, would see. How much ripple remains depends on the
+  filter or the load: see the RC filter tool.
+- **Frequency is a design choice the tool does not make.** It must be
+  high enough for the load to average: no visible flicker, no audible
+  whine (20 kHz is the usual upper limit of hearing). It must also be
+  low enough for the switching losses to stay small.
+
+### What it deliberately does not do
+
+- Timer register values (prescaler, top, compare) are not computed: they
+  differ from one microcontroller family to the next.
+- Filtering the PWM into a DC level is the RC filter tool's job.
+
+### How it was checked
+
+- **1 kHz, 50 %, 5 V / 0 V:** Ton 500 µs, average 2.5 V, RMS 3.536 V,
+  period 1 ms.
+- **25 % at 1 kHz:** 250 µs on, 750 µs off, average 1.25 V.
+- **2 kHz** with the duty kept at 50 %: 250 µs on.
+- **Ton 200 µs, then Toff 800 µs:** 1 kHz and 20 %.
+- **150 % typed:** held at 100 %, Toff 0, average 5 V.
+- **+12 V / −12 V at 75 %:** average 6 V, RMS 12 V.
+- **Examples:**
+  - servo: 1.5 ms on, 18.5 ms off, 7.5 %;
+  - analogWrite(128): 490 Hz, 50.2 %, 2.51 V;
+  - PC fan at 40 %: 16 µs at 25 kHz;
+  - 12 V motor at 75 %: 9 V.
+
+The review made these changes:
+- It replaced the two mode pills with six live boxes.
+- It put the average voltage first and large.
+- It redrew the waveform:
+  - the pulse in the part blue, not the domain colour;
+  - two periods, with the average dashed in green;
+  - 11 px labels instead of 9 px;
+  - the duty slider under it.
+- It limited the units to real ones (Hz–MHz, ns–s), and the levels to V
+  with a ± key.
+- It added plain definitions, examples, and remembered levels.
 
 [↑ Index](#index)
 
