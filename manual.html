@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=6bee6eacdb" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=1cbf0a6c31" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -5606,14 +5606,18 @@ the error, and the marks that fall outside their own bit turn red.</p>
 <section class="tool" id="crystal-load" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Timing &amp; interfaces</div>
   <h2>Crystal load</h2>
-  <figure class="shot"><img src="manual/img/crystal-load.jpg?h=cb7204621c" loading="lazy" alt="Crystal load as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/crystal-load.jpg?h=6276f4992a" loading="lazy" alt="Crystal load as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Crystal load capacitance)</p>
 <h3>What it computes</h3>
 <p>For a Pierce oscillator, it computes:
 - <strong>the two capacitors it needs,</strong> so the crystal sees the load it was cut
   for. The pair to buy, in the chosen E-series, is shown large, with the
   load it really presents and how far that pulls the frequency;
-- <strong>for the pair in the fields:</strong> its load, its error and its pull.</p>
+- <strong>for the pair in the fields:</strong> its load, its error and its pull;
+- <strong>start-up, after AN2867:</strong>
+  - from the frequency, the crystal's ESR and the MCU's gm, the gain
+    margin, with and without RExt;
+  - RExt's starting value.</p>
 <p>The drawing is the oscillator as it is really built:
 - the MCU, with its inverting amplifier and feedback resistor RF inside;
 - the OSC_IN and OSC_OUT pins (OSC32_IN and OSC32_OUT for a 32.768 kHz
@@ -5633,7 +5637,28 @@ the error, and the marks that fall outside their own bit turn red.</p>
     example: a 15 pF crystal, assuming Cs = 5 pF, needs CL1 = CL2 = 20 pF;</li>
 <li><strong>section 3.7:</strong> pullability from Cm, C0 and CL;</li>
 <li><strong>section 3.2, typical RF:</strong> 10–25 MΩ at 32.768 kHz, down to
-    0.47–5 MΩ at 20 MHz.</li>
+    0.47–5 MΩ at 20 MHz;</li>
+<li><strong>section 3.4, the gain margin:</strong><ul>
+<li>gmcrit = 4 × ESR × (2πF)² × (C0 + CL)², and gm / gmcrit should be at
+  least 5;</li>
+<li>the worked example: an 8 MHz Fox crystal (C0 7 pF, CL 10 pF,
+  ESR 80 Ω) on an STM32F1 (gm 25 mA/V) gives gmcrit 0.23 mA/V and a
+  margin of 107;</li>
+<li>its LSE table gives gm from 5 to 25 µA/V across the drive modes of
+  the first family listed;</li>
+</ul>
+</li>
+<li><strong>section 3.5.3, RExt:</strong><ul>
+<li>it limits the drive level, and with CL2 keeps the oscillator off
+  overtones;</li>
+<li>it is mandatory only if the crystal would dissipate more than its
+  rated drive level, and otherwise "not recommended", 0 Ω;</li>
+<li>its initial value is the reactance of CL2, 1 / (2πF × CL2): 1326 Ω
+  at 8 MHz with 15 pF;</li>
+<li>it is then trimmed with a potentiometer, and added to ESR when the
+  margin is rechecked.</li>
+</ul>
+</li>
 <li><strong>Epson FC-13F / FC-135 specification sheet,</strong> read for the 32.768 kHz
   values:</li>
 <li>C1 3.4 fF and C0 1.0 pF typical;</li>
@@ -5733,15 +5758,12 @@ capacitance, or to use it in a circuit that runs it at series resonance.</p>
 </ul>
 <h3>What it deliberately does not do</h3>
 <ul>
-<li><strong>Drive level and negative-resistance margin.</strong> Whether the oscillator starts
-  and whether it overdrives the crystal are the other half of the design, set by
-  the amplifier's transconductance, the crystal's ESR and any series resistor.
-  It is a separate calculation with separate datasheet numbers.</li>
-<li><strong>RF and RExt are drawn, not sized.</strong></li>
-<li>RF is inside the MCU on the parts AN2867 covers. Its section 3.2 gives
-    typical values, from 10–25 MΩ at 32.768 kHz to 0.47–5 MΩ at 20 MHz.</li>
-<li>RExt is sized from the crystal's drive level (AN2867 section 3.5), and
-    fitted only when the drive level needs it.</li>
+<li><strong>RF is drawn, not sized.</strong> It is inside the MCU on the parts AN2867
+  covers. Its section 3.2 gives typical values, from 10–25 MΩ at
+  32.768 kHz to 0.47–5 MΩ at 20 MHz.</li>
+<li><strong>The drive level is not computed.</strong> AN2867 measures it, with a current
+  probe or from the swing on CL1. RExt is therefore only its starting
+  value, and is fitted only when that measurement says so.</li>
 <li><strong>Temperature and ageing.</strong> The load error here is a fixed offset; drift over
   temperature is the crystal's cut and belongs with the ppm tooling.</li>
 </ul>
@@ -5758,7 +5780,19 @@ The watch preset (FC-135) returns 9.328 ppm/pF, against
 - <strong>The E12 pair for 12.5 pF with 3 pF stray</strong> is 18 pF, which presents
   12 pF and pulls +8.325 ppm.
 - <strong>The FC-135's 7 pF version</strong> needs 8 pF parts and pulls 26.56 ppm/pF.
-- <strong>A Series crystal with 18 pF parts</strong> runs +266.7 ppm fast.</p>
+- <strong>A Series crystal with 18 pF parts</strong> runs +266.7 ppm fast.
+- <strong>Start-up reproduces AN2867:</strong>
+  - C0 7 pF, CL 10 pF, 8 MHz, ESR 80 Ω and gm 25 mA/V give a margin of
+    107;
+  - RExt with CL2 = 15 pF is 1326 Ω.
+- <strong>At the defaults</strong> (8 MHz, C0 3 pF, CL 12.5 pF, 19 pF parts):
+  - RExt 1.047 kΩ;
+  - margin 129 without RExt, 9.135 with it.
+- <strong>The FC-135 at 15 µA/V:</strong>
+  - margin 6.934;
+  - with RExt (255.6 kΩ) it would fall to 1.491, so the tool says to fit
+    0 Ω;
+  - at the lowest drive, 5 µA/V, the margin is 2.311, too low.</p>
 <p>The pullability was wrong by twelve orders of magnitude on first write:
 C1 / (2(C0+CL)²) is <em>per farad</em>, not dimensionless, because the numerator is
 first order in capacitance and the denominator is second. It needs multiplying
@@ -5773,6 +5807,8 @@ by one picofarad to become per-pF. The hand check is what caught it.</p>
 - It replaced the "2–5 pF" stray range, which AN2867 does not state in what
   was read, with its worked example's 5 pF.
 - It put the pair to buy first and large, with what it pulls.
+- It added the start-up check and RExt's starting value from AN2867,
+  after Pierre asked why RExt was drawn but not calculated.
 - It added examples, remembers the crystal type and the series, and was
   renamed Crystal load, on Pierre's choice.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/digital%3A3%3A4/crystal-load">Open the tool</a></p>

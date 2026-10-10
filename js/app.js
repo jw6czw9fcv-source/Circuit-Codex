@@ -19192,9 +19192,14 @@ function renderUartBaud(domain, tool, favId) {
 // 32.768 kHz ones are Epson's FC-135 (C1 3.4 fF and C0 1.0 pF typical, CL 7,
 // 9 or 12.5 pF). The MHz ones are illustrative of small SMD crystals: no
 // manufacturer table was found to quote, so the fields say to use the part's.
+// The start-up figures follow ST's AN2867: its worked HSE example (8 MHz,
+// ESR 80 ohm, gm 25 mA/V on an STM32F1), and for the LSE the FC-135's 70 kOhm
+// maximum ESR with the "medium-high" drive of AN2867's LSE table (15 uA/V).
 const XTAL_KINDS = {
-  mhz: { label: "MHz crystal", c0: 3, cm: 8, cl: 12.5 },
-  khz: { label: "32.768 kHz", c0: 1, cm: 3.4, cl: 12.5 },
+  mhz: { label: "MHz crystal", c0: 3, cm: 8, cl: 12.5, f: 8, esr: 80, gm: 25,
+         fUnit: "MHz", fMul: 1e6, esrUnit: "Ω", esrMul: 1, gmUnit: "mA/V", gmMul: 1e-3 },
+  khz: { label: "32.768 kHz", c0: 1, cm: 3.4, cl: 12.5, f: 32.768, esr: 70, gm: 15,
+         fUnit: "kHz", fMul: 1e3, esrUnit: "kΩ", esrMul: 1e3, gmUnit: "µA/V", gmMul: 1e-6 },
 };
 
 function renderCrystalLoad(domain, tool, favId) {
@@ -19210,8 +19215,12 @@ function renderCrystalLoad(domain, tool, favId) {
     tol: pref(C, "tol", 10, [1, 2, 5, 10, 20]),
     cl: 12.5, stray: 3, c1: 19, c2: 19, c0: 3, cm: 8, pull: 0,
   };
-  state.c0 = XTAL_KINDS[state.kind].c0;
-  state.cm = XTAL_KINDS[state.kind].cm;
+  // Everything a family brings with it: its crystal and its oscillator.
+  const loadKind = (k) => {
+    const x = XTAL_KINDS[k];
+    Object.assign(state, { kind: k, c0: x.c0, cm: x.cm, f: x.f, esr: x.esr, gm: x.gm });
+  };
+  loadKind(state.kind);
 
   // Pullability in ppm/pF from C1 motional (fF), C0 and CL (pF):
   // Cm / (2(C0+CL)^2) is per pF once Cm is in pF, then x1e6 for ppm.
@@ -19238,7 +19247,8 @@ function renderCrystalLoad(domain, tool, favId) {
   // sized from them, except for the Series case, where the capacitors are the
   // ones on the board.
   const example = (kind, cl, stray, caps) => () => {
-    Object.assign(state, { kind, cl, stray, c0: XTAL_KINDS[kind].c0, cm: XTAL_KINDS[kind].cm });
+    loadKind(kind);
+    Object.assign(state, { cl, stray });
     if (caps) { state.c1 = caps; state.c2 = caps; } else capsFromSpec();
     pullFromCm();
     paint();
@@ -19297,6 +19307,18 @@ function renderCrystalLoad(domain, tool, favId) {
     };
   }
 
+  function startup() {
+    const x = XTAL_KINDS[state.kind];
+    const F = state.f * x.fMul, esr = state.esr * x.esrMul, gm = state.gm * x.gmMul;
+    const c2 = state.c2 * 1e-12, c0cl = (state.c0 + state.cl) * 1e-12;
+    if (!(F > 0) || !(esr > 0) || !(gm > 0) || !(c2 > 0)) return null;
+    const w2 = Math.pow(2 * Math.PI * F, 2);
+    const rext = 1 / (2 * Math.PI * F * c2);
+    const gmcrit = 4 * esr * w2 * c0cl * c0cl;
+    const gmcritR = 4 * (esr + rext) * w2 * c0cl * c0cl;
+    return { rext, gmcrit, margin: gm / gmcrit, marginR: gm / gmcritR, x };
+  }
+
   const wire = "#5A6169";
   const comp = "#8FC1F5";
   const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`;
@@ -19320,6 +19342,8 @@ function renderCrystalLoad(domain, tool, favId) {
     const lse = state.kind === "khz";
     const pinIn = lse ? "OSC32_IN" : "OSC_IN", pinOut = lse ? "OSC32_OUT" : "OSC_OUT";
     const pf = (v) => (isFinite(v) && v > 0 ? `${trim(v)} pF` : "");
+    const su = startup();
+    const rextVal = su ? formatOhms(su.rext) : "";
     return `<svg width="260" height="184" viewBox="0 0 260 184" fill="none">
       <rect x="40" y="8" width="180" height="74" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
       ${lbl(48, 23, "MCU")}
@@ -19335,7 +19359,7 @@ function renderCrystalLoad(domain, tool, favId) {
       ${w("M80 56 V134")}${w("M180 56 V90")}
       ${grey(70, 96, pinIn, "end")}${grey(190, 96, pinOut)}
 
-      ${part(zigV(180, 90))}${w("M180 126 V134")}${lbl(192, 112, "RExt")}
+      ${part(zigV(180, 90))}${w("M180 126 V134")}${lbl(192, 110, "RExt")}${rextVal ? grey(192, 124, rextVal) : ""}
 
       ${dot(80, 134)}${dot(180, 134)}
       ${w("M80 134 H118")}
@@ -19397,9 +19421,29 @@ function renderCrystalLoad(domain, tool, favId) {
       ${caution}`;
   }
 
+  // The margin AN2867 asks for is 5: below it the oscillator may start on
+  // the bench and not in the field.
+  function startupHTML() {
+    const u = startup();
+    if (!u) return `<div class="error-text">Frequency, ESR and gm must all be greater than zero.</div>`;
+    const ok = (m) => (m >= 5 ? comp : "#E08585");
+    const fmtM = (m) => (m >= 100 ? Math.round(m).toString() : trim(m));
+    let note = "";
+    if (u.margin < 5) note = `A margin of ${fmtM(u.margin)} is under the 5 AN2867 asks for: the oscillator may not start in the field. Use a stronger drive (higher gm), or a crystal with a lower ESR or a lower CL.`;
+    else if (u.marginR < 5) note = `With RExt fitted the margin drops to ${fmtM(u.marginR)}: fit 0 Ω unless the crystal's drive level is exceeded, as AN2867 advises.`;
+    return `
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("RExt, to start", `<span data-res="rext">${formatOhms(u.rext)}</span>`)}
+        ${cell("Gain margin", `<span data-res="margin">${fmtM(u.margin)}</span>`, ok(u.margin))}
+        ${cell("With RExt", `<span data-res="marginr">${fmtM(u.marginR)}</span>`, ok(u.marginR))}
+      </div>
+      ${note ? `<div class="error-text" data-res="startnote" style="color:#E0A85E">${note}</div>` : ""}`;
+  }
+
   function refresh() {
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
     app.querySelector('[data-res="schem"]').innerHTML = diagram();
+    app.querySelector('[data-res="startup"]').innerHTML = startupHTML();
   }
 
   function syncField(id, name) {
@@ -19471,22 +19515,29 @@ function renderCrystalLoad(domain, tool, favId) {
       </div>
       <div data-res="results">${resultsHTML(r)}</div>
 
+      <div class="section-label" style="color:#8FC1F5">Start-up and RExt (AN2867)</div>
+      <div class="field-pair">
+        ${field("xl-f", "f", "Frequency", XTAL_KINDS[state.kind].fUnit, 1.1)}
+        ${field("xl-esr", "esr", "ESR", XTAL_KINDS[state.kind].esrUnit, 0.9)}
+        ${field("xl-gm", "gm", "MCU gm", XTAL_KINDS[state.kind].gmUnit, 1.1)}
+      </div>
+      <div data-res="startup">${startupHTML()}</div>
+
       ${formulaSection(
         ["Load = CL1 \u00d7 CL2 / (CL1 + CL2) + Stray",
          "CL1 = CL2 = 2 \u00d7 (CL spec \u2212 Stray)",
          "Pullability = C1 / (2 \u00d7 (C0 + CL spec)\u00b2)",
-         "Pulled = \u2212Pullability \u00d7 Load error"],
-        "A crystal is trimmed to its marked frequency for one load capacitance, CL, printed on its datasheet; present a different load and it runs off frequency. In a Pierce oscillator the load is CL1 and CL2 in series, plus the stray capacitance of the pins and tracks, so a 12.5 pF crystal needs about 19 pF parts, not 12.5 or 25. C0, the shunt capacitance of the electrodes, is on the crystal datasheet; C1, the motional capacitance, often is not, so type the pullability (ppm per pF) instead if that is given and C1 is worked back. A CL of Series is typed as 0. Stray is never on the crystal datasheet: it is your board, and ST's AN2867 assumes 5 pF in its worked example. The pills load typical values: Epson's FC-135 for 32.768 kHz, illustrative ones for MHz, so use your crystal's. Editing the spec or the stray sizes the pair; editing a capacitor checks the load it presents."
+         "Pulled = \u2212Pullability \u00d7 Load error",
+         "RExt \u2248 1 / (2\u03c0 \u00d7 F \u00d7 CL2)",
+         "gmcrit = 4 \u00d7 (ESR + RExt) \u00d7 (2\u03c0F)\u00b2 \u00d7 (C0 + CL)\u00b2,  margin = gm / gmcrit \u2265 5"],
+        "A crystal is trimmed to its marked frequency for one load capacitance, CL, printed on its datasheet; present a different load and it runs off frequency. In a Pierce oscillator the load is CL1 and CL2 in series, plus the stray capacitance of the pins and tracks, so a 12.5 pF crystal needs about 19 pF parts, not 12.5 or 25. C0, the shunt capacitance of the electrodes, is on the crystal datasheet; C1, the motional capacitance, often is not, so type the pullability (ppm per pF) instead if that is given and C1 is worked back. A CL of Series is typed as 0. Stray is never on the crystal datasheet: it is your board, and ST's AN2867 assumes 5 pF in its worked example. The pills load typical values: Epson's FC-135 for 32.768 kHz, illustrative ones for MHz, so use your crystal's. Editing the spec or the stray sizes the pair; editing a capacitor checks the load it presents. Start-up follows AN2867: the MCU's amplifier must supply at least five times the gain the crystal needs (gm, its transconductance, from the MCU datasheet; ESR, the crystal's loss resistance, from the crystal's). RExt limits the power into the crystal; ST starts it at the reactance of CL2 and trims it with a potentiometer, and fits 0 Ω when the crystal's drive level is not exceeded."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (m) => {
-      const k = XTAL_KINDS[m];
-      state.kind = m;
+      loadKind(m);
       setPref(C, "kind", m);
-      state.c0 = k.c0;
-      state.cm = k.cm;
       pullFromCm();
       paint();
     });
@@ -19494,7 +19545,8 @@ function renderCrystalLoad(domain, tool, favId) {
     document.getElementById("xl-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
 
     [["xl-cl", "cl"], ["xl-stray", "stray"], ["xl-c1", "c1"], ["xl-c2", "c2"],
-     ["xl-c0", "c0"], ["xl-cm", "cm"], ["xl-pull", "pull"]].forEach(([id, name]) => {
+     ["xl-c0", "c0"], ["xl-cm", "cm"], ["xl-pull", "pull"],
+     ["xl-f", "f"], ["xl-esr", "esr"], ["xl-gm", "gm"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
       if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
     });
