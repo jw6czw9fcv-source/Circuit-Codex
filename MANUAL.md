@@ -6140,23 +6140,50 @@ The review made these changes:
 ---
 
 <a id="crystal-load"></a>
-## Crystal load capacitance
+## Crystal load
 
-`calc: crystal-load` · Digital › Timing & interfaces
+`calc: crystal-load` · Digital & logic circuits › Timing & interfaces
+(formerly Crystal load capacitance)
 
 ### What it computes
 
-The two capacitors a Pierce oscillator needs so the crystal sees the load it
-was cut for, the load a given pair actually presents, and how far off frequency
-the difference pulls it.
+For a Pierce oscillator, it computes:
+- **the two capacitors it needs,** so the crystal sees the load it was cut
+  for. The pair to buy, in the chosen E-series, is shown large, with the
+  load it really presents and how far that pulls the frequency;
+- **for the pair in the fields:** its load, its error and its pull.
+
+The drawing is the oscillator as it is really built:
+- the MCU, with its inverting amplifier and feedback resistor RF inside;
+- the OSC_IN and OSC_OUT pins (OSC32_IN and OSC32_OUT for a 32.768 kHz
+  crystal);
+- the crystal Y1, RExt, and CL1 and CL2, with their values.
+
+The crystal type and the series are remembered.
 
 ### Source
 
-The series expression appears in every oscillator application note — ST AN2867,
-the Abracon and Epson design guides, and the NXP equivalents. The pulling
-expression comes from the crystal's equivalent circuit, the Butterworth–Van
-Dyke model: a motional arm of L1, C1 and R1 in series, all in parallel with the
-shunt capacitance C0 of the electrodes and holder.
+- **ST AN2867, Oscillator design guide, rev. 10 (DocID15287),** was read in
+  a copy hosted by Raltron (st.com reset the connection):
+  - **figure 5, "Pierce-oscillator circuitry":** Inv, the internal inverter
+    working as the amplifier; RF, the internal feedback resistor; Q, the
+    crystal; RExt, an external resistor "to limit the inverter output
+    current"; CL1 and CL2, the load capacitors; Cs, the stray, which is the
+    pin capacitance plus the PCB;
+  - **section 3.3:** CL = CL1 × CL2 / (CL1 + CL2) + Cs, and the worked
+    example: a 15 pF crystal, assuming Cs = 5 pF, needs CL1 = CL2 = 20 pF;
+  - **section 3.7:** pullability from Cm, C0 and CL;
+  - **section 3.2, typical RF:** 10–25 MΩ at 32.768 kHz, down to
+    0.47–5 MΩ at 20 MHz.
+- **Epson FC-13F / FC-135 specification sheet,** read for the 32.768 kHz
+  values:
+  - C1 3.4 fF and C0 1.0 pF typical;
+  - CL 7, 9 or 12.5 pF;
+  - ±20 ppm at 25 °C.
+- **The pulling expression** comes from the crystal's equivalent circuit,
+  the Butterworth–Van Dyke model: a motional arm of L1, C1 and R1 in series,
+  all in parallel with the shunt capacitance C0 of the electrodes and
+  holder.
 
 ### Why the formulas are these
 
@@ -6200,9 +6227,9 @@ tool reports as pullability:
 The sign is negative: **more load, lower frequency**. For a typical MHz part
 with C1 = 8 fF and C0 = 3 pF at CL = 12.5 pF that comes to about 16.6 ppm/pF, so
 fitting 22 pF where 19 pF was wanted — 1.5 pF too much load — pulls it roughly
-25 ppm slow. A 32.768 kHz tuning fork has a tenth the motional capacitance and
-pulls far less per pF, around 6 ppm/pF on the same load, which is why watch
-crystals are specified so tightly: there is little room to trim them back.
+25 ppm slow. Epson's FC-135 watch crystal (C1 3.4 fF, C0 1.0 pF) pulls
+9.3 ppm/pF at 12.5 pF. In its 7 pF version it pulls 26.6 ppm/pF: the lower the
+load, the steeper the slope, so a low-load crystal wants the tightest stray.
 
 ### Where the inputs come from, and what they are called
 
@@ -6219,9 +6246,9 @@ Three of the inputs are easy to look for in the wrong place.
   so changing CL spec recomputes pullability, not C1.
 - **Stray** — **never** on the crystal datasheet, because it is not the
   crystal. It is the capacitance of the two oscillator pins, sometimes listed
-  in the MCU datasheet, plus the two tracks. Application notes such as ST
-  AN2867 give 2–5 pF as the usual range; that is an order of magnitude, not a
-  value to copy.
+  in the MCU datasheet, plus the two tracks. ST's AN2867 assumes 5 pF in
+  its worked example; take that as an order of magnitude, not a value to
+  copy.
 
 The load capacitors are called **CL1 and CL2** rather than C1 and C2, which is
 how MCU application notes label them and which keeps C1 free for its datasheet
@@ -6242,11 +6269,16 @@ capacitance, or to use it in a circuit that runs it at series resonance.
 
 ### Assumptions and limits
 
-- **Stray is an estimate and it dominates the mistakes.** Two to five picofarads
-  is the usual range for the pins plus short tracks, but a long or guarded
-  layout can be well outside it. If the frequency matters, measure.
-- The presets are typical for each family, not for any specific part, and
-  a wrong C1 scales the pullability proportionally.
+- **Stray is an estimate, and it dominates the mistakes.** It is a few
+  picofarads for the pins plus short tracks (AN2867's example takes 5 pF),
+  but a long or guarded layout can be well outside that. If the frequency
+  matters, measure.
+- **The presets are starting points.**
+  - The 32.768 kHz preset is the Epson FC-135's typical values.
+  - The MHz preset is illustrative: no manufacturer table was found to quote
+    for C0 and C1.
+  - Use your crystal's datasheet: a wrong C1 scales the pullability in
+    proportion.
 - The pulling figure is a **slope taken at the specified load**, so it is exact
   for small errors and increasingly optimistic for large ones, since the true
   curve flattens as CL grows.
@@ -6259,8 +6291,11 @@ capacitance, or to use it in a circuit that runs it at series resonance.
   and whether it overdrives the crystal are the other half of the design, set by
   the amplifier's transconductance, the crystal's ESR and any series resistor.
   It is a separate calculation with separate datasheet numbers.
-- **The feedback resistor**, which is inside the MCU on every part this applies
-  to and is not drawn for that reason.
+- **RF and RExt are drawn, not sized.**
+  - RF is inside the MCU on the parts AN2867 covers. Its section 3.2 gives
+    typical values, from 10–25 MΩ at 32.768 kHz to 0.47–5 MΩ at 20 MHz.
+  - RExt is sized from the crystal's drive level (AN2867 section 3.5), and
+    fitted only when the drive level needs it.
 - **Temperature and ageing.** The load error here is a fixed offset; drift over
   temperature is the crystal's cut and belongs with the ppm tooling.
 
@@ -6270,13 +6305,34 @@ Recomputed by hand: 12.5 pF specified with 3 pF stray gives 19 pF capacitors and
 a presented load of exactly 12.5 pF, 0 ppm. Fitting 22 pF instead presents
 14 pF, 1.5 pF over, and pulls −24.97 ppm against 16.65 × 1.5 = 24.98 by hand.
 Fitting 33 pF presents 19.5 pF and pulls −116.5 ppm against 16.65 × 7 = 116.6.
-The watch preset returns 6.378 ppm/pF against 2.5 fF / (2 × (1.5 + 12.5 pF)²)
-= 6.38 by hand.
+The watch preset (FC-135) returns 9.328 ppm/pF, against
+3.4 fF / (2 × (1.0 + 12.5 pF)²) = 9.33 by hand.
+
+Further checks:
+- **AN2867's example** (15 pF, 5 pF stray) gives 20 pF each, the same as
+  the note.
+- **The E12 pair for 12.5 pF with 3 pF stray** is 18 pF, which presents
+  12 pF and pulls +8.325 ppm.
+- **The FC-135's 7 pF version** needs 8 pF parts and pulls 26.56 ppm/pF.
+- **A Series crystal with 18 pF parts** runs +266.7 ppm fast.
 
 The pullability was wrong by twelve orders of magnitude on first write:
 C1 / (2(C0+CL)²) is *per farad*, not dimensionless, because the numerator is
 first order in capacitance and the denominator is second. It needs multiplying
 by one picofarad to become per-pF. The hand check is what caught it.
+
+The review made these changes:
+- It redrew the schematic as the real Pierce oscillator of AN2867 figure 5,
+  on Pierre's request.
+- It replaced the 32.768 kHz preset (C0 1.5 pF, C1 2.5 fF, from no source)
+  with the Epson FC-135's typical values, and corrected the claim that a
+  watch crystal has "a tenth the motional capacitance" and pulls "around
+  6 ppm/pF".
+- It replaced the "2–5 pF" stray range, which AN2867 does not state in what
+  was read, with its worked example's 5 pF.
+- It put the pair to buy first and large, with what it pulls.
+- It added examples, remembers the crystal type and the series, and was
+  renamed Crystal load, on Pierre's choice.
 
 [↑ Index](#index)
 

@@ -19188,13 +19188,13 @@ function renderUartBaud(domain, tool, favId) {
   paint();
 }
 
-// The two families behave differently enough that one set of defaults would be
-// wrong for half the users: a watch tuning fork has a tenth the motional
-// capacitance of an MHz plate, so it pulls far less per pF of load error but
-// has far less margin for drive. Datasheet values override these.
+// Typical values to start from; a datasheet's own override them. The
+// 32.768 kHz ones are Epson's FC-135 (C1 3.4 fF and C0 1.0 pF typical, CL 7,
+// 9 or 12.5 pF). The MHz ones are illustrative of small SMD crystals: no
+// manufacturer table was found to quote, so the fields say to use the part's.
 const XTAL_KINDS = {
   mhz: { label: "MHz crystal", c0: 3, cm: 8, cl: 12.5 },
-  khz: { label: "32.768 kHz", c0: 1.5, cm: 2.5, cl: 12.5 },
+  khz: { label: "32.768 kHz", c0: 1, cm: 3.4, cl: 12.5 },
 };
 
 function renderCrystalLoad(domain, tool, favId) {
@@ -19204,7 +19204,14 @@ function renderCrystalLoad(domain, tool, favId) {
   // Names follow the crystal datasheet: C0 shunt and C1 motional. The load
   // capacitors are CL1 and CL2, which is what the MCU application notes call
   // them and which keeps C1 free for its datasheet meaning.
-  const state = { kind: "mhz", tol: 10, cl: 12.5, stray: 3, c1: 19, c2: 19, c0: 3, cm: 8, pull: 0 };
+  const C = "crystal-load";
+  const state = {
+    kind: pref(C, "kind", "mhz", Object.keys(XTAL_KINDS)),
+    tol: pref(C, "tol", 10, [1, 2, 5, 10, 20]),
+    cl: 12.5, stray: 3, c1: 19, c2: 19, c0: 3, cm: 8, pull: 0,
+  };
+  state.c0 = XTAL_KINDS[state.kind].c0;
+  state.cm = XTAL_KINDS[state.kind].cm;
 
   // Pullability in ppm/pF from C1 motional (fF), C0 and CL (pF):
   // Cm / (2(C0+CL)^2) is per pF once Cm is in pF, then x1e6 for ppm.
@@ -19226,6 +19233,26 @@ function renderCrystalLoad(domain, tool, favId) {
     if (state.c0 + state.cl > 0 && state.pull > 0) state.cm = round4(cmFrom(state.pull, state.c0, state.cl));
   }
   pullFromCm();
+
+  // Each example sets the family, the crystal and the board; the pair is then
+  // sized from them, except for the Series case, where the capacitors are the
+  // ones on the board.
+  const example = (kind, cl, stray, caps) => () => {
+    Object.assign(state, { kind, cl, stray, c0: XTAL_KINDS[kind].c0, cm: XTAL_KINDS[kind].cm });
+    if (caps) { state.c1 = caps; state.c2 = caps; } else capsFromSpec();
+    pullFromCm();
+    paint();
+  };
+  useExamples([
+    { title: "ST's worked example", note: "AN2867: a 15 pF crystal with 5 pF of stray needs CL1 = CL2 = 20 pF.",
+      apply: example("mhz", 15, 5) },
+    { title: "Watch crystal, 12.5 pF", note: "Epson FC-135 on a board with 3 pF of stray: 19 pF parts, 18 pF in E12.",
+      apply: example("khz", 12.5, 3) },
+    { title: "Low-power watch crystal", note: "The FC-135's 7 pF version needs only 8 pF parts, but pulls 26.6 ppm per pF.",
+      apply: example("khz", 7, 3) },
+    { title: "A Series crystal", note: "Cut for no load, it runs fast in a Pierce circuit: about 267 ppm with 18 pF parts.",
+      apply: example("mhz", 0, 3, 18) },
+  ]);
 
   // The spec CL is a datasheet number and is never rewritten. Editing it, or
   // the stray, sizes the pair; editing a capacitor lets the presented load
@@ -19260,9 +19287,13 @@ function renderCrystalLoad(domain, tool, favId) {
     const errPF = Math.abs(load - cl) < 1e-3 ? 0 : load - cl;
     const ppm = pull > 0 ? -pull * errPF : NaN;
     const ideal = 2 * (cl - stray);
+    const suggested = ideal > 0 ? nearestESeries(ideal, seriesName()).value : NaN;
+    // What the pair you can buy actually does: its load and its pull.
+    const sugLoad = suggested / 2 + stray;
+    const sugErr = Math.abs(sugLoad - cl) < 1e-3 ? 0 : sugLoad - cl;
     return {
-      problem: "", load, errPF, ppm,
-      suggested: ideal > 0 ? nearestESeries(ideal, seriesName()).value : NaN,
+      problem: "", load, errPF, ppm, suggested, sugLoad,
+      sugPpm: pull > 0 ? -pull * sugErr : NaN,
     };
   }
 
@@ -19289,35 +19320,35 @@ function renderCrystalLoad(domain, tool, favId) {
     const lse = state.kind === "khz";
     const pinIn = lse ? "OSC32_IN" : "OSC_IN", pinOut = lse ? "OSC32_OUT" : "OSC_OUT";
     const pf = (v) => (isFinite(v) && v > 0 ? `${trim(v)} pF` : "");
-    return `<svg width="260" height="200" viewBox="0 0 260 200" fill="none">
-      <rect x="40" y="8" width="180" height="82" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
-      ${lbl(48, 24, "MCU")}
+    return `<svg width="260" height="184" viewBox="0 0 260 184" fill="none">
+      <rect x="40" y="8" width="180" height="74" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      ${lbl(48, 23, "MCU")}
 
-      ${dot(80, 60)}${dot(180, 60)}
-      ${w("M80 60 H112")}
-      ${part("M112 48 L136 60 L112 72 Z")}
-      <circle cx="140" cy="60" r="4" fill="none" stroke="${comp}" stroke-width="1.6"/>
-      ${w("M144 60 H180")}
-      ${w("M80 60 V36 H112")}${part(zigH(36, 112))}${w("M148 36 H180 V60")}
-      ${lbl(130, 26, "RF", "middle")}
+      ${dot(80, 56)}${dot(180, 56)}
+      ${w("M80 56 H112")}
+      ${part("M112 46 L134 56 L112 66 Z")}
+      <circle cx="138" cy="56" r="4" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      ${w("M142 56 H180")}
+      ${w("M80 56 V31 H112")}${part(zigH(31, 112))}${w("M148 31 H180 V56")}
+      ${lbl(130, 21, "RF", "middle")}
 
-      ${w("M80 60 V146")}${w("M180 60 V98")}
-      ${grey(74, 104, pinIn, "end")}${grey(186, 104, pinOut)}
+      ${w("M80 56 V134")}${w("M180 56 V90")}
+      ${grey(70, 96, pinIn, "end")}${grey(190, 96, pinOut)}
 
-      ${part(zigV(180, 98))}${w("M180 134 V146")}${lbl(192, 120, "RExt")}
+      ${part(zigV(180, 90))}${w("M180 126 V134")}${lbl(192, 112, "RExt")}
 
-      ${dot(80, 146)}${dot(180, 146)}
-      ${w("M80 146 H118")}
-      ${part("M118 136 V156")}
-      <rect x="122" y="134" width="16" height="24" rx="2" fill="none" stroke="${comp}" stroke-width="1.8"/>
-      ${part("M142 136 V156")}
-      ${w("M142 146 H180")}
-      ${lbl(130, 128, "Y1", "middle")}
+      ${dot(80, 134)}${dot(180, 134)}
+      ${w("M80 134 H118")}
+      ${part("M118 124 V144")}
+      <rect x="122" y="122" width="16" height="24" rx="2" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      ${part("M142 124 V144")}
+      ${w("M142 134 H180")}
+      ${lbl(130, 116, "Y1", "middle")}
 
-      ${w("M80 146 V162")}${capV(80, 162)}${w("M80 168 V184")}${ground(80, 184)}
-      ${w("M180 146 V162")}${capV(180, 162)}${w("M180 168 V184")}${ground(180, 184)}
-      ${lbl(66, 164, "CL1", "end")}${grey(66, 178, pf(state.c1), "end")}
-      ${lbl(194, 164, "CL2")}${grey(194, 178, pf(state.c2))}
+      ${w("M80 134 V148")}${capV(80, 148)}${w("M80 154 V168")}${ground(80, 168)}
+      ${w("M180 134 V148")}${capV(180, 148)}${w("M180 154 V168")}${ground(180, 168)}
+      ${lbl(66, 150, "CL1", "end")}${grey(66, 164, pf(state.c1), "end")}
+      ${lbl(194, 150, "CL2")}${grey(194, 164, pf(state.c2))}
     </svg>`;
   }
 
@@ -19330,28 +19361,38 @@ function renderCrystalLoad(domain, tool, favId) {
 
   const signed = (x) => `${x >= 0 ? "+" : ""}${trim(x)}`;
 
+  const big = (label, value, sub, colour) => `
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">${label}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main"${colour ? ` style="color:${colour}"` : ""}>${value}</span></div>
+        <div class="result-sub">${sub}</div>
+      </div>`;
+  const tone = (ppm) => (Math.abs(ppm) <= 10 ? comp : Math.abs(ppm) <= 30 ? "#E0A85E" : "#E08585");
+
+  // The pair to buy large, with what it really presents and pulls; then the
+  // pair in the fields, which is the one on the board when you are checking.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     if (r.series) {
-      return `
-      <div class="eseries-grid eseries-grid--tight">
-        ${cell("Load", `${trim(r.load)} pF`)}
-        ${cell("Load error", "—")}
-        ${cell("Pulled", isFinite(r.ppm) ? `+${trim(r.ppm)} ppm` : "—", "#E08585")}
-        ${cell("Suggested", "—")}
-      </div>
-      <div class="error-text" style="color:#E0A85E">CL 0 means Series: the crystal was cut to run with no load, and this circuit adds ${trim(r.load)} pF, so it runs about ${isFinite(r.ppm) ? trim(r.ppm) : "several hundred"} ppm fast. Order the part with a load capacitance instead, or use it in a series-resonant circuit.</div>`;
+      return big("Runs fast by", isFinite(r.ppm) ? `+${trim(r.ppm)} ppm` : "\u2014",
+          `a Series crystal, loaded with <span data-res="load">${trim(r.load)} pF</span>`, "#E08585")
+        + `<div class="error-text" style="color:#E0A85E">CL 0 means Series: the crystal was cut to run with no load, and this circuit adds ${trim(r.load)} pF, so it runs about ${isFinite(r.ppm) ? trim(r.ppm) : "several hundred"} ppm fast. Order the part with a load capacitance instead, or use it in a series-resonant circuit.</div>`;
     }
-    const tight = Math.abs(r.ppm) <= 10 ? comp : Math.abs(r.ppm) <= 30 ? "#E0A85E" : "#E08585";
     const caution = Math.abs(r.ppm) > 30
       ? `<div class="error-text" style="color:#E0A85E">${trim(Math.abs(r.ppm))} ppm of pulling is more than most crystals are specified to within. Move the capacitors, or pick a crystal cut for the load this board actually presents.</div>`
       : "";
-    return `
-      <div class="eseries-grid eseries-grid--tight">
-        ${cell("Load", `${trim(r.load)} pF`)}
-        ${cell("Load error", `${signed(r.errPF)} pF`)}
-        ${cell("Pulled", isFinite(r.ppm) ? `${signed(r.ppm)} ppm` : "\u2014", tight)}
-        ${cell("Suggested", isFinite(r.suggested) ? `${trim(r.suggested)} pF` : "\u2014")}
+    const sugText = isFinite(r.suggested) ? `${trim(r.suggested)} pF` : "\u2014";
+    const sugSub = isFinite(r.suggested)
+      ? `they present <span data-res="sugload">${trim(r.sugLoad)} pF</span>${isFinite(r.sugPpm) ? `, pulling <span data-res="sugppm">${signed(r.sugPpm)} ppm</span>` : ""}`
+      : "no pair fits";
+    return big(`Fit CL1 = CL2 (${seriesName()})`, sugText, sugSub)
+      + `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Your load", `<span data-res="load">${trim(r.load)} pF</span>`)}
+        ${cell("Load error", `<span data-res="err">${signed(r.errPF)} pF</span>`)}
+        ${cell("Pulled", `<span data-res="ppm">${isFinite(r.ppm) ? `${signed(r.ppm)} ppm` : "\u2014"}</span>`, isFinite(r.ppm) ? tone(r.ppm) : "")}
       </div>
       ${caution}`;
   }
@@ -19435,7 +19476,7 @@ function renderCrystalLoad(domain, tool, favId) {
          "CL1 = CL2 = 2 \u00d7 (CL spec \u2212 Stray)",
          "Pullability = C1 / (2 \u00d7 (C0 + CL spec)\u00b2)",
          "Pulled = \u2212Pullability \u00d7 Load error"],
-        "Where each number comes from: CL spec and C0 are on the crystal datasheet; a CL of Series is typed as 0. C1 motional often is not \u2014 when it is missing, type the pullability instead if the datasheet gives it, and C1 is worked back. Stray is never on the crystal datasheet: it is your board, the oscillator pins (sometimes in the MCU datasheet) plus the tracks, typically 2\u20135 pF. The pills load typical C0 and C1 for each family. Editing the spec or the stray sizes the pair; editing a capacitor moves the presented load instead."
+        "A crystal is trimmed to its marked frequency for one load capacitance, CL, printed on its datasheet; present a different load and it runs off frequency. In a Pierce oscillator the load is CL1 and CL2 in series, plus the stray capacitance of the pins and tracks, so a 12.5 pF crystal needs about 19 pF parts, not 12.5 or 25. C0, the shunt capacitance of the electrodes, is on the crystal datasheet; C1, the motional capacitance, often is not, so type the pullability (ppm per pF) instead if that is given and C1 is worked back. A CL of Series is typed as 0. Stray is never on the crystal datasheet: it is your board, and ST's AN2867 assumes 5 pF in its worked example. The pills load typical values: Epson's FC-135 for 32.768 kHz, illustrative ones for MHz, so use your crystal's. Editing the spec or the stray sizes the pair; editing a capacitor checks the load it presents."
       )}
       ${calcFooter()}
     `;
@@ -19443,12 +19484,14 @@ function renderCrystalLoad(domain, tool, favId) {
     wireCalc(favId, paint, (m) => {
       const k = XTAL_KINDS[m];
       state.kind = m;
+      setPref(C, "kind", m);
       state.c0 = k.c0;
       state.cm = k.cm;
       pullFromCm();
       paint();
     });
-    document.getElementById("xl-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); refresh(); };
+    // A full paint, not a refresh: the result label carries the series name.
+    document.getElementById("xl-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
 
     [["xl-cl", "cl"], ["xl-stray", "stray"], ["xl-c1", "c1"], ["xl-c2", "c2"],
      ["xl-c0", "c0"], ["xl-cm", "cm"], ["xl-pull", "pull"]].forEach(([id, name]) => {
