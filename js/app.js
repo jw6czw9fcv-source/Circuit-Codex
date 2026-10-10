@@ -18671,13 +18671,17 @@ function eSeriesBetween(lo, hi, name) {
 }
 
 function renderI2CPullup(domain, tool, favId) {
+  const C = "i2c-pullup";
   const state = {
-    mode: "fast", tol: 5,
+    mode: pref(C, "mode", "fast", Object.keys(I2C_MODES)),
+    tol: pref(C, "tol", 5, [0.1, 0.5, 1, 2, 5, 10, 20]),
     vdd: 3.3, vddUnit: "V",
     cb: 100, cbUnit: "pF",
+    devices: 2,
     rp: 2.2, rpUnit: "kΩ",
     iol: 3, iolUnit: "mA",
   };
+  { const v = pref(C, "vdd", 3.3); if (typeof v === "number" && v > 0) state.vdd = v; }
 
   // Each field offers only the units its quantity actually comes in. Vdd is
   // volts, bus capacitance picofarads and I_OL milliamps on every I2C bus;
@@ -18693,14 +18697,46 @@ function renderI2CPullup(domain, tool, favId) {
   const si = (name) => state[name] * UNITS[name][state[name + "Unit"]];
   const seriesName = () => eSeriesForTolerance(state.tol);
 
+  // UM10204 table 10: the output-low level is 0.4 V at the mode's sink current
+  // above 2 V, and 0.2 Vdd at 2 mA at or below it — specified for Fast mode
+  // and Fast-mode Plus only. I_OL follows the mode and the supply until it is
+  // typed over, since a particular part may be rated otherwise.
+  const lowSupply = () => si("vdd") <= 2 && state.mode !== "std";
+  const vol = () => (lowSupply() ? 0.2 * si("vdd") : I2C_VOL);
+  const iolDefault = () => (lowSupply() ? 2 : I2C_MODES[state.mode].iol);
+  state.iol = iolDefault();
+
+  const example = (mode, vdd, cb, devices, rp) => () => {
+    Object.assign(state, { mode, vdd, cb, devices, rp, rpUnit: rp >= 1000 ? "kΩ" : "Ω" });
+    if (rp >= 1000) state.rp = rp / 1000;
+    state.iol = iolDefault();
+    paint();
+  };
+  useExamples([
+    { title: "Sensor board, 400 kHz", note: "3.3 V, about 100 pF: anything from 967 Ω to 3.54 kΩ works, and 1.8 kΩ sits in the middle.",
+      apply: example("fast", 3.3, 100, 2, 1800) },
+    { title: "1.8 V bus", note: "Below 2 V the spec allows 0.2 Vdd at 2 mA, so Rp can go no lower than 720 Ω at 1.8 V.",
+      apply: example("fast", 1.8, 100, 2, 1600) },
+    { title: "Fast-mode Plus, 1 MHz", note: "20 mA sinks and a 120 ns rise: at 3.3 V and 200 pF only 145–708 Ω works.",
+      apply: example("fmp", 3.3, 200, 2, 330) },
+    { title: "A bus too long", note: "450 pF at 400 kHz: no resistor rises in time without overloading the 3 mA pull-down.",
+      apply: example("fast", 3.3, 450, 4, 1000) },
+  ]);
+
   function compute() {
     const m = I2C_MODES[state.mode];
-    const vdd = si("vdd"), cb = si("cb"), rp = si("rp"), iol = si("iol");
-    if (!(vdd > I2C_VOL)) return { problem: "Vdd has to be above the 0.4 V output-low level." };
+    const vdd = si("vdd"), cb = si("cb"), rp = si("rp"), iol = si("iol"), n = state.devices;
+    const low = vol();
+    if (!(vdd > low)) return { problem: `Vdd has to be above the ${siFormat(low, "V")} output-low level.` };
     if (!(cb > 0) || !(rp > 0) || !(iol > 0)) return { problem: "Bus capacitance, Rp and I_OL must all be greater than zero." };
+    if (!(n >= 1)) return { problem: "There must be at least one device on the bus." };
 
-    const rpMin = (vdd - I2C_VOL) / iol;
-    const rpMax = m.tr / (I2C_K * cb);
+    const rpMin = (vdd - low) / iol;
+    const rpRise = m.tr / (I2C_K * cb);
+    // UM10204 7.4: each connection may draw up to 10 µA at the high level,
+    // and that current through Rp must not eat the 0.2 Vdd noise margin.
+    const rpLeak = (0.2 * vdd) / (n * 10e-6);
+    const rpMax = Math.min(rpRise, rpLeak);
     const feasible = rpMax > rpMin;
     let suggested = NaN;
     if (feasible) {
@@ -18712,9 +18748,10 @@ function renderI2CPullup(domain, tool, favId) {
       }
     }
     return {
-      problem: "", m, cb, rp, rpMin, rpMax, feasible, suggested,
+      problem: "", m, vdd, cb, rp, n, low, rpMin, rpMax, rpRise, rpLeak, feasible, suggested,
       tRise: I2C_K * rp * cb,
-      iSink: (vdd - I2C_VOL) / rp,
+      iSink: (vdd - low) / rp,
+      leakDrop: n * 10e-6 * rp,
     };
   }
 
@@ -18723,9 +18760,7 @@ function renderI2CPullup(domain, tool, favId) {
   const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`;
   const part = (d) => `<path d="${d}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
   const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
-  const ground = (x, y) => `<path d="M${x - 11} ${y} H${x + 11} M${x - 7} ${y + 4} H${x + 7} M${x - 3} ${y + 8} H${x + 3}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
   const zigV = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
-  const capV = (x, y) => `${part(`M${x - 9} ${y} H${x + 9}`)}${part(`M${x - 9} ${y + 6} H${x + 9}`)}`;
   const lbl = (x, y, t, anchor, size) => `<text x="${x}" y="${y}" fill="${comp}" font-size="${size || 11}" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
 
   // The conventional bus figure, the one every datasheet and application note
@@ -18743,7 +18778,7 @@ function renderI2CPullup(domain, tool, favId) {
       const cx = x + 22;
       return `
         <rect x="${x}" y="124" width="44" height="32" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
-        <text x="${cx}" y="144" fill="${comp}" font-size="10" font-weight="600" text-anchor="middle">${name}</text>
+        <text x="${cx}" y="144" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">${name}</text>
         ${w(`M${cx - 8} 124 V96`)}${w(`M${cx + 8} 124 V70`)}`;
     };
     return `<svg width="240" height="182" viewBox="8 -18 240 182" fill="none">
@@ -18770,26 +18805,41 @@ function renderI2CPullup(domain, tool, favId) {
   // Three different things can be wrong and they are not the same severity.
   // No window at all is a dead end; the others are choices to reconsider.
   function warnings(r) {
-    if (!r.feasible) {
-      return `<div class="error-text">No value works: at ${siFormat(r.cb, "F")} the bus cannot rise inside the ${r.m.label} budget while still respecting I_OL. Shorten the bus, drop devices, move to a slower mode, or use a bus buffer.</div>`;
-    }
     const msgs = [];
+    if (si("vdd") <= 2 && state.mode === "std") msgs.push("UM10204 gives no Standard-mode output-low level at 2 V or less; 0.4 V at 3 mA is assumed.");
     if (r.cb > r.m.cbMax) msgs.push(`Bus capacitance is past the ${siFormat(r.m.cbMax, "F")} the spec allows at ${r.m.label}.`);
-    if (r.rp < r.rpMin) msgs.push("Your Rp draws more than I_OL at the 0.4 V output-low level.");
-    else if (r.rp > r.rpMax) msgs.push("Your Rp is too slow: the rise time is past the budget for this mode.");
+    if (!r.feasible) {
+      return `<div class="error-text" data-res="dead">No value works: at ${siFormat(r.cb, "F")} the bus cannot rise inside the ${r.m.label} budget while still respecting I_OL. Shorten the bus, drop devices, move to a slower mode, or use a bus buffer.</div>`
+        + (msgs.length ? `<div class="error-text" style="color:#E0A85E">${msgs.join(" ")}</div>` : "");
+    }
+    if (r.rp < r.rpMin) msgs.push("Your Rp draws more than I_OL at the output-low level.");
+    else if (r.rp > r.rpRise) msgs.push("Your Rp is too slow: the rise time is past the budget for this mode.");
+    else if (r.rp > r.rpLeak) msgs.push("Your Rp is too large for this many devices: their leakage eats the 0.2 Vdd high-level margin.");
     if (!isFinite(r.suggested)) msgs.push("No E-series value falls inside the window; try a finer series.");
-    return msgs.length ? `<div class="error-text" style="color:#E0A85E">${msgs.join(" ")}</div>` : "";
+    return msgs.length ? `<div class="error-text" data-res="caution" style="color:#E0A85E">${msgs.join(" ")}</div>` : "";
   }
 
+  // The suggestion large, the window it sits in beneath, then what your own
+  // Rp does: how fast it rises, how hard it loads the pull-down, and how far
+  // the devices' leakage pulls the high level down through it.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const e = seriesName();
+    const top = r.rpLeak < r.rpRise ? "input leakage" : "the rise time";
     return `
-      <div class="eseries-grid eseries-grid--tight">
-        ${cell("Rp min", siFormat(r.rpMin, "Ω"))}
-        ${cell("Rp max", siFormat(r.rpMax, "Ω"))}
-        ${cell("Suggested", isFinite(r.suggested) ? siFormat(r.suggested, "Ω") : "—")}
-        ${cell("Rise time", siFormat(r.tRise, "s"))}
-        ${cell("Sink current", siFormat(r.iSink, "A"))}
+      ${r.feasible ? `
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Suggested Rp (${e})</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main">${isFinite(r.suggested) ? formatOhms(r.suggested) : "—"}</span></div>
+        <div class="result-sub">window <span data-res="min">${siFormat(r.rpMin, "Ω")}</span> – <span data-res="max">${siFormat(r.rpMax, "Ω")}</span>, top set by <span data-res="top">${top}</span></div>
+      </div>` : ""}
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Your rise time", `<span data-res="rise">${siFormat(r.tRise, "s")}</span>`)}
+        ${cell("Your sink current", `<span data-res="sink">${siFormat(r.iSink, "A")}</span>`)}
+        ${cell("Your leakage drop", `<span data-res="leak">${siFormat(r.leakDrop, "V")}</span>`)}
       </div>
       ${warnings(r)}`;
   }
@@ -18799,9 +18849,9 @@ function renderI2CPullup(domain, tool, favId) {
   }
 
   function field(id, name, label, units) {
-    const keys = Object.keys(units);
-    const unit = keys.length === 1
-      ? `<span class="unit-fixed">${keys[0]}</span>`
+    const keys = units ? Object.keys(units) : [];
+    const unit = !units ? ""
+      : keys.length === 1 ? `<span class="unit-fixed">${keys[0]}</span>`
       : `<select id="${id}-unit">${keys.map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     return `
         <div class="field">
@@ -18829,8 +18879,9 @@ function renderI2CPullup(domain, tool, favId) {
         ${field("i2c-cb", "cb", "Bus capacitance", UNITS.cb)}
       </div>
       <div class="field-pair">
-        ${field("i2c-rp", "rp", "Rp", UNITS.rp)}
+        ${field("i2c-n", "devices", "Devices")}
         ${field("i2c-iol", "iol", "I_OL", UNITS.iol)}
+        ${field("i2c-rp", "rp", "Your Rp", UNITS.rp)}
       </div>
 
       <div class="section-label split" style="color:#5DCAA5">
@@ -18843,27 +18894,45 @@ function renderI2CPullup(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["Rp min = (Vdd − 0.4 V) / I_OL",
+        ["Rp min = (Vdd − V_OL) / I_OL",
          "Rp max = t_r / (0.8473 × Cb)",
+         "Rp max, leakage = 0.2 Vdd / (n × 10 µA)",
          "Suggested = √(Rp min × Rp max), on the E-series",
-         "Rise time = 0.8473 × Rp × Cb",
-         "Sink current = (Vdd − 0.4 V) / Rp"],
-        "Limits are from the I2C spec, NXP UM10204. Bus capacitance is the number people guess worst: reckon a few pF per centimetre of track plus around 10 pF per device, and measure it if the bus is long. I_OL follows the mode — 3 mA up to Fast mode, 20 mA in Fast mode Plus — so change it only if your parts say otherwise. When the window closes no resistor works: shorten the bus, drop devices, use a slower mode, or fit a bus buffer."
+         "Rise time = 0.8473 × Rp × Cb"],
+        "I2C lines are open-drain: a device can only pull a line low, and the pull-up resistor Rp brings it back high. Too small an Rp and the device cannot hold the line low: I_OL is the current it is rated to sink while staying at the output-low level V_OL, 0.4 V (0.2 Vdd at 2 V or less). Too large and the line rises too slowly: the rise time t_r, from 0.3 to 0.7 Vdd, has a limit per mode, and the bus capacitance Cb — every pin, up to 10 pF each, plus the wiring — sets it with Rp. Each of the n devices may also leak up to 10 µA, which must not cost more than 0.2 Vdd through Rp. All limits are from the I2C specification, NXP UM10204, which suggests the high end of the window for low-power designs. To find Cb, measure the rise time with a known Rp: Cb = t_r / (0.8473 × Rp)."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (m) => {
       state.mode = m;
-      state.iol = I2C_MODES[m].iol;
+      setPref(C, "mode", m);
+      state.iol = iolDefault();
       state.iolUnit = "mA";
       paint();
     });
-    document.getElementById("i2c-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); refresh(); };
+    // A full paint, not a refresh: the result label carries the series name.
+    document.getElementById("i2c-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
 
-    [["i2c-vdd", "vdd"], ["i2c-cb", "cb"], ["i2c-rp", "rp"], ["i2c-iol", "iol"]].forEach(([id, name]) => {
+    [["i2c-vdd", "vdd"], ["i2c-cb", "cb"], ["i2c-n", "devices"], ["i2c-rp", "rp"], ["i2c-iol", "iol"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
-      if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; refresh(); } };
+      if (el) el.oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        // Crossing 2 V changes which output-low level the spec gives, and
+        // with it the default sink current.
+        const before = name === "vdd" ? lowSupply() : null;
+        state[name] = v;
+        if (name === "vdd") {
+          setPref(C, "vdd", v);
+          if (lowSupply() !== before) {
+            state.iol = iolDefault();
+            const f = document.getElementById("i2c-iol");
+            if (f) f.value = state.iol;
+          }
+        }
+        refresh();
+      };
       const u = document.getElementById(id + "-unit");
       if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; refresh(); };
     });

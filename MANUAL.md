@@ -5838,91 +5838,141 @@ The review made these changes:
 <a id="i2c-pullup"></a>
 ## I2C pull-up resistor
 
-`calc: i2c-pullup` · Digital › Timing & interfaces
+`calc: i2c-pullup` · Digital & logic circuits › Timing & interfaces
 
 ### What it computes
 
-The window of pull-up resistances that work on an I²C bus, given the supply, the
-bus capacitance and the speed mode — and a suggested value inside it, snapped to
-a standard E-series.
+For an I²C bus, given the speed mode, the supply, the bus capacitance and
+the number of devices, it computes:
+- **the window** of pull-up resistances that work;
+- **a suggested value** inside it, snapped to a standard E-series and shown
+  large. The result says which limit sets the top of the window: the rise
+  time, or the devices' leakage;
+- **for the Rp you have:** its rise time, the current it asks a device to
+  sink, and how far leakage pulls the high level down through it.
+
+The mode, the series and Vdd are remembered.
 
 ### Source
 
-The I²C specification, **NXP UM10204**. Every constant here is from it: the 0.4 V
-output-low level, the 3 mA and 20 mA sink currents, the rise-time budgets, and
-the bus capacitance ceilings.
+**NXP UM10204, I²C-bus specification and user manual, rev. 7.0 (1 October
+2021)**, was read for every limit:
+- **Section 7.1, pull-up resistor sizing:**
+  - the rise time is measured between 0.3 and 0.7 Vdd, which gives
+    T = 0.8473 × RC;
+  - Rp(max) = t_r / (0.8473 × Cb);
+  - Rp(min) is set by the minimum sink current: 3 mA for Standard and Fast
+    mode, 20 mA for Fast-mode Plus;
+  - portable, low-power designs "can use a value toward the higher end of
+    the range".
+- **Table 10, the I/O stages:**
+  - V_OL1 is 0.4 V at 3 mA when Vdd > 2 V;
+  - V_OL2 is 0.2 Vdd at 2 mA when Vdd ≤ 2 V, for Fast mode and Fast-mode
+    Plus only;
+  - I_OL at 0.4 V is 3, 3 and 20 mA;
+  - each I/O pin is at most 10 pF.
+- **Table 11, the bus lines:**
+  - the rise time t_r is at most 1000, 300 and 120 ns;
+  - the bus capacitance Cb is at most 400, 400 and 550 pF;
+  - the high-level noise margin is 0.2 Vdd.
+- **Section 7.4, input leakage:** each connection may draw up to 10 µA at
+  the high level, and "due to the required noise margin of 0.2 VDD for
+  the HIGH level, this input current limits the maximum value of Rp."
+
+### What it means
+
+- **Open-drain.** I²C lines are open-drain: a device can only pull a line
+  low. Nothing drives it high; the pull-up resistor Rp brings it back.
+  That single fact produces the bounds, pulling in opposite directions.
+- **I_OL** — the current a device is rated to sink while holding the line
+  at the output-low level V_OL. Too small an Rp asks for more.
+- **The rise time t_r** — the time the line takes to climb from 0.3 to
+  0.7 Vdd. Too large an Rp makes it too slow for the mode.
+- **The bus capacitance Cb** — every pin on the bus, up to 10 pF each, plus
+  the wiring. It is the input people are most wrong about, and the whole
+  upper bound scales with it.
+- **Leakage** — every device may leak up to 10 µA into the line. Through
+  Rp, that pulls the high level down, and it must not cost more than the
+  0.2 Vdd noise margin. With many devices this, and not the rise time,
+  sets the top of the window.
 
 ### Why the formulas are these
 
-I²C lines are **open-drain**. Nothing on the bus drives a line high; devices can
-only pull it low, and the pull-up resistor is what brings it back up. That single
-fact produces both bounds, pulling in opposite directions.
+    Rp min          = (Vdd − V_OL) / I_OL        V_OL = 0.4 V, or 0.2 Vdd at 2 V or less
+    Rp max          = t_r / (0.8473 × Cb)
+    Rp max, leakage = 0.2 Vdd / (n × 10 µA)
+    Suggested       = √(Rp min × Rp max), on the E-series
 
-**The lower bound is the pull-down.** When a device asserts the line, its
-open-drain transistor has to hold it below the 0.4 V that counts as a low, and
-the current it must swallow is whatever the pull-up pushes through:
-
-    Rp min = (Vdd − 0.4 V) / I_OL
-
-The spec requires devices to sink **3 mA** up to Fast mode, and **20 mA** in Fast
-mode Plus. A smaller resistor asks for more than the transistor is rated to take,
-and the line stops reaching a valid low.
-
-**The upper bound is the rise.** Going up, the line is just an RC: the pull-up
-charging the bus capacitance. The spec measures rise time between **0.3 Vdd and
-0.7 Vdd**, and an RC charge reaches those fractions at
-
-    t(0.3 Vdd) = RC · ln(1/0.7)
-    t(0.7 Vdd) = RC · ln(1/0.3)
-
-so the specified rise time is the difference:
-
-    t_r = RC · [ln(1/0.3) − ln(1/0.7)] = RC · ln(7/3) = 0.8473 · RC
-
-Hence
-
-    Rp max = t_r / (0.8473 × Cb)
-
-That 0.8473 is copied everywhere without explanation; it is just ln(7/3). The
-budget for t_r is 1000 ns at 100 kHz, 300 ns at 400 kHz and 120 ns at 1 MHz.
-
-**The suggestion** is the geometric mean of the two bounds, √(Rp min × Rp max),
-snapped to the chosen E-series. The geometric mean is the centre of the window on
-a logarithmic scale, which is what "equal margin on both sides" means when the
-two ends can differ by a decade. For a 3.3 V standard-mode bus with 100 pF it
-lands on 3.3 kΩ — the value most designs actually fit.
-
-**When the window closes.** Rp max falls as bus capacitance rises, while Rp min
-does not move. Past roughly 366 pF in Fast mode at 3.3 V the two cross and no
-resistor satisfies both: the bus cannot rise fast enough without asking the
-pull-down for more current than it is rated for. That is a real dead end, not a
-poor choice, and the ways out are a shorter bus, fewer devices, a slower mode, or
-an active bus buffer that isolates segments.
+- **The lower bound is the pull-down.** When a device asserts the line,
+  its transistor has to hold it below V_OL while the pull-up pushes
+  (Vdd − V_OL) / Rp into it.
+- **The upper bound is the rise.** Going up, the line is just an RC: the
+  pull-up charging the bus capacitance. An RC charge reaches 0.3 Vdd at
+  RC × ln(1/0.7), and 0.7 Vdd at RC × ln(1/0.3). The difference is
+  RC × ln(7/3) = 0.8473 RC, the factor the spec prints.
+- **The leakage bound** is Ohm's law. n devices × 10 µA through Rp must
+  drop no more than 0.2 Vdd.
+- **The suggestion** is the geometric mean of the two bounds: the centre
+  of the window on a logarithmic scale, which is what "equal margin on
+  both sides" means when the ends can differ by a decade. The spec's own
+  advice for low-power designs is the high end instead.
+- **Finding Cb.** Measure the rise time with a known Rp, and the same
+  formula gives Cb = t_r / (0.8473 × Rp).
+- **When the window closes.** Rp max falls as the bus capacitance rises,
+  while Rp min does not move. At 3.3 V in Fast mode the two cross at about
+  366 pF. Past that no resistor rises in time without overloading the pull-down. That is a
+  dead end, not a poor choice. The ways out are:
+  - a shorter bus, or fewer devices;
+  - a slower mode;
+  - a bus buffer that splits the bus into segments (UM10204 section 7.2).
 
 ### Assumptions and limits
 
-- **Bus capacitance is an estimate.** Reckon on a few pF per centimetre of track
-  plus about 10 pF per device. It is the input people are most wrong about, and
-  the whole upper bound scales with it. Measure it on a long bus.
-- The RC model treats the bus as one lumped capacitance and the pull-up as ideal.
-  At Fast mode Plus, with long tracks, transmission-line behaviour starts to
-  matter and the model flatters the real rise time.
-- Leakage from many devices and from the pull-up itself is ignored. On a bus with
-  dozens of devices it adds a small standing current that eats into the low-level
-  margin.
-- I_OL defaults to the spec value for the mode. A specific part may be rated
-  differently; the field is editable for that reason.
+- **Bus capacitance is an estimate.** UM10204 gives no capacitance per
+  centimetre of wiring, so the tool does not guess one. Measure it on a
+  long bus, as above.
+- **One lumped capacitance and an ideal resistor.** At Fast-mode Plus,
+  with long tracks, the line no longer behaves as one RC.
+- **Standard mode at 2 V or less** has no output-low level in UM10204.
+  The tool keeps 0.4 V at 3 mA and says so.
+- **I_OL follows the mode and the supply,** unless you type a value: a
+  particular part may be rated differently.
 
 ### What it deliberately does not do
 
-- **Current-source or active pull-ups.** Fast mode Plus devices sometimes use a
-  current source rather than a resistor, which removes the RC ceiling entirely.
-  Different circuit, different arithmetic.
-- **Bus buffers and repeaters.** They break a bus into segments each with their
-  own capacitance and their own resistor; the tool sizes one segment, so run it
-  once per segment.
-- **Level shifters.** A MOSFET level shifter between two voltage domains puts a
-  pull-up on each side, and the two interact. Not modelled.
+- **Current-source or switched pull-ups** (UM10204 section 7.2.4): a
+  different circuit, with different arithmetic.
+- **Bus buffers and repeaters:** they split a bus into segments, each
+  with its own capacitance and resistor. Run the tool once per segment.
+- **Level shifters:** a MOSFET level shifter between two voltage domains
+  puts a pull-up on each side, and the two interact.
+
+### How it was checked
+
+- **400 kHz, 3.3 V, 100 pF, 2 devices:**
+  - window 966.7 Ω – 3.541 kΩ, 1.8 kΩ suggested;
+  - with 2.2 kΩ: rise time 186.4 ns, sink current 1.318 mA, leakage drop
+    44 mV.
+- **100 kHz, same bus:** up to 11.8 kΩ, 3.3 kΩ suggested.
+- **100 kHz with 10 devices:** leakage caps Rp at 6.6 kΩ, and 2.4 kΩ is
+  suggested.
+- **1.8 V at 400 kHz:** I_OL drops to 2 mA, Rp min is 720 Ω, and 1.6 kΩ is
+  suggested.
+- **1 MHz, 3.3 V, 200 pF:** 145–708.1 Ω, 330 Ω suggested.
+- **370 pF at 400 kHz and 3.3 V:** no value works.
+
+The review made these changes:
+- It added the output-low level below 2 V, 0.2 Vdd at 2 mA. The tool used
+  0.4 V at 3 mA at any supply, which put Rp min too low on a 1.8 V bus
+  (467 Ω instead of 720 Ω).
+- It added the input-leakage limit (UM10204 section 7.4), with a Devices
+  field.
+- It replaced the unsourced "a few pF per centimetre of track" with the
+  spec's 10 pF per pin and the measure-the-rise-time method.
+- It put the suggestion first and large, and named which limit sets the
+  window.
+- It added examples, remembered the mode, series and Vdd, enlarged the
+  10 px labels to 11 px, and added plain definitions.
 
 [↑ Index](#index)
 
