@@ -5981,46 +5981,80 @@ The review made these changes:
 <a id="uart-baud"></a>
 ## UART baud rate
 
-`calc: uart-baud` · Digital › Timing & interfaces
+`calc: uart-baud` · Digital & logic circuits › Timing & interfaces
 
 ### What it computes
 
-The divisor a UART needs to reach a wanted baud rate from a given peripheral
-clock, the rate it actually produces once that divisor is rounded to an
-integer, and the resulting error — with the error shown against every standard
-rate on the same clock.
+From a peripheral clock and a wanted baud rate, it computes:
+- **the divisor** the UART needs, and the divisor actually written once
+  it is rounded;
+- **the rate that divisor gives,** and the resulting **error**, shown
+  large;
+- **the frame time** for 8N1.
+
+There are two kinds of divider, each at 16x or 8x oversampling:
+- **16x / 8x:** the integer divider of the AVR, the 16550 family and PIC.
+- **STM32 16x / 8x:** the finer divider of STM32's USART.
+
+A table gives the error of every standard rate on the same clock; tap one
+to try it. The drawing shows the sample points walking off the bits as
+the error grows. The mode and the clock are remembered.
 
 ### Source
 
-There is no single standard for baud generation: it is per-device, and the
-register is called BRR, UBRR, DLL/DLM or SBRG depending on whose part it is.
-What is common to nearly all of them is the shape — an integer divider off a
-peripheral clock, with the receiver oversampling each bit — and 16x
-oversampling, inherited from the 8250 and 16550 and still the default almost
-everywhere. The error budget below is derived from the sampling behaviour, not
-quoted.
+There is no single standard for baud generation: it is per-device. Three
+sources were read:
+- **ST's STM32G0 HAL driver** (stm32g0xx_hal_uart.h and .c, on GitHub):
+  - UART_DIV_SAMPLING16 is round(PCLK / baud);
+  - UART_DIV_SAMPLING8 is round(2 × PCLK / baud);
+  - the authorized BRR is UART_BRR_MIN 0x10 (16) to UART_BRR_MAX 0xFFFF.
+- **The Arduino AVR core** (HardwareSerial.cpp, ArduinoCore-avr on
+  GitHub):
+  - begin() tries U2X, the 8x mode, first;
+  - it falls back to 16x only for 57600 at 16 MHz (for bootloader
+    compatibility), or when the divisor would exceed 4095.
+- **The error budget** is derived below from the sampling behaviour, not
+  quoted.
+
+### What it means
+
+- **A UART** sends bytes one bit at a time, with no clock wire. Both ends
+  agree on a rate, the baud, in bits per second.
+- **Its own oscillator** — it has none. It divides whatever clock it is
+  given, and the divisor is a whole number, so the rate comes out a
+  little off.
+- **Oversampling** (16x or 8x) — how many clock periods of the divided
+  clock the receiver counts per bit, to find the middle of each bit.
+- **8N1** — one start bit, eight data bits, no parity, one stop bit: ten
+  bits per frame.
+- **Register names:**
+  - an AVR writes UBRR = divisor − 1;
+  - an STM32 writes BRR, which at 16x is the divisor shown. At 8x the
+    HAL computes USARTDIV, shown here, and repacks it into BRR.
 
 ### Why the formulas are these
 
-A UART has no oscillator of its own. It divides whatever clock it is given:
+    Integer:  Divisor = Clock / (Oversample × Baud),  Actual = Clock / (Oversample × round(Divisor))
+    STM32:    BRR = round(Clock / Baud) at 16x,  round(2 × Clock / Baud) at 8x
+              Actual = Clock / BRR,  or 2 × Clock / USARTDIV
+    Error  = (Actual − Baud) / Baud
 
-    Divisor = Clock / (Oversample × Baud)
+**Integer dividers.** At 16 MHz, 115200 baud and 16x, the divisor comes
+to 8.681. Written as 9, the line runs at 111,111 baud, 3.55 % slow.
+- That single fact is why 14.7456 MHz crystals exist: 14,745,600 / 16 =
+  921,600, which divides exactly into every standard rate. 11.0592 MHz and
+  18.432 MHz are the same trick at other speeds.
+- **An Arduino Uno does better than that figure.** Its core uses 8x mode
+  first: 16 MHz / (8 × 17) = 117,647 baud, 2.12 % fast.
 
-The divider is a counter, so the value written is an **integer**. Rounding it
-is the whole problem:
+**STM32.** STM32's USART divides in whole clock cycles per bit, sixteen
+times finer than an integer 16x divider. The same 16 MHz at 115200
+writes BRR = 139: 115,108 baud, −0.08 %.
 
-    Actual baud = Clock / (Oversample × round(Divisor))
-
-At 16 MHz, 115200 baud and 16x oversampling the divisor comes to 8.68. Written
-as 9, the line runs at 111111 baud — 3.55% slow. That single fact is why
-14.7456 MHz crystals exist: 14745600 / 16 = 921600, which divides exactly into
-every standard rate, so the divisor is always a whole number and the error is
-zero. 11.0592 MHz and 18.432 MHz are the same trick at other speeds.
-
-**Why the error matters, and how much is allowed.** There is no clock shared
-between the two ends. The receiver finds the falling edge of the start bit,
-starts its own counter, and samples each bit at what it believes is the middle.
-Take the receiver as the reference: it samples bit *n* at time
+**How much error a link survives.** There is no clock shared between the
+two ends. The receiver finds the falling edge of the start bit, starts
+its own counter, and samples each bit at what it believes is the middle.
+Taking the receiver as the reference, it samples bit *n* at
 
     (n + 0.5) × T_rx
 
@@ -6028,69 +6062,78 @@ while the transmitter's bit *n* occupies
 
     [ n × T_tx , (n+1) × T_tx ]
 
-Writing r = T_tx / T_rx, the sample lands in the right bit only while
+With r = T_tx / T_rx, the sample lands in the right bit only while
 
     n × r  <  n + 0.5  <  (n+1) × r
 
-Nothing resynchronises inside a frame, so the worst case is the last bit. For
-8N1 that is the stop bit, n = 9:
+Nothing resynchronises inside a frame, so the worst case is the last bit.
+For 8N1 that is the stop bit, n = 9:
 
     9 r < 9.5      →  r < 1.0556
     9.5 < 10 r     →  r > 0.95
 
-So the two clocks may differ by about **−5.0% to +5.56%** — usually quoted as
-±5%, and slightly asymmetric because the sample point is fixed at mid-bit
-while the bit it must land in is what stretches. That budget covers **both**
-ends together, which is why 2% each is the practical rule: it leaves room for
-the other end plus edge jitter and finite rise time.
+So the two clocks may differ by about −5.0 % to +5.56 %, usually quoted as
+±5 %.
+- It is slightly asymmetric because the sample point is fixed at mid-bit,
+  while the bit it must land in is what stretches.
+- That budget covers **both** ends together. Hence 2 % each as the
+  practical rule: it leaves room for the other end, edge jitter and
+  finite rise time.
+- **The tool's colours:** blue up to 2 %, amber to 3 %, red beyond. The
+  caution says "fails outright" only past 5 %.
 
-Note what does *not* happen: the error does not accumulate across a message.
-The receiver re-finds the start edge on every frame, so the drift resets ten
-bits at a time. A 3% error is not 3% worse each byte; it is the same 3% on each
-of them, which is why it either works or does not.
+The error does **not** accumulate across a message. The receiver re-finds
+the start edge on every frame, so the drift resets ten bits at a time.
 
-**The drawing shows exactly this.** The waveform is drawn at the transmitter's
-real bit width, stretched or squeezed by the error, while the sample marks stay
-evenly spaced where the receiver puts them. Raise the error and the marks visibly
-walk toward the bit edges; the ones that fall outside their own bit turn red.
-It is the inequality above, drawn.
+**The drawing shows exactly this.** The waveform is drawn at the
+transmitter's real bit width, stretched or squeezed by the error, while
+the sample marks stay evenly spaced where the receiver puts them. Raise
+the error, and the marks that fall outside their own bit turn red.
 
 ### Assumptions and limits
 
-- **8N1 is assumed** — one start bit, eight data, one stop, no parity. Adding
-  parity or a second stop bit makes the frame longer and the budget tighter,
-  since the worst case moves to a later bit.
-- **The receiver is taken as exact.** In reality both ends have error and the
-  two add; the tool reports one side's, which is why the caution appears at 2%
-  rather than 5%.
-- **Integer divisors only.** See below.
-- Oversampling is a divider stage, not noise immunity: 8x doubles the top speed
-  from a given clock and halves the margin around each sample, so a noisy line
-  suffers more.
+- **8N1 is assumed.** Parity or a second stop bit makes the frame longer
+  and the budget tighter.
+- **One end's error.** The receiver is taken as exact. In reality both
+  ends have error and the two add, which is why the caution starts at 2 %
+  rather than 5 %.
+- **STM32 as ST's HAL writes it,** read from the G0 driver only; the
+  other STM32 families' drivers were not read. Other vendors' fractional
+  dividers (SAM, nRF and others) have their own resolution, and are not
+  modelled.
+- **Oversampling is a divider stage, not noise immunity.** 8x doubles the
+  top speed from a given clock, and halves the margin around each sample.
 
 ### What it deliberately does not do
 
-- **Fractional dividers.** Many modern UARTs — STM32, SAM, nRF — add fractional
-  bits below the integer divisor, which cuts the error by roughly the resolution
-  of that fraction and would make the numbers here pessimistic for those parts.
-  Modelling it means picking a vendor, since the fraction is 4 bits on some
-  parts, 6 on others, and a full 16-bit accumulator on a few.
-- **Auto-baud detection**, where the receiver measures a known character
-  instead of being told the rate.
-- **Anything above the physical layer**: framing errors, break detection, flow
-  control.
+- **Auto-baud detection**, where the receiver measures a known character.
+- **Anything above the physical layer:** framing errors, break detection,
+  flow control.
 
 ### How it was checked
 
-The classic cases were recomputed by hand: 16 MHz at 115200 gives divisor 8.68,
-used 9, 111111 baud, −3.549%; 14.7456 MHz gives exactly 8 and 0%; 16 MHz at
-9600 gives 104.17, used 104, +0.160%, which is why that part runs 9600 happily
-and 115200 badly. 8 MHz at 115200 gives +8.507%.
+- **16 MHz, 115200, integer 16x:** divisor 8.681, 9 used, 111,111 Bd,
+  −3.55 %.
+- **16 MHz at 9600:** 104, +0.16 %.
+- **Arduino Uno (8x), 16 MHz at 115200:** 17, 117,647 Bd, +2.12 %.
+- **STM32 16x, 16 MHz at 115200:** BRR 139, 115,108 Bd, −0.08 %. At 8x,
+  USARTDIV 278 gives the same.
+- **14.7456 MHz at 115200:** exactly 8, 0.00 %.
+- **8 MHz at 115200, integer 16x:** 4 used, +8.51 %, fails.
+- **STM32 at 1 MHz and 115200:** BRR would be 9, under the HAL's minimum
+  of 16, so the tool refuses it.
 
-The sample-point test in the drawing was checked against the inequality above
-at several errors: at 0% and −3.5% every sample lands inside its bit, at +0.16%
-likewise, and at +8.5% the last four fail — which is what
-n × 0.9216 < n + 0.5 predicts, the first failure being at n = 6.
+The review made these changes:
+- It added STM32's divider from ST's HAL. The tool modelled only integer
+  dividers, which overstated an STM32's error about fortyfold at 16 MHz
+  and 115200.
+- It put the error first and large.
+- It reworded the caution: a single end at 3.55 % does not fail, it uses
+  most of the shared budget; only past 5 % does a frame fail.
+- It added the Arduino detail (8x first), checked against the core's
+  source, and examples.
+- It remembers the mode and the clock, and enlarged the 9 px labels to
+  11 px.
 
 [↑ Index](#index)
 
