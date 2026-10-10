@@ -103,7 +103,7 @@ const DOMAINS = [
       {
         title: "Timing & interfaces",
         tools: [
-          { name: "PWM (duty cycle)", calc: "pwm-duty" }, { name: "Debounce / RC timing", calc: "debounce-rc" }, { name: "I2C pull-up resistor", calc: "i2c-pullup" }, { name: "UART baud rate", calc: "uart-baud" },
+          { name: "PWM (duty cycle)", calc: "pwm-duty" }, { name: "Switch debounce", was: "Debounce / RC timing", calc: "debounce-rc" }, { name: "I2C pull-up resistor", calc: "i2c-pullup" }, { name: "UART baud rate", calc: "uart-baud" },
           { name: "Crystal load capacitance", calc: "crystal-load" }, { name: "Oscillator stability (ppm → Hz)", calc: "osc-stability" }, { name: "PLL multiplication factor", calc: "pll" },
         ],
       },
@@ -294,7 +294,7 @@ const TOOL_KEYWORDS = {
   "dec-hex-bin": "binary hexadecimal octal decimal base conversion dec hex oct bin two's complement signed unsigned bits register",
   "ascii-table": "ascii characters code table control characters cr lf xon xoff escape ctrl",
   "pwm-duty": "pulse width modulation duty cycle ton toff pulse average rms servo motor fan dimming",
-  "debounce-rc": "switch bounce button rc filter",
+  "debounce-rc": "debounce switch bounce rc schmitt trigger button contact ganssle",
   "i2c-pullup": "i2c pull up resistor bus capacitance",
   "uart-baud": "serial baud rate divisor error",
   "crystal-load": "crystal load capacitance pierce oscillator",

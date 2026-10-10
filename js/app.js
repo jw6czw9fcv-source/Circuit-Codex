@@ -10352,302 +10352,294 @@ function renderPwmDutyCycle(domain, tool, favId) {
 }
 
 // ---------- Debounce / RC timing ----------
-// A pull-up (or pull-down) resistor plus a capacitor at a switch node forms
-// a low-pass filter that slows the edge so contact bounce — a burst of
-// make/break within a few ms of the press — never crosses the logic
-// threshold more than once. The design question is just: does the time to
-// cross that threshold, t = -tau * ln(1 - Vth/Vcc), comfortably outlast the
-// bounce window? "Check" verifies a chosen R/C; "Size" solves the
-// capacitor needed for a target safety margin over a given bounce time.
+// Jack Ganssle's RC debouncer (A Guide to Debouncing, part 2): Vcc through R1
+// to the switch, which shorts that node to ground; R2 from there to C; and C
+// feeding a Schmitt-trigger input. Pressing empties C through R2 alone,
+// releasing fills it through R1 + R2, and each is sized so C takes the
+// switch's bounce time to reach the input's worst-case threshold — the
+// highest VT− for the press, the lowest VT+ for the release.
+
+// The next standard value at or above a resistance, so a built debouncer
+// never waits less than it was sized for.
+function ceilESeries(ohms, name) {
+  const values = eSeriesValues(name);
+  const places = values[0] >= 100 ? 3 : 2;
+  const scale = Math.pow(10, Math.floor(Math.log10(ohms)) - (places - 1));
+  const m = ohms / scale;
+  const up = values.find((v) => v >= m * (1 - 1e-9));
+  return (up !== undefined ? up : values[0] * 10) * scale;
+}
+
 function renderDebounceRc(domain, tool, favId) {
+  const C = "debounce-rc";
+  const T_UNITS = { "µs": 1e-6, ms: 1e-3, s: 1 };
+  const volts = (key, fallback) => { const v = pref(C, key, fallback); return typeof v === "number" && isFinite(v) ? v : fallback; };
   const state = {
-    mode: "check",
-    values: { r: 10, c: 4.7 },
-    units: { r: "kΩ", c: "µF" },
-    tol: 5,
-    vcc: 5,
-    vth: 50,
-    bounceVal: 10, bounceUnit: "ms",
-    margin: 3,
+    bounce: 20, bounceUnit: "ms",
+    c: 1, cUnit: "µF",
+    r1: 82, r1Unit: "kΩ", r2: 18, r2Unit: "kΩ",
+    // VT− at its highest and VT+ at its lowest: the thresholds that give the
+    // shortest delays. Ganssle's 74AHCT14 figures, the defaults.
+    vcc: volts("vcc", 5), vtm: volts("vtm", 1.7), vtp: volts("vtp", 0.9),
+    tol: pref(C, "tol", 5, [0.1, 0.5, 1, 2, 5, 10, 20]),
   };
+  const UNITS = { bounce: T_UNITS, c: RCF_C_UNITS, r1: DIVIDER_R_UNITS, r2: DIVIDER_R_UNITS };
+  const si = (n) => state[n] * UNITS[n][state[n + "Unit"]];
 
-  function rSI() { return state.values.r * OHM_UNITS[state.units.r]; }
-  function cSI() { return state.values.c * CAP_UNITS[state.units.c]; }
-  function bounceSI() { return state.bounceVal * RC_TIME_UNITS[state.bounceUnit]; }
+  // How many time constants each edge takes: falling from Vcc to VT−,
+  // rising from 0 to VT+. NaN when a threshold is not between 0 and Vcc.
+  const kPress = () => (state.vtm > 0 && state.vtm < state.vcc ? Math.log(state.vcc / state.vtm) : NaN);
+  const kRelease = () => (state.vtp > 0 && state.vtp < state.vcc ? -Math.log(1 - state.vtp / state.vcc) : NaN);
 
-  // R's slider explores the plain E-series range; C's covers the same
-  // decade families but clamped to a realistic 1pF-1mF, same split the
-  // capacitor series/parallel screen uses for the same reason — farads
-  // span a much wider practical range than ohms do.
-  function boundsFor(name) {
-    return name === "r" ? unitSliderBounds(OHM_UNITS[state.units.r]) : unitSliderBounds(CAP_UNITS[state.units.c], CAP_SLIDER_MIN, CAP_SLIDER_MAX);
-  }
-  function valueFor(name) {
-    return name === "r" ? rSI() : cSI();
-  }
-  function seriesHint(name) {
-    const value = valueFor(name);
-    if (!isFinite(value) || value <= 0) return "";
-    const series = eSeriesForTolerance(state.tol);
-    const near = nearestESeries(value, series);
-    return near.exact ? series : `${series} → ${name === "r" ? formatOhms(near.value) : formatFarads(near.value)}`;
+  // Parts at five significant figures, in the unit that suits them.
+  function setScaled(name, value) {
+    const units = UNITS[name];
+    if (value === 0) { state[name] = 0; return; }
+    const keys = Object.keys(units).sort((a, b) => units[b] - units[a]);
+    const k = keys.find((u) => Math.abs(value) >= units[u]) || keys[keys.length - 1];
+    state[name] = +(value / units[k]).toPrecision(5);
+    state[name + "Unit"] = k;
   }
 
-  // -ln(1 - Vth/Vcc): how many time constants it takes an RC charging from
-  // 0 to cross a given fraction of Vcc. NaN outside (0,100) since the
-  // curve only ever approaches Vcc, never reaches or exceeds it.
-  function thresholdFactor() {
-    const frac = state.vth / 100;
-    if (!(frac > 0) || !(frac < 1)) return NaN;
-    return -Math.log(1 - frac);
+  // The bounce time, C and the thresholds size both resistors; C is chosen
+  // first, as Ganssle does, because resistors come in finer steps.
+  function size() {
+    const t = si("bounce"), c = si("c"), kp = kPress(), kr = kRelease();
+    if (!(t > 0) || !(c > 0) || !(kp > 0) || !(kr > 0)) return;
+    const r2 = t / (c * kp);
+    setScaled("r2", r2);
+    setScaled("r1", Math.max(0, t / (c * kr) - r2));
   }
+  size();
+
+  const example = (s, noR2) => () => { Object.assign(state, s); size(); if (noR2) state.r2 = 0; paint(); };
+  useExamples([
+    { title: "Ganssle's 20 ms design", note: "1 µF on a 74AHCT14 at 5 V (VT− up to 1.7 V, VT+ down to 0.9 V): R2 18.5 k, R1 82.2 k.",
+      apply: example({ bounce: 20, bounceUnit: "ms", c: 1, cUnit: "µF", vcc: 5, vtm: 1.7, vtp: 0.9 }) },
+    { title: "74HC14 at 4.5 V", note: "Nexperia's worst case at 4.5 V: VT− up to 2.0 V, VT+ down to 1.7 V; 20 ms with 1 µF.",
+      apply: example({ bounce: 20, bounceUnit: "ms", c: 1, cUnit: "µF", vcc: 4.5, vtm: 2.0, vtp: 1.7 }) },
+    { title: "Without R2", note: "C across the switch: a press shows at once, and the contacts take C's full surge.",
+      apply: example({ bounce: 20, bounceUnit: "ms", c: 1, cUnit: "µF", vcc: 5, vtm: 1.7, vtp: 0.9 }, true) },
+  ]);
 
   function compute() {
-    const k = thresholdFactor();
-    const bounce = bounceSI();
-    if (state.mode === "check") {
-      const r = rSI(), c = cSI();
-      const tau = r * c;
-      const tth = tau * k;
-      const margin = bounce > 0 ? tth / bounce : NaN;
-      return { r, c, tau, tth, bounce, margin };
-    }
-    const r = rSI();
-    const tth = state.margin * bounce;
-    const tau = k > 0 ? tth / k : NaN;
-    const c = r > 0 ? tau / r : NaN;
-    return { r, c, tau, tth, bounce, margin: state.margin };
+    const r1 = si("r1"), r2 = si("r2"), c = si("c"), tb = si("bounce");
+    if (!(state.vcc > 0)) return { problem: "Vcc must be greater than zero." };
+    if (!(kPress() > 0)) return { problem: "VT− must be between 0 V and Vcc." };
+    if (!(kRelease() > 0)) return { problem: "VT+ must be between 0 V and Vcc." };
+    if (!(c > 0)) return { problem: "C must be greater than zero." };
+    if (!(r1 >= 0) || !(r2 >= 0)) return { problem: "R1 and R2 cannot be negative." };
+    if (!(tb > 0)) return { problem: "The bounce time must be greater than zero." };
+    const series = eSeriesForTolerance(state.tol);
+    const r1e = r1 > 0 ? ceilESeries(r1, series) : 0, r2e = r2 > 0 ? ceilESeries(r2, series) : 0;
+    const press = r2e * c * kPress(), release = (r1e + r2e) * c * kRelease();
+    return { problem: "", tb, c, r1, r2, r1e, r2e, series, press, release,
+             worst: Math.min(press, release), leak: 1e-6 * r2e };
   }
 
-  function problem(res) {
-    if (!(state.vth > 0 && state.vth < 100)) return "Threshold must be between 0% and 100% of Vcc.";
-    if (!isFinite(res.r) || res.r <= 0) return "Resistance must be greater than zero.";
-    if (!isFinite(res.c) || res.c <= 0) return "Capacitance must be greater than zero.";
-    if (!isFinite(res.bounce) || res.bounce <= 0) return "Bounce time must be greater than zero.";
-    return "";
-  }
+  const wire = "#5A6169";
+  const comp = "#8FC1F5";
+  const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`;
+  const part = (d) => `<path d="${d}" stroke="${comp}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>`;
+  const dot = (x, y) => `<circle cx="${x}" cy="${y}" r="2.6" fill="${wire}"/>`;
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${comp}" stroke-width="1.6"/>`;
+  const ground = (x, y) => `<path d="M${x - 11} ${y} H${x + 11} M${x - 7} ${y + 4} H${x + 7} M${x - 3} ${y + 8} H${x + 3}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>`;
+  const zigV = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+  const zigH = (y, t) => `M${t} ${y} L${t + 3} ${y - 7} L${t + 9} ${y + 7} L${t + 15} ${y - 7} L${t + 21} ${y + 7} L${t + 27} ${y - 7} L${t + 33} ${y + 7} L${t + 36} ${y}`;
+  const lbl = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="${comp}" font-size="11" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
 
-  function verdict(res) {
-    if (!isFinite(res.margin)) return { text: "", color: "" };
-    const m = trim(res.margin);
-    if (res.margin >= 2) return { text: `Comfortable margin — crosses threshold at ${m}× the bounce time.`, color: "#5DCAA5" };
-    if (res.margin >= 1) return { text: `Marginal — only ${m}× the bounce time. More R or C would be safer.`, color: "#F0C24A" };
-    return { text: `Not enough — only ${m}× the bounce time. Bounce will likely glitch through.`, color: "#E24B4A" };
-  }
-
-  // Pull-up debounce: Vcc through R to the switch node, C and the switch
-  // both to ground off that same node, node feeds the logic input. The
-  // switch symbol is drawn open — pressing it shorts the node low, and C
-  // is what keeps that transition (and the release afterward) from
-  // chattering across the threshold.
-  function diagram() {
-    const wire = "#5A6169";
-    const ink = "#8FC1F5";
-    // Same symmetric-node convention as the RC/RL filter screens: every leg
-    // off a node runs the same 20px, except the run between the two nodes
-    // themselves — widened so C and the switch each land far enough apart
-    // to get their own ground symbol instead of sharing one. Node A (R
-    // meets C's drop) and node B (the switch's drop meets the output tap)
-    // are two separate, genuine junctions, each with its own dot.
-    return `<svg width="240" height="120" viewBox="0 0 240 120" fill="none">
-      <text x="40" y="10" fill="${ink}" font-size="12" font-weight="600" text-anchor="middle">Vcc</text>
-      <path d="M40,16 V30 M40,30 H60" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M60 30 L63 23 L69 37 L75 23 L81 37 L87 23 L93 37 L96 30" stroke="${ink}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
-      <path d="M96,30 H180" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="116" cy="30" r="2.6" fill="${wire}"/>
-      <circle cx="160" cy="30" r="2.6" fill="${wire}"/>
-      <text x="185" y="34" fill="#8A9099" font-size="10">to logic</text>
-      <path d="M116,30 V50 M160,30 V62" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M116,50 V64 M109,64 H123 M109,69 H123 M116,69 V92" stroke="${ink}" stroke-width="1.8" stroke-linecap="round"/>
-      <text x="100" y="69" fill="${ink}" font-size="12" font-weight="600" text-anchor="end">C</text>
-      <path d="M116,92 V98 M104,98 H128 M108,103 H124 M112,108 H120" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="160" cy="62" r="1.8" fill="${wire}"/>
-      <path d="M160,62 L169,74" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="160" cy="78" r="1.8" fill="${wire}"/>
-      <path d="M160,78 V92" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <text x="172" y="58" fill="#8A9099" font-size="10">SW</text>
-      <path d="M160,92 V98 M148,98 H172 M152,103 H168 M156,108 H164" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+  // Two columns hang off the R1/R2 node and the C node to grounds on one
+  // line: the switch under R1, C under the input, so the press path (switch,
+  // R2, C) reads left to right along the middle row.
+  function diagram(noR2) {
+    return `<svg width="250" height="134" viewBox="0 0 250 134" fill="none">
+      ${port(40, 9)}${lbl(49, 13, "Vcc")}
+      ${w("M40 12 V20")}${part(zigV(40, 20))}${w("M40 56 V70")}${lbl(28, 42, "R1", "end")}
+      ${dot(40, 70)}
+      ${w("M40 70 V84")}
+      <circle cx="40" cy="86" r="2" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      ${part("M41 88 L52 102")}
+      <circle cx="40" cy="104" r="2" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      ${w("M40 106 V118")}${ground(40, 118)}${lbl(28, 99, "SW", "end")}
+      ${noR2
+        ? `${w("M40 70 H128")}`
+        : `${w("M40 70 H66")}${part(zigH(70, 66))}${w("M102 70 H128")}${lbl(84, 57, "R2", "middle")}`}
+      ${dot(128, 70)}
+      ${w("M128 70 V91")}${part("M119 91 H137")}${part("M119 97 H137")}${w("M128 97 V118")}${ground(128, 118)}${lbl(141, 98, "C")}
+      ${w("M128 70 H160")}
+      ${part("M160 54 L188 70 L160 86 Z")}
+      <circle cx="192" cy="70" r="4" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      <path d="M164 75 H173 V65 M168 75 V65 H177" stroke="${comp}" stroke-width="1.3" fill="none"/>
+      ${w("M196 70 H214")}${port(217, 70)}${lbl(217, 58, "Out", "middle")}
+      <text x="174" y="102" fill="#8A9099" font-size="11" font-weight="600" text-anchor="middle">Schmitt</text>
     </svg>`;
   }
 
-  function updateResults() {
+  // C's voltage after a press (falling through R2 from Vcc) and after a
+  // release (rising through R1 + R2 from 0 V), each against the bounce
+  // window, with a dot where it crosses the threshold that changes the input:
+  // green after the bounce is over, amber inside it.
+  function timing(r) {
+    if (r.problem) return `<svg width="318" height="82" viewBox="0 0 318 82" fill="none"></svg>`;
+    const amber = "#E0A85E", green = "#5DCAA5", grey = "#8A9099";
+    const yTop = 12, yBot = 54, vcc = state.vcc;
+    const yv = (v) => yBot - (v / vcc) * (yBot - yTop);
+    const panel = (x0, width, t, tau, rising, vt, name, caption) => {
+      const lead = 8, span = width - lead;
+      const W = Math.max(2 * r.tb, 1.3 * t);
+      const xt = (s) => x0 + lead + (s / W) * span;
+      const v = (s) => {
+        const e = tau > 0 ? Math.exp(-s / tau) : 0;
+        return rising ? vcc * (1 - e) : vcc * e;
+      };
+      let d = `M${x0} ${yv(rising ? 0 : vcc).toFixed(1)} H${x0 + lead}`;
+      for (let i = 0; i <= 48; i++) { const s = (W * i) / 48; d += ` L${xt(s).toFixed(1)} ${yv(v(s)).toFixed(1)}`; }
+      const bw = (r.tb / W) * span;
+      return `
+        <rect x="${x0 + lead}" y="${yTop}" width="${bw.toFixed(1)}" height="${yBot - yTop}" fill="${amber}" fill-opacity="0.13"/>
+        ${bw >= 44 ? `<text x="${x0 + lead + 3}" y="${rising ? yTop + 11 : yBot - 4}" fill="${amber}" font-size="11" font-weight="600">bounce</text>` : ""}
+        <path d="M${x0} ${yv(vt).toFixed(1)} H${x0 + width}" stroke="${grey}" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="${x0 + width}" y="${(yv(vt) + (rising ? 13 : -4)).toFixed(1)}" fill="${grey}" font-size="11" font-weight="600" text-anchor="end">${name}</text>
+        <path d="${d}" stroke="${comp}" stroke-width="2" fill="none"/>
+        <circle cx="${xt(t).toFixed(1)}" cy="${yv(vt).toFixed(1)}" r="3.4" fill="${t >= r.tb * (1 - 1e-6) ? green : amber}"/>
+        <text x="${x0 + width / 2}" y="77" fill="${grey}" font-size="11" font-weight="600" text-anchor="middle">${caption}</text>`;
+    };
+    return `<svg width="318" height="82" viewBox="0 0 318 82" fill="none">
+      ${panel(12, 140, r.press, r.r2e * r.c, false, state.vtm, "VT−", "press: C empties through R2")}
+      ${panel(170, 140, r.release, (r.r1e + r.r2e) * r.c, true, state.vtp, "VT+", "release: fills through R1 + R2")}
+    </svg>`;
+  }
+
+  function cell(label, value) {
+    return `<div class="eseries-cell">
+      <div style="font-weight:600;color:${domain.color};">${label}</div>
+      <div>${value}</div>
+    </div>`;
+  }
+
+  // The delays of the circuit built from standard values (rounded up), the
+  // shorter of the two large, then the parts and what leakage does to them.
+  function resultsHTML(r) {
+    if (r.problem) return `<div class="error-text">${r.problem}</div>`;
+    const ok = r.worst >= r.tb * (1 - 1e-6);
+    const tb = siFormat(r.tb, "s");
+    const verdict = r.r2e === 0
+      ? ["#E0A85E", "No R2: a press shows on the first contact, and the switch takes C's full discharge."]
+      : ok ? ["#5DCAA5", `Both edges wait longer than the ${tb} bounce.`]
+      : ["#E0A85E", `Shorter than the ${tb} bounce: raise C or the resistors.`];
+    const cautions = [];
+    if (!(r.r1e > 0)) cautions.push("R1 is the pull-up and cannot be 0: pressing the switch would short Vcc to ground.");
+    if (r.leak >= 0.1) cautions.push(`With 1 µA of input leakage, R2 holds the pressed input at ${siFormat(r.leak, "V", 2)}. Ganssle found 0.18 V too close to a 0.5 V threshold; a larger C allows a smaller R2.`);
+    return `
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Ignores bounce for</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main">${siFormat(r.worst, "s")}</span></div>
+        <div class="result-sub">press <span data-res="press">${siFormat(r.press, "s")}</span> · release <span data-res="release">${siFormat(r.release, "s")}</span></div>
+        <div class="result-sub" data-res="verdict" style="color:${verdict[0]}">${verdict[1]}</div>
+      </div>
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell(`R1 (${r.series})`, `<span data-res="r1e">${formatOhms(r.r1e)}</span>`)}
+        ${cell(`R2 (${r.series})`, `<span data-res="r2e">${formatOhms(r.r2e)}</span>`)}
+        ${cell("Pressed input", `<span data-res="leak">≤ ${siFormat(r.leak, "V", 2)}</span>`)}
+      </div>
+      ${cautions.length ? `<div class="error-text" data-res="caution" style="color:#E0A85E">${cautions.join(" ")}</div>` : ""}`;
+  }
+
+  function refresh() {
     const r = compute();
-    const issue = problem(r);
-    const v = verdict(r);
-    app.querySelector('[data-res="err"]').textContent = issue;
-    app.querySelector('[data-res="tau"]').textContent = issue ? "—" : siFormat(r.tau, "s");
-    app.querySelector('[data-res="tth"]').textContent = issue ? "—" : siFormat(r.tth, "s");
-    const vEl = app.querySelector('[data-res="verdict"]');
-    if (issue) { vEl.textContent = ""; } else { vEl.textContent = v.text; vEl.style.color = v.color; }
-    if (state.mode === "size") {
-      app.querySelector('[data-res="reqC"]').textContent = issue ? "—" : formatFarads(r.c);
-    } else {
-      const mEl = app.querySelector('[data-res="margin"]');
-      if (mEl) {
-        mEl.textContent = issue || !isFinite(r.margin) ? "—" : `${trim(r.margin)}×`;
-        mEl.style.color = v.color;
-      }
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
+    app.querySelector('[data-res="wave"]').innerHTML = timing(r);
+    app.querySelector('[data-res="schem"]').innerHTML = diagram(!r.problem && r.r2e === 0);
+  }
+
+  function field(id, name, label, units) {
+    const unit = typeof units === "string" ? `<span class="unit-fixed">${units}</span>`
+      : `<select id="${id}-unit">${Object.keys(units).map((u) => `<option ${state[name + "Unit"] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    return `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
+            ${unit}
+          </div>
+        </div>`;
+  }
+
+  function syncField(id, name) {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = state[name];
+    const u = document.getElementById(id + "-unit");
+    if (u && state[name + "Unit"]) u.value = state[name + "Unit"];
+  }
+
+  // R1 and R2 are the answer, so typing anything else re-sizes them; typing
+  // R1 or R2 themselves checks a circuit you already have.
+  function afterEdit(name) {
+    if (name === "vcc" || name === "vtm" || name === "vtp") setPref(C, name, state[name]);
+    if (name !== "r1" && name !== "r2") {
+      size();
+      syncField("db-r1", "r1");
+      syncField("db-r2", "r2");
     }
-    app.querySelectorAll("[data-hint]").forEach((el) => { el.textContent = seriesHint(el.dataset.hint); });
-    syncSliderPositions(eSeriesForTolerance(state.tol), valueFor, boundsFor);
+    refresh();
   }
 
   function paint() {
     const r = compute();
-    const issue = problem(r);
-    const v = verdict(r);
     app.innerHTML = `
-      ${calcHeader(tool, favId, "t = −τ × ln(1 − Vth/Vcc) — time to cross the logic threshold")}
+      ${calcHeader(tool, favId, "Size R1 and R2 for a bounce time, or check yours")}
 
-      <div class="diagram-box">${diagram()}</div>
+      <div class="diagram-box" style="padding:2px 6px; flex-direction:column; gap:0;">
+        <div data-res="schem">${diagram(!r.problem && r.r2e === 0)}</div>
+        <div data-res="wave">${timing(r)}</div>
+      </div>
 
-      ${pillRow([["check", "Check R/C"], ["size", "Size C"]], state.mode, domain.bg)}
+      <div class="field-pair">
+        ${field("db-bounce", "bounce", "Bounce time", T_UNITS)}
+        ${field("db-c", "c", "C", RCF_C_UNITS)}
+      </div>
+      <div class="field-pair">
+        ${field("db-r1", "r1", "R1 (pull-up)", DIVIDER_R_UNITS)}
+        ${field("db-r2", "r2", "R2 (to C)", DIVIDER_R_UNITS)}
+      </div>
+      <div class="field-pair">
+        ${field("db-vcc", "vcc", "Vcc", "V")}
+        ${field("db-vtm", "vtm", "VT− max", "V")}
+        ${field("db-vtp", "vtp", "VT+ min", "V")}
+      </div>
 
-      <div class="section-label" style="color:#8FC1F5">Your inputs
+      <div class="section-label split" style="color:#5DCAA5">
+        <span>Output</span>
+        <span></span>
         <select id="db-tol" class="label-select">
           ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
         </select>
       </div>
-      <div class="field">
-        <label><span class="field-name">Resistance (R)</span><span class="field-hint" data-hint="r">${seriesHint("r")}</span></label>
-        <div class="field-row">
-          <input type="number" inputmode="decimal" step="any" id="db-r" value="${trim(state.values.r)}" />
-          <select id="db-r-unit">${Object.keys(OHM_UNITS).map((u) => `<option ${state.units.r === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-        </div>
-        ${seriesSliderHTML("r", eSeriesForTolerance(state.tol), rSI(), boundsFor("r"))}
-      </div>
-      ${state.mode === "check" ? `
-        <div class="field">
-          <label><span class="field-name">Capacitance (C)</span><span class="field-hint" data-hint="c">${seriesHint("c")}</span></label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="db-c" value="${trim(state.values.c)}" />
-            <select id="db-c-unit">${Object.keys(CAP_UNITS).map((u) => `<option ${state.units.c === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-          </div>
-          ${seriesSliderHTML("c", eSeriesForTolerance(state.tol), cSI(), boundsFor("c"))}
-        </div>` : ""}
-      <div class="field-pair">
-        <div class="field">
-          <label>Supply (Vcc)</label>
-          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="db-vcc" value="${trim(state.vcc)}" /></div>
-        </div>
-        <div class="field">
-          <label>Threshold (% of Vcc)</label>
-          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="db-vth" value="${trim(state.vth)}" /></div>
-        </div>
-      </div>
-      <div class="field">
-        <label>Expected bounce time</label>
-        <div class="field-row">
-          <input type="number" inputmode="decimal" step="any" id="db-bounce" value="${trim(state.bounceVal)}" />
-          <select id="db-bounce-unit">${Object.keys(RC_TIME_UNITS).map((u) => `<option ${state.bounceUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
-        </div>
-      </div>
-      ${state.mode === "size" ? `
-        <div class="r-list">
-          <div class="r-item">
-            <div class="r-line">
-              <span class="r-index">Margin</span>
-              <input type="number" inputmode="decimal" step="any" id="db-margin-input" style="font-size:26px;font-weight:600;" value="${trim(state.margin)}" />
-              <span class="r-hint" style="font-size:15px;">×</span>
-              <button type="button" class="r-reset" id="db-margin-reset" aria-label="Reset to 3×">${ICONS.reset}</button>
-            </div>
-            <div class="slider-row">
-              <button type="button" class="slider-step" id="db-margin-dec" aria-label="Decrease margin">−</button>
-              <input type="range" class="series-slider" id="db-margin-slider" min="1" max="10" step="0.1" value="${state.margin}" aria-label="Drag to set the target safety margin" />
-              <button type="button" class="slider-step" id="db-margin-inc" aria-label="Increase margin">+</button>
-            </div>
-          </div>
-        </div>` : ""}
-      <div class="error-text" data-res="err">${issue}</div>
-
-      <div class="section-label" style="color:#5DCAA5">Results</div>
-      ${state.mode === "size" ? `
-        <div class="result-field">
-          <div class="result-head">
-            <span class="label">Required capacitance (C)</span>
-            <span class="badge-calc">${ICONS.bolt2}Calculated</span>
-          </div>
-          <div class="result-value"><span class="num" data-res="reqC">${issue ? "—" : formatFarads(r.c)}</span></div>
-        </div>` : ""}
-      <div class="result-field">
-        <div class="result-head"><span class="label">Time constant (τ = R × C)</span></div>
-        <div class="result-value"><span class="num" data-res="tau">${issue ? "—" : siFormat(r.tau, "s")}</span></div>
-      </div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">Time to cross threshold</span></div>
-        <div class="result-value"><span class="num" data-res="tth">${issue ? "—" : siFormat(r.tth, "s")}</span></div>
-        <div class="result-sub" data-res="verdict" style="color:${v.color}">${issue ? "" : v.text}</div>
-      </div>
-      ${state.mode === "check" ? `
-        <div class="result-field">
-          <div class="result-head"><span class="label">Margin (threshold time ÷ bounce time)</span></div>
-          <div class="result-value"><span class="num" data-res="margin" style="color:${v.color}">${issue || !isFinite(r.margin) ? "—" : `${trim(r.margin)}×`}</span></div>
-        </div>` : ""}
-
-      <div class="section-label" style="color:#8FC1F5">Typical contact bounce, for reference</div>
-      <div class="truth-table" style="--tt-cols:2">
-        <div class="tt-row"><span>Tactile / miniature pushbutton</span><span class="tt-out">≈1–10 ms</span></div>
-        <div class="tt-row"><span>Standard pushbutton</span><span class="tt-out">≈5–20 ms</span></div>
-        <div class="tt-row"><span>Toggle / slide switch</span><span class="tt-out">≈10–30 ms</span></div>
-        <div class="tt-row"><span>Relay / contactor contacts</span><span class="tt-out">≈10–25 ms</span></div>
-      </div>
+      <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        ["τ = R × C", "t = −τ × ln(1 − Vth/Vcc)", "C = t / (R × (−ln(1 − Vth/Vcc)))"],
-        "This models one clean charge from 0 V — the standard shortcut for RC debounce sizing, not a simulation of the actual bounce pulses. It also assumes a Schmitt-trigger input for the hysteresis; a plain comparator-style input can still glitch on a slow edge even with a wide margin here. Many designs pair this with a firmware debounce as a backstop rather than relying on the RC alone."
+        ["Press delay = R2 × C × ln(Vcc / VT−)",
+         "Release delay = (R1 + R2) × C × −ln(1 − VT+ / Vcc)",
+         "Sized with each delay equal to the bounce time"],
+        "A switch's contacts bounce for a few milliseconds when it is pressed or released, and a fast input would see every bounce as a press. Here C slows the input down: pressing empties it through R2, releasing fills it through R1 + R2, and the input changes only once C crosses its threshold, after the bouncing is over. A Schmitt-trigger input has two thresholds, VT− for a falling input and VT+ for a rising one, with a gap between them (hysteresis), so a slow edge switches it only once; Ganssle warns never to feed C to an input without one. Use the datasheet's worst case — the highest VT− and the lowest VT+ — which gives the shortest delays. Typing the bounce time, C or the thresholds sizes R1 and R2; typing R1 or R2 checks a circuit you have. The standard values are rounded up, so the delays never fall short. Ganssle found most switches bounce well under 10 ms and designs for 20 ms."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v2) => { state.mode = v2; paint(); });
+    wireCalc(favId, paint);
+    // A full paint, not a refresh: the cell labels carry the series name.
+    document.getElementById("db-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
 
-    document.getElementById("db-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); updateResults(); };
-
-    const rField = document.getElementById("db-r");
-    rField.oninput = () => { const v = parseFloat(rField.value); if (isFinite(v)) { state.values.r = v; updateResults(); } };
-    document.getElementById("db-r-unit").onchange = (e) => { state.units.r = e.target.value; updateResults(); };
-    wireSlider("r",
-      () => eSeriesRange(eSeriesForTolerance(state.tol), ...boundsFor("r")),
-      (ohms) => {
-        state.values.r = ohms / OHM_UNITS[state.units.r];
-        rField.value = trim(state.values.r);
-        updateResults();
-      });
-    if (state.mode === "check") {
-      const cField = document.getElementById("db-c");
-      cField.oninput = () => { const v = parseFloat(cField.value); if (isFinite(v)) { state.values.c = v; updateResults(); } };
-      document.getElementById("db-c-unit").onchange = (e) => { state.units.c = e.target.value; updateResults(); };
-      wireSlider("c",
-        () => eSeriesRange(eSeriesForTolerance(state.tol), ...boundsFor("c")),
-        (farads) => {
-          state.values.c = farads / CAP_UNITS[state.units.c];
-          cField.value = trim(state.values.c);
-          updateResults();
-        });
-    }
-    const vccField = document.getElementById("db-vcc");
-    vccField.oninput = () => { const v = parseFloat(vccField.value); if (isFinite(v)) { state.vcc = v; updateResults(); } };
-    const vthField = document.getElementById("db-vth");
-    vthField.oninput = () => { const v = parseFloat(vthField.value); if (isFinite(v)) { state.vth = v; updateResults(); } };
-    const bounceField = document.getElementById("db-bounce");
-    bounceField.oninput = () => { const v = parseFloat(bounceField.value); if (isFinite(v)) { state.bounceVal = v; updateResults(); } };
-    document.getElementById("db-bounce-unit").onchange = (e) => { state.bounceUnit = e.target.value; updateResults(); };
-
-    if (state.mode === "size") {
-      const marginInput = document.getElementById("db-margin-input");
-      const marginSlider = document.getElementById("db-margin-slider");
-      const syncMargin = () => { marginInput.value = trim(state.margin); marginSlider.value = state.margin; updateResults(); };
-      marginInput.oninput = () => {
-        const val = parseFloat(marginInput.value);
-        if (isFinite(val)) { state.margin = Math.max(1, Math.min(10, val)); marginSlider.value = state.margin; updateResults(); }
-      };
-      marginSlider.oninput = () => { state.margin = parseFloat(marginSlider.value); marginInput.value = trim(state.margin); updateResults(); };
-      document.getElementById("db-margin-dec").onclick = () => { state.margin = Math.max(1, state.margin - 0.5); syncMargin(); };
-      document.getElementById("db-margin-inc").onclick = () => { state.margin = Math.min(10, state.margin + 0.5); syncMargin(); };
-      document.getElementById("db-margin-reset").onclick = () => { state.margin = 3; syncMargin(); };
-    }
-
-    updateResults();
+    [["db-bounce", "bounce"], ["db-c", "c"], ["db-r1", "r1"], ["db-r2", "r2"],
+     ["db-vcc", "vcc"], ["db-vtm", "vtm"], ["db-vtp", "vtp"]].forEach(([id, name]) => {
+      const el = document.getElementById(id);
+      el.oninput = () => { const v = parseFloat(el.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
+      const u = document.getElementById(id + "-unit");
+      if (u) u.onchange = (e) => { state[name + "Unit"] = e.target.value; afterEdit(name); };
+    });
   }
 
   paint();

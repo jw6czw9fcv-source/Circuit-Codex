@@ -78,6 +78,7 @@ will key on, since that is the id the app already holds for each tool.
 - Number systems → [Number bases](#number-bases)
 - Number systems → [ASCII table](#ascii-table)
 - Timing & interfaces → [PWM (duty cycle)](#pwm-duty-cycle)
+- Timing & interfaces → [Switch debounce](#switch-debounce)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
 - Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
@@ -5666,6 +5667,169 @@ The review made these changes:
 - It limited the units to real ones (Hz–MHz, ns–s), and the levels to V
   with a ± key.
 - It added plain definitions, examples, and remembered levels.
+
+[↑ Index](#index)
+
+---
+
+<a id="debounce-rc"></a>
+## Switch debounce
+
+`calc: debounce-rc` · Digital & logic circuits › Timing & interfaces
+(formerly Debounce / RC timing)
+
+### What it computes
+
+It sizes the RC debouncer from Jack Ganssle's guide: Vcc through R1 to the
+switch, R2 from the switch to C, and C feeding a Schmitt-trigger input.
+- **Sizing.** Type the bounce time, C, Vcc and the input's worst-case
+  thresholds (VT− at its highest, VT+ at its lowest), and R1 and R2 are
+  sized so that both the press and the release take the bounce time to
+  change the input.
+- **Checking.** Type R1 and R2 to check a circuit you have.
+
+The output shows:
+- **the delays of the circuit built from standard values,** rounded up to
+  the next value of the chosen series. The shorter delay is shown large,
+  with the press and release delays beneath;
+- **the two resistors** in standard values;
+- **the pressed input level** caused by input leakage through R2.
+
+Two small graphs show C's voltage after a press, falling through R2, and
+after a release, rising through R1 + R2. Each is drawn against the bounce
+window, with a dot where it crosses the threshold: green after the bounce,
+amber inside it. Vcc, the thresholds and the series are remembered.
+
+### Source
+
+- **Jack Ganssle, *A Guide to Debouncing*, part 2** (ganssle.com) was
+  read for:
+  - the circuit;
+  - the method: R2 from the press, R1 + R2 from the release, each against
+    the worst-case threshold;
+  - his worked example: 20 ms, 74AHCT14 at 5 V; with 0.1 µF R2 = 185 kΩ,
+    and with 1 µF R2 = 18 kΩ, R1 + R2 = 101 kΩ, R1 = 82 kΩ;
+  - the leakage concern;
+  - his measured bounce times: most switches well under 10 ms, so he
+    designs for 20 ms.
+
+  His equations are images on the page and could not be read as text.
+  They were rebuilt from the RC charge law, and reproduce all three of his
+  resistor values.
+- **TI SN74AHCT14 datasheet (SCLS246T, October 2023)** was read for the
+  thresholds:
+  - VT+ (rising) is 0.9–1.9 V at 4.5 V, and 1.0–2.1 V at 5.5 V;
+  - VT− (falling) is 0.5–1.5 V at 4.5 V, and 0.6–1.7 V at 5.5 V;
+  - Ganssle's 0.9 V and 1.7 V are the extremes;
+  - the input current is ±1 µA.
+- **Nexperia 74HC_HCT14 datasheet (rev. 10, 29 February 2024)**, table 10,
+  was read for the 74HC14 thresholds:
+  - at 4.5 V, VT+ is 1.7–3.15 V and VT− 0.9–2.0 V;
+  - the input leakage is ±1.0 µA over temperature.
+
+### What it means
+
+- **Contact bounce** — a switch's contacts bounce for a few milliseconds
+  when it is pressed or released. A fast input would see every bounce as
+  another press.
+- **The RC delay** — C slows the input down. Pressing empties C through
+  R2; releasing fills it through R1 + R2. The input changes only once C
+  crosses its threshold, after the bouncing is over.
+- **R1** — the pull-up. It also limits the current through the switch
+  while it is held.
+- **R2** — sets the press delay, and limits the current the contacts take
+  from C.
+  - Without R2 (C straight across the switch), a press registers on the
+    very first contact, and the contacts take C's full discharge.
+  - The bounce after that first contact is still filtered: an opening is
+    too short for C to recharge past VT+ through R1.
+- **A Schmitt-trigger input** — it has two thresholds, VT− for a falling
+  input and VT+ for a rising one, with a gap between them (hysteresis).
+  So a slow, noisy edge switches it only once.
+  - Ganssle warns never to feed C straight to a microcontroller input, as
+    few have any hysteresis. An input without it does unpredictable things
+    on a slow edge.
+  - Some microcontrollers do have Schmitt-trigger inputs: check the
+    datasheet, and use its thresholds.
+- **Worst case** — thresholds vary between parts and with the supply. The
+  highest VT− and the lowest VT+ give the shortest delays, so those are
+  the values to design with.
+- **Pressed input** — the input's leakage (up to 1 µA) flows through R2
+  while the switch is held, lifting the input up to 1 µA × R2 above
+  ground.
+  - Ganssle rejected 180 kΩ (0.18 V, against a lowest threshold of 0.5 V)
+    and moved to 1 µF to bring R2 down to 18 kΩ.
+  - The tool cautions from 0.1 V.
+
+### Why the formulas are these
+
+    Press delay   = R2 × C × ln(Vcc / VT−)
+    Release delay = (R1 + R2) × C × −ln(1 − VT+ / Vcc)
+    Sizing:  R2 = t / (C × ln(Vcc / VT−)),   R1 + R2 = t / (C × −ln(1 − VT+ / Vcc))
+
+- **Press:** C falls from Vcc toward 0 through R2 alone, following
+  V = Vcc × e^(−t/R2C). It reaches VT− after R2C × ln(Vcc / VT−).
+- **Release:** C rises from 0 toward Vcc through R1 + R2, following
+  V = Vcc × (1 − e^(−t/(R1+R2)C)). It reaches VT+ after
+  (R1 + R2)C × −ln(1 − VT+ / Vcc).
+- **Bounce makes the real delays longer.** Each opening during a press
+  lets C climb back a little, so these delays are the shortest the
+  circuit can give, which is what the design needs.
+- **Typing the bounce time, C or the thresholds** sizes R1 and R2.
+  **Typing R1 or R2** checks them, as typed.
+- **The standard values are rounded up,** so the built circuit never
+  waits less than the bounce time. Ganssle rounded to the nearest values
+  (18 k, 82 k): that gives 19.4 ms and 19.8 ms, a little under his 20 ms,
+  which already doubles the bounce he measured.
+
+### Assumptions and limits
+
+- **Full charge and discharge.** Each delay starts from C fully charged
+  or fully empty. A press released before C has emptied gives a shorter
+  release delay.
+- **Leakage only through R2 is shown.** The released input also sits up
+  to 1 µA × (R1 + R2) below Vcc.
+- **Bounce time is the switch's.** Measure it, or use Ganssle's 20 ms.
+  Some switches bounce far longer.
+
+### What it deliberately does not do
+
+- Firmware debouncing, which Ganssle's guide also covers, is not
+  modelled.
+- The RC charge itself, with any threshold, has its own tool: RC
+  charge/discharge.
+
+### How it was checked
+
+- **20 ms, 1 µF, 74AHCT14 at 5 V (1.7 V, 0.9 V):**
+  - exact R2 18.539 kΩ and R1 82.242 kΩ, so R1 + R2 = 100.78 kΩ
+    (Ganssle's 101 kΩ);
+  - E24, rounded up: 20 kΩ and 91 kΩ;
+  - delays: press 21.58 ms, release 22.03 ms;
+  - pressed input ≤ 20 mV.
+- **0.1 µF:** R2 = 185.39 kΩ (Ganssle's 185 kΩ). With 200 kΩ (E24) the
+  pressed input sits at 200 mV, and the tool cautions.
+- **50 ms:** R2 46.347 kΩ, R1 205.6 kΩ.
+- **10 k and 10 k typed with 1 µF:** press 10.79 ms, release 3.969 ms,
+  shorter than 20 ms.
+- **74HC14 at 4.5 V (2.0 V, 1.7 V), 1 µF, 20 ms:** 27 kΩ and 18 kΩ
+  (E24), shorter delay 21.35 ms.
+- **R2 = 0:** the press delay is 0 s, and the tool says why.
+
+The review made these changes:
+- It replaced the single-resistor circuit, C straight across the switch,
+  with Ganssle's two-resistor circuit and his worst-case method.
+- It made Vcc count. It was an input the result never used, because the
+  threshold was a percentage.
+- It replaced the guessed 50 % threshold with VT− and VT+ in volts, from
+  the datasheet.
+- It replaced the unsourced bounce-time table with Ganssle's
+  measurements.
+- It added the two graphs and the leakage check.
+- It limited the units to real ones (Ω–MΩ, pF–µF, µs–s, volts).
+- It put the result first and large, added examples, and remembers the
+  input's thresholds.
+- The tool was renamed Switch debounce, on Pierre's choice.
 
 [↑ Index](#index)
 
