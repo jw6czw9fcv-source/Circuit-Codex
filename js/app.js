@@ -19275,28 +19275,49 @@ function renderCrystalLoad(domain, tool, favId) {
   const capH = (x, y) => `${part(`M${x - 9} ${y} H${x + 9}`)}${part(`M${x - 9} ${y + 6} H${x + 9}`)}`;
   const lbl = (x, y, t, anchor, size) => `<text x="${x}" y="${y}" fill="${comp}" font-size="${size || 11}" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
 
-  // Pierce, drawn symmetric about the crystal: the two load capacitors are the
-  // same part doing the same job on either side, and the picture should say so.
-  // The feedback resistor is inside the MCU on every part this applies to, so
-  // it is not drawn \u2014 only what gets soldered.
+  // The Pierce oscillator as it is really built, after ST's AN2867 figure 5:
+  // inside the MCU, the inverter that works as the amplifier, with its
+  // feedback resistor RF across it; outside, the crystal Y1 between OSC_IN and
+  // OSC_OUT, one load capacitor to ground on each side, and RExt, which limits
+  // the current into the crystal and is fitted only when its drive level
+  // needs it. The stray capacitance is not drawn: nobody solders it.
   function diagram() {
-    const arm = (x, dir) => `
-      ${dot(x, 88)}${w(`M${x} 88 H${x + dir * 38}`)}${w(`M${x + dir * 38} 88 V120`)}
-      ${capH(x + dir * 38, 120)}${w(`M${x + dir * 38} 126 V146`)}${ground(x + dir * 38, 146)}`;
-    return `<svg width="196" height="142" viewBox="23 20 196 142" fill="none">
-      ${w("M100 60 H110")}${part("M110 48 V72")}
-      <rect x="114" y="46" width="12" height="28" rx="2" fill="none" stroke="${comp}" stroke-width="1.8"/>
-      ${part("M130 48 V72")}${w("M130 60 H140")}
-      ${lbl(120, 38, "XTAL", "middle")}
+    const zigH = (y, t) => `M${t} ${y} L${t + 3} ${y - 7} L${t + 9} ${y + 7} L${t + 15} ${y - 7} L${t + 21} ${y + 7} L${t + 27} ${y - 7} L${t + 33} ${y + 7} L${t + 36} ${y}`;
+    const zigV = (x, t) => `M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`;
+    const capV = (x, y) => `${part(`M${x - 9} ${y} H${x + 9}`)}${part(`M${x - 9} ${y + 6} H${x + 9}`)}`;
+    const grey = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="#8A9099" font-size="11" font-weight="600"${anchor ? ` text-anchor="${anchor}"` : ""}>${t}</text>`;
+    const lse = state.kind === "khz";
+    const pinIn = lse ? "OSC32_IN" : "OSC_IN", pinOut = lse ? "OSC32_OUT" : "OSC_OUT";
+    const pf = (v) => (isFinite(v) && v > 0 ? `${trim(v)} pF` : "");
+    return `<svg width="260" height="200" viewBox="0 0 260 200" fill="none">
+      <rect x="40" y="8" width="180" height="82" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      ${lbl(48, 24, "MCU")}
 
-      ${w("M100 60 V118")}${w("M140 60 V118")}
-      ${arm(100, -1)}${arm(140, 1)}
-      ${lbl(46, 126, "CL1", "end")}${lbl(194, 126, "CL2", "start")}
+      ${dot(80, 60)}${dot(180, 60)}
+      ${w("M80 60 H112")}
+      ${part("M112 48 L136 60 L112 72 Z")}
+      <circle cx="140" cy="60" r="4" fill="none" stroke="${comp}" stroke-width="1.6"/>
+      ${w("M144 60 H180")}
+      ${w("M80 60 V36 H112")}${part(zigH(36, 112))}${w("M148 36 H180 V60")}
+      ${lbl(130, 26, "RF", "middle")}
 
-      <rect x="78" y="118" width="84" height="38" rx="4" fill="none" stroke="${comp}" stroke-width="1.8"/>
-      <text x="100" y="132" fill="${wire}" font-size="9" font-weight="600" text-anchor="middle">XI</text>
-      <text x="140" y="132" fill="${wire}" font-size="9" font-weight="600" text-anchor="middle">XO</text>
-      ${lbl(120, 150, "MCU", "middle", 10)}
+      ${w("M80 60 V146")}${w("M180 60 V98")}
+      ${grey(74, 104, pinIn, "end")}${grey(186, 104, pinOut)}
+
+      ${part(zigV(180, 98))}${w("M180 134 V146")}${lbl(192, 120, "RExt")}
+
+      ${dot(80, 146)}${dot(180, 146)}
+      ${w("M80 146 H118")}
+      ${part("M118 136 V156")}
+      <rect x="122" y="134" width="16" height="24" rx="2" fill="none" stroke="${comp}" stroke-width="1.8"/>
+      ${part("M142 136 V156")}
+      ${w("M142 146 H180")}
+      ${lbl(130, 128, "Y1", "middle")}
+
+      ${w("M80 146 V162")}${capV(80, 162)}${w("M80 168 V184")}${ground(80, 184)}
+      ${w("M180 146 V162")}${capV(180, 162)}${w("M180 168 V184")}${ground(180, 184)}
+      ${lbl(66, 164, "CL1", "end")}${grey(66, 178, pf(state.c1), "end")}
+      ${lbl(194, 164, "CL2")}${grey(194, 178, pf(state.c2))}
     </svg>`;
   }
 
@@ -19337,6 +19358,7 @@ function renderCrystalLoad(domain, tool, favId) {
 
   function refresh() {
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
+    app.querySelector('[data-res="schem"]').innerHTML = diagram();
   }
 
   function syncField(id, name) {
@@ -19382,7 +19404,7 @@ function renderCrystalLoad(domain, tool, favId) {
       ${pillRow(Object.keys(XTAL_KINDS).map((k) => [k, XTAL_KINDS[k].label]), state.kind, domain.bg)}
 
       <div class="diagram-box" style="padding:4px 6px;">
-        <div>${diagram()}</div>
+        <div data-res="schem">${diagram()}</div>
       </div>
 
       <div class="field-pair">
