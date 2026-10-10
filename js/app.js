@@ -10478,11 +10478,12 @@ function renderDebounceRc(domain, tool, favId) {
   // C's voltage after a press (falling through R2 from Vcc) and after a
   // release (rising through R1 + R2 from 0 V), each against the bounce
   // window, with a dot where it crosses the threshold that changes the input:
-  // green after the bounce is over, amber inside it.
+  // green after the bounce is over, amber inside it. A legend line on top
+  // names the square and the dot, which do not explain themselves.
   function timing(r) {
-    if (r.problem) return `<svg width="318" height="82" viewBox="0 0 318 82" fill="none"></svg>`;
+    if (r.problem) return `<svg width="318" height="84" viewBox="0 0 318 84" fill="none"></svg>`;
     const amber = "#E0A85E", green = "#5DCAA5", grey = "#8A9099";
-    const yTop = 12, yBot = 54, vcc = state.vcc;
+    const yTop = 16, yBot = 56, vcc = state.vcc;
     const yv = (v) => yBot - (v / vcc) * (yBot - yTop);
     const panel = (x0, width, t, tau, rising, vt, name, caption) => {
       const lead = 8, span = width - lead;
@@ -10497,14 +10498,17 @@ function renderDebounceRc(domain, tool, favId) {
       const bw = (r.tb / W) * span;
       return `
         <rect x="${x0 + lead}" y="${yTop}" width="${bw.toFixed(1)}" height="${yBot - yTop}" fill="${amber}" fill-opacity="0.13"/>
-        ${bw >= 44 ? `<text x="${x0 + lead + 3}" y="${rising ? yTop + 11 : yBot - 4}" fill="${amber}" font-size="11" font-weight="600">bounce</text>` : ""}
         <path d="M${x0} ${yv(vt).toFixed(1)} H${x0 + width}" stroke="${grey}" stroke-width="1" stroke-dasharray="3 3"/>
         <text x="${x0 + width}" y="${(yv(vt) + (rising ? 13 : -4)).toFixed(1)}" fill="${grey}" font-size="11" font-weight="600" text-anchor="end">${name}</text>
         <path d="${d}" stroke="${comp}" stroke-width="2" fill="none"/>
         <circle cx="${xt(t).toFixed(1)}" cy="${yv(vt).toFixed(1)}" r="3.4" fill="${t >= r.tb * (1 - 1e-6) ? green : amber}"/>
-        <text x="${x0 + width / 2}" y="77" fill="${grey}" font-size="11" font-weight="600" text-anchor="middle">${caption}</text>`;
+        <text x="${x0 + width / 2}" y="79" fill="${grey}" font-size="11" font-weight="600" text-anchor="middle">${caption}</text>`;
     };
-    return `<svg width="318" height="82" viewBox="0 0 318 82" fill="none">
+    return `<svg width="318" height="84" viewBox="0 0 318 84" fill="none">
+      <rect x="62" y="2" width="10" height="9" fill="${amber}" fill-opacity="0.35"/>
+      <text x="76" y="10" fill="${amber}" font-size="11" font-weight="600">bounce ${siFormat(r.tb, "s")}</text>
+      <circle cx="170" cy="6.5" r="3.4" fill="${green}"/>
+      <text x="177" y="10" fill="${grey}" font-size="11" font-weight="600">input switches</text>
       ${panel(12, 140, r.press, r.r2e * r.c, false, state.vtm, "VT−", "press: C empties through R2")}
       ${panel(170, 140, r.release, (r.r1e + r.r2e) * r.c, true, state.vtp, "VT+", "release: fills through R1 + R2")}
     </svg>`;
