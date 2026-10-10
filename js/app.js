@@ -19195,10 +19195,13 @@ function renderUartBaud(domain, tool, favId) {
 // The start-up figures follow ST's AN2867: its worked HSE example (8 MHz,
 // ESR 80 ohm, gm 25 mA/V on an STM32F1), and for the LSE the FC-135's 70 kOhm
 // maximum ESR with the "medium-high" drive of AN2867's LSE table (15 uA/V).
+// The drive-level ratings are Epson's: 200 uW max for the FA-238 (10 uW
+// recommended), 0.5 uW for the FC-135. The Vpp defaults only illustrate a
+// scope reading; the real one is measured.
 const XTAL_KINDS = {
-  mhz: { label: "MHz crystal", c0: 3, cm: 8, cl: 12.5, f: 8, esr: 80, gm: 25,
+  mhz: { label: "MHz crystal", c0: 3, cm: 8, cl: 12.5, f: 8, esr: 80, gm: 25, vpp: 1, dlmax: 200,
          fUnit: "MHz", fMul: 1e6, esrUnit: "Ω", esrMul: 1, gmUnit: "mA/V", gmMul: 1e-3 },
-  khz: { label: "32.768 kHz", c0: 1, cm: 3.4, cl: 12.5, f: 32.768, esr: 70, gm: 15,
+  khz: { label: "32.768 kHz", c0: 1, cm: 3.4, cl: 12.5, f: 32.768, esr: 70, gm: 15, vpp: 0.5, dlmax: 0.5,
          fUnit: "kHz", fMul: 1e3, esrUnit: "kΩ", esrMul: 1e3, gmUnit: "µA/V", gmMul: 1e-6 },
 };
 
@@ -19214,11 +19217,12 @@ function renderCrystalLoad(domain, tool, favId) {
     kind: pref(C, "kind", "mhz", Object.keys(XTAL_KINDS)),
     tol: pref(C, "tol", 10, [1, 2, 5, 10, 20]),
     cl: 12.5, stray: 3, c1: 19, c2: 19, c0: 3, cm: 8, pull: 0,
+    cprobe: 1,
   };
   // Everything a family brings with it: its crystal and its oscillator.
   const loadKind = (k) => {
     const x = XTAL_KINDS[k];
-    Object.assign(state, { kind: k, c0: x.c0, cm: x.cm, f: x.f, esr: x.esr, gm: x.gm });
+    Object.assign(state, { kind: k, c0: x.c0, cm: x.cm, f: x.f, esr: x.esr, gm: x.gm, vpp: x.vpp, dlmax: x.dlmax });
   };
   loadKind(state.kind);
 
@@ -19316,7 +19320,13 @@ function renderCrystalLoad(domain, tool, favId) {
     const rext = 1 / (2 * Math.PI * F * c2);
     const gmcrit = 4 * esr * w2 * c0cl * c0cl;
     const gmcritR = 4 * (esr + rext) * w2 * c0cl * c0cl;
-    return { rext, gmcrit, margin: gm / gmcrit, marginR: gm / gmcritR, x };
+    // AN2867 3.5.2: the crystal current is the current through CL1, so the
+    // swing measured there gives the power: DL = ESR (pi F Ctot)^2 Vpp^2 / 2,
+    // with Ctot = CL1 + Cs/2 + Cprobe.
+    const ctot = (state.c1 + state.stray / 2 + state.cprobe) * 1e-12;
+    const dl = state.vpp > 0 ? (esr * Math.pow(Math.PI * F * ctot, 2) * state.vpp * state.vpp) / 2 : NaN;
+    const dlmax = state.dlmax * 1e-6;
+    return { rext, gmcrit, margin: gm / gmcrit, marginR: gm / gmcritR, dl, dlmax, x };
   }
 
   const wire = "#5A6169";
@@ -19423,19 +19433,35 @@ function renderCrystalLoad(domain, tool, favId) {
 
   // The margin AN2867 asks for is 5: below it the oscillator may start on
   // the bench and not in the field.
+  const okM = (m) => (m >= 5 ? comp : "#E08585");
+  const fmtM = (m) => (m >= 100 ? Math.round(m).toString() : trim(m));
+
   function startupHTML() {
     const u = startup();
     if (!u) return `<div class="error-text">Frequency, ESR and gm must all be greater than zero.</div>`;
-    const ok = (m) => (m >= 5 ? comp : "#E08585");
-    const fmtM = (m) => (m >= 100 ? Math.round(m).toString() : trim(m));
-    let note = "";
-    if (u.margin < 5) note = `A margin of ${fmtM(u.margin)} is under the 5 AN2867 asks for: the oscillator may not start in the field. Use a stronger drive (higher gm), or a crystal with a lower ESR or a lower CL.`;
-    else if (u.marginR < 5) note = `With RExt fitted the margin drops to ${fmtM(u.marginR)}: fit 0 Ω unless the crystal's drive level is exceeded, as AN2867 advises.`;
     return `
       <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
         ${cell("RExt, to start", `<span data-res="rext">${formatOhms(u.rext)}</span>`)}
-        ${cell("Gain margin", `<span data-res="margin">${fmtM(u.margin)}</span>`, ok(u.margin))}
-        ${cell("With RExt", `<span data-res="marginr">${fmtM(u.marginR)}</span>`, ok(u.marginR))}
+        ${cell("Gain margin", `<span data-res="margin">${fmtM(u.margin)}</span>`, okM(u.margin))}
+        ${cell("With RExt", `<span data-res="marginr">${fmtM(u.marginR)}</span>`, okM(u.marginR))}
+      </div>`;
+  }
+
+  // The drive level from the measured swing, against the crystal's rating;
+  // then the one thing to do about the two checks, if anything.
+  function driveHTML() {
+    const u = startup();
+    if (!u) return "";
+    const over = isFinite(u.dl) && u.dlmax > 0 && u.dl > u.dlmax;
+    let note = "";
+    if (u.margin < 5) note = `A margin of ${fmtM(u.margin)} is under the 5 AN2867 asks for: the oscillator may not start in the field. Use a stronger drive (higher gm), or a crystal with a lower ESR or a lower CL.`;
+    else if (over) note = `The crystal is over-driven: ${siFormat(u.dl, "W")} against its ${siFormat(u.dlmax, "W")} rating. Fit RExt, starting at ${formatOhms(u.rext)}, and trim it until the drive level is within the rating, then check the margin with it stays at 5 or more (it is ${fmtM(u.marginR)} at the starting value).`;
+    else if (u.marginR < 5) note = `With RExt fitted the margin drops to ${fmtM(u.marginR)}: fit 0 Ω unless the crystal's drive level is exceeded, as AN2867 advises.`;
+    return `
+      <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+        ${cell("Drive level", `<span data-res="dl">${isFinite(u.dl) ? siFormat(u.dl, "W") : "\u2014"}</span>`, isFinite(u.dl) ? (over ? "#E08585" : comp) : "")}
+        ${cell("Of the rating", `<span data-res="dlpct">${isFinite(u.dl) && u.dlmax > 0 ? trim((u.dl / u.dlmax) * 100) + "%" : "\u2014"}</span>`)}
+        ${cell("RExt", `<span data-res="rextneed">${!isFinite(u.dl) ? "\u2014" : over ? "needed" : "0 Ω"}</span>`, over ? "#E08585" : "")}
       </div>
       ${note ? `<div class="error-text" data-res="startnote" style="color:#E0A85E">${note}</div>` : ""}`;
   }
@@ -19444,6 +19470,7 @@ function renderCrystalLoad(domain, tool, favId) {
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(compute());
     app.querySelector('[data-res="schem"]').innerHTML = diagram();
     app.querySelector('[data-res="startup"]').innerHTML = startupHTML();
+    app.querySelector('[data-res="drive"]').innerHTML = driveHTML();
   }
 
   function syncField(id, name) {
@@ -19522,6 +19549,12 @@ function renderCrystalLoad(domain, tool, favId) {
         ${field("xl-gm", "gm", "MCU gm", XTAL_KINDS[state.kind].gmUnit, 1.1)}
       </div>
       <div data-res="startup">${startupHTML()}</div>
+      <div class="field-pair" style="margin-top:10px;">
+        ${field("xl-vpp", "vpp", "Vpp at OSC_IN", "V", 1.1)}
+        ${field("xl-cprobe", "cprobe", "Probe", "pF", 0.8)}
+        ${field("xl-dlmax", "dlmax", "Max drive", "µW", 1.1)}
+      </div>
+      <div data-res="drive">${driveHTML()}</div>
 
       ${formulaSection(
         ["Load = CL1 \u00d7 CL2 / (CL1 + CL2) + Stray",
@@ -19546,7 +19579,8 @@ function renderCrystalLoad(domain, tool, favId) {
 
     [["xl-cl", "cl"], ["xl-stray", "stray"], ["xl-c1", "c1"], ["xl-c2", "c2"],
      ["xl-c0", "c0"], ["xl-cm", "cm"], ["xl-pull", "pull"],
-     ["xl-f", "f"], ["xl-esr", "esr"], ["xl-gm", "gm"]].forEach(([id, name]) => {
+     ["xl-f", "f"], ["xl-esr", "esr"], ["xl-gm", "gm"],
+     ["xl-vpp", "vpp"], ["xl-cprobe", "cprobe"], ["xl-dlmax", "dlmax"]].forEach(([id, name]) => {
       const el = document.getElementById(id);
       if (el) el.oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state[name] = v; afterEdit(name); } };
     });

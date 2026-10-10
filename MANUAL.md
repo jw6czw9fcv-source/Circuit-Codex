@@ -6155,7 +6155,9 @@ For a Pierce oscillator, it computes:
 - **start-up, after AN2867:**
   - from the frequency, the crystal's ESR and the MCU's gm, the gain
     margin, with and without RExt;
-  - RExt's starting value.
+  - RExt's starting value;
+  - from the swing you measure on OSC_IN, the crystal's drive level
+    against its rating, and so whether RExt is needed at all.
 
 The drawing is the oscillator as it is really built:
 - the MCU, with its inverting amplifier and feedback resistor RF inside;
@@ -6195,7 +6197,16 @@ The crystal type and the series are remembered.
     - its initial value is the reactance of CL2, 1 / (2πF × CL2): 1326 Ω
       at 8 MHz with 15 pF;
     - it is then trimmed with a potentiometer, and added to ESR when the
-      margin is rechecked.
+      margin is rechecked;
+  - **section 3.5.2, the drive level from a measurement:**
+    - the crystal current is the current through CL1, so the swing Vpp
+      measured on CL1 gives DL = ESR × (π F Ctot)² × Vpp² / 2, with
+      Ctot = CL1 + Cs/2 + Cprobe;
+    - the probe must add no more than 1 pF;
+    - section 3.5.1 gives the other way, a current probe, with
+      I_pp,max = 2√2 × √(DLmax / ESR).
+- **The drive-level ratings are Epson's:** 0.5 µW max for the FC-135, and
+  200 µW max (10 µW recommended) for the FA-238, an MHz crystal.
 - **Epson FC-13F / FC-135 specification sheet,** read for the 32.768 kHz
   values:
   - C1 3.4 fF and C0 1.0 pF typical;
@@ -6311,9 +6322,12 @@ capacitance, or to use it in a circuit that runs it at series resonance.
 - **RF is drawn, not sized.** It is inside the MCU on the parts AN2867
   covers. Its section 3.2 gives typical values, from 10–25 MΩ at
   32.768 kHz to 0.47–5 MΩ at 20 MHz.
-- **The drive level is not computed.** AN2867 measures it, with a current
-  probe or from the swing on CL1. RExt is therefore only its starting
-  value, and is fitted only when that measurement says so.
+- **The drive level comes from your measurement,** not from a model. Type
+  the peak-to-peak swing you read on OSC_IN.
+  - The Vpp defaults (1 V, 0.5 V) only illustrate a reading.
+  - A probe heavier than 1 pF both loads the oscillator and inflates the
+    figure: a 10 pF probe reads twice the drive of a 1 pF one at 8 MHz
+    here.
 - **Temperature and ageing.** The load error here is a fixed offset; drift over
   temperature is the crystal's cut and belongs with the ppm tooling.
 
@@ -6340,6 +6354,12 @@ Further checks:
 - **At the defaults** (8 MHz, C0 3 pF, CL 12.5 pF, 19 pF parts):
   - RExt 1.047 kΩ;
   - margin 129 without RExt, 9.135 with it.
+- **Drive level at 8 MHz** (19 pF parts, 3 pF stray, 1 pF probe, ESR
+  80 Ω):
+  - 1 Vpp gives 11.68 µW, 5.84 % of the FA-238's 200 µW, so RExt is 0 Ω;
+  - 5 Vpp gives 292 µW, over the rating, so RExt is needed;
+  - a 10 pF probe reads 23.5 µW for the same 1 Vpp.
+- **The FC-135 at 0.5 Vpp:** 42.86 nW, against its 0.5 µW rating.
 - **The FC-135 at 15 µA/V:**
   - margin 6.934;
   - with RExt (255.6 kΩ) it would fall to 1.491, so the tool says to fit
@@ -6363,6 +6383,8 @@ The review made these changes:
 - It put the pair to buy first and large, with what it pulls.
 - It added the start-up check and RExt's starting value from AN2867,
   after Pierre asked why RExt was drawn but not calculated.
+- It added the drive-level check from a scope reading, so the tool says
+  whether RExt is needed at all.
 - It added examples, remembers the crystal type and the series, and was
   renamed Crystal load, on Pierre's choice.
 
