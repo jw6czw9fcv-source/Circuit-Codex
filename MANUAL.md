@@ -6395,14 +6395,17 @@ The review made these changes:
 <a id="osc-stability"></a>
 ## Oscillator stability
 
-`calc: osc-stability` · Digital › Timing & interfaces
+`calc: osc-stability` · Digital & logic circuits › Timing & interfaces
+(formerly Oscillator stability (ppm → Hz))
 
 ### What it computes
 
 The total frequency error budget of a crystal oscillator — tolerance,
 temperature, ageing and load pulling combined — as a worst case and as a
 root-sum-square estimate, then expressed as hertz and as time gained or lost
-per day and per year.
+per day and per year. The worst case is shown large, the RSS beneath it.
+For a 32.768 kHz crystal, the parabola's coefficient B and turnover T0 are
+fields, taken from the crystal's datasheet. The crystal type is remembered.
 
 For a single ppm figure applied to a single value, the **PPM converter** under
 Tools does that; this tool is the budget that produces the figure.
@@ -6414,10 +6417,17 @@ frequency tolerance at a reference temperature, frequency stability over the
 operating temperature range, and ageing, usually per first year. The reference
 is 20 °C on some datasheets and 25 °C on others — one Petermann-Technik page
 quotes both for the same part — so the field is labelled Tolerance without a
-temperature. The 32.768 kHz
-temperature curve is the parabola the tuning-fork datasheets from Epson,
-Abracon and Micro Crystal all quote, with a coefficient of about
-−0.034 ppm/°C² (±0.006) about a turnover near 25 °C.
+temperature.
+
+The 32.768 kHz temperature curve is a parabola, whose two numbers come
+from the crystal's datasheet. **Epson's FC-135 specification sheet,**
+read for this review, gives:
+- B −0.04 ppm/°C² max, and a turnover of 25 ± 5 °C;
+- a tolerance of ±20 ppm at 25 °C;
+- ageing of ±3 ppm in the first year.
+
+These are the tool's defaults. The −0.034 ppm/°C² often quoted as typical
+(±0.006) has −0.04 as its worst end.
 
 ### Why the formulas are these
 
@@ -6449,10 +6459,12 @@ random.
 **The tuning-fork parabola.** A 32.768 kHz crystal is a quartz tuning fork, and
 its frequency falls off either side of a turnover temperature:
 
-    Δf/f = −0.034 ppm/°C² × (T − 25 °C)²
+    Δf/f = B × (T − T0)²       (FC-135: B −0.04 ppm/°C² max, T0 25 °C)
 
-It only ever goes down. At 0 °C that is −21 ppm, about 1.8 seconds a day; at
-−20 °C it is −69 ppm, six seconds a day. That is why a watch or a data
+It only ever goes down.
+- **With the FC-135's worst-case B:** −25 ppm at 0 °C (2.2 seconds a day),
+  and −81 ppm at −20 °C (7 seconds a day).
+- **With the typical −0.034:** −21 ppm and −69 ppm. That is why a watch or a data
 logger left outdoors in winter runs slow, and why the tool asks for the
 temperature the fork will actually see rather than a spec. MHz crystals are
 AT-cut plates, whose curve is a cubic set by the cut angle; their datasheets
@@ -6467,9 +6479,10 @@ fold it into one ±ppm figure over the range, which is what the MHz pill asks fo
 - **Ageing is not linear.** It is fastest in the first months and slows roughly
   logarithmically, so ten years is much less than ten times the first-year
   figure. Enter the total you expect over the period, not a rate.
-- **The parabola is typical**, not the part's own curve: the coefficient varies
-  by about ±18% and the turnover by several degrees. Near 25 °C that barely
-  matters; at the extremes it does.
+- **The parabola uses one B and one T0.** The datasheet gives B as a
+  maximum and T0 with a tolerance (±5 °C on the FC-135). Typing the worst
+  B, and the turnover furthest from your temperature, gives the worst case.
+  Near the turnover it barely matters; at the extremes it does.
 - The MHz temperature figure is taken as a symmetric ± limit, which is how it is
   specified, even though the real AT-cut curve is not symmetric.
 - Pulling is carried in as a signed figure from the crystal load tool and is
@@ -6499,10 +6512,24 @@ By hand, MHz defaults: 20 + 30 + 3 = 53 ppm worst case; √(400 + 900 + 9) =
 31.56 s = 27.88 minutes a year. With −25 ppm of pulling the window becomes
 −78 to +28 ppm and the worst case reads −78, signed.
 
-32.768 kHz at 0 °C: drift −0.034 × 25² = −21.25 ppm; with ±23 ppm of
-limits the window is −44.25 to +1.75 ppm, worst −44.25 ppm, −3.82 s a day.
-Switching pills resets pulling, which on first build carried over from one
-family to the other.
+32.768 kHz at 0 °C, with the FC-135's B of −0.04:
+- drift −0.04 × 25² = −25 ppm;
+- with ±23 ppm of limits the window is −48 to −2 ppm, worst −48 ppm.
+
+At −10 °C it is −49 ppm of drift, −72 ppm worst, 6.221 s a day slow. A
+typed B of −0.034 at −10 °C gives −41.65 ppm of drift, −64.65 ppm worst.
+At 25 °C only the limits remain: ±23 ppm, 12.1 minutes a year. Switching
+pills resets pulling, which on first build carried over from one family to
+the other.
+
+The review made these changes:
+- It made B and the turnover fields, defaulting to the FC-135 sheet. The
+  tool hard-coded −0.034 ppm/°C² about 25 °C, which is a typical value and
+  not the datasheet's worst case.
+- It put the worst case first and large.
+- It enlarged the 9–10 px chart labels to 11 px.
+- It added a plain definition of ppm, examples, and the remembered type.
+- It was renamed Oscillator stability, on Pierre's choice.
 
 [↑ Index](#index)
 
