@@ -19847,7 +19847,9 @@ function renderOscStability(domain, tool, favId) {
 // 50..432, PLLP 2/4/6/8, PLLQ 2..15, VCO input 1..2 MHz) and RM0090 (VCO
 // output 100..432 MHz, 168 MHz SYSCLK on the F405/407); RP2040 from the Pico
 // SDK's vcocalc.py (REFDIV 1..63 with at least 5 MHz after it, FBDIV 16..320,
-// VCO 750..1600 MHz, two post-dividers 1..7).
+// VCO 750..1600 MHz, two post-dividers 1..7). The RP2040's ceiling is the
+// Pico SDK 2.1.1 release notes': certified to 200 MHz with the core regulator
+// at 1.15 V or more, where 133 MHz was the most supported before.
 function pllPostPairs() {
   // RP2040 has two post-dividers in series. Many pairs give the same product;
   // keep the one with the larger first divider, which is what the SDK prefers.
@@ -19865,7 +19867,7 @@ const PLL_PRESETS = {
     P: [2, 4, 6, 8].map((v) => ({ v, label: `${v}` })), pText: "2, 4, 6, 8",
   },
   rp2040: {
-    label: "RP2040", fref: 12, target: 125, sysMax: 133, usb: false, pName: "PD1\u00b7PD2",
+    label: "RP2040", fref: 12, target: 125, sysMax: 200, sysPlain: 133, usb: false, pName: "PD1\u00b7PD2",
     mMin: 1, mMax: 63, nMin: 16, nMax: 320, pfdMin: 5, pfdMax: 1e9, vcoMin: 750, vcoMax: 1600,
     P: pllPostPairs(), pText: "PD1\u00b7PD2, each 1\u20137",
   },
@@ -19877,8 +19879,26 @@ const PLL_PRESETS = {
 };
 
 function renderPll(domain, tool, favId) {
-  const state = { kind: "stm32f4", pick: 0, ...PLL_PRESETS.stm32f4 };
+  const C = "pll";
+  const kind0 = pref(C, "kind", "stm32f4", Object.keys(PLL_PRESETS));
+  const state = { kind: kind0, pick: 0, ...PLL_PRESETS[kind0] };
   delete state.label;
+
+  const example = (kind, fref, target) => () => {
+    Object.assign(state, PLL_PRESETS[kind], { kind, fref, target, pick: 0 });
+    delete state.label;
+    paint();
+  };
+  useExamples([
+    { title: "STM32F4 at 168 MHz", note: "From an 8 MHz crystal: 168 MHz for the core and exactly 48 MHz for USB.",
+      apply: example("stm32f4", 8, 168) },
+    { title: "STM32F4, 25 MHz crystal", note: "A 25 MHz crystal still reaches 168 MHz and 48 MHz, with the PFD at 1 MHz.",
+      apply: example("stm32f4", 25, 168) },
+    { title: "RP2040 at 125 MHz", note: "The Pico SDK's default system clock, from the 12 MHz crystal.",
+      apply: example("rp2040", 12, 125) },
+    { title: "RP2040 at 200 MHz", note: "Certified since Pico SDK 2.1.1, with the core regulator at 1.15 V or more.",
+      apply: example("rp2040", 12, 200) },
+  ]);
 
   function cfg() {
     const c = { ...state };
@@ -19949,10 +19969,10 @@ function renderPll(domain, tool, favId) {
     if (r.problem) return "";
     const s0 = r.best[Math.min(state.pick, r.best.length - 1)];
     const box = (x, y, w, t, sub) => `<rect x="${x}" y="${y}" width="${w}" height="24" rx="4" fill="none" stroke="${comp}" stroke-width="1.6"/>
-      <text x="${x + w / 2}" y="${y + 16}" fill="${comp}" font-size="10" font-weight="700" text-anchor="middle">${t}</text>`;
+      <text x="${x + w / 2}" y="${y + 16}" fill="${comp}" font-size="11" font-weight="700" text-anchor="middle">${t}</text>`;
     const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
     const arrow = (x, y) => `<path d="M${x - 5} ${y - 4} L${x} ${y} L${x - 5} ${y + 4}" stroke="${wire}" stroke-width="1.5" fill="none" stroke-linejoin="round"/>`;
-    const tag = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="#9AA4B0" font-size="9" font-weight="600" text-anchor="${anchor || "middle"}">${t}</text>`;
+    const tag = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="#9AA4B0" font-size="11" font-weight="600" text-anchor="${anchor || "middle"}">${t}</text>`;
     const Y = 44;
     const usb = r.c.usb ? `
       ${w(`M226 ${Y + 12} V${Y - 26} H240`)}${arrow(240, Y - 26)}
@@ -19966,7 +19986,7 @@ function renderPll(domain, tool, favId) {
       ${box(96, Y, 38, "PFD")}
       ${w(`M134 ${Y + 12} H152`)}${arrow(152, Y + 12)}
       ${box(152, Y, 38, "VCO")}
-      ${w(`M190 ${Y + 12} H240`)}${arrow(240, Y + 12)}${tag(212, Y + 6, mhz(s0.vco))}
+      ${w(`M190 ${Y + 12} H240`)}${arrow(240, Y + 12)}${tag(222, Y - 6, mhz(s0.vco), "end")}
       ${box(240, Y, 38, `\u00f7${s0.p.label}`)}
       ${w(`M278 ${Y + 12} H292`)}${tag(296, Y + 16, mhz(s0.f), "start")}
       ${w(`M208 ${Y + 12} V${Y + 58} H176`)}${arrow(176, Y + 58)}
@@ -20000,19 +20020,26 @@ function renderPll(domain, tool, favId) {
     </div>`;
   }
 
+  // The chosen setting large: its output, the dividers that make it, and
+  // the internal frequencies a reference manual checks them against.
   function summaryHTML(r) {
     if (r.problem) return "";
     const b = r.best[Math.min(state.pick, r.best.length - 1)];
     const over = r.c.sysMax && b.f > r.c.sysMax + 1e-9;
+    const raised = !over && r.c.sysPlain && b.f > r.c.sysPlain + 1e-9;
+    const exact = Math.abs(b.err) < 1e-6;
+    const setting = `M ${b.m} · N ${b.n} · ${r.c.pName} ${b.p.label}${r.c.usb ? ` · Q ${b.q}` : ""}`;
     return `
-      <div class="eseries-grid eseries-grid--tight">
-        ${cell("Out", mhz(b.f))}
-        ${cell("Error", `${ppm(b.err)} ppm`, Math.abs(b.err) < 1e-6 ? null : "#E0A85E")}
-        ${cell("PFD", mhz(b.pfd))}
-        ${cell("VCO", mhz(b.vco))}
-        ${r.c.usb ? cell("USB", mhz(b.usb), b.usbPenalty ? "#E08585" : null) : ""}
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label" data-res="setting">${setting}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main">${mhz(b.f)}</span></div>
+        <div class="result-sub"><span data-res="err"${exact ? "" : ' style="color:#E0A85E"'}>${exact ? "exact" : `${ppm(b.err)} ppm`}</span> · PFD ${mhz(b.pfd)} · VCO ${mhz(b.vco)}${r.c.usb ? ` · USB <span data-res="usb"${b.usbPenalty ? ' style="color:#E08585"' : ""}>${mhz(b.usb)}</span>` : ""}</div>
       </div>
-      ${over ? `<div class="error-text" style="color:#E0A85E">${mhz(b.f)} is above the ${mhz(r.c.sysMax)} this part is rated for.</div>` : ""}
+      ${over ? `<div class="error-text" data-res="over" style="color:#E0A85E">${mhz(b.f)} is above the ${mhz(r.c.sysMax)} this part is rated for.</div>` : ""}
+      ${raised ? `<div class="error-text" data-res="raised" style="color:#E0A85E">Above ${mhz(r.c.sysPlain)} the RP2040 needs its core regulator at 1.15 V or more; the Pico SDK (2.1.1 on) certifies it to 200 MHz and raises the voltage itself.</div>` : ""}
       ${r.c.usb && b.usbPenalty ? `<div class="error-text" style="color:#E0A85E">No Q gives exactly 48 MHz from this VCO, so USB will not work on this setting.</div>` : ""}`;
   }
 
@@ -20083,14 +20110,16 @@ function renderPll(domain, tool, favId) {
       </div>`}
       ${limitsHTML()}
 
-      <div class="section-label" style="color:#5DCAA5">Best settings \u2014 tap one</div>
-      <div data-res="table">${tableHTML(r)}</div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="summary">${summaryHTML(r)}</div>
+      <div class="section-label">Best settings \u2014 tap one</div>
+      <div data-res="table">${tableHTML(r)}</div>
 
       ${formulaSection(
         ["PFD = Input / M", "VCO = PFD \u00d7 N", "Out = VCO / " + (state.kind === "rp2040" ? "(PD1 \u00d7 PD2)" : "P"),
          ...(state.usb ? ["USB = VCO / Q, must be exactly 48 MHz"] : [])],
-        "Rows are ranked by error, then " + (state.usb ? "by whether USB gets exactly 48 MHz, then " : "")
+        "A PLL multiplies a reference clock. The input is divided by M down to the frequency the phase detector compares at (the PFD); the VCO, a voltage-controlled oscillator, is locked to N times that; and the output divider brings it down to the clock you use. Every chip limits M, N, the dividers and the PFD and VCO windows, which is why only some targets are exact. "
+        + "Rows are ranked by error, then " + (state.usb ? "by whether USB gets exactly 48 MHz, then " : "")
         + "by the higher PFD, which runs the loop's comparison faster and quieter. Two rows can give the same output from different PFD and VCO frequencies; either works. "
         + (state.kind === "generic" ? "The limits come from your chip's reference manual: the M, N and P ranges and the PFD and VCO windows." : "The limits are this chip's, from the vendor's own code.")
       )}
@@ -20101,6 +20130,7 @@ function renderPll(domain, tool, favId) {
       Object.assign(state, PLL_PRESETS[m]);
       delete state.label;
       state.kind = m;
+      setPref(C, "kind", m);
       state.pick = 0;
       paint();
     });

@@ -6536,9 +6536,10 @@ The review made these changes:
 ---
 
 <a id="pll"></a>
-## PLL multiplication factor
+## PLL settings
 
-`calc: pll` · Digital › Timing & interfaces
+`calc: pll` · Digital & logic circuits › Timing & interfaces
+(formerly PLL multiplication factor)
 
 ### What it computes
 
@@ -6546,7 +6547,8 @@ Every combination of input divider M, feedback multiplier N and output divider P
 that a chip's PLL allows, walked exhaustively, with the ones that land closest
 to a target frequency listed first — each with its error in ppm and the
 frequencies at the phase detector and the VCO, so the limits can be seen being
-respected.
+respected. The chosen setting is shown large, with its error and its
+internal frequencies; tap another row to choose it. The chip is remembered.
 
 ### Source
 
@@ -6559,7 +6561,12 @@ which disagree with each other:
   system clock of the F405/407 are from RM0090.
 - **RP2040** — the Pico SDK's own calculator, `vcocalc.py`: reference divider
   1–63 with at least 5 MHz after it, FBDIV 16–320, VCO 750–1600 MHz, and two
-  post-dividers each 1–7. The 133 MHz system clock rating is the datasheet's.
+  post-dividers each 1–7.
+- **The RP2040's rated clock** is from the Pico SDK 2.1.1 release notes: it
+  is now "certified to run at a system clock of 200Mhz when using a
+  regulator voltage of at least 1.15 volts". The SDK raises the voltage
+  itself when needed, and keeps 125 MHz as the default. Before, 133 MHz was
+  the most that was supported.
 
 ### Why the formulas are these
 
@@ -6627,7 +6634,19 @@ flagged as above the part's 168 MHz rating and as leaving USB at 45 MHz.
 
 On the RP2040, 12 MHz to 125 MHz gives VCO 1500 MHz with post-dividers 6 and 2,
 and 133 MHz gives VCO 1596 MHz with 6 and 2 — both exactly the Pico SDK's own
-default settings. The full RP2040 search takes about 3 ms.
+default settings. 200 MHz gives VCO 1200 MHz with 6 and 1, and the note about
+the 1.15 V core voltage; 250 MHz is flagged as above the certified 200 MHz.
+The full RP2040 search takes about 3 ms.
+
+The review made these changes:
+- It raised the RP2040's rating from 133 MHz to the 200 MHz certified in
+  Pico SDK 2.1.1, with the voltage condition shown above 133 MHz.
+- It put the chosen setting first and large.
+- It enlarged the 9–10 px diagram labels to 11 px, and moved the VCO
+  frequency clear of the USB branch.
+- It added plain definitions of the PFD, the VCO and the dividers, examples,
+  and the remembered chip.
+- It was renamed PLL settings, on Pierre's choice.
 
 [↑ Index](#index)
 

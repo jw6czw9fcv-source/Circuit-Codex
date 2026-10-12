@@ -104,7 +104,7 @@ const DOMAINS = [
         title: "Timing & interfaces",
         tools: [
           { name: "PWM (duty cycle)", calc: "pwm-duty" }, { name: "Switch debounce", was: "Debounce / RC timing", calc: "debounce-rc" }, { name: "I2C pull-up resistor", calc: "i2c-pullup" }, { name: "UART baud rate", calc: "uart-baud" },
-          { name: "Crystal load", was: "Crystal load capacitance", calc: "crystal-load" }, { name: "Oscillator stability", was: "Oscillator stability (ppm → Hz)", calc: "osc-stability" }, { name: "PLL multiplication factor", calc: "pll" },
+          { name: "Crystal load", was: "Crystal load capacitance", calc: "crystal-load" }, { name: "Oscillator stability", was: "Oscillator stability (ppm → Hz)", calc: "osc-stability" }, { name: "PLL settings", was: "PLL multiplication factor", calc: "pll" },
         ],
       },
       { title: "Data conversion", tools: [{ name: "ADC resolution / quantization", calc: "adc" }, { name: "DAC resolution", calc: "dac" }, { name: "SNR estimation", calc: "snr" }] },
