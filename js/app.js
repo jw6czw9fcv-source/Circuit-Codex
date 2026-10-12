@@ -20398,7 +20398,7 @@ function renderAdc(domain, tool, favId) {
 
   function rangeHTML(r) {
     if (r.problem) return "";
-    return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">Range ${volts(r.low)} to ${volts(r.high)} · codes ${minus(codeMin())} to ${codeMax()}</div>`;
+    return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">${whole(`Range ${volts(r.low)} to ${volts(r.high)}`)} · ${whole(`codes ${minus(codeMin())} to ${codeMax()}`)}</div>`;
   }
 
   // The step size large, since that is the resolution; under it, what the
