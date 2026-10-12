@@ -19842,14 +19842,25 @@ function renderOscStability(domain, tool, favId) {
   paint();
 }
 
-// Constraints come from the vendors' own code, not from memory:
+// Constraints come from the vendors' datasheets and code, not from memory:
 // STM32F4 from ST's HAL (stm32f4xx_hal_rcc.h / _rcc_ex.h: PLLM 2..63, PLLN
 // 50..432, PLLP 2/4/6/8, PLLQ 2..15, VCO input 1..2 MHz) and RM0090 (VCO
-// output 100..432 MHz, 168 MHz SYSCLK on the F405/407); RP2040 from the Pico
-// SDK's vcocalc.py (REFDIV 1..63 with at least 5 MHz after it, FBDIV 16..320,
-// VCO 750..1600 MHz, two post-dividers 1..7). The RP2040's ceiling is the
-// Pico SDK 2.1.1 release notes': certified to 200 MHz with the core regulator
-// at 1.15 V or more, where 133 MHz was the most supported before.
+// output 100..432 MHz, 168 MHz SYSCLK on the F405/407); STM32F103 from
+// DS5319 rev 18 table 27 (PLL input 1..25 MHz, PLL output 16..72 MHz, no
+// output divider) and the F1 HAL (PLLMUL 2..16, PLLXTPRE HSE /1 or /2, USB
+// clock PLL /1 or /1.5); STM32G474 from DS12288 rev 2 table 49 and STM32G071
+// from DS12232 rev 4 table 43 (both: PLL input 2.66..16 MHz, VCO 96..344
+// MHz; R output to 150 MHz on the G4, 170 in Range 1 boost mode, and to 64
+// on the G0) with the dividers from their HALs (G4: PLLM 1..16, PLLN 8..127,
+// PLLR 2/4/6/8; G0: PLLM 1..8, PLLN 8..86, PLLR 2..8). ST's own LL utils
+// code still carries older windows (VCO from 64 MHz, a 4..8 MHz G0 input);
+// an ST moderator confirmed the datasheet tables are the correct ones.
+// RP2040 from the Pico SDK's vcocalc.py (REFDIV 1..63 with at least 5 MHz
+// after it, FBDIV 16..320, VCO 750..1600 MHz, two post-dividers 1..7), the
+// same PLL the RP2350 datasheet (section 8.6) gives, with 150 MHz the most it
+// supports. The RP2040's ceiling is the Pico SDK 2.1.1 release notes':
+// certified to 200 MHz with the core regulator at 1.15 V or more, where 133
+// MHz was the most supported before.
 function pllPostPairs() {
   // RP2040 has two post-dividers in series. Many pairs give the same product;
   // keep the one with the larger first divider, which is what the SDK prefers.
@@ -19860,44 +19871,94 @@ function pllPostPairs() {
   }
   return [...best.entries()].sort((x, y) => x[0] - y[0]).map(([v, [a, b]]) => ({ v, label: `${a}\u00b7${b}` }));
 }
+const pllDivs = (list) => list.map((v) => ({ v, label: `${v}` }));
+const PLL_ST_NAMES = "In ST's names these are PLLM, PLLN and PLLR, the output that clocks the core.";
+const PLL_RP_NAMES = "In the datasheet M is REFDIV, N is FBDIV, and PD1\u00b7PD2 are POSTDIV1 and POSTDIV2.";
+// usbQ lists the dividers that can make USB's 48 MHz from the VCO; noP marks
+// a PLL whose output is the VCO itself (the F1 has no output divider, so its
+// window is the PLL output's). sysPlain and raiseNote mark a ceiling that
+// needs something set first.
 const PLL_PRESETS = {
+  stm32f1: {
+    label: "STM32F1", fref: 8, target: 72, sysMax: 72, pName: "", noP: true,
+    usbQ: [1, 1.5], qText: "1 or 1.5",
+    usbNote: "USB needs the PLL at 48 or 72 MHz (Q 1 or 1.5), so it will not work on this setting.",
+    mMin: 1, mMax: 2, nMin: 2, nMax: 16, pfdMin: 1, pfdMax: 25, vcoMin: 16, vcoMax: 72,
+    P: [{ v: 1, label: "" }], pText: "",
+    names: "In ST's names M is PLLXTPRE (the crystal \u00f71 or \u00f72), N is PLLMUL and Q is the USB prescaler.",
+  },
   stm32f4: {
-    label: "STM32F4", fref: 8, target: 168, sysMax: 168, usb: true, pName: "P",
+    label: "STM32F4", fref: 8, target: 168, sysMax: 168, pName: "P",
+    usbQ: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], qText: "2\u201315",
+    usbNote: "No Q gives exactly 48 MHz from this VCO, so USB will not work on this setting.",
     mMin: 2, mMax: 63, nMin: 50, nMax: 432, pfdMin: 1, pfdMax: 2, vcoMin: 100, vcoMax: 432,
-    P: [2, 4, 6, 8].map((v) => ({ v, label: `${v}` })), pText: "2, 4, 6, 8",
+    P: pllDivs([2, 4, 6, 8]), pText: "2, 4, 6, 8",
+    names: "In ST's names these are PLLM, PLLN, PLLP and PLLQ.",
+  },
+  stm32g0: {
+    label: "STM32G0", fref: 16, target: 64, sysMax: 64, pName: "R",
+    mMin: 1, mMax: 8, nMin: 8, nMax: 86, pfdMin: 2.66, pfdMax: 16, vcoMin: 96, vcoMax: 344,
+    P: pllDivs([2, 3, 4, 5, 6, 7, 8]), pText: "2\u20138", names: PLL_ST_NAMES,
+  },
+  stm32g4: {
+    label: "STM32G4", fref: 16, target: 170, sysMax: 170, sysPlain: 150, pName: "R",
+    raiseNote: "Above 150 MHz the G4 needs its regulator in Range 1 boost mode, which the datasheet rates to 170 MHz.",
+    mMin: 1, mMax: 16, nMin: 8, nMax: 127, pfdMin: 2.66, pfdMax: 16, vcoMin: 96, vcoMax: 344,
+    P: pllDivs([2, 4, 6, 8]), pText: "2, 4, 6, 8", names: PLL_ST_NAMES,
   },
   rp2040: {
-    label: "RP2040", fref: 12, target: 125, sysMax: 200, sysPlain: 133, usb: false, pName: "PD1\u00b7PD2",
+    label: "RP2040", fref: 12, target: 125, sysMax: 200, sysPlain: 133, pName: "PD1\u00b7PD2", pFormula: "(PD1 \u00d7 PD2)",
+    raiseNote: "Above 133 MHz the RP2040 needs its core regulator at 1.15 V or more; the Pico SDK (2.1.1 on) certifies it to 200 MHz and raises the voltage itself.",
     mMin: 1, mMax: 63, nMin: 16, nMax: 320, pfdMin: 5, pfdMax: 1e9, vcoMin: 750, vcoMax: 1600,
-    P: pllPostPairs(), pText: "each 1\u20137",
+    P: pllPostPairs(), pText: "each 1\u20137", names: PLL_RP_NAMES,
+  },
+  rp2350: {
+    label: "RP2350", fref: 12, target: 150, sysMax: 150, pName: "PD1\u00b7PD2", pFormula: "(PD1 \u00d7 PD2)",
+    mMin: 1, mMax: 63, nMin: 16, nMax: 320, pfdMin: 5, pfdMax: 1e9, vcoMin: 750, vcoMax: 1600,
+    P: pllPostPairs(), pText: "each 1\u20137", names: PLL_RP_NAMES,
   },
   generic: {
-    label: "Generic", fref: 10, target: 100, sysMax: 0, usb: false, pName: "P",
+    label: "Generic", fref: 10, target: 100, sysMax: 0, pName: "P",
     mMin: 1, mMax: 16, nMin: 2, nMax: 512, pfdMin: 1, pfdMax: 50, vcoMin: 100, vcoMax: 1000,
     pMin: 1, pMax: 16,
   },
 };
+// Two rows: seven equal pills don't fit one at 375 px.
+const PLL_ROWS = [["stm32f1", "stm32f4", "stm32g0", "stm32g4"], ["rp2040", "rp2350", "generic"]];
 
 function renderPll(domain, tool, favId) {
   const C = "pll";
-  const kind0 = pref(C, "kind", "stm32f4", Object.keys(PLL_PRESETS));
-  const state = { kind: kind0, pick: 0, ...PLL_PRESETS[kind0] };
-  delete state.label;
+  // A chip's state is rebuilt from its preset, not merged into the last
+  // one's: a merge kept keys only one chip has (the RP2040's 133 MHz note
+  // showed on an STM32F4 after switching).
+  const fresh = (kind) => {
+    const s = { kind, pick: 0, ...PLL_PRESETS[kind] };
+    delete s.label;
+    return s;
+  };
+  let state = fresh(pref(C, "kind", "stm32f4", Object.keys(PLL_PRESETS)));
 
   const example = (kind, fref, target) => () => {
-    Object.assign(state, PLL_PRESETS[kind], { kind, fref, target, pick: 0 });
-    delete state.label;
+    state = { ...fresh(kind), fref, target };
     paint();
   };
   useExamples([
+    { title: "STM32F1 at 72 MHz", note: "Blue Pill: its 8 MHz crystal × 9, and USB gets 72 ÷ 1.5 = 48 MHz.",
+      apply: example("stm32f1", 8, 72) },
     { title: "STM32F4 at 168 MHz", note: "From an 8 MHz crystal: 168 MHz for the core and exactly 48 MHz for USB.",
       apply: example("stm32f4", 8, 168) },
     { title: "STM32F4, 25 MHz crystal", note: "A 25 MHz crystal still reaches 168 MHz and 48 MHz, with the PFD at 1 MHz.",
       apply: example("stm32f4", 25, 168) },
+    { title: "STM32G0 at 64 MHz", note: "Its full speed from the 16 MHz internal oscillator, HSI16.",
+      apply: example("stm32g0", 16, 64) },
+    { title: "STM32G4 at 170 MHz", note: "From HSI16: ÷4, ×85, ÷2. Above 150 MHz it needs boost mode.",
+      apply: example("stm32g4", 16, 170) },
     { title: "RP2040 at 125 MHz", note: "The Pico SDK's default system clock, from the 12 MHz crystal.",
       apply: example("rp2040", 12, 125) },
     { title: "RP2040 at 200 MHz", note: "Certified since Pico SDK 2.1.1, with the core regulator at 1.15 V or more.",
       apply: example("rp2040", 12, 200) },
+    { title: "RP2350 at 150 MHz", note: "The Pico 2's default and its rated maximum, from the 12 MHz crystal.",
+      apply: example("rp2350", 12, 150) },
   ]);
 
   function cfg() {
@@ -19913,9 +19974,10 @@ function renderPll(domain, tool, favId) {
 
   // The whole search space is small enough to walk: 62 M x 383 N x 4 P on an
   // STM32F4, a few hundred thousand on an RP2040. Only a short best-list is
-  // kept, ranked by error, then (on STM32) by whether Q can make USB's 48 MHz
-  // exactly, then by the higher PFD \u2014 ST recommends 2 MHz there to limit
-  // jitter, and a faster comparison is quieter on any PLL \u2014 then higher VCO.
+  // kept, ranked by error, then (on the STM32F1 and F4) by whether Q can make
+  // USB's 48 MHz exactly, then by the higher PFD \u2014 ST recommends 2 MHz there
+  // on the F4 to limit jitter, and a faster comparison is quieter on any PLL
+  // \u2014 then higher VCO.
   function search() {
     const c = cfg();
     const fref = state.fref, target = state.target;
@@ -19935,9 +19997,9 @@ function renderPll(domain, tool, favId) {
         const vco = pfd * n;
         if (vco < c.vcoMin - 1e-9 || vco > c.vcoMax + 1e-9) continue;
         let q = null, usb = null, usbPenalty = 0;
-        if (c.usb) {
-          let bq = 2;
-          for (let qq = 2; qq <= 15; qq++) if (Math.abs(vco / qq - 48) < Math.abs(vco / bq - 48)) bq = qq;
+        if (c.usbQ) {
+          let bq = c.usbQ[0];
+          for (const qq of c.usbQ) if (Math.abs(vco / qq - 48) < Math.abs(vco / bq - 48)) bq = qq;
           q = bq; usb = vco / bq;
           usbPenalty = Math.abs(usb - 48) < 1e-9 ? 0 : 1;
         }
@@ -19974,11 +20036,20 @@ function renderPll(domain, tool, favId) {
     const arrow = (x, y) => `<path d="M${x - 5} ${y - 4} L${x} ${y} L${x - 5} ${y + 4}" stroke="${wire}" stroke-width="1.5" fill="none" stroke-linejoin="round"/>`;
     const tag = (x, y, t, anchor) => `<text x="${x}" y="${y}" fill="#9AA4B0" font-size="11" font-weight="600" text-anchor="${anchor || "middle"}">${t}</text>`;
     const Y = 44;
-    const usb = r.c.usb ? `
+    const usb = r.c.usbQ ? `
       ${w(`M226 ${Y + 12} V${Y - 26} H240`)}${arrow(240, Y - 26)}
       ${box(240, Y - 38, 34, `\u00f7${s0.q}`)}
       ${w(`M274 ${Y - 26} H290`)}${tag(292, Y - 22, `${trim(s0.usb)} USB`, "start")}` : "";
-    return `<svg width="340" height="118" viewBox="0 -2 340 118" fill="none">
+    // Without the USB branch the band above the chain is empty; cropping it
+    // keeps Generic's result above the tab bar with the second row of pills.
+    const [top, high] = r.c.usbQ ? [-2, 118] : [26, 90];
+    // The F1 has no output divider: the VCO is the PLL output.
+    const out = r.c.noP
+      ? `${w(`M190 ${Y + 12} H292`)}${tag(296, Y + 16, mhz(s0.f), "start")}`
+      : `${w(`M190 ${Y + 12} H240`)}${arrow(240, Y + 12)}${tag(222, Y - 6, mhz(s0.vco), "end")}
+      ${box(240, Y, 38, `\u00f7${s0.p.label}`)}
+      ${w(`M278 ${Y + 12} H292`)}${tag(296, Y + 16, mhz(s0.f), "start")}`;
+    return `<svg width="340" height="${high}" viewBox="0 ${top} 340 ${high}" fill="none">
       ${tag(20, Y + 16, "ref", "middle")}${tag(20, Y + 30, mhz(state.fref), "middle")}
       ${w(`M30 ${Y + 12} H44`)}${arrow(44, Y + 12)}
       ${box(44, Y, 34, `\u00f7${s0.m}`)}
@@ -19986,9 +20057,7 @@ function renderPll(domain, tool, favId) {
       ${box(96, Y, 38, "PFD")}
       ${w(`M134 ${Y + 12} H152`)}${arrow(152, Y + 12)}
       ${box(152, Y, 38, "VCO")}
-      ${w(`M190 ${Y + 12} H240`)}${arrow(240, Y + 12)}${tag(222, Y - 6, mhz(s0.vco), "end")}
-      ${box(240, Y, 38, `\u00f7${s0.p.label}`)}
-      ${w(`M278 ${Y + 12} H292`)}${tag(296, Y + 16, mhz(s0.f), "start")}
+      ${out}
       ${w(`M208 ${Y + 12} V${Y + 58} H176`)}${arrow(176, Y + 58)}
       ${box(138, Y + 46, 38, `\u00f7${s0.n}`)}
       ${w(`M138 ${Y + 58} H115 V${Y + 24}`)}
@@ -20001,13 +20070,12 @@ function renderPll(domain, tool, favId) {
 
   function tableHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
-    const cols = r.c.usb ? 6 : 5;
-    const head = ["M", "N", r.c.pName, ...(r.c.usb ? ["Q"] : []), "Out MHz", "ppm"];
+    const head = ["M", "N", ...(r.c.noP ? [] : [r.c.pName]), ...(r.c.usbQ ? ["Q"] : []), "Out MHz", "ppm"];
     return `
-      <div class="truth-table" style="--tt-cols:${cols}">
+      <div class="truth-table" style="--tt-cols:${head.length}">
         <div class="tt-row tt-head">${head.map((h) => `<span>${h}</span>`).join("")}</div>
         ${r.best.map((b, i) => `<div class="tt-row" data-pick="${i}" style="cursor:pointer${i === state.pick ? ";background:rgba(143,193,245,0.12)" : ""}">
-          <span>${b.m}</span><span>${b.n}</span><span>${b.p.label}</span>${r.c.usb ? `<span${b.usbPenalty ? ' style="color:#E0A85E"' : ""}>${b.q}</span>` : ""}
+          <span>${b.m}</span><span>${b.n}</span>${r.c.noP ? "" : `<span>${b.p.label}</span>`}${r.c.usbQ ? `<span${b.usbPenalty ? ' style="color:#E0A85E"' : ""}>${b.q}</span>` : ""}
           <span class="tt-out">${trim(b.f)}</span><span>${ppm(b.err)}</span></div>`).join("")}
       </div>
       ${r.truncated ? `<div class="error-text" style="color:#E0A85E">The ranges are wide enough that the search stopped at three million combinations; narrow them for a complete answer.</div>` : ""}`;
@@ -20028,7 +20096,7 @@ function renderPll(domain, tool, favId) {
     const over = r.c.sysMax && b.f > r.c.sysMax + 1e-9;
     const raised = !over && r.c.sysPlain && b.f > r.c.sysPlain + 1e-9;
     const exact = Math.abs(b.err) < 1e-6;
-    const setting = `M ${b.m} · N ${b.n} · ${r.c.pName} ${b.p.label}${r.c.usb ? ` · Q ${b.q}` : ""}`;
+    const setting = `M ${b.m} · N ${b.n}${r.c.noP ? "" : ` · ${r.c.pName} ${b.p.label}`}${r.c.usbQ ? ` · Q ${b.q}` : ""}`;
     return `
       <div class="result-field">
         <div class="result-head">
@@ -20036,11 +20104,11 @@ function renderPll(domain, tool, favId) {
           <span class="badge-calc">${ICONS.bolt2}Calculated</span>
         </div>
         <div class="result-value"><span class="num" data-res="main">${mhz(b.f)}</span></div>
-        <div class="result-sub"><span data-res="err"${exact ? "" : ' style="color:#E0A85E"'}>${exact ? "exact" : `${ppm(b.err)} ppm`}</span> · PFD ${mhz(b.pfd)} · VCO ${mhz(b.vco)}${r.c.usb ? ` · USB <span data-res="usb"${b.usbPenalty ? ' style="color:#E08585"' : ""}>${mhz(b.usb)}</span>` : ""}</div>
+        <div class="result-sub"><span data-res="err"${exact ? "" : ' style="color:#E0A85E"'}>${exact ? "exact" : `${ppm(b.err)} ppm`}</span> · PFD ${mhz(b.pfd)}${r.c.noP ? "" : ` · VCO ${mhz(b.vco)}`}${r.c.usbQ ? ` · USB <span data-res="usb"${b.usbPenalty ? ' style="color:#E08585"' : ""}>${mhz(b.usb)}</span>` : ""}</div>
       </div>
       ${over ? `<div class="error-text" data-res="over" style="color:#E0A85E">${mhz(b.f)} is above the ${mhz(r.c.sysMax)} this part is rated for.</div>` : ""}
-      ${raised ? `<div class="error-text" data-res="raised" style="color:#E0A85E">Above ${mhz(r.c.sysPlain)} the RP2040 needs its core regulator at 1.15 V or more; the Pico SDK (2.1.1 on) certifies it to 200 MHz and raises the voltage itself.</div>` : ""}
-      ${r.c.usb && b.usbPenalty ? `<div class="error-text" style="color:#E0A85E">No Q gives exactly 48 MHz from this VCO, so USB will not work on this setting.</div>` : ""}`;
+      ${raised ? `<div class="error-text" data-res="raised" style="color:#E0A85E">${r.c.raiseNote}</div>` : ""}
+      ${r.c.usbQ && b.usbPenalty ? `<div class="error-text" data-res="usbwarn" style="color:#E0A85E">${r.c.usbNote}</div>` : ""}`;
   }
 
   function refresh() {
@@ -20069,7 +20137,12 @@ function renderPll(domain, tool, favId) {
     if (state.kind !== "generic") {
       const p = PLL_PRESETS[state.kind];
       const pfd = p.pfdMax >= 1e8 ? `\u2265 ${p.pfdMin} MHz` : `${p.pfdMin}\u2013${p.pfdMax} MHz`;
-      return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">Limits: M ${p.mMin}\u2013${p.mMax} \u00b7 N ${p.nMin}\u2013${p.nMax} \u00b7 ${p.pName} ${p.pText} \u00b7 PFD ${pfd} \u00b7 VCO ${p.vcoMin}\u2013${p.vcoMax} MHz${p.usb ? " \u00b7 Q 2\u201315" : ""}</div>`;
+      const items = [`M ${p.mMin}\u2013${p.mMax}`, `N ${p.nMin}\u2013${p.nMax}`, ...(p.noP ? [] : [`${p.pName} ${p.pText}`]),
+        `PFD ${pfd}`, `${p.noP ? "Out" : "VCO"} ${p.vcoMin}\u2013${p.vcoMax} MHz`, ...(p.usbQ ? [`Q ${p.qText}`] : [])];
+      // Each limit stays whole when the line wraps ("Q" had ended one line
+      // and "1 or 1.5" begun the next). nowrap, not non-breaking spaces: a
+      // line may also break after the en dash, as in "VCO 100\u2013" / "432 MHz".
+      return `<div class="error-text" data-res="limits" style="color:var(--text-secondary);margin-top:0">Limits: ${items.map((t) => `<span style="white-space:nowrap">${t}</span>`).join(" \u00b7 ")}</div>`;
     }
     // Generic packs the input and target in with the limits, four to a row:
     // stacked two to a row they pushed the results table 56px under the tab
@@ -20098,7 +20171,9 @@ function renderPll(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "Every allowed M, N and P, ranked by error")}
 
-      ${pillRow(Object.keys(PLL_PRESETS).map((k) => [k, PLL_PRESETS[k].label]), state.kind, domain.bg)}
+      <div class="pill-stack">
+        ${PLL_ROWS.map((row) => pillRow(row.map((k) => [k, PLL_PRESETS[k].label]), state.kind, domain.bg)).join("")}
+      </div>
 
       <div class="diagram-box" style="padding:6px;">
         <div data-res="chain">${chainSVG(r)}</div>
@@ -20116,22 +20191,22 @@ function renderPll(domain, tool, favId) {
       <div data-res="table">${tableHTML(r)}</div>
 
       ${formulaSection(
-        ["PFD = Input / M", "VCO = PFD \u00d7 N", "Out = VCO / " + (state.kind === "rp2040" ? "(PD1 \u00d7 PD2)" : "P"),
-         ...(state.usb ? ["USB = VCO / Q, must be exactly 48 MHz"] : [])],
+        ["PFD = Input / M",
+         ...(state.noP ? ["Out = PFD \u00d7 N"] : ["VCO = PFD \u00d7 N", `Out = VCO / ${state.pFormula || state.pName}`]),
+         ...(state.usbQ ? [`USB = ${state.noP ? "Out" : "VCO"} / Q, must be exactly 48 MHz`] : [])],
         "A PLL multiplies a reference clock. The input is divided by M down to the frequency the phase detector compares at (the PFD); the VCO, a voltage-controlled oscillator, is locked to N times that; and the output divider brings it down to the clock you use. Every chip limits M, N, the dividers and the PFD and VCO windows, which is why only some targets are exact. "
-        + "Rows are ranked by error, then " + (state.usb ? "by whether USB gets exactly 48 MHz, then " : "")
+        + (state.noP ? "The STM32F1 has no output divider: its VCO is the PLL output, 16 to 72 MHz. " : "")
+        + (state.names ? state.names + " " : "")
+        + "Rows are ranked by error, then " + (state.usbQ ? "by whether USB gets exactly 48 MHz, then " : "")
         + "by the higher PFD, which runs the loop's comparison faster and quieter. Two rows can give the same output from different PFD and VCO frequencies; either works. "
-        + (state.kind === "generic" ? "The limits come from your chip's reference manual: the M, N and P ranges and the PFD and VCO windows." : "The limits are this chip's, from the vendor's own code.")
+        + (state.kind === "generic" ? "The limits come from your chip's reference manual: the M, N and P ranges and the PFD and VCO windows." : "The limits are this chip's, from the vendor's datasheet and code.")
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (m) => {
-      Object.assign(state, PLL_PRESETS[m]);
-      delete state.label;
-      state.kind = m;
+      state = fresh(m);
       setPref(C, "kind", m);
-      state.pick = 0;
       paint();
     });
 

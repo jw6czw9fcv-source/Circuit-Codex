@@ -306,6 +306,9 @@ html, body {
   border: none;
 }
 .pill.active { color: #FFFFFF; }
+/* One choice split over two rows of pills (PLL settings' seven chips, too
+   many for one row at 375 px): the rows sit closer than two controls would. */
+.pill-stack .mode-pills:not(:last-child) { margin-bottom: 6px; }
 
 /* Filter buttons — same look as .mode-pills/.pill (Ohm's law's VI/VR/IR
    toggle: one shared rounded container, active = domain-tinted background

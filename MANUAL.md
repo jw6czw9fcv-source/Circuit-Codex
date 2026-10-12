@@ -6543,22 +6543,36 @@ The review made these changes:
 
 ### What it computes
 
-Every combination of input divider M, feedback multiplier N and output divider P
+Every combination of input divider M, feedback multiplier N and output divider
 that a chip's PLL allows, walked exhaustively, with the ones that land closest
 to a target frequency listed first — each with its error in ppm and the
 frequencies at the phase detector and the VCO, so the limits can be seen being
 respected. The chosen setting is shown large, with its error and its
-internal frequencies; tap another row to choose it. The chip is remembered.
+internal frequencies; tap another row to choose it. Presets cover the STM32F1,
+F4, G0 and G4 and the RP2040 and RP2350; Generic takes any integer-N PLL's
+limits from its manual. The chip is remembered.
 
 ### Source
 
-The limits are taken from the vendors' own code rather than from summaries,
-which disagree with each other:
+The limits are taken from the vendors' datasheets and code rather than from
+summaries, which disagree with each other:
 
 - **STM32F4** — ST's HAL driver (`stm32f4xx_hal_rcc.h`, `stm32f4xx_hal_rcc_ex.h`):
   PLLM 2–63, PLLN 50–432, PLLP 2, 4, 6 or 8, PLLQ 2–15, and the VCO input
   between 1 and 2 MHz. The VCO output window of 100–432 MHz and the 168 MHz
   system clock of the F405/407 are from RM0090.
+- **STM32F1** (the F103 of the Blue Pill) — DS5319 rev 18, table 27: PLL input
+  1–25 MHz, PLL output 16–72 MHz. The F1 has no output divider: its PLL output
+  is the system clock. From the F1 HAL: PLLMUL 2–16, the crystal divided by 1
+  or 2 on its way in (PLLXTPRE), and USB clocked by the PLL output divided by
+  1 or 1.5 — so USB works only with the PLL at 48 or 72 MHz.
+- **STM32G4** (G474) — DS12288 rev 2, table 49: PLL input 2.66–16 MHz, VCO
+  96–344 MHz, and the R output that clocks the core up to 150 MHz, or 170 MHz
+  with the regulator in Range 1 boost mode (section 3 of the same datasheet).
+  Dividers from the G4 HAL: PLLM 1–16, PLLN 8–127, PLLR 2, 4, 6 or 8.
+- **STM32G0** (G071) — DS12232 rev 4, table 43: PLL input 2.66–16 MHz, VCO
+  96–344 MHz, R output 12–64 MHz. Dividers from the G0 HAL: PLLM 1–8, PLLN
+  8–86, PLLR 2–8.
 - **RP2040** — the Pico SDK's own calculator, `vcocalc.py`: reference divider
   1–63 with at least 5 MHz after it, FBDIV 16–320, VCO 750–1600 MHz, and two
   post-dividers each 1–7.
@@ -6567,6 +6581,19 @@ which disagree with each other:
   regulator voltage of at least 1.15 volts". The SDK raises the voltage
   itself when needed, and keeps 125 MHz as the default. Before, 133 MHz was
   the most that was supported.
+- **RP2350** — its datasheet, section 8.6, lists the RP2040's limits again
+  (at least 5 MHz after REFDIV, VCO 750–1600 MHz, FBDIV 16–320, post-dividers
+  1–7) and gives 150 MHz as the most the RP2350 supports.
+
+The STM32 datasheets were read in the copies distributors host (RS and
+DigiKey), because st.com refused the download; later revisions exist and were
+not compared. ST's own code disagrees with these tables: its LL utils files
+check the VCO from 64 MHz on both families and the G0's PLL input at 4–8 MHz,
+and the G4's reference manual (RM0440 rev 3) gave a 64–344 MHz VCO and a
+2.66–8 MHz input. Asked about it on ST's community forum in April 2020, an ST
+technical moderator answered that the datasheet's PLL characteristics are the
+correct values and that RM0440 would drop its numbers, so the tables are used
+here.
 
 ### Why the formulas are these
 
@@ -6585,22 +6612,33 @@ the oscillator only tunes over a range. That is what makes this a search rather
 than a division — the obvious M and N often put one of the stages outside its
 window.
 
+The STM32F1 has no output divider, so there Out = PFD × N, and its window is
+the PLL output's. The output divider is P on the F4, R on the G0 and G4, and
+two dividers in series on the RP2040 and RP2350.
+
 **Ranking.** Rows are ordered by error first. Among equally good rows:
 
-- on the STM32F4, a row whose VCO also divides by some Q to exactly 48 MHz comes
-  first, since USB OTG will not work on anything else;
-- then the **higher PFD**. ST's manual recommends a 2 MHz VCO input to limit
-  jitter, and in general a faster comparison lets the loop correct the VCO more
-  often and filter less, which is quieter;
-- then the higher VCO.
+- on the STM32F1 and F4, a row that also gives USB exactly 48 MHz comes first,
+  since USB will not work on anything else;
+- then the **higher PFD**. ST's manual recommends a 2 MHz VCO input on the F4
+  to limit jitter, and in general a faster comparison lets the loop correct the
+  VCO more often and filter less, which is quieter;
+- then the higher VCO, quieter for the same reason. It costs current: the G0
+  and G4 datasheets give their PLL 200 µA typical at a 96 MHz VCO and 520 µA
+  at 344 MHz, so pick a lower-VCO row from the table when power matters more.
 
 That is why 8 MHz to 168 MHz on the STM32F4 comes out as M 4, N 168, P 2, Q 7
 (PFD 2 MHz, VCO 336 MHz, USB 48 MHz) ahead of the equally exact M 8, N 336,
 which runs the detector at 1 MHz.
 
-**RP2040's two post-dividers** multiply, so the tool offers each distinct
-product once, as the pair with the larger first divider — the SDK prefers that
-split for power.
+**The RP2040's and RP2350's two post-dividers** multiply, so the tool offers
+each distinct product once, as the pair with the larger first divider — the
+SDK prefers that split for power.
+
+**Notes above a plain rating.** The RP2040 above 133 MHz needs its core
+regulator at 1.15 V or more, and the G4 above 150 MHz needs Range 1 boost
+mode (`PWR_REGULATOR_VOLTAGE_SCALE1_BOOST` in the HAL); the tool says so under
+the result. Above the rating itself it says the part is not rated for it.
 
 ### Assumptions and limits
 
@@ -6608,9 +6646,13 @@ split for power.
   almost any target but trades it for spurs and depends on each vendor's
   modulator. Not modelled.
 - The preset limits are for the named parts. Other members of a family can
-  differ — the F401, for one, needs its VCO in 192–432 MHz, and
-  the RP2350 is not the RP2040 — so use Generic with the right reference
-  manual when in doubt.
+  differ — the F401, for one, needs its VCO in 192–432 MHz, and the F105/F107
+  multiply by 4–9 or 6.5 after a 1–16 prescaler — and the G0 and G4 presets
+  come from the G071 and G474 datasheets, so check another member's own
+  table, or use Generic with the right reference manual when in doubt.
+- The G0 and G4 windows are Range 1's. Range 2, the low-power range, narrows
+  the VCO to 96–128 MHz and the system clock to 26 MHz on the G4 and 16 MHz
+  on the G0; not modelled.
 - Lock time, loop-filter design and phase noise are not addressed; the tool
   answers only which settings are legal and how close they land.
 - On Generic, the search stops at three million combinations to stay responsive
@@ -6621,6 +6663,9 @@ split for power.
 - **Vendor clock trees beyond the PLL** — AHB and APB prescalers, peripheral
   clock muxes, flash wait states for the chosen frequency. Those are the next
   steps after this one, and every family arranges them differently.
+- **The G0's and G4's other PLL outputs.** P and Q feed peripherals; the tool
+  sets R, the system clock. The G4 can clock USB from its separate 48 MHz
+  oscillator, HSI48, instead of the PLL.
 - **Other presets.** The Generic pill covers any integer-N PLL given its manual;
   a preset is only worth adding for a part used often enough to save the
   reading.
@@ -6632,10 +6677,20 @@ gives M 4, N 168, P 2, Q 7 with USB at exactly 48 MHz, and from a 25 MHz crystal
 M 25, N 336, P 2, Q 7 — the standard setting for that crystal. 180 MHz is
 flagged as above the part's 168 MHz rating and as leaving USB at 45 MHz.
 
+On the STM32F1, 8 MHz to 72 MHz gives M 1, N 9 with USB at 72 / 1.5 = 48 MHz,
+the setting of ST's own F1 USB examples; at 64 MHz the tool warns that USB
+cannot get its 48 MHz. On the STM32G4, 16 MHz (HSI16) to 170 MHz gives M 4,
+N 85, R 2 with the boost-mode note — the setting of ST's NUCLEO-G474RE
+examples, which switch boost mode on — and 150 MHz gives M 4, N 75, R 2
+without it. On the STM32G0, 16 MHz to 64 MHz gives M 1, N 20, R 5 (VCO
+320 MHz).
+
 On the RP2040, 12 MHz to 125 MHz gives VCO 1500 MHz with post-dividers 6 and 2,
 and 133 MHz gives VCO 1596 MHz with 6 and 2 — both exactly the Pico SDK's own
 default settings. 200 MHz gives VCO 1200 MHz with 6 and 1, and the note about
 the 1.15 V core voltage; 250 MHz is flagged as above the certified 200 MHz.
+On the RP2350, 12 MHz to 150 MHz gives VCO 1500 MHz with 5 and 2, the SDK's
+default in `clocks.h`; 200 MHz is flagged as above its 150 MHz.
 The full RP2040 search takes about 3 ms.
 
 The review made these changes:
@@ -6647,6 +6702,12 @@ The review made these changes:
 - It added plain definitions of the PFD, the VCO and the dividers, examples,
   and the remembered chip.
 - It was renamed PLL settings, on Pierre's choice.
+- It added the STM32F1, G0 and G4 and the RP2350, on Pierre's choice, with
+  limits read from their datasheets, the chips split over two rows of pills.
+- It fixed a chip switch that carried the RP2040's 1.15 V note over to the
+  next chip.
+- Without a USB branch, the diagram drops its empty top band, which keeps
+  Generic's result above the tab bar with the second row of pills.
 
 [↑ Index](#index)
 
