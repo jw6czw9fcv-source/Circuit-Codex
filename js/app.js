@@ -19869,7 +19869,7 @@ const PLL_PRESETS = {
   rp2040: {
     label: "RP2040", fref: 12, target: 125, sysMax: 200, sysPlain: 133, usb: false, pName: "PD1\u00b7PD2",
     mMin: 1, mMax: 63, nMin: 16, nMax: 320, pfdMin: 5, pfdMax: 1e9, vcoMin: 750, vcoMax: 1600,
-    P: pllPostPairs(), pText: "PD1\u00b7PD2, each 1\u20137",
+    P: pllPostPairs(), pText: "each 1\u20137",
   },
   generic: {
     label: "Generic", fref: 10, target: 100, sysMax: 0, usb: false, pName: "P",
