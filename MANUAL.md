@@ -81,10 +81,10 @@ will key on, since that is the id the app already holds for each tool.
 - Timing & interfaces → [Switch debounce](#switch-debounce)
 - Timing & interfaces → [I2C pull-up resistor](#i2c-pull-up-resistor)
 - Timing & interfaces → [UART baud rate](#uart-baud-rate)
-- Timing & interfaces → [Crystal load capacitance](#crystal-load-capacitance)
+- Timing & interfaces → [Crystal load](#crystal-load)
 - Timing & interfaces → [Oscillator stability](#oscillator-stability)
-- Timing & interfaces → [PLL multiplication factor](#pll-multiplication-factor)
-- Data conversion → [ADC resolution / quantization](#adc-resolution--quantization)
+- Timing & interfaces → [PLL settings](#pll-settings)
+- Data conversion → [ADC resolution](#adc-resolution)
 - Data conversion → [DAC resolution](#dac-resolution)
 - Data conversion → [SNR estimation](#snr-estimation)
 
@@ -6714,37 +6714,54 @@ The review made these changes:
 ---
 
 <a id="adc"></a>
-## ADC resolution / quantization
+## ADC resolution
 
 `calc: adc` · Digital › Data conversion
+(formerly ADC resolution / quantization)
 
 ### What it computes
 
 For an ideal N-bit converter and its reference: the size of one step (the LSB),
-the code a given input produces, the voltage that code stands for, and the
-quantization error between the two, in volts and in LSB. It works both ways:
-type a voltage to get the code, or type a code — say, one read off a register —
-to get the voltage. The range of inputs and codes is shown under the fields.
+shown large since it is the resolution, then the code a given input produces,
+the voltage that code stands for, and the quantization error between the two,
+in volts and in LSB. It works both ways: type a voltage to get the code, or
+type a code — say, one read off a register — to get the voltage. The range of
+inputs and codes is shown under the fields. The reference and the input can be
+typed in mV or V; the mode and both units are remembered.
 
 Two pills cover the two ways converters are built:
 
 - **Single-ended** — 0 to VREF, codes 0 to 2ᴺ − 1. Every MCU ADC (AVR, STM32,
   RP2040, ESP32) works this way.
 - **Bipolar ±** — −FSR to +FSR, codes −2ᴺ⁻¹ to 2ᴺ⁻¹ − 1 in two's complement.
-  Differential converters such as the ADS1115 work this way.
+  Differential converters such as the ADS1115 and the HX711 work this way.
+
+Examples: an Arduino Uno on its 5 V reference, an LM35 temperature sensor on
+the Uno's 1.1 V reference, an STM32 at 12 bits on 3.3 V, the ADS1115 at its
+default ±2.048 V, and the HX711 load-cell converter at 24 bits.
 
 ### Source
 
 - The ideal transfer function is the one in IEEE Std 1241 and the one MCU
-  datasheets measure their errors against. The ATmega328P datasheet (ADC
-  characteristics) defines offset error as the deviation of the first transition
-  from its ideal place "at 0.5 LSB", gain error against a last transition 1.5 LSB
-  below full scale, and gives ±0.5 LSB as the ideal absolute accuracy.
+  datasheets measure their errors against. The ATmega328P datasheet
+  (Atmel-42735B, section 28.6) defines offset error as the deviation of the
+  first transition from its ideal place "at 0.5 LSB", gain error against a last
+  transition 1.5 LSB below full scale, the quantization error as always
+  ±0.5 LSB, and ±0.5 LSB as the ideal absolute accuracy. The same chip is
+  specified at ±2 LSB absolute accuracy, and its internal reference at 1.0 V
+  minimum, 1.1 V typical, 1.2 V maximum.
+- Arduino's analogReference() page gives the Uno's DEFAULT reference as 5 V
+  and INTERNAL as 1.1 V on the ATmega328P.
 - The bipolar pill follows the TI ADS1115 datasheet (SBAS444E): the full-scale
   range is set by the PGA to ±6.144, ±4.096, ±2.048 (the power-up default),
   ±1.024, ±0.512 or ±0.256 V; Table 7-1 gives the LSB as 125 µV at ±4.096 V
   and 62.5 µV at ±2.048 V; output is binary two's complement, clipping at 7FFFh
   and 8000h.
+- The HX711 datasheet (Avia Semiconductor) gives its full-scale input as
+  ±0.5(AVDD/GAIN), ±20 mV at gain 128 with a 5 V AVDD, 24-bit two's complement
+  output from 800000h to 7FFFFFh, and 50 nV rms input noise at gain 128 and
+  10 samples a second.
+- The LM35 is 10 mV/°C (TI SNIS159H).
 
 ### Why the formulas are these
 
@@ -6774,24 +6791,32 @@ voltage a code stands for is VREF − 1 LSB: 3.2992 V for 12 bits on 3.3 V. An
 input at VREF itself reads the top code, a whole LSB short.
 
 **Two's complement.** A bipolar converter's register holds negative codes as
-2ᴺ + code, so −1 reads FFFFh and −FS reads 8000h. The Hex cell shows the
-register as it would be read, the Code field the signed value it means.
+2ᴺ + code, so −1 reads FFFFh and −FS reads 8000h. The hex in the result shows
+the register as it would be read, the Code field the signed value it means.
 
 **Dividing by 2ᴺ − 1.** Arduino's ReadAnalogVoltage example computes
-code × 5.0 / 1023, and ST's LL macro divides by 4095. That treats the top code
+code × (5.0 / 1023.0), and ST's LL macro `__LL_ADC_CALC_DATA_TO_VOLTAGE`
+divides by `__LL_ADC_DIGITAL_SCALE`, 4095 at 12 bits. That treats the top code
 as exactly VREF, stretching the scale: the reading is k / (2ᴺ − 1) instead of
 k / 2ᴺ of VREF, high by up to one LSB near the top. Small beside a real ADC's
 errors, but a systematic one, and it is why a 3.3 V input "reads 3.3 V" on
 those examples and 3.2992 V here.
 
+**Resolution is not accuracy.** A finer LSB only helps while it stays above
+the noise and the reference's tolerance. The HX711's 2.33 nV step sits under
+50 nV rms of noise, about 21 LSB, so its last four bits or so are noise; SNR
+estimation turns noise into effective bits.
+
 ### Assumptions and limits
 
 - **An ideal converter.** Offset, gain error, INL, DNL and noise are not
   modelled; on a real MCU ADC they add up to several LSB, far more than the
-  quantization shown here. Their datasheet figures are in LSB, which is what
-  this tool gives the size of.
+  quantization shown here (the ATmega328P's ±2 LSB, for one). Their datasheet
+  figures are in LSB, which is what this tool gives the size of.
 - **VREF is taken as exact.** On most MCUs it is the supply, so the supply's
-  own tolerance scales every reading. A 1% regulator is 41 LSB at 12 bits.
+  own tolerance scales every reading. A 1% regulator is 41 LSB at 12 bits. An
+  internal reference is no cure by itself: the ATmega328P's 1.1 V is 1.0 to
+  1.2 V from part to part, ±9 %, so measure it once and use that figure.
 - **Inputs past the range** read the end code; the tool says so and the error
   then is the overshoot, not quantization. On the ADS1115 the ±4.096 and
   ±6.144 V settings are scaling only — the pins themselves never go past
@@ -6814,16 +6839,26 @@ those examples and 3.2992 V here.
 
 By hand, single-ended 12 bits on 3.3 V: LSB = 3.3 / 4096 = 805.66 µV;
 1.2 V / 805.66 µV = 1489.45, code 1489 = 0x5D1, code voltage 1.19963 V,
-error +366.2 µV = +0.4545 LSB. Code 4095 gives 3.29919 V; 3.4 V reads 4095
+error +366.2 µV = +0.4545 LSB. Code 4095 gives 3.29919 V; 4 V reads 4095
 and is flagged as over range.
 
-Bipolar 16 bits on ±2.048 V: LSB 62.5 µV, matching the ADS1115's Table 7-1.
-−1.23456 V / 62.5 µV = −19752.96, code −19753, register 0xB2D7
-(65536 − 19753 = 45783); error +2.5 µV = +0.04 LSB. At ±4.096 V the LSB is
-125 µV, again the datasheet's figure. Code −32768 reads 0x8000 and −4.096 V,
-the datasheet's −FS. 24 and 32 bits keep enough figures in the code voltage
-to tell neighbouring codes apart, and the hex fits its cell.
+The examples: 3.3 V on the Uno's 5 V reference reads 676 (4.883 mV steps,
+−0.16 LSB); an LM35 at 25 °C, 250 mV, reads 233 on the 1.1 V reference, in
+steps of 1.074 mV, 0.11 °C, against 0.49 °C on 5 V; −1 V on the ADS1115 at
+±2.048 V reads −16000, 0xC180; 5 mV on the HX711 at ±19.53 mV reads 2147484,
+0x20C49C, in steps of 2.328 nV.
 
+The review made these changes:
+- It was renamed ADC resolution, on Pierre's choice; the old name still finds
+  it in search.
+- The LSB became the large result, with the code, its voltage and the error on
+  the line under it.
+- The reference and input fields take mV or V, remembered with the mode.
+- The drawing's labels went from 9–10 px to 11 px, with a left margin that
+  grows with the code's digits.
+- It added the five examples, checked against their datasheets.
+- In formula search, the cards of renamed tools had lost their link to the
+  tool; they now find a tool by its old name too.
 [↑ Index](#index)
 
 ---

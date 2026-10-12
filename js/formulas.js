@@ -39,16 +39,16 @@ const FORMULAS = [
     note: "T is the full period, t_on the time the signal is high within it.",
   },
   {
-    tool: "555 Timer (astable/monostable)",
+    tool: "555 timer",
     domain: "digital",
     formulas: ["f = 1.44 / ((R1 + 2R2) × C)", "Duty = (R1 + R2) / (R1 + 2R2)"],
     note: "Standard astable configuration. Duty cycle is always above 50% in this topology.",
   },
   {
-    tool: "ADC resolution / quantization",
+    tool: "ADC resolution",
     domain: "digital",
-    formulas: ["Step size = Vref / 2ⁿ"],
-    note: "n is the ADC's bit depth. Smaller step = finer resolution.",
+    formulas: ["LSB = VREF / 2ᴺ", "Code = round(Vin / LSB)"],
+    note: "N is the resolution in bits. A bipolar ADC spans ±FSR, so its LSB is 2 × FSR / 2ᴺ.",
   },
   {
     tool: "DAC resolution",
@@ -69,7 +69,7 @@ const FORMULAS = [
     note: "Free-space path loss. d in km, f in MHz.",
   },
   {
-    tool: "Wavelength",
+    tool: "Wavelength ↔ frequency",
     domain: "rf",
     formulas: ["λ = c / f"],
     note: "c = 299,792,458 m/s. In a medium other than vacuum, divide c by the velocity factor first.",
@@ -111,13 +111,13 @@ const FORMULAS = [
     note: "Ideal, continuous-conduction mode. D is duty cycle as a fraction (0–1).",
   },
   {
-    tool: "Runtime / capacity estimation",
+    tool: "Battery runtime",
     domain: "power",
     formulas: ["Runtime (h) = Capacity (Ah) / Load current (A)"],
     note: "Assumes constant current and ignores the capacity fade real batteries show near empty.",
   },
   {
-    tool: "C-rate",
+    tool: "Battery C-rate",
     domain: "power",
     formulas: ["C-rate = Current / Capacity"],
     note: "A 2000 mAh cell discharged at 1C draws 2 A; at 0.5C, 1 A.",
@@ -129,7 +129,7 @@ const FORMULAS = [
     note: "θJA (junction-to-ambient) or θJC (junction-to-case), from the datasheet. P is power dissipated in the part.",
   },
   {
-    tool: "Voltage drop of a cable",
+    tool: "Cable resistance / voltage drop",
     domain: "pcb",
     formulas: ["Vdrop = 2 × I × L × R_per_length"],
     note: "The factor of 2 is the round trip through both conductors — the single-length resistance alone understates it by half.",

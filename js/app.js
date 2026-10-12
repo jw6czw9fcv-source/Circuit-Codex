@@ -3728,14 +3728,17 @@ function renderKirchhoff(domain, tool, favId) {
 // its formula, and a one-line note, findable by name or by the formula
 // itself. When a real calculator later exists for the same tool name, the
 // card links straight to it — this list and the navigation tree are separate
-// data, joined only by that name match at render time.
-function findRouteForTool(name) {
+// data, joined only by that name match at render time. A renamed tool is
+// found by its old name too (`was`): matching the current name alone had
+// quietly unlinked the 555 timer, both battery tools and Wavelength.
+function findToolForFormula(name) {
   for (const d of DOMAINS) {
     for (let si = 0; si < d.sections.length; si++) {
       const sec = d.sections[si];
       for (let ti = 0; ti < sec.tools.length; ti++) {
-        if (sec.tools[ti].name === name && sec.tools[ti].calc) {
-          return `/tool/${encodeURIComponent(`${d.id}:${si}:${ti}`)}/${sec.tools[ti].calc}`;
+        const t = sec.tools[ti];
+        if ((t.name === name || t.was === name) && t.calc) {
+          return { name: t.name, route: `/tool/${encodeURIComponent(`${d.id}:${si}:${ti}`)}/${t.calc}` };
         }
       }
     }
@@ -3745,11 +3748,12 @@ function findRouteForTool(name) {
 
 function renderFormulaSearch(domain, tool, favId) {
   function card(f) {
-    const route = findRouteForTool(f.tool);
+    const found = findToolForFormula(f.tool);
+    const route = found && found.route;
     const d = DOMAINS.find(x => x.id === f.domain);
     const inner = `
       <div class="formula-card-head">
-        <span class="formula-card-title">${f.tool}</span>
+        <span class="formula-card-title">${found ? found.name : f.tool}</span>
         ${route ? `<span class="formula-card-go">Open ${ICONS.chevronRight}</span>` : ""}
       </div>
       ${d ? `<div class="breadcrumb">${d.title}</div>` : ""}
@@ -20223,23 +20227,35 @@ function renderPll(domain, tool, favId) {
   paint();
 }
 
-// ---------- ADC resolution / quantization ----------
+// ---------- ADC resolution ----------
 // The ideal converter of IEEE 1241: code k stands for k LSB and covers half an
 // LSB either side of it, so the code is the input rounded, and what a code
-// "means" is the centre of its step. The ATmega328P datasheet defines its
-// offset error against exactly this, a first transition at 0.5 LSB.
+// "means" is the centre of its step. The ATmega328P datasheet (Atmel-42735B,
+// 28.6) defines its offset error against exactly this, a first transition at
+// 0.5 LSB, and gives the quantization error as always ±0.5 LSB.
 const ADC_KINDS = {
   single: { label: "Single-ended", bits: 12, ref: 3.3, vin: 1.2, refName: "VREF" },
   bipolar: { label: "Bipolar ±", bits: 16, ref: 2.048, vin: -1.23456, refName: "FSR ±" },
 };
+// A reference is volts, but a PGA range or a bridge signal is millivolts
+// (the HX711's ±19.53 mV), so both fields offer the two.
+const ADC_V_UNITS = { mV: 1e-3, V: 1 };
 
 function renderAdc(domain, tool, favId) {
-  const state = { kind: "single", bits: 12, ref: 3.3, vin: 1.2, code: 0 };
+  const C = "adc";
+  const units = Object.keys(ADC_V_UNITS);
+  const kind0 = pref(C, "kind", "single", Object.keys(ADC_KINDS));
+  const start = ADC_KINDS[kind0];
+  // ref and vin are held in volts whatever unit their field shows.
+  const state = {
+    kind: kind0, bits: start.bits, ref: start.ref, vin: start.vin, code: 0,
+    refUnit: pref(C, "refUnit", "V", units), vinUnit: pref(C, "vinUnit", "V", units),
+  };
 
   const bipolar = () => state.kind === "bipolar";
   // Single-ended spans 0..VREF in 2^N steps. Bipolar spans -FSR..+FSR, so the
-  // same 2^N codes cover twice the voltage: the ADS1115's 125 uV LSB is
-  // 2 x 4.096 V / 65536, which is how its datasheet's Table 7-1 lists it.
+  // same 2^N codes cover twice the voltage: the ADS1115's 62.5 uV LSB at
+  // ±2.048 V is 4.096 V / 65536, as its datasheet's Table 7-1 lists it.
   const lsb = () => (bipolar() ? 2 : 1) * state.ref / Math.pow(2, state.bits);
   const codeMin = () => (bipolar() ? -Math.pow(2, state.bits - 1) : 0);
   const codeMax = () => (bipolar() ? Math.pow(2, state.bits - 1) - 1 : Math.pow(2, state.bits) - 1);
@@ -20247,6 +20263,7 @@ function renderAdc(domain, tool, favId) {
 
   // Enough figures that a 24-bit code survives the round trip through the field.
   const fig = (x) => +x.toPrecision(10);
+  const shown = (name, unitKey) => fig(state[name] / ADC_V_UNITS[state[unitKey]]);
 
   function codeFromVin() {
     if (!valid()) return;
@@ -20257,6 +20274,28 @@ function renderAdc(domain, tool, favId) {
     state.vin = fig(state.code * lsb());
   }
   codeFromVin();
+
+  const example = (kind, bits, ref, vin, refUnit, vinUnit) => () => {
+    Object.assign(state, { kind, bits, ref, vin, refUnit, vinUnit });
+    codeFromVin();
+    paint();
+  };
+  // Arduino's reference page gives the Uno 5 V by default and 1.1 V internal
+  // (ATmega328P: 1.0 to 1.2 V); the LM35 is 10 mV/°C (TI SNIS159H); the
+  // ADS1115 range and LSB are its Table 7-1 (SBAS444E); the HX711 spans
+  // ±0.5(AVDD/GAIN), 2's complement, with 50 nV rms noise at gain 128.
+  useExamples([
+    { title: "Arduino Uno at 5 V", note: "10 bits on the default 5 V reference: a 3.3 V signal reads 676.",
+      apply: example("single", 10, 5, 3.3, "V", "V") },
+    { title: "LM35 on Arduino's 1.1 V", note: "25 °C is 250 mV. The 1.1 V reference gives 0.11 °C steps, 5 V gives 0.49 °C.",
+      apply: example("single", 10, 1.1, 0.25, "V", "mV") },
+    { title: "STM32, 12 bits at 3.3 V", note: "VREF+ on the 3.3 V supply: 1.2 V reads 1489, 0x5D1.",
+      apply: example("single", 12, 3.3, 1.2, "V", "V") },
+    { title: "ADS1115 at ±2.048 V", note: "Its default range, 62.5 µV per code: −1 V reads −16000, held as 0xC180.",
+      apply: example("bipolar", 16, 2.048, -1, "V", "V") },
+    { title: "HX711, 24 bits", note: "Gain 128 on a 5 V AVDD: ±19.53 mV in 2.33 nV steps, far under its 50 nV of noise.",
+      apply: example("bipolar", 24, 0.01953125, 0.005, "mV", "mV") },
+  ]);
 
   // Two's complement is what a bipolar ADC's register actually holds, so that
   // is the hex shown; single-ended codes are the plain binary.
@@ -20294,7 +20333,9 @@ function renderAdc(domain, tool, favId) {
     if (r.problem) return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none"></svg>`;
     const n = Math.min(8, codeMax() - codeMin() + 1);
     const k0 = Math.max(codeMin(), Math.min(codeMax() - n + 1, r.code - Math.floor((n - 1) / 2)));
-    const x0 = 56, x1 = 324, y0 = 136, y1 = 22;
+    // The code labels set the left margin: a 24-bit code is seven digits.
+    const widest = Math.max(String(k0).length, String(k0 + n - 1).length);
+    const x0 = Math.max(44, Math.round(12 + widest * 6.6)), x1 = 324, y0 = 134, y1 = 22;
     const sx = (x1 - x0) / n, sy = (y0 - y1) / n;
     // Code k is centred at k LSB and its step runs from k - 1/2 to k + 1/2.
     const X = (lsbs) => x0 + (lsbs - (k0 - 0.5)) * sx;
@@ -20320,17 +20361,19 @@ function renderAdc(domain, tool, favId) {
     const labels = [];
     for (let k = k0; k < k0 + n; k++) {
       const on = k === r.code;
-      labels.push(`<text x="${x0 - 6}" y="${(Y(k) + 3).toFixed(1)}" fill="${on ? hit : wire}" font-size="${on ? 10 : 9}" font-weight="600" text-anchor="end">${k}</text>`);
+      labels.push(`<text x="${x0 - 6}" y="${(Y(k) + 4).toFixed(1)}" fill="${on ? hit : "#9AA4B0"}" font-size="11" font-weight="${on ? 700 : 600}" text-anchor="end">${minus(k)}</text>`);
     }
 
     // One step dimensioned, the one the input is on, under the axis.
     const da = X(r.code - 0.5), db = X(r.code + 0.5);
-    const dim = `<path d="M${da.toFixed(1)} ${y0 + 6} V${y0 + 12} M${db.toFixed(1)} ${y0 + 6} V${y0 + 12} M${da.toFixed(1)} ${y0 + 9} H${db.toFixed(1)}" stroke="${comp}" stroke-width="1.2"/>
-      <text x="${((da + db) / 2).toFixed(1)}" y="${y0 + 20}" fill="${comp}" font-size="9" font-weight="600" text-anchor="middle">1 LSB</text>`;
+    const dim = `<path d="M${da.toFixed(1)} ${y0 + 5} V${y0 + 11} M${db.toFixed(1)} ${y0 + 5} V${y0 + 11} M${da.toFixed(1)} ${y0 + 8} H${db.toFixed(1)}" stroke="${comp}" stroke-width="1.2"/>
+      <text x="${((da + db) / 2).toFixed(1)}" y="${y0 + 22}" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">1 LSB</text>`;
 
+    // Axis names in the corners the staircase never reaches: code above the
+    // labels, input under them, clear of the dimensioned step at either end.
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none">
       <path d="M${x0} ${y1 - 4} V${y0} H${x1 + 4}" stroke="${wire}" stroke-width="1.2"/>
-      <text x="4" y="${y1 - 10}" fill="${wire}" font-size="9" font-weight="600">Code</text>
+      <text x="4" y="${y1 - 8}" fill="#9AA4B0" font-size="11" font-weight="600">Code</text>
       ${labels.join("")}
       <path d="${ideal}" stroke="${wire}" stroke-width="1" stroke-dasharray="3 3"/>
       <path d="${d}" stroke="${comp}" stroke-width="2" fill="none" stroke-linejoin="round"/>
@@ -20338,43 +20381,48 @@ function renderAdc(domain, tool, favId) {
       ${inside || !r.over ? `<path d="M${px.toFixed(1)} ${py.toFixed(1)} V${y0}" stroke="${hit}" stroke-width="1" stroke-dasharray="2 3"/>` : ""}
       <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.4" fill="${r.over ? warn : hit}"/>
       ${dim}
-      <text x="${x1 + 4}" y="${y0 + 20}" fill="${wire}" font-size="9" font-weight="600" text-anchor="end">Input</text>
+      <text x="4" y="${y0 + 22}" fill="#9AA4B0" font-size="11" font-weight="600">Input →</text>
     </svg>`;
   }
 
-  function cell(label, value, colour) {
-    return `<div class="eseries-cell">
-      <div style="font-weight:600;color:${domain.color};">${label}</div>
-      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
-    </div>`;
-  }
-
-  const signed = (x, unit) => (x > 0 ? "+" : "") + (unit ? siFormat(x, unit) : trim(x));
+  // Shown text gets a true minus sign; the fields keep the hyphen they parse.
+  const minus = (s) => String(s).replace(/^-/, "−");
+  const signed = (x, unit) => (x > 0 ? "+" : "") + minus(unit ? siFormat(x, unit) : trim(x));
   // A code voltage needs as many figures as the code has, or 1489 and 1490
   // both print as 1.2 V and the top of the range reads as VREF itself.
-  const volts = (v) => siFormat(v, "V", Math.min(10, Math.max(4, Math.ceil(state.bits * Math.LOG10E * Math.LN2) + 1)));
+  const volts = (v) => minus(siFormat(v, "V", Math.min(10, Math.max(4, Math.ceil(state.bits * Math.LOG10E * Math.LN2) + 1))));
+  const sup = (n) => String(n).replace(/\d/g, (c) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[c]);
+  // Each part of the line under the result wraps whole: "+366.2" had ended a
+  // line with its "µV" starting the next.
+  const whole = (html) => `<span style="white-space:nowrap">${html}</span>`;
 
   function rangeHTML(r) {
     if (r.problem) return "";
-    return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">Range ${volts(r.low)} to ${volts(r.high)} · codes ${codeMin()} to ${codeMax()}</div>`;
+    return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">Range ${volts(r.low)} to ${volts(r.high)} · codes ${minus(codeMin())} to ${codeMax()}</div>`;
   }
 
+  // The step size large, since that is the resolution; under it, what the
+  // input became: its code, the voltage that code stands for, and the error.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     // Snap float noise: a code typed in gives an input exactly on the step
     // centre, and 1e-16 V of residue should read as zero.
     const err = Math.abs(r.errLsb) < 1e-6 ? 0 : r.err;
     const errLsb = Math.abs(r.errLsb) < 1e-6 ? 0 : r.errLsb;
+    const ref = `${trim(shown("ref", "refUnit"))} ${state.refUnit}`;
+    const head = `1 LSB = ${bipolar() ? `2 × ${ref}` : ref} / 2${sup(state.bits)}`;
+    const tone = r.over ? ` style="color:${warn}"` : "";
     const caution = r.over
-      ? `<div class="error-text" style="color:${warn}">The input is ${r.over === "high" ? "above" : "below"} the range, so the ADC reads its end code and the error is the overshoot, not quantization.</div>`
+      ? `<div class="error-text" data-res="over" style="color:${warn}">The input is ${r.over === "high" ? "above" : "below"} the range, so the ADC reads its end code and the error is the overshoot, not quantization.</div>`
       : "";
     return `
-      <div class="eseries-grid eseries-grid--tight">
-        ${cell("LSB", siFormat(r.q, "V"))}
-        ${cell("Hex", hex(r.code))}
-        ${cell("Code voltage", volts(r.vcode))}
-        ${cell("Error", signed(err, "V"), r.over ? warn : "")}
-        ${cell("Error LSB", signed(errLsb), r.over ? warn : "")}
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label" data-res="head">${head}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main">${siFormat(r.q, "V")}</span></div>
+        <div class="result-sub">${whole(`Code ${minus(r.code)} = <span data-res="hex">${hex(r.code)}</span>`)} · ${whole(`stands for <span data-res="vcode">${volts(r.vcode)}</span>`)} · ${whole(`error <span data-res="err"${tone}>${signed(err, "V")}</span>, <span data-res="errlsb"${tone}>${signed(errLsb)} LSB</span>`)}</div>
       </div>
       ${caution}`;
   }
@@ -20386,9 +20434,9 @@ function renderAdc(domain, tool, favId) {
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
   }
 
-  function syncField(id, name) {
+  function syncField(id, value) {
     const el = document.getElementById(id);
-    if (el && document.activeElement !== el) el.value = state[name];
+    if (el && document.activeElement !== el) el.value = value;
   }
 
   // Bits, the reference and the input are the things you know; the code
@@ -20396,25 +20444,26 @@ function renderAdc(domain, tool, favId) {
   function afterEdit(name) {
     if (name === "code") {
       vinFromCode();
-      syncField("ad-vin", "vin");
+      syncField("ad-vin", shown("vin", "vinUnit"));
     } else {
       codeFromVin();
-      syncField("ad-code", "code");
+      syncField("ad-code", state.code);
     }
     refresh();
   }
 
+  const unitSelect = (id, cur) => `<select id="${id}">${units.map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+
   // The iPhone decimal keypad has no minus key, and a bipolar input or code is
-  // as often negative as not, so those two fields get the text keyboard's
-  // number row instead.
-  function field(id, name, label, unit, signedField) {
+  // as often negative as not, so those two fields get the ± key.
+  function field(id, label, value, unitHTML, signedField) {
     const mode = `type="number" inputmode="decimal" step="any"${signedField && bipolar() ? " data-signed" : ""}`;
     return `
         <div class="field">
           <label>${label}</label>
           <div class="field-row">
-            <input ${mode} id="${id}" value="${state[name]}" />
-            ${unit ? `<span class="unit-fixed">${unit}</span>` : ""}
+            <input ${mode} id="${id}" value="${value}" />
+            ${unitHTML}
           </div>
         </div>`;
   }
@@ -20432,12 +20481,12 @@ function renderAdc(domain, tool, favId) {
       </div>
 
       <div class="field-pair">
-        ${field("ad-bits", "bits", "Resolution", "bits")}
-        ${field("ad-ref", "ref", k.refName, "V")}
+        ${field("ad-bits", "Resolution", state.bits, `<span class="unit-fixed">bits</span>`)}
+        ${field("ad-ref", k.refName, shown("ref", "refUnit"), unitSelect("ad-ref-unit", state.refUnit))}
       </div>
       <div class="field-pair">
-        ${field("ad-vin", "vin", "Input", "V", true)}
-        ${field("ad-code", "code", "Code", "", true)}
+        ${field("ad-vin", "Input", shown("vin", "vinUnit"), unitSelect("ad-vin-unit", state.vinUnit), true)}
+        ${field("ad-code", "Code", state.code, "", true)}
       </div>
       <div data-res="range">${rangeHTML(r)}</div>
 
@@ -20454,21 +20503,20 @@ function renderAdc(domain, tool, favId) {
              "Code = round(Input / LSB), 0 to 2ᴺ − 1",
              "Code voltage = Code × LSB",
              "Error = Input − Code voltage, within ±½ LSB"],
-        "An ADC turns a voltage into a number, the code. The LSB is the voltage of one step between codes; the input is rounded to the nearest step, and what is left over is the quantization error. "
+        "An ADC turns a voltage into a number, the code. The LSB, least significant bit, is the voltage of one step between codes; the input is rounded to the nearest step, and what is left over is the quantization error, never more than half an LSB. "
         + (bipolar()
-          ? "FSR is the ± full-scale range the datasheet quotes, often set by a PGA: ±2.048 V on an ADS1115 by default. Negative codes are two’s complement, which is how the register holds them and what Hex shows. "
+          ? "FSR is the ± full-scale range the datasheet quotes, often set by a PGA, a programmable-gain amplifier: ±2.048 V on an ADS1115 by default. Negative codes are two’s complement, which is how the register holds them and what the hex shows. "
           : "VREF is whatever the ADC measures against — often the supply on an MCU, which makes the supply’s accuracy part of every reading. ")
-        + "Converting back, Arduino’s examples and ST’s LL macros divide by 2ᴺ − 1 (1023, 4095) rather than 2ᴺ, which reads up to one LSB high near the top. Typing a code puts the input on that code’s centre."
+        + "Resolution is not accuracy: an LSB finer than the noise or the reference’s tolerance adds no information, and SNR estimation turns noise into effective bits. "
+        + "Converting back, Arduino’s example and ST’s LL macro divide by 2ᴺ − 1 (1023, 4095) rather than 2ᴺ, which reads up to one LSB high near the top. Typing a code puts the input on that code’s centre."
       )}
       ${calcFooter()}
     `;
 
     wireCalc(favId, paint, (m) => {
       const kk = ADC_KINDS[m];
-      state.kind = m;
-      state.bits = kk.bits;
-      state.ref = kk.ref;
-      state.vin = kk.vin;
+      Object.assign(state, { kind: m, bits: kk.bits, ref: kk.ref, vin: kk.vin });
+      setPref(C, "kind", m);
       codeFromVin();
       paint();
     });
@@ -20478,9 +20526,21 @@ function renderAdc(domain, tool, favId) {
       if (el) el.oninput = (e) => {
         const v = parseFloat(String(e.target.value).replace("−", "-"));
         if (!isFinite(v)) return;
-        state[name] = name === "code" ? Math.round(v) : v;
-        if (name === "code") state.code = Math.min(codeMax(), Math.max(codeMin(), state.code));
+        if (name === "code") state.code = Math.min(codeMax(), Math.max(codeMin(), Math.round(v)));
+        else if (name === "vin") state.vin = v * ADC_V_UNITS[state.vinUnit];
+        else if (name === "ref") state.ref = v * ADC_V_UNITS[state.refUnit];
+        else state.bits = v;
         afterEdit(name);
+      };
+    });
+    // A unit change re-expresses the same voltage; nothing is recomputed.
+    [["ad-ref-unit", "refUnit", "ad-ref", "ref"], ["ad-vin-unit", "vinUnit", "ad-vin", "vin"]].forEach(([id, key, fieldId, name]) => {
+      const el = document.getElementById(id);
+      if (el) el.onchange = (e) => {
+        state[key] = e.target.value;
+        setPref(C, key, state[key]);
+        syncField(fieldId, shown(name, key));
+        refresh();
       };
     });
   }

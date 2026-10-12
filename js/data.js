@@ -107,7 +107,7 @@ const DOMAINS = [
           { name: "Crystal load", was: "Crystal load capacitance", calc: "crystal-load" }, { name: "Oscillator stability", was: "Oscillator stability (ppm → Hz)", calc: "osc-stability" }, { name: "PLL settings", was: "PLL multiplication factor", calc: "pll" },
         ],
       },
-      { title: "Data conversion", tools: [{ name: "ADC resolution / quantization", calc: "adc" }, { name: "DAC resolution", calc: "dac" }, { name: "SNR estimation", calc: "snr" }] },
+      { title: "Data conversion", tools: [{ name: "ADC resolution", was: "ADC resolution / quantization", calc: "adc" }, { name: "DAC resolution", calc: "dac" }, { name: "SNR estimation", calc: "snr" }] },
     ],
   },
   {
@@ -300,7 +300,7 @@ const TOOL_KEYWORDS = {
   "crystal-load": "crystal load capacitance pierce oscillator",
   "osc-stability": "ppm crystal drift ageing clock accuracy",
   "pll": "pll multiplier divider clock stm32 rp2040",
-  "adc": "adc resolution lsb quantization bits",
+  "adc": "adc resolution lsb quantization bits analog to digital converter code step vref fsr",
   "dac": "dac resolution lsb output voltage",
   "snr": "snr enob sinad noise jitter oversampling",
   "wavelength": "frequency wavelength lambda radio",
