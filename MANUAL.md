@@ -6871,20 +6871,48 @@ The review made these changes:
 ### What it computes
 
 For an N-bit DAC, its reference and its output gain: the step between
-neighbouring output levels (the LSB), the code to write for a target voltage,
-the voltage that code really puts out, and how far that is from the target, in
-volts and in LSB. It works both ways — type the voltage you want, or type a code
-to see what it outputs. The output range is shown under the fields.
+neighbouring output levels (the LSB), shown large since it is the resolution,
+then the code to write for a target voltage, the voltage that code really puts
+out, and how far that is from the target, in volts and in LSB. It works both
+ways — type the voltage you want, or type a code to see what it outputs. The
+output range is shown under the fields. The target can be typed in mV or V;
+the divisor pill and the unit are remembered.
+
+Examples: an MCP4725 on 5 V, an MCP4822 at ×2, an STM32 DAC set to 0.7 V,
+the ESP32's 8-bit DAC and the SAMD21's 10-bit DAC (the Arduino Zero's).
 
 ### Source
 
-- **Microchip MCP4802/4812/4822** datasheet (DS20002249B): VOUT = VREF × D / 4096
-  with the GA bit at 1 (×1), and 2 × VREF × D / 4096 with GA at 0 (×2), from the
+Divided by 2ᴺ, the top code one LSB under VREF:
+
+- **Microchip MCP4725** (DS22039D): Equation 4-1 gives the ideal LSB as
+  VREF / 2ⁿ, which equals (full-scale − zero-scale) / (2ⁿ − 1); VREF is VDD on
+  this part.
+- **Microchip MCP4802/4812/4822** (DS20002249B): VOUT = VREF × D / 4096 with
+  the GA bit at 1 (×1), and 2 × VREF × D / 4096 with GA at 0 (×2), from the
   internal 2.048 V reference; its table gives 0.5 mV per step at ×1 and 1 mV at
-  ×2. The MCP4725 datasheet writes the same VREF × Dn / 4096 with VREF = VDD.
-- **ST's LL driver** for the STM32 DAC (`stm32f4xx_ll_dac.h`):
-  `__LL_DAC_DIGITAL_SCALE` is 0xFFF, and `__LL_DAC_CALC_VOLTAGE_TO_DATA`
-  multiplies by it and divides by VREF, i.e. code = V × 4095 / VREF.
+  ×2.
+- **TI DAC7311** (SBAS442D): Equation 1, VOUT = AVDD × D / 2ⁿ, read in TI's
+  HTML datasheet viewer.
+- **STM32.** On ST's community forum, a user quotes RM0444 (STM32G0) as
+  dividing by 4096, and in a 2017 thread on the STM32F373, whose reference
+  manual also writes 4096, ST engineer K.Oku explains why: the DAC "is kind of
+  R-2R implementation", and its top code "has one resistor (corresponds 1LSB)
+  under the VREF". RM0444 itself was not read; st.com refused the download.
+  The STM32G071 datasheet (DS12232 rev 4, table 59) gives the output as 0 to
+  VREF+ with the buffer off and 0.2 V to VREF+ − 0.2 V with it on.
+
+Divided by 2ᴺ − 1, the top code at VREF:
+
+- **SAMD21** (Atmel-42181, the Arduino Zero's microcontroller): VDAC =
+  DATA / 0x3FF × VREF.
+- **ESP32** (technical reference manual, section 31.4.3): DACn_OUT =
+  VDD3P3_RTC × PDACn_DAC / 255, with VDD3P3_RTC typically 3.3 V.
+
+And ST's software, against its own manuals: the STM32G0 HAL's comment writes
+DAC_OUTx = VREF+ × DOR / 4095, with the example (3.3 × 868) / 4095 = 0.7 V,
+and its LL driver's `DAC_DIGITAL_SCALE_12BITS` is 4095, which
+`__LL_DAC_CALC_VOLTAGE_TO_DATA` multiplies by.
 
 ### Why the formulas are these
 
@@ -6904,14 +6932,24 @@ datasheet divides by:
     ÷ 2ᴺ:        LSB = VREF × Gain / 2ᴺ         top code = VREF × Gain − 1 LSB
     ÷ (2ᴺ − 1):  LSB = VREF × Gain / (2ᴺ − 1)   top code = VREF × Gain exactly
 
-Microchip, TI and Analog Devices write 2ᴺ: a resistor string or R-2R ladder of
-2ᴺ equal steps, of which the top code uses 2ᴺ − 1, so the output never quite
-reaches VREF. ST's own code for the STM32 DAC uses 2ᴺ − 1, so 4095 is VREF
-itself. ST's documents do not all agree — a user on ST's community forum
-points out that RM0444 and AN3126 write 4096 — but the driver says 4095, and
-that user's bench measurements on a NUCLEO-G071RB matched 4095 within a
-millivolt where 4096 was 3–5 mV out. The difference is under one LSB, but it is
-systematic, and it is always largest near the top of the range.
+A resistor string or R-2R ladder makes 2ᴺ equal steps between ground and VREF,
+of which the top code uses 2ᴺ − 1, so the output stops one LSB short: that is
+the ÷ 2ᴺ datasheets, the STM32 among them. The SAMD21 and ESP32 documents
+divide by 2ᴺ − 1 instead. The difference is under one LSB, but it is
+systematic, largest near the top of the range. Pick the pill your part's
+datasheet uses.
+
+**ST's 4095.** ST's HAL and LL code divide by 4095, so a code they compute is
+up to one LSB low near the top on a DAC that, by ST's manuals, divides by 4096.
+At 0.7 V on 3.3 V, the HAL comment's 868 puts out 0.69932 V; 869, the nearer
+level on the 4096 scale, puts out 0.70012 V.
+
+An earlier version of this tool took the STM32 to be ÷ 4095, on a forum
+user's bench readings from a NUCLEO-G071RB. Those readings cannot decide it:
+on the 2.5 V reference used there, the two divisors give the same code, or
+codes one LSB (0.61 mV) apart, at the 400, 800 and 1200 mV targets, yet the
+readings differ by about 4 mV, six or seven LSB, so something else changed
+between the two runs.
 
 **Gain.** Many DACs follow the ladder with an amplifier. On the MCP4822 the GA
 bit picks ×1 or ×2 from its internal 2.048 V reference, which is how a 2.048 V
@@ -6921,10 +6959,10 @@ reference makes a 4.095 V range at 1 mV a step.
 
 - **The output cannot reach the rails.** The MCP4822's amplifier swings from
   10 mV to VDD − 40 mV, and its accuracy holds only between those. The STM32
-  DAC with its output buffer on is similarly limited near 0 V and VREF+. The
-  top and bottom few codes on the tool's range are therefore not really
-  available on those parts, and with ×2 gain the range can exceed VDD, which
-  the output will not follow either.
+  DAC with its output buffer on spans 0.2 V to VREF+ − 0.2 V. The top and
+  bottom few codes on the tool's range are therefore not really available on
+  those parts, and with ×2 gain the range can exceed VDD, which the output will
+  not follow either.
 - **An ideal DAC.** Offset, gain error, INL and DNL are not modelled; they are
   specified in LSB, which is what this tool gives the size of.
 - **VREF is taken as exact.** When it is VDD, as on the MCP4725, the supply's
@@ -6948,11 +6986,22 @@ short of VREF.
 ÷ (2ᴺ − 1): LSB 3.3 / 4095 = 805.86 µV; code 4095 outputs exactly 3.3 V;
 1.2 V gives code 1489, output 1.19993 V.
 
-MCP4822 at ×2 (VREF 2.048 V, gain 2): LSB 1 mV, matching the datasheet's
-table; 3 V is code 3000 exactly; 5 V is flagged as above the 4.095 V range.
-8 bits on the same settings: LSB 16 mV. 24 bits: output shown to enough figures
-to tell neighbouring codes apart.
+The examples: the MCP4725 on 5 V puts 3.3 V at code 2703, 0xA8F, 0.44 mV low;
+the MCP4822 at ×2 steps exactly 1 mV, so 3 V is code 3000; the STM32 at 0.7 V
+gets 869, +122 µV; the ESP32's 8 bits ÷ 255 step 12.94 mV, so 1.5 V is code
+116 at 1.501 V; the SAMD21's 10 bits ÷ 1023 put code 310 at exactly 1 V.
 
+The review made these changes:
+- The STM32 moved from the ÷ (2ᴺ − 1) side to ÷ 2ᴺ, after reading ST's
+  engineer's answer and its manuals' 4096; the second pill now rests on the
+  SAMD21 and ESP32 documents, and the forum bench test is no longer cited as
+  evidence. Analog Devices is no longer named: none of its datasheets was read.
+- The LSB became the large result, with the code, its output and the error on
+  the line under it.
+- The target field takes mV or V, remembered with the pill.
+- The drawing's labels went from 9–10 px to 11 px.
+- It added the five examples, the first cases (13), and in every tool's
+  examples a value now stays on one line with its unit.
 [↑ Index](#index)
 
 ---

@@ -301,7 +301,7 @@ const TOOL_KEYWORDS = {
   "osc-stability": "ppm crystal drift ageing clock accuracy",
   "pll": "pll multiplier divider clock stm32 rp2040",
   "adc": "adc resolution lsb quantization bits analog to digital converter code step vref fsr",
-  "dac": "dac resolution lsb output voltage",
+  "dac": "dac resolution lsb output voltage digital to analog converter code vref mcp4725 mcp4822",
   "snr": "snr enob sinad noise jitter oversampling",
   "wavelength": "frequency wavelength lambda radio",
   "battery-runtime": "battery life mah runtime capacity",

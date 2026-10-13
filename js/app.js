@@ -704,8 +704,14 @@ function formatFarads(v) {
 let TOOL_EXAMPLES = null;
 let EXAMPLE_NOTE = "";
 
+// A value and its unit stay on one line in example titles and notes: "3.3"
+// had ended a line with its "V" starting the next. Only a number followed by
+// a unit symbol is glued, with a non-breaking space.
+const UNIT_GLUE = /(\d) (?=(?:[pnµmkMG]?(?:V|A|Hz|Ω|F|W|s|H)|°C|%|ppm|dB[a-zA-Z]*|bits?)(?![\w]))/g;
+const glueUnits = (s) => s.replace(UNIT_GLUE, "$1 ");
+
 function useExamples(list) {
-  TOOL_EXAMPLES = list;
+  TOOL_EXAMPLES = list.map((ex) => ({ ...ex, title: glueUnits(ex.title), note: glueUnits(ex.note) }));
 }
 
 function openExamples() {
@@ -11630,7 +11636,7 @@ function renderTransistorBias(domain, tool, favId) {
     paint();
   };
   useExamples([
-    { title: "Amplifier stage on 12 V", note: "47 k / 10 k set the base at 2.1 V: 1.29 mA flows, and halving or doubling hFE moves it under 10 %.",
+    { title: "Amplifier stage on 12 V", note: "47 k / 10 k set the base at 2.1 V: 1.29 mA flows; halving or doubling hFE moves it under 10%.",
       apply: example("npn", 47, 10, 2.2, 1) },
     { title: "Vce near half the supply", note: "Rc = 3.3 k puts Vce at 6.46 V, near the middle, leaving room for the output to swing both ways.",
       apply: example("npn", 47, 10, 3.3, 1) },
@@ -20549,26 +20555,39 @@ function renderAdc(domain, tool, favId) {
 }
 
 // ---------- DAC resolution ----------
-// Vendors disagree on the divisor, and it is not a rounding detail: it decides
-// whether the top code reaches VREF. Microchip writes Vout = VREF x Dn / 2^N
-// (MCP4725, MCP4822), so the top code stops one LSB short. ST's own LL code
-// divides by 2^N - 1 (__LL_DAC_DIGITAL_SCALE is 0xFFF), so 4095 is VREF, and
-// a bench test on a NUCLEO-G071RB agrees, although RM0444 writes 4096.
+// Datasheets disagree on the divisor, and it is not a rounding detail: it
+// decides whether the top code reaches VREF. Microchip (MCP4725 equation 4-1,
+// LSB = VREF / 2^n; MCP4822) and TI (DAC7311 equation 1, AVDD x D / 2^n)
+// divide by 2^N, so the top code stops one LSB short. So does the STM32 DAC:
+// its reference manuals write 4096, and an ST engineer described it as an
+// R-2R ladder whose top code sits one resistor under VREF. The SAMD21
+// datasheet (DATA / 0x3FF x VREF) and the ESP32 manual (VDD3P3_RTC x code /
+// 255) divide by 2^N - 1. ST's own HAL comment and LL macro use 4095 too, at
+// odds with its manuals; that is software, not the converter.
 const DAC_KINDS = {
   pow2: { label: "÷ 2ᴺ" },
   pow2m1: { label: "÷ (2ᴺ − 1)" },
 };
 
 function renderDac(domain, tool, favId) {
-  const state = { kind: "pow2", bits: 12, ref: 3.3, gain: 1, vt: 1.2, code: 0 };
+  const C = "dac";
+  // The target is volts or millivolts; a reference is always volts.
+  const units = Object.keys(ADC_V_UNITS);
+  const state = {
+    kind: pref(C, "kind", "pow2", Object.keys(DAC_KINDS)),
+    bits: 12, ref: 3.3, gain: 1, vt: 1.2, code: 0,
+    vtUnit: pref(C, "vtUnit", "V", units),
+  };
 
-  const divisor = () => Math.pow(2, state.bits) - (state.kind === "pow2m1" ? 1 : 0);
+  const pow2 = () => state.kind === "pow2";
+  const divisor = () => Math.pow(2, state.bits) - (pow2() ? 0 : 1);
   const lsb = () => state.ref * state.gain / divisor();
   const codeMax = () => Math.pow(2, state.bits) - 1;
   const valid = () => Number.isInteger(state.bits) && state.bits >= 1 && state.bits <= 32 && state.ref > 0 && state.gain > 0;
 
   // Enough figures that a 24-bit code survives the round trip through the field.
   const fig = (x) => +x.toPrecision(10);
+  const shownVt = () => fig(state.vt / ADC_V_UNITS[state.vtUnit]);
 
   function codeFromTarget() {
     if (!valid()) return;
@@ -20579,6 +20598,27 @@ function renderDac(domain, tool, favId) {
     state.vt = fig(state.code * lsb());
   }
   codeFromTarget();
+
+  const example = (kind, bits, ref, gain, vt) => () => {
+    Object.assign(state, { kind, bits, ref, gain, vt });
+    codeFromTarget();
+    paint();
+  };
+  // MCP4725 DS22039D (VREF = VDD), MCP4822 DS20002249B (2.048 V, GA bit),
+  // ST's G0 HAL comment (0.7 V as (3.3 x 868) / 4095), ESP32 TRM 31.4.3
+  // (VDD3P3_RTC, typically 3.3 V, / 255), SAMD21 Atmel-42181 (DATA / 0x3FF).
+  useExamples([
+    { title: "MCP4725 on 5 V", note: "12 bits with VDD as the reference: 3.3 V is code 2703, 0.44 mV low.",
+      apply: example("pow2", 12, 5, 1, 3.3) },
+    { title: "MCP4822 at ×2", note: "Its 2.048 V reference doubled: exactly 1 mV a code, so 3 V is code 3000.",
+      apply: example("pow2", 12, 2.048, 2, 3) },
+    { title: "STM32 DAC, 0.7 V", note: "On 3.3 V, 869 is nearest; ST's HAL comment, dividing by 4095, writes 868.",
+      apply: example("pow2", 12, 3.3, 1, 0.7) },
+    { title: "ESP32, 8 bits", note: "Its manual divides by 255, so 255 is the full 3.3 V: 12.94 mV a code.",
+      apply: example("pow2m1", 8, 3.3, 1, 1.5) },
+    { title: "SAMD21, 10 bits", note: "Arduino Zero's DAC divides by 0x3FF: on 3.3 V, code 310 is exactly 1 V.",
+      apply: example("pow2m1", 10, 3.3, 1, 1) },
+  ]);
 
   const hex = (code) => "0x" + code.toString(16).toUpperCase().padStart(Math.ceil(state.bits / 4), "0");
 
@@ -20600,6 +20640,7 @@ function renderDac(domain, tool, favId) {
   const comp = "#8FC1F5";
   const hit = "#5DCAA5";
   const warn = "#E0A85E";
+  const label = "#9AA4B0";
 
   // A DAC does not make a staircase you slide along: it makes one level per
   // code and nothing in between. So the picture is eight levels as points
@@ -20610,7 +20651,8 @@ function renderDac(domain, tool, favId) {
     if (r.problem) return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none"></svg>`;
     const n = Math.min(8, codeMax() + 1);
     const k0 = Math.max(0, Math.min(codeMax() - n + 1, r.code - Math.floor((n - 1) / 2)));
-    const x0 = 40, x1 = 296, y0 = 108, y1 = 14;
+    // The plot stops short of the right edge to leave the "1 LSB" label room.
+    const x0 = 40, x1 = 288, y0 = 108, y1 = 16;
     const sx = (x1 - x0) / n, sy = (y0 - y1) / n;
     const X = (k) => x0 + (k - k0 + 0.5) * sx;
     const Y = (v) => y0 - (v / r.q - (k0 - 0.5)) * sy;
@@ -20627,53 +20669,57 @@ function renderDac(domain, tool, favId) {
     // neighbour.
     const nb = r.code + 1 <= k0 + n - 1 ? r.code + 1 : r.code - 1;
     const ya = Y(r.code * r.q), yb = Y(nb * r.q);
-    const dim = `<path d="M302 ${ya.toFixed(1)} H310 M302 ${yb.toFixed(1)} H310 M306 ${ya.toFixed(1)} V${yb.toFixed(1)}" stroke="${comp}" stroke-width="1.2"/>
-      <text x="313" y="${((ya + yb) / 2 + 3).toFixed(1)}" fill="${comp}" font-size="9" font-weight="600">1 LSB</text>`;
+    const dim = `<path d="M292 ${ya.toFixed(1)} H300 M292 ${yb.toFixed(1)} H300 M296 ${ya.toFixed(1)} V${yb.toFixed(1)}" stroke="${comp}" stroke-width="1.2"/>
+      <text x="304" y="${((ya + yb) / 2 + 4).toFixed(1)}" fill="${comp}" font-size="11" font-weight="600">1 LSB</text>`;
 
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none">
       <path d="M${x0} ${y1 - 4} V${y0} H${x1 + 4}" stroke="${wire}" stroke-width="1.2"/>
-      <text x="4" y="${y1 + 2}" fill="${wire}" font-size="9" font-weight="600">Vout</text>
+      <text x="4" y="${y1 - 2}" fill="${label}" font-size="11" font-weight="600">Vout</text>
       <path d="${ideal}" stroke="${wire}" stroke-width="1" stroke-dasharray="3 3"/>
       <path d="M${x0} ${yT.toFixed(1)} H${x1}" stroke="${hit}" stroke-width="1.2" stroke-dasharray="4 3"/>
-      <text x="${x0 + 4}" y="${(yT - 4).toFixed(1)}" fill="${hit}" font-size="9" font-weight="600">Target</text>
+      <text x="${x0 + 4}" y="${(yT - 5).toFixed(1)}" fill="${hit}" font-size="11" font-weight="600">Target</text>
       <path d="M${X(r.code).toFixed(1)} ${ya.toFixed(1)} V${y0}" stroke="${r.over ? warn : hit}" stroke-width="1" stroke-dasharray="2 3"/>
       ${dots.join("")}
       ${dim}
-      <text x="${X(r.code).toFixed(1)}" y="${y0 + 14}" fill="${r.over ? warn : hit}" font-size="10" font-weight="600" text-anchor="middle">${r.code}</text>
-      <text x="${x0 - 4}" y="${y0 + 14}" fill="${wire}" font-size="9" font-weight="600" text-anchor="end">Code</text>
+      <text x="${X(r.code).toFixed(1)}" y="${y0 + 16}" fill="${r.over ? warn : hit}" font-size="11" font-weight="700" text-anchor="middle">${r.code}</text>
+      <text x="${x0 - 4}" y="${y0 + 16}" fill="${label}" font-size="11" font-weight="600" text-anchor="end">Code</text>
     </svg>`;
   }
 
-  function cell(label, value, colour) {
-    return `<div class="eseries-cell">
-      <div style="font-weight:600;color:${domain.color};">${label}</div>
-      <div${colour ? ` style="color:${colour}"` : ""}>${value}</div>
-    </div>`;
-  }
-
-  const signed = (x, unit) => (x > 0 ? "+" : "") + (unit ? siFormat(x, unit) : trim(x));
+  // Shown text gets a true minus sign; the fields keep the hyphen they parse.
+  const minus = (s) => String(s).replace(/^-/, "−");
+  const signed = (x, unit) => (x > 0 ? "+" : "") + minus(unit ? siFormat(x, unit) : trim(x));
   // An output voltage needs as many figures as the code has, or neighbouring
   // codes print alike.
-  const volts = (v) => siFormat(v, "V", Math.min(10, Math.max(4, Math.ceil(state.bits * Math.LOG10E * Math.LN2) + 1)));
+  const volts = (v) => minus(siFormat(v, "V", Math.min(10, Math.max(4, Math.ceil(state.bits * Math.LOG10E * Math.LN2) + 1))));
+  const sup = (n) => String(n).replace(/\d/g, (c) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[c]);
+  // Each part of a wrapping line stays whole, as on the ADC.
+  const whole = (html) => `<span style="white-space:nowrap">${html}</span>`;
 
   function rangeHTML(r) {
     if (r.problem) return "";
-    return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">Output 0 V to ${volts(r.top)} · codes 0 to ${codeMax()}</div>`;
+    return `<div class="error-text" style="color:var(--text-secondary);margin-top:0">${whole(`Output 0 V to ${volts(r.top)}`)} · ${whole(`codes 0 to ${codeMax()}`)}</div>`;
   }
 
+  // The step size large, since that is the resolution; under it, the code to
+  // write, what it really puts out, and how far that is from the target.
   function resultsHTML(r) {
     if (r.problem) return `<div class="error-text">${r.problem}</div>`;
     const snap = Math.abs(r.errLsb) < 1e-6;
+    const scale = `${trim(state.ref)} V${state.gain !== 1 ? ` × ${trim(state.gain)}` : ""}`;
+    const head = `1 LSB = ${scale} / ${pow2() ? `2${sup(state.bits)}` : `(2${sup(state.bits)} − 1)`}`;
+    const tone = r.over ? ` style="color:${warn}"` : "";
     const caution = r.over
-      ? `<div class="error-text" style="color:${warn}">The target is ${r.over === "high" ? "above the top" : "below the bottom"} of the output range, so the nearest the DAC gets is its end code.</div>`
+      ? `<div class="error-text" data-res="over" style="color:${warn}">The target is ${r.over === "high" ? "above the top" : "below the bottom"} of the output range, so the nearest the DAC gets is its end code.</div>`
       : "";
     return `
-      <div class="eseries-grid eseries-grid--tight">
-        ${cell("LSB", siFormat(r.q, "V"))}
-        ${cell("Hex", hex(r.code))}
-        ${cell("Vout", volts(r.vout))}
-        ${cell("Error", snap ? "0 V" : signed(r.err, "V"), r.over ? warn : "")}
-        ${cell("Error LSB", snap ? "0" : signed(r.errLsb), r.over ? warn : "")}
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label" data-res="head">${head}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="main">${siFormat(r.q, "V")}</span></div>
+        <div class="result-sub">${whole(`Code ${r.code} = <span data-res="hex">${hex(r.code)}</span>`)} · ${whole(`puts out <span data-res="vout">${volts(r.vout)}</span>`)} · ${whole(`error <span data-res="err"${tone}>${snap ? "0 V" : signed(r.err, "V")}</span>, <span data-res="errlsb"${tone}>${snap ? "0" : signed(r.errLsb)} LSB</span>`)}</div>
       </div>
       ${caution}`;
   }
@@ -20685,9 +20731,9 @@ function renderDac(domain, tool, favId) {
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML(r);
   }
 
-  function syncField(id, name) {
+  function syncField(id, value) {
     const el = document.getElementById(id);
-    if (el && document.activeElement !== el) el.value = state[name];
+    if (el && document.activeElement !== el) el.value = value;
   }
 
   // The target is what you want; the code follows it. Typing a code instead
@@ -20695,28 +20741,28 @@ function renderDac(domain, tool, favId) {
   function afterEdit(name) {
     if (name === "code") {
       targetFromCode();
-      syncField("da-vt", "vt");
+      syncField("da-vt", shownVt());
     } else {
       codeFromTarget();
-      syncField("da-code", "code");
+      syncField("da-code", state.code);
     }
     refresh();
   }
 
-  function field(id, name, label, unit) {
+  function field(id, label, value, unitHTML) {
     return `
         <div class="field">
           <label>${label}</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" id="${id}" value="${state[name]}" />
-            ${unit ? `<span class="unit-fixed">${unit}</span>` : ""}
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${value}" />
+            ${unitHTML}
           </div>
         </div>`;
   }
+  const unitSelect = (id, cur) => `<select id="${id}">${units.map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
 
   function paint() {
     const r = compute();
-    const pow2 = state.kind === "pow2";
     app.innerHTML = `
       ${calcHeader(tool, favId, "One level per code, and the target falls between two")}
 
@@ -20727,13 +20773,13 @@ function renderDac(domain, tool, favId) {
       </div>
 
       <div class="field-pair">
-        ${field("da-bits", "bits", "Resolution", "bits")}
-        ${field("da-ref", "ref", "VREF", "V")}
-        ${field("da-gain", "gain", "Gain", "")}
+        ${field("da-bits", "Resolution", state.bits, `<span class="unit-fixed">bits</span>`)}
+        ${field("da-ref", "VREF", state.ref, `<span class="unit-fixed">V</span>`)}
+        ${field("da-gain", "Gain", state.gain, "")}
       </div>
       <div class="field-pair">
-        ${field("da-vt", "vt", "Target", "V")}
-        ${field("da-code", "code", "Code", "")}
+        ${field("da-vt", "Target", shownVt(), unitSelect("da-vt-unit", state.vtUnit))}
+        ${field("da-code", "Code", state.code, "")}
       </div>
       <div data-res="range">${rangeHTML(r)}</div>
 
@@ -20741,11 +20787,14 @@ function renderDac(domain, tool, favId) {
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
-        [pow2 ? "LSB = VREF × Gain / 2ᴺ" : "LSB = VREF × Gain / (2ᴺ − 1)",
+        [pow2() ? "LSB = VREF × Gain / 2ᴺ" : "LSB = VREF × Gain / (2ᴺ − 1)",
          "Code = round(Target / LSB), 0 to 2ᴺ − 1",
          "Vout = Code × LSB",
-         pow2 ? "Top = VREF × Gain − 1 LSB" : "Top = VREF × Gain exactly"],
-        "A DAC turns a number, the code, into a voltage. It has one output level per code, one LSB apart, and nothing in between, so a target between two levels gets the nearer one. ÷ 2ᴺ is what Microchip, TI and Analog Devices datasheets write: the top code stops one LSB short of VREF. ÷ (2ᴺ − 1) is what ST’s own code uses for the STM32 DAC, so 4095 is VREF itself. Pick the pill that matches your part’s datasheet. Gain is the output amplifier’s: ×1 or ×2 on an MCP4822, set by its GA bit. Typing a code shows what it puts out."
+         pow2() ? "Top = VREF × Gain − 1 LSB" : "Top = VREF × Gain exactly"],
+        "A DAC turns a number, the code, into a voltage. It has one output level per code, one LSB (least significant bit) apart, and nothing in between, so a target between two levels gets the nearer one. "
+        + "Datasheets divide by one of two numbers, and it decides whether the top code reaches VREF. ÷ 2ᴺ is what Microchip’s and TI’s DACs and the STM32’s reference manuals write: the top code stops one LSB short. ÷ (2ᴺ − 1) is what the SAMD21 datasheet and the ESP32 manual write: the top code is VREF itself. Pick the pill your part’s datasheet uses. "
+        + "ST’s HAL and LL code divide by 4095 although the STM32 manuals write 4096, which puts a computed code up to one LSB low near the top. "
+        + "Gain is the output amplifier’s: ×1 or ×2 on an MCP4822, set by its GA bit. Typing a code shows what it puts out."
       )}
       ${calcFooter()}
     `;
@@ -20754,6 +20803,7 @@ function renderDac(domain, tool, favId) {
     // numbers stay and only the code is worked out again.
     wireCalc(favId, paint, (m) => {
       state.kind = m;
+      setPref(C, "kind", m);
       codeFromTarget();
       paint();
     });
@@ -20763,10 +20813,20 @@ function renderDac(domain, tool, favId) {
       if (el) el.oninput = (e) => {
         const v = parseFloat(e.target.value);
         if (!isFinite(v)) return;
-        state[name] = name === "code" ? Math.min(codeMax(), Math.max(0, Math.round(v))) : v;
+        if (name === "code") state.code = Math.min(codeMax(), Math.max(0, Math.round(v)));
+        else if (name === "vt") state.vt = v * ADC_V_UNITS[state.vtUnit];
+        else state[name] = v;
         afterEdit(name);
       };
     });
+    // A unit change re-expresses the same voltage; nothing is recomputed.
+    const unitEl = document.getElementById("da-vt-unit");
+    if (unitEl) unitEl.onchange = (e) => {
+      state.vtUnit = e.target.value;
+      setPref(C, "vtUnit", state.vtUnit);
+      syncField("da-vt", shownVt());
+      refresh();
+    };
   }
 
   paint();

@@ -53,8 +53,8 @@ const FORMULAS = [
   {
     tool: "DAC resolution",
     domain: "digital",
-    formulas: ["Step size = Vref / 2ⁿ"],
-    note: "Same relationship as ADC resolution, read the other direction.",
+    formulas: ["LSB = VREF × Gain / 2ᴺ", "Vout = Code × LSB"],
+    note: "The top code stops one LSB under VREF. The SAMD21 and ESP32 datasheets divide by 2ᴺ − 1 instead, so their top code is VREF itself.",
   },
   {
     tool: "I2C pull-up resistor",
