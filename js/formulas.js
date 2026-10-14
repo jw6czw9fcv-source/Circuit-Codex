@@ -57,6 +57,12 @@ const FORMULAS = [
     note: "The top code stops one LSB under VREF. The SAMD21 and ESP32 datasheets divide by 2ᴺ − 1 instead, so their top code is VREF itself.",
   },
   {
+    tool: "SNR estimation",
+    domain: "digital",
+    formulas: ["SNR = 6.02N + 1.76 dB", "ENOB = (SINAD − 1.76) / 6.02", "SNR(jitter) = −20 log(2π × fin × tj)"],
+    note: "The ideal SNR of an N-bit ADC, for a full-scale sine over dc to fs/2. ENOB turns a datasheet's measured SINAD back into bits.",
+  },
+  {
     tool: "I2C pull-up resistor",
     domain: "digital",
     formulas: ["R_min = (Vdd − Vol) / Iol", "R_max ≈ t_rise / (0.8473 × C_bus)"],

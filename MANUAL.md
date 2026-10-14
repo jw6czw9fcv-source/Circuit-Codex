@@ -7023,9 +7023,17 @@ Two things, one per pill.
   quote, both ways, with how many of the converter's bits noise and distortion
   take away.
 
+The total SNR is the large result on Estimate, with the ENOB it is worth and
+its three terms on the line under it; on ENOB ↔ SINAD the effective bits are
+large, with the bits lost and the noise floor. The pill and the units of the
+sample rate, bandwidth, input frequency and jitter are remembered.
+
 The picture is a level diagram in dBFS: full scale at the top, the signal, and
 each noise floor as a line. The gap from the signal down to the total floor is
 the SNR, and the highest noise line is the one worth fixing.
+
+Examples: 16-bit audio at 44.1 kHz, ×16 oversampling, 1 ps of jitter at
+100 MHz, a signal at −20 dBFS, and the ADCs of the RP2040 and the STM32G0.
 
 ### Source
 
@@ -7041,8 +7049,28 @@ Walt Kester's Analog Devices tutorials:
   limit set by jitter, and that the total jitter is the root-sum-square of the
   sampling clock's and the ADC's own aperture jitter.
 
-The ENOB pill's defaults come from the **RP2040 datasheet**, section 4.9.3:
-SINAD 54.0 dB typical at 997 Hz and almost full scale, ENOB 8.7.
+analog.com refused a re-read of these during the review, so the formulas were
+checked again elsewhere:
+
+- **TI's SLYT379**, part 1 of an Analog Applications Journal series on clock
+  jitter: its Equation 2 is SNR = −20 log(2π × fIN × tJitter), its Equation 1
+  adds the quantization, thermal and jitter SNRs as noise powers, and its
+  Equation 3 combines the clock's and the ADC's aperture jitter as a
+  root-sum-square.
+- Wikipedia's article on ENOB quotes MT-003's ENOB = (SINAD − 1.76) / 6.02.
+- National Semiconductor's note on aperture time and jitter (TI SNAA018)
+  agrees that doubling the sample rate and filtering gains 3 dB. Its jitter
+  example does not agree with the formula: it gives 73 dB for 10 ps at
+  10 MHz, where −20 log(2π × 10 MHz × 10 ps) is 64 dB, because it divides by
+  the full-scale range where the sine's rms value belongs (20 log 2√2 = 9 dB).
+
+Datasheet figures:
+
+- **RP2040**, section 4.9.3, table 566, typical, measured at 250 ksps with the
+  input spanning codes 1 to 4094: SNR 61.5 dB, THD −55 dB, SFDR 59.9 dB,
+  SINAD 54.0 dB, ENOB 8.7. These are the ENOB pill's defaults.
+- **STM32G071**, DS12232 rev 4, table 58: SINAD 63 dB typical (62.5 dB
+  minimum) and ENOB 10.2 (10.1) at VDDA = VREF+ = 3 V and 25 °C.
 
 ### Why the formulas are these
 
@@ -7114,9 +7142,10 @@ MT-003:
 
 On the ENOB pill SINAD takes the place of SNR, as the datasheets do. The
 RP2040's 54.0 dB gives 8.68 bits, and its datasheet says 8.7: of its 12 bits,
-3.3 are lost to noise and distortion. Its SNR is 61.5 dB but its THD is −55 dB
-— its INL and DNL errors (the DNL spikes are erratum RP2040-E11) cost more
-than the noise.
+3.3 are lost to noise and distortion. Its noise alone, an SNR of 61.5 dB, would
+leave 9.9; its THD of −55 dB — its INL and DNL errors (the DNL spikes are
+erratum RP2040-E11) — costs more than the noise. The STM32G071's 63 dB gives
+10.17 bits, its datasheet's 10.2.
 
 ### Assumptions and limits
 
@@ -7156,4 +7185,19 @@ normalised.
 ENOB pill: SINAD 54.0 dB at 0 dBFS gives 8.678 bits — the RP2040's 8.7 — with
 3.32 bits lost; ENOB 10 gives SINAD 61.96 dB.
 
+The examples: 16 bits over the whole band with no jitter, 98.08 dB; 12 bits
+keeping 31.25 kHz of a 1 MSPS band, process gain 12.04 dB, total 86.04 dB,
+14 bits; 14 bits at 250 MSPS with 1 ps at 100 MHz, jitter 64.04 dB, total
+64.01 dB, 10.34 bits, with the warning; 12 bits at −20 dBFS, 54 dB and an
+ENOB still of 12; the STM32G0's 63 dB, 10.17 bits.
+
+The review made these changes:
+- The total SNR and the ENOB became the large results, with their terms on the
+  line under them.
+- Rates, frequencies and jitter are kept in hertz and seconds, so a remembered
+  unit only changes how a field shows them; the pill and units are remembered.
+- The Estimate fields went from three to a row to two: at 375 px the sample
+  rate's unit was cut to "MS…".
+- The diagram's labels went from 8–9 px to 11 px, with values to one decimal.
+- It added the six examples, the first cases (12) and a formula-search card.
 [↑ Index](#index)
