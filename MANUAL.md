@@ -97,6 +97,7 @@ will key on, since that is the id the app already holds for each tool.
 - Battery → [Battery runtime](#battery-runtime)
 - Battery → [Battery C-rate](#battery-c-rate)
 - Battery → [Battery types & sizes](#battery-types--sizes)
+- Battery → [Button cell sizes](#button-cell-sizes)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -7535,5 +7536,79 @@ The review made these changes:
   Energizer's 1500 mAh rather than an approximation.
 - The search covers the ANSI codes; the filter is remembered.
 - It added the first cases (5) and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="button-cells"></a>
+## Button cell sizes
+
+`calc: button-cells` · Power electronics › Battery
+(formerly Button cells)
+
+### What it computes
+
+A searchable list of coin and button cells — alkaline, silver oxide, lithium
+and zinc-air — each with its IEC and ANSI designations where known,
+dimensions, a capacity with the end voltage it is measured to, its chemistry
+and voltage, and a note on uses and substitutes. A filter by chemistry is
+remembered; the search matches the common name, either designation or the
+chemistry.
+
+### Source
+
+Energizer's datasheets, read in review, give each cell's typical capacity
+and designations:
+
+- **Alkaline:** LR44 (Energizer A76) 150 mAh to 0.9 V at 7.5 kΩ, IEC LR44,
+  ANSI 1166A; LR1130 (189) 80 mAh to 0.9 V, IEC **LR54**.
+- **Silver oxide**, to 1.2 V: SR44 (357) 150 mAh at 6.8 kΩ, IEC SR44, ANSI
+  1131SO; SR621 (364) 23 mAh at 68 kΩ, IEC SR60, ANSI 1175SO; SR626 (377)
+  27 mAh at 45 kΩ, IEC SR66, ANSI 1176SO; SR920 (371) 35 mAh at 30 kΩ, IEC
+  SR69.
+- **Lithium**, to 2.0 V: CR1220 37 mAh (ANSI 5012LC), CR1616 60 mAh, CR1632
+  130 mAh, CR2016 100 mAh (5000LC), CR2025 170 mAh (5003LC), CR2032 235 mAh
+  at 15 kΩ (5004LC), CR2450 620 mAh (5029LC).
+
+Not from those sheets: the dimensions, which the sheets draw but could not
+be read as text, and the zinc-air capacities, which remain typical market
+ranges.
+
+### Why the formulas are these
+
+There is no formula: it is a reference. A lithium coin's name gives its
+size: the first two digits are the diameter in mm and the last two the
+thickness in tenths of a mm, so a CR2032 is 20 × 3.2 mm. The IEC numbers of
+alkaline and silver-oxide cells (LR54, SR66) are size codes, not dimensions,
+which is why trade names like LR1130 and SR626 stay in use.
+
+### Assumptions and limits
+
+- **Capacity is to an end voltage at one load,** given with each figure; a
+  heavier load or a higher cutoff gets less.
+- **Same size, different chemistry:** LR44 and SR44 share a case at 1.5 V and
+  1.55 V; silver oxide's flatter curve suits watches, so the substitution
+  works one way only.
+- **Zinc-air** cells start their life when the tab is peeled.
+
+### What it deliberately does not do
+
+- **Cylindrical cells** are Battery types & sizes.
+- **Runtime** is Battery runtime.
+
+### How it was checked
+
+Searching "lr54" finds the LR1130 with 80 mAh to 0.9 V; "cr2016" shows
+100 mAh to 2.0 V and ANSI 5000LC; "sr66" finds the SR626; the Zinc-air filter
+is remembered.
+
+The review made these changes:
+- Capacities are Energizer's typical figures with their end voltage, where
+  the table had ranges — three of which (CR1616, CR2016, CR2025) sat below
+  Energizer's figure.
+- IEC and ANSI designations were added; LR1130's IEC name is LR54, and the
+  silver-oxide cells' are SR44, SR60, SR66 and SR69. The search covers them.
+- The filter is remembered; it added the first cases (4) and this section.
 
 [↑ Index](#index)

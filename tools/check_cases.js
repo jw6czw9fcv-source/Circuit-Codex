@@ -987,6 +987,16 @@ const CHECK_CASES = {
     { name: "the filter is remembered", do: [["click", '#bs-chips [data-filter="lithium"]'], ["reopen"]],
       expect: [["#bs-chips .filter-btn.active", "Lithium"]] },
   ],
+  "button-cells": [
+    { name: "LR1130's IEC designation is LR54, 80 mAh (Energizer 189)", do: [["set", "#bc-input", "lr54"]],
+      expect: [["#bc-results .formula-card-title", "LR1130 (AG10) IEC LR54"], ["#bc-results .breadcrumb", "/80 mAh to 0.9 V/"]] },
+    { name: "CR2016 is 100 mAh to 2.0 V, ANSI 5000LC", do: [["set", "#bc-input", "cr2016"]],
+      expect: [["#bc-results .breadcrumb", "/100 mAh to 2.0 V.*ANSI 5000LC/"]] },
+    { name: "searching IEC SR66 finds the SR626", do: [["set", "#bc-input", "sr66"]],
+      expect: [["#bc-results .formula-card-title", "SR626 (377) IEC SR66"]] },
+    { name: "the filter is remembered", do: [["click", '#bc-chips [data-filter="zincair"]'], ["reopen"]],
+      expect: [["#bc-chips .filter-btn.active", "Zinc-air"]] },
+  ],
   "thyristor-firing": [
     { name: "TRIAC, 120 V, 144 Ω, α 90°: half power, 50 W", do: [],
       expect: [['[data-res="p"]', "50 W"], ['[data-res="pct"]', "50%"], ['[data-res="vrms"]', "84.85 V"], ['[data-res="delay"]', "4.167 ms"], ['[data-res="piv"]', "169.7 V"]] },
