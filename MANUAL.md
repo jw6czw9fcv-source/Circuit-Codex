@@ -95,6 +95,7 @@ will key on, since that is the id the app already holds for each tool.
 ### Power electronics
 
 - Battery → [Battery runtime](#battery-runtime)
+- Battery → [Battery C-rate](#battery-c-rate)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -7397,5 +7398,69 @@ The review made these changes:
   arrow its comment had promised.
 - It added five examples from the CR2032 and NCR18650B datasheets, the first
   cases (10) and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="c-rate"></a>
+## Battery C-rate
+
+`calc: c-rate` · Power electronics › Battery
+(formerly C-rate)
+
+### What it computes
+
+Any one of current, C-rate and capacity from the other two, one pill each,
+with the time a full charge or discharge takes at that rate, and a table of
+common C-rates and their times. The pill and the units are remembered.
+
+Examples: a Panasonic 18650's standard charge, the same cell at 1C, a CR2032
+at the load its datasheet rates it at, and the capacity a 2 A load needs to
+stay at 0.5C.
+
+### Source
+
+- **Panasonic NCR18650B datasheet:** standard charge CC-CV at 1625 mA to
+  4.20 V; capacity at least 3250 mAh at 25 °C, rated capacity at least
+  3200 mAh at 20 °C; its cycle-life and temperature curves discharge at 1C.
+- **Energizer CR2032 datasheet:** 235 mAh rated at 15 kΩ, a drain of 0.19 mA.
+
+### Why the formulas are these
+
+    Current = C-rate × Capacity
+    Time = 1 / C-rate
+
+1C is the current that would move the battery's rated capacity in one hour:
+a 2000 mAh cell at 1C draws 2 A, at 0.5C 1 A for two hours. The C is the
+capacity, not the coulomb, though capacity in Ah is itself a charge
+(1 Ah = 3600 C). The 18650's standard charge checks it: 1625 mA into
+3250 mAh is exactly 0.5C.
+
+### Assumptions and limits
+
+- **A notation, not a permission.** A cell's allowed charge and discharge
+  C-rates are in its datasheet; this tool converts, it does not judge.
+- **The time is nominal.** A real charge slows in its constant-voltage phase,
+  and a real discharge stops at the cutoff voltage, both before 1 / C-rate.
+- **Capacity is the rated one.** Which figure a datasheet's C refers to — the
+  rated or the typical capacity — is its own; the NCR18650B quotes both.
+
+### What it deliberately does not do
+
+- **Runtime from a real load** is Battery runtime, with a usable share.
+- **Peukert's effect and temperature** are not modelled.
+
+### How it was checked
+
+2000 mAh at 1C gives 2 A and 1 h; at 0.2C, 400 mA and 5 h. 1625 mA into
+3250 mAh gives 0.5C and 2 h. 1C on 3200 mAh gives 3.2 A. 0.19 mA from
+235 mAh gives 0.0008085C, 1237 h. 2 A at 0.5C needs 4 Ah.
+
+The review made these changes:
+- Values are kept in Ah and A, so a remembered unit only changes how a field
+  shows them; the pill and the units are remembered.
+- It added four examples from the NCR18650B and CR2032 datasheets, the
+  first cases (9) and this section.
 
 [↑ Index](#index)

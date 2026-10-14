@@ -8672,22 +8672,45 @@ function renderBatteryRuntime(domain, tool, favId) {
 // Battery runtime, but that tool starts from a real load current; this one
 // starts from a spec sheet's "nC" rating and converts it to actual amps
 // (or the reverse — what C-rate a measured current actually represents).
+// Examples from Panasonic's NCR18650B (standard charge 1625 mA, capacity
+// min. 3250 mAh at 25 °C, rated min. 3200 mAh; cycle test at 1C) and
+// Energizer's CR2032 (235 mAh rated at 0.19 mA).
 const C_RATE_REFERENCE = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
 
 function renderCRate(domain, tool, favId) {
+  const CALC = "c-rate";
+  const UNITS = { capacity: CAPACITY_UNITS, current: AMP_UNITS };
+  // Capacity in Ah and current in A; the units only say how a field shows
+  // them, so a remembered unit cannot change the numbers.
   const state = {
-    mode: "current",
-    values: { capacity: 2000, crate: 1, current: 2000 },
-    units: { capacity: "mAh", current: "mA" },
+    mode: pref(CALC, "mode", "current", ["current", "crate", "capacity"]),
+    si: { capacity: 2, crate: 1, current: 2 },
+    units: {
+      capacity: pref(CALC, "capacityUnit", "mAh", Object.keys(CAPACITY_UNITS)),
+      current: pref(CALC, "currentUnit", "mA", Object.keys(AMP_UNITS)),
+    },
   };
+  const shown = (name) => (name === "crate" ? state.si.crate : +(state.si[name] / UNITS[name][state.units[name]]).toPrecision(6));
 
-  function si(name) {
-    if (name === "crate") return state.values.crate;
-    return state.values[name] * (name === "capacity" ? CAPACITY_UNITS : AMP_UNITS)[state.units[name]];
-  }
+  const example = (mode, si, units) => () => {
+    state.mode = mode;
+    Object.assign(state.si, si);
+    Object.assign(state.units, units);
+    paint();
+  };
+  useExamples([
+    { title: "18650 standard charge", note: "NCR18650B: 1625 mA into 3250 mAh is 0.5C, a two-hour charge.",
+      apply: example("crate", { capacity: 3.25, current: 1.625 }, { capacity: "mAh", current: "mA" }) },
+    { title: "18650 at 1C", note: "Its cycle test discharges at 1C: on the rated 3200 mAh, 3.2 A for an hour.",
+      apply: example("current", { capacity: 3.2, crate: 1 }, { capacity: "mAh", current: "A" }) },
+    { title: "CR2032 at its rated load", note: "0.19 mA from 235 mAh is about 0.0008C: 1237 hours to empty.",
+      apply: example("crate", { capacity: 0.235, current: 0.19e-3 }, { capacity: "mAh", current: "mA" }) },
+    { title: "Capacity for 2 A at 0.5C", note: "To draw 2 A at no more than 0.5C, the pack needs 4 Ah.",
+      apply: example("capacity", { current: 2, crate: 0.5 }, { capacity: "Ah", current: "A" }) },
+  ]);
 
   function compute() {
-    let capacity = si("capacity"), crate = si("crate"), current = si("current");
+    let { capacity, crate, current } = state.si;
     if (state.mode === "current") current = crate * capacity;
     if (state.mode === "crate") crate = capacity > 0 ? current / capacity : NaN;
     if (state.mode === "capacity") capacity = crate > 0 ? current / crate : NaN;
@@ -8733,7 +8756,7 @@ function renderCRate(domain, tool, favId) {
     const issue = problem(r);
     app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
     app.querySelector('[data-res="label"]').textContent = solvedLabel();
-    app.querySelector('[data-res="time"]').textContent = issue ? "" : `Full charge/discharge in ${formatTime(r.time)} at this rate`;
+    app.querySelector('[data-res="time"]').textContent = issue ? "" : `Full charge or discharge in ${formatTime(r.time)} at this rate`;
     app.querySelector('[data-res="err"]').textContent = issue;
   }
 
@@ -8754,13 +8777,13 @@ function renderCRate(domain, tool, favId) {
         <div class="field">
           <label>${FIELD_LABEL[name]}</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${trim(state.values[name])}" />
-            ${name === "crate" ? `<span style="color:var(--text-secondary);font-size:14px;padding-right:2px">C</span>` : `<select data-unit="${name}">${Object.keys(name === "capacity" ? CAPACITY_UNITS : AMP_UNITS).map((u) => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`}
+            <input type="number" inputmode="decimal" step="any" id="cr-${name}" data-var="${name}" value="${shown(name)}" />
+            ${name === "crate" ? `<span class="unit-fixed">C</span>` : `<select id="cr-${name}-unit" data-unit="${name}">${Object.keys(UNITS[name]).map((u) => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}</select>`}
           </div>
         </div>`).join("")}
       <div class="error-text" data-res="err"></div>
 
-      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div class="result-field">
         <div class="result-head">
           <span class="label" data-res="label">${solvedLabel()}</span>
@@ -8780,13 +8803,25 @@ function renderCRate(domain, tool, favId) {
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(CALC, "mode", v); paint(); });
 
     app.querySelectorAll("input[data-var]").forEach((inp) => {
-      inp.oninput = () => { state.values[inp.dataset.var] = parseFloat(inp.value); updateResults(); };
+      inp.oninput = () => {
+        const name = inp.dataset.var;
+        const v = parseFloat(inp.value);
+        state.si[name] = name === "crate" ? v : v * UNITS[name][state.units[name]];
+        updateResults();
+      };
     });
+    // A unit change re-expresses the same quantity; nothing is recomputed.
     app.querySelectorAll("select[data-unit]").forEach((sel) => {
-      sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; updateResults(); };
+      sel.onchange = () => {
+        const name = sel.dataset.unit;
+        state.units[name] = sel.value;
+        setPref(CALC, `${name}Unit`, sel.value);
+        const inp = document.getElementById(`cr-${name}`);
+        if (inp) inp.value = shown(name);
+      };
     });
 
     updateResults();
