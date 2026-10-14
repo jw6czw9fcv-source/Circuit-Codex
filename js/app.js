@@ -8461,8 +8461,11 @@ function renderDbAbsolute(domain, tool, favId) {
 // than assert a specific derating number as fact, "Usable capacity" is
 // left at 100% (the ideal case) and adjustable — the note says why a real
 // runtime is usually shorter, without pretending 80% or any other figure
-// is universally correct. Battery type/size capacities are a separate,
-// later tool (Battery types & sizes); this one is just the Ah/A/h math.
+// is universally correct. Battery type/size capacities are a separate
+// tool (Battery types & sizes); this one is just the Ah/A/h math.
+// Examples from Energizer's CR2032 datasheet (235 mAh to 2.0 V at 15 kΩ,
+// 0.19 mA, 1245 h; ~1%/year self-discharge) and Panasonic's NCR18650B
+// (rated capacity min. 3200 mAh).
 const CAPACITY_UNITS = { mAh: 1e-3, Ah: 1 };
 const RUNTIME_UNITS = { min: 1 / 60, h: 1 };
 const BATTERY_FIELD = {
@@ -8470,14 +8473,43 @@ const BATTERY_FIELD = {
   current: { label: "Load current", units: AMP_UNITS },
   runtime: { label: "Runtime", units: RUNTIME_UNITS },
 };
+const BATT_USABLE = [100, 90, 85, 80, 70, 60, 50];
 
 function renderBatteryRuntime(domain, tool, favId) {
+  const CALC = "battery-runtime";
+  // Values held in Ah, A and h; the units only say how a field shows them,
+  // so a remembered unit cannot change the numbers.
   const state = {
-    mode: "runtime",
-    values: { capacity: 2000, current: 500, runtime: 4 },
-    units: { capacity: "mAh", current: "mA", runtime: "h" },
-    efficiency: 100,
+    mode: pref(CALC, "mode", "runtime", ["runtime", "current", "capacity"]),
+    si: { capacity: 2, current: 0.5, runtime: 4 },
+    units: {
+      capacity: pref(CALC, "capacityUnit", "mAh", Object.keys(CAPACITY_UNITS)),
+      current: pref(CALC, "currentUnit", "mA", Object.keys(AMP_UNITS)),
+      runtime: pref(CALC, "runtimeUnit", "h", Object.keys(RUNTIME_UNITS)),
+    },
+    efficiency: pref(CALC, "usable", 100, BATT_USABLE),
   };
+  const shown = (name) => +(state.si[name] / BATTERY_FIELD[name].units[state.units[name]]).toPrecision(6);
+
+  const example = (mode, si, units, efficiency) => () => {
+    state.mode = mode;
+    Object.assign(state.si, si);
+    Object.assign(state.units, units);
+    state.efficiency = efficiency;
+    paint();
+  };
+  useExamples([
+    { title: "CR2032 at its rated load", note: "235 mAh at 0.19 mA: 1237 h, about 52 days. Energizer measured 1245 h.",
+      apply: example("runtime", { capacity: 0.235, current: 0.19e-3 }, { capacity: "mAh", current: "mA" }, 100) },
+    { title: "Sensor on a CR2032", note: "Averaging 20 µA: 11750 h, 490 days on paper, less pulses and 1% a year self-discharge.",
+      apply: example("runtime", { capacity: 0.235, current: 20e-6 }, { capacity: "mAh", current: "µA" }, 100) },
+    { title: "18650 at 500 mA", note: "Panasonic NCR18650B, rated at least 3200 mAh: 6 h 24 min.",
+      apply: example("runtime", { capacity: 3.2, current: 0.5 }, { capacity: "mAh", current: "mA" }, 100) },
+    { title: "Current for a whole day", note: "2000 mAh lasting 24 h allows 83.3 mA on average.",
+      apply: example("current", { capacity: 2, runtime: 24 }, { capacity: "mAh", runtime: "h" }, 100) },
+    { title: "Capacity for 8 h at 1 A", note: "Taking 85% as usable, 8 h at 1 A needs 9.41 Ah of cells.",
+      apply: example("capacity", { current: 1, runtime: 8 }, { current: "A", runtime: "h" }, 85) },
+  ]);
 
   function inputsFor(mode) {
     if (mode === "runtime") return ["capacity", "current"];
@@ -8485,12 +8517,8 @@ function renderBatteryRuntime(domain, tool, favId) {
     return ["current", "runtime"];
   }
 
-  function si(name) {
-    return state.values[name] * BATTERY_FIELD[name].units[state.units[name]];
-  }
-
   function compute() {
-    let capacity = si("capacity"), current = si("current"), runtime = si("runtime");
+    let { capacity, current, runtime } = state.si;
     const eff = state.efficiency / 100;
     if (state.mode === "runtime") runtime = (capacity * eff) / current;
     if (state.mode === "current") current = (capacity * eff) / runtime;
@@ -8516,6 +8544,18 @@ function renderBatteryRuntime(domain, tool, favId) {
     return `${hh} h ${mm} min`;
   }
 
+  // Under a runtime, the same span in the unit people plan in: days past two
+  // days, years past two years. Under a current or a capacity, the runtime
+  // it was worked from.
+  function subText(r) {
+    if (problem(r)) return "";
+    const h = r.runtime;
+    const span = h >= 2 * 8766 ? `about ${trim(h / 8766)} years` : h >= 48 ? `about ${trim(h / 24)} days` : "";
+    if (state.mode === "runtime") return span;
+    if (state.mode === "current") return `average, to last ${formatRuntime(h)}${state.efficiency < 100 ? ` with ${state.efficiency}% usable` : ""}`;
+    return `nominal${state.efficiency < 100 ? `, so that ${state.efficiency}% of it covers the load` : ""}`;
+  }
+
   function solvedLabel() {
     return { runtime: "Runtime", current: "Max. load current", capacity: "Battery capacity needed" }[state.mode];
   }
@@ -8527,16 +8567,20 @@ function renderBatteryRuntime(domain, tool, favId) {
     return siFormat(r.capacity, "Ah", 3);
   }
 
-  // Battery symbol (long/short plates) feeding a load box, current arrow
-  // along the top wire — same loop convention as the LED/diode screens.
+  // The cell (long plate +, designator BT1) feeding a load box, the current
+  // marked on the top wire in the direction it flows.
   function diagram() {
     const wire = "#5A6169";
+    const comp = "#8FC1F5";
     return `<svg width="220" height="90" viewBox="0 0 220 90" fill="none">
       <path d="M30,18 H80 M140,18 H190 M190,18 V72 M190,72 H30 M30,72 V54 M30,42 V18" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M20,42 H40 M26,54 H34" stroke="#8FC1F5" stroke-width="2" stroke-linecap="round"/>
-      <rect x="80" y="8" width="60" height="20" rx="3" stroke="#8FC1F5" stroke-width="1.6" fill="none"/>
-      <text x="110" y="22" fill="#8FC1F5" font-size="11" font-weight="600" text-anchor="middle">Load</text>
-      <text x="12" y="51" fill="#8FC1F5" font-size="12" font-weight="600" text-anchor="middle">Bat</text>
+      <path d="M20,42 H40 M25,54 H35" stroke="${comp}" stroke-width="2" stroke-linecap="round"/>
+      <text x="44" y="40" fill="${comp}" font-size="11" font-weight="700">+</text>
+      <text x="44" y="56" fill="${comp}" font-size="11" font-weight="600">BT1</text>
+      <rect x="80" y="8" width="60" height="20" rx="3" stroke="${comp}" stroke-width="1.6" fill="none"/>
+      <text x="110" y="22" fill="${comp}" font-size="11" font-weight="600" text-anchor="middle">Load</text>
+      <path d="M60,12 L68,18 L60,24" stroke="${wire}" stroke-width="1.4" fill="none" stroke-linejoin="round"/>
+      <text x="54" y="13" fill="#9AA4B0" font-size="11" font-weight="600" text-anchor="middle">I</text>
     </svg>`;
   }
 
@@ -8544,6 +8588,7 @@ function renderBatteryRuntime(domain, tool, favId) {
     const r = compute();
     const issue = problem(r);
     app.querySelector('[data-res="solved"]').textContent = solvedValue(r);
+    app.querySelector('[data-res="sub"]').textContent = subText(r);
     app.querySelector('[data-res="err"]').textContent = issue;
     app.querySelector('[data-res="label"]').textContent = solvedLabel();
   }
@@ -8559,44 +8604,61 @@ function renderBatteryRuntime(domain, tool, favId) {
 
       <div class="section-label" style="color:#8FC1F5">Your inputs
         <select id="batt-eff" class="label-select">
-          ${[100, 90, 85, 80, 70, 60, 50].map((e) => `<option value="${e}" ${state.efficiency === e ? "selected" : ""}>${e}% usable</option>`).join("")}
+          ${BATT_USABLE.map((e) => `<option value="${e}" ${state.efficiency === e ? "selected" : ""}>${e}% usable</option>`).join("")}
         </select>
       </div>
       ${inputs.map((name) => `
         <div class="field">
           <label>${BATTERY_FIELD[name].label}</label>
           <div class="field-row">
-            <input type="number" inputmode="decimal" step="any" data-var="${name}" value="${trim(state.values[name])}" />
-            <select data-unit="${name}">${Object.keys(BATTERY_FIELD[name].units).map((u) => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            <input type="number" inputmode="decimal" step="any" id="batt-${name}" data-var="${name}" value="${shown(name)}" />
+            <select id="batt-${name}-unit" data-unit="${name}">${Object.keys(BATTERY_FIELD[name].units).map((u) => `<option ${state.units[name] === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>`).join("")}
       <div class="error-text" data-res="err"></div>
 
-      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div class="result-field">
         <div class="result-head">
           <span class="label" data-res="label">${solvedLabel()}</span>
           <span class="badge-calc">${ICONS.bolt2}Calculated</span>
         </div>
         <div class="result-value"><span class="num" data-res="solved">${solvedValue(compute())}</span></div>
+        <div class="result-sub" data-res="sub">${subText(compute())}</div>
       </div>
 
       ${formulaSection(
         ["Runtime (h) = Capacity (Ah) × Usable% / Current (A)"],
-        "\"Usable capacity\" defaults to 100% — the ideal, constant-current case. A real battery usually delivers less than that before its cutoff voltage arrives, and how much less depends on the discharge rate and chemistry (most pronounced in lead-acid, via Peukert's effect) — there's no single correct derating figure, so pick one that matches the pack and load you actually have, or leave it at 100% for the theoretical best case."
+        "Capacity, in mAh or Ah, is how much charge the battery holds: 2000 mAh delivers 2000 mA for one hour, or 20 mA for a hundred, in this model. \"Usable capacity\" defaults to 100% — the ideal, constant-current case. A real battery usually delivers less than that before its cutoff voltage arrives, and how much less depends on the discharge rate and chemistry (most pronounced in lead-acid, via Peukert's effect) — there's no single correct derating figure, so pick one that matches the pack and load you actually have, or leave it at 100% for the theoretical best case. Datasheets rate capacity at one load, which they state: the CR2032's 235 mAh is at 0.19 mA."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(CALC, "mode", v); paint(); });
 
     app.querySelectorAll("input[data-var]").forEach((inp) => {
-      inp.oninput = () => { state.values[inp.dataset.var] = parseFloat(inp.value); updateResults(); };
+      inp.oninput = () => {
+        const v = parseFloat(inp.value);
+        const name = inp.dataset.var;
+        state.si[name] = v * BATTERY_FIELD[name].units[state.units[name]];
+        updateResults();
+      };
     });
+    // A unit change re-expresses the same quantity; nothing is recomputed.
     app.querySelectorAll("select[data-unit]").forEach((sel) => {
-      sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; updateResults(); };
+      sel.onchange = () => {
+        const name = sel.dataset.unit;
+        state.units[name] = sel.value;
+        setPref(CALC, `${name}Unit`, sel.value);
+        const inp = document.getElementById(`batt-${name}`);
+        if (inp) inp.value = shown(name);
+      };
     });
-    document.getElementById("batt-eff").onchange = (e) => { state.efficiency = Number(e.target.value); updateResults(); };
+    document.getElementById("batt-eff").onchange = (e) => {
+      state.efficiency = Number(e.target.value);
+      setPref(CALC, "usable", state.efficiency);
+      updateResults();
+    };
   }
 
   paint();

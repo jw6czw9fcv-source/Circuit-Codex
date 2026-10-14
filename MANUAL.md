@@ -92,6 +92,10 @@ will key on, since that is the id the app already holds for each tool.
 
 - Antennas & propagation → [Radio wavelength](#radio-wavelength)
 
+### Power electronics
+
+- Battery → [Battery runtime](#battery-runtime)
+
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
 whatever is still missing.
@@ -7314,5 +7318,84 @@ The review made these changes:
 - Frequency and wavelength are kept in hertz and metres with remembered units,
   shown to seven figures so GPS's .42 survives.
 - It added six examples and the first cases (11).
+
+[↑ Index](#index)
+
+---
+
+<a id="battery-runtime"></a>
+## Battery runtime
+
+`calc: battery-runtime` · Power electronics › Battery
+(formerly Runtime / capacity estimation)
+
+### What it computes
+
+Any one of runtime, load current and battery capacity from the other two,
+one pill each, with a "usable" share of the capacity (100% by default). The
+answer is the large result; under a runtime of more than two days the same
+span is given in days, and past two years in years. The pill, the usable
+share and the units are remembered.
+
+Examples: a CR2032 at the load its datasheet rates it at, a sensor averaging
+20 µA on one, an 18650 at 500 mA, the current that lasts a day, and the
+capacity a 1 A load needs for 8 hours.
+
+### Source
+
+- **Energizer CR2032 datasheet:** typical capacity 235 mAh to 2.0 V, rated at
+  15 kΩ (a drain of 0.19 mA at 2.9 V), 1245 hours to 2.0 V in that test, and
+  about 1% a year self-discharge.
+- **Panasonic NCR18650B datasheet:** rated capacity at least 3200 mAh
+  (typical 3350 mAh), discharged to 2.5 V.
+- **Energizer E91 (AA alkaline) datasheet:** it gives capacity as a graph
+  against continuous discharge current, 25 to 500 mA, not as one number —
+  which is why the tool leaves the usable share to you rather than
+  inventing one figure.
+
+### Why the formulas are these
+
+    Runtime = Capacity × Usable / Current
+    Current = Capacity × Usable / Runtime
+    Capacity = Current × Runtime / Usable
+
+Capacity in ampere-hours is a charge: a current times a time. A battery that
+delivers 2000 mA for one hour holds 2000 mAh, and in this model gives 20 mA
+for 100 hours. The CR2032 checks it: 235 mAh at 0.19 mA is 1237 hours, and
+Energizer measured 1245.
+
+### Assumptions and limits
+
+- **Constant current.** Real loads pulse; use the average current, and know
+  that heavy pulses cost more than their average on small cells.
+- **Capacity depends on the load.** Datasheets rate capacity at one drain,
+  which they state; at higher currents a cell generally delivers less, most
+  markedly lead-acid (Peukert's effect). The usable share is where that
+  goes, and no single figure fits every cell and load.
+- **Cutoff voltage.** The rated capacity is to a stated end voltage (2.0 V for
+  the CR2032, 2.5 V for the NCR18650B); a circuit that quits earlier gets less.
+- **Self-discharge and temperature** are not modelled: over a year and more,
+  the CR2032's 1% a year starts to count, and cold cuts capacity.
+
+### What it deliberately does not do
+
+- **Cell capacities** are in Battery types & sizes and Button cell sizes.
+- **C-rate**, the current as a multiple of capacity, has its own tool.
+
+### How it was checked
+
+2000 mAh at 500 mA gives 4 h; at 80% usable, 3 h 12 min. 235 mAh at
+0.19 mA gives 1237 h, about 51.54 days; at 20 µA, 11750 h, about 489.6 days.
+3200 mAh at 500 mA gives 6 h 24 min. 2000 mAh over 24 h allows 83.3 mA.
+1 A for 8 h at 85% usable needs 9.41 Ah.
+
+The review made these changes:
+- The answer gained a line in days or years for long runtimes.
+- Values are kept in Ah, A and h, so a remembered unit only changes how a
+  field shows them; the pill, the usable share and the units are remembered.
+- The drawing gained the cell's + plate, its designator BT1 and the current
+  arrow its comment had promised.
+- It added five examples from the CR2032 and NCR18650B datasheets, the first
+  cases (10) and this section.
 
 [↑ Index](#index)
