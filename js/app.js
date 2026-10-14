@@ -8847,19 +8847,23 @@ function renderCRate(domain, tool, favId) {
 // discharge curve (stays near 1.5V much longer instead of sagging), about
 // a third lighter, usable well below freezing, and a much longer shelf
 // life — real, checked differences, not a marketing rebrand of alkaline.
+// IEC and ANSI designations, weights, shelf lives and the CR123A's capacity
+// are from Energizer's datasheets (E96, E92, E90, E91, E93, E95, 522, L92,
+// L91, 123); the "≈" capacity ranges are typical market figures, since
+// those sheets give alkaline capacity only as a graph against the load.
 const BATTERY_SIZES = [
-  { code: "AAAA", iec: "LR8D425", chem: "Alkaline, 1.5V", dims: "⌀8.3 × 42.5 mm", capacity: "≈500–625 mAh", group: "common" },
-  { code: "AAA", iec: "LR03", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀10.5 × 44.5 mm", capacity: "≈800–1200 mAh", group: "common" },
-  { code: "N", iec: "LR1", chem: "Alkaline, 1.5V", dims: "⌀12 × 30.2 mm", capacity: "≈800–1000 mAh", group: "common" },
-  { code: "AA", iec: "LR6", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀14.5 × 50.5 mm", capacity: "≈1800–3000 mAh", group: "common" },
-  { code: "C", iec: "LR14", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀26.2 × 50 mm", capacity: "≈6000–8000 mAh", group: "common" },
-  { code: "D", iec: "LR20", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀34.2 × 61.5 mm", capacity: "≈12,000–18,000 mAh", group: "common" },
-  { code: "9V (PP3)", iec: "6LR61", chem: "Alkaline, 9V (six 1.5V cells in series)", dims: "48.5 × 26.5 × 17.5 mm", capacity: "≈400–600 mAh", group: "common" },
-  { code: "AAA (Lithium)", iec: "L92", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AAA, flatter discharge curve, ~⅓ lighter, works well below freezing", dims: "⌀10.5 × 44.5 mm", capacity: "≈1200–1300 mAh", group: "lithium" },
+  { code: "AAAA", iec: "LR61", ansi: "25A", chem: "Alkaline, 1.5V (IEC also LR8D425)", dims: "⌀8.3 × 42.5 mm", capacity: "≈500–625 mAh", group: "common" },
+  { code: "AAA", iec: "LR03", ansi: "24A", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀10.5 × 44.5 mm", capacity: "≈800–1200 mAh", group: "common" },
+  { code: "N", iec: "LR1", ansi: "910A", chem: "Alkaline, 1.5V", dims: "⌀12 × 30.2 mm", capacity: "≈800–1000 mAh", group: "common" },
+  { code: "AA", iec: "LR6", ansi: "15A", chem: "Alkaline 1.5V / NiMH 1.2V; an alkaline AA weighs about 23 g and keeps 10 years on the shelf (Energizer E91)", dims: "⌀14.5 × 50.5 mm", capacity: "≈1800–3000 mAh", group: "common" },
+  { code: "C", iec: "LR14", ansi: "14A", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀26.2 × 50 mm", capacity: "≈6000–8000 mAh", group: "common" },
+  { code: "D", iec: "LR20", ansi: "13A", chem: "Alkaline 1.5V / NiMH 1.2V", dims: "⌀34.2 × 61.5 mm", capacity: "≈12,000–18,000 mAh", group: "common" },
+  { code: "9V (PP3)", iec: "6LR61", ansi: "1604A", chem: "Alkaline, 9V (six 1.5V cells in series; IEC also 6LF22)", dims: "48.5 × 26.5 × 17.5 mm", capacity: "≈400–600 mAh", group: "common" },
+  { code: "AAA (Lithium)", iec: "FR03", ansi: "24-LF", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AAA, flatter discharge curve; Energizer L92: 7.6 g against 11.5 g for alkaline, −40 to 60 °C, 25-year shelf life", dims: "⌀10.5 × 44.5 mm", capacity: "≈1200–1300 mAh", group: "lithium" },
   { code: "14500", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀14 × 50 mm", capacity: "≈600–900 mAh", group: "lithium" },
-  { code: "AA (Lithium)", iec: "L91", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AA, same advantages as the AAA (L92)", dims: "⌀14.5 × 50.5 mm", capacity: "≈3000–3500 mAh", group: "lithium" },
+  { code: "AA (Lithium)", iec: "FR6", ansi: "15-LF", chem: "Li/FeS2 primary, 1.5V — same size/fit as standard AA; Energizer L91: 15 g against 23 g for alkaline, −40 to 60 °C, 25-year shelf life, 2.5 A continuous", dims: "⌀14.5 × 50.5 mm", capacity: "≈3000–3500 mAh", group: "lithium" },
   { code: "CR2", iec: "—", chem: "Lithium primary, 3V — cameras, flashlights, some smoke detectors; a shorter, different cell than CR123A despite the similar name", dims: "⌀15.6 × 27 mm", capacity: "≈800–850 mAh", group: "lithium" },
-  { code: "CR123A", iec: "—", chem: "Lithium primary, 3V", dims: "⌀17 × 34.5 mm", capacity: "≈1500 mAh", group: "lithium" },
+  { code: "CR123A", iec: "CR17345", ansi: "5018LC", chem: "Lithium primary (Li/MnO2), 3V; Energizer 123: 1500 mAh to 2.0 V at 100 Ω, 1.5 A continuous", dims: "⌀17 × 34.5 mm", capacity: "1500 mAh", group: "lithium" },
   { code: "18650", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀18 × 65 mm", capacity: "≈2000–3600 mAh", group: "lithium" },
   { code: "21700", iec: "—", chem: "Li-ion, 3.6–3.7V", dims: "⌀21 × 70 mm", capacity: "≈4000–5000 mAh", group: "lithium" },
   { code: "26650", iec: "—", chem: "Li-ion, 3.6–3.7V — larger than 21700; flashlights, e-bikes, power tools", dims: "⌀26 × 65 mm", capacity: "≈4000–6000 mAh", group: "lithium" },
@@ -8867,21 +8871,22 @@ const BATTERY_SIZES = [
 const BATTERY_SIZE_FILTERS = [["all", "All"], ["common", "Alkaline / NiMH"], ["lithium", "Lithium"]];
 
 function renderBatterySizes(domain, tool, favId) {
-  const state = { filter: "all", query: "" };
+  const CALC = "battery-sizes";
+  const state = { filter: pref(CALC, "filter", "all", BATTERY_SIZE_FILTERS.map((f) => f[0])), query: "" };
 
   function card(b) {
     return `
       <div class="formula-card formula-card--static">
         <div class="formula-card-head">
-          <span class="formula-card-title">${b.code}${b.iec !== "—" ? ` <span style="opacity:.55;font-weight:500">${b.iec}</span>` : ""}</span>
+          <span class="formula-card-title">${b.code}${b.iec !== "—" ? ` <span style="opacity:.55;font-weight:500">IEC ${b.iec}</span>` : ""}</span>
         </div>
-        <div class="breadcrumb">${b.dims} &nbsp;·&nbsp; ${b.capacity}</div>
+        <div class="breadcrumb">${b.dims} &nbsp;·&nbsp; ${b.capacity}${b.ansi ? ` &nbsp;·&nbsp; ANSI ${b.ansi}` : ""}</div>
         <div class="formula-card-note">${b.chem}</div>
       </div>`;
   }
 
   function matches(b, q) {
-    return b.code.toLowerCase().includes(q) || b.iec.toLowerCase().includes(q) || b.chem.toLowerCase().includes(q);
+    return b.code.toLowerCase().includes(q) || b.iec.toLowerCase().includes(q) || (b.ansi || "").toLowerCase().includes(q) || b.chem.toLowerCase().includes(q);
   }
 
   function filteredList() {
@@ -8925,6 +8930,7 @@ function renderBatterySizes(domain, tool, favId) {
       const btn = e.target.closest(".filter-btn");
       if (!btn) return;
       state.filter = btn.dataset.filter;
+      setPref(CALC, "filter", state.filter);
       paint();
     });
 

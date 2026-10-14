@@ -975,6 +975,18 @@ const CHECK_CASES = {
       expect: [["#cr-capacity", "2"], ["#cr-capacity-unit", "Ah"], ['[data-res="solved"]', "2 A"]] },
     { name: "the mode is remembered", do: [["pill", 1], ["reopen"]], expect: [[".pill.active", "C-rate"]] },
   ],
+  "battery-sizes": [
+    { name: "searching the IEC code FR6 finds the lithium AA", do: [["set", "#bs-input", "fr6"]],
+      expect: [["#bs-results .formula-card-title", "AA (Lithium) IEC FR6"]] },
+    { name: "searching the ANSI code 1604A finds the 9V", do: [["set", "#bs-input", "1604"]],
+      expect: [["#bs-results .formula-card-title", "9V (PP3) IEC 6LR61"]] },
+    { name: "the CR123A shows Energizer's 1500 mAh and IEC CR17345", do: [["set", "#bs-input", "17345"]],
+      expect: [["#bs-results .formula-card-title", "CR123A IEC CR17345"], ["#bs-results .breadcrumb", "/1500 mAh.*ANSI 5018LC/"]] },
+    { name: "the Lithium filter starts with the lithium AAA", do: [["click", '#bs-chips [data-filter="lithium"]']],
+      expect: [["#bs-results .formula-card-title", "AAA (Lithium) IEC FR03"]] },
+    { name: "the filter is remembered", do: [["click", '#bs-chips [data-filter="lithium"]'], ["reopen"]],
+      expect: [["#bs-chips .filter-btn.active", "Lithium"]] },
+  ],
   "thyristor-firing": [
     { name: "TRIAC, 120 V, 144 Ω, α 90°: half power, 50 W", do: [],
       expect: [['[data-res="p"]', "50 W"], ['[data-res="pct"]', "50%"], ['[data-res="vrms"]', "84.85 V"], ['[data-res="delay"]', "4.167 ms"], ['[data-res="piv"]', "169.7 V"]] },

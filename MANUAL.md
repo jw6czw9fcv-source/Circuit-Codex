@@ -96,6 +96,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Battery → [Battery runtime](#battery-runtime)
 - Battery → [Battery C-rate](#battery-c-rate)
+- Battery → [Battery types & sizes](#battery-types--sizes)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -7462,5 +7463,77 @@ The review made these changes:
   shows them; the pill and the units are remembered.
 - It added four examples from the NCR18650B and CR2032 datasheets, the
   first cases (9) and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="battery-sizes"></a>
+## Battery types & sizes
+
+`calc: battery-sizes` · Power electronics › Battery
+
+### What it computes
+
+A searchable list of cylindrical cells — AAAA to D, 9V, the lithium AA and
+AAA, CR2, CR123A and the Li-ion 14500, 18650, 21700 and 26650 — each with its
+IEC and ANSI designations where they exist, dimensions, a capacity, and its
+chemistry and voltage. A filter splits alkaline/NiMH from lithium, and is
+remembered; the search matches the size, either designation or the text.
+
+### Source
+
+Energizer's datasheets, one per size, read in review:
+
+- **Designations:** AAAA IEC LR61 (also LR8D425), ANSI 25A; AAA LR03, 24A;
+  N LR1, 910A; AA LR6, 15A; C LR14, 14A; D LR20, 13A; 9V 6LR61 (also
+  6LF22), 1604A; lithium AAA (L92) FR03, 24-LF; lithium AA (L91) FR6
+  (FR14505), 15-LF; CR123A CR17345, 5018LC.
+- **Lithium iron disulfide against alkaline:** the L91 AA weighs 15 g against
+  the E91 alkaline AA's 23 g, the L92 AAA 7.6 g against the E92's 11.5 g;
+  both lithium cells run from −40 to 60 °C and keep 25 years on the shelf,
+  against 10 years for the alkaline AA; the L91 allows 2.5 A continuous.
+- **CR123A:** 1500 mAh to 2.0 V, rated at 100 Ω; 1.5 A continuous.
+
+Not from those sheets: the dimensions are the industry-standard maxima the
+sheets draw but whose figures could not be read as text, the CR2's sheet was
+not found, and the "≈" capacity ranges are typical market figures, because
+Energizer gives alkaline capacity only as a graph against the load.
+
+### Why the formulas are these
+
+There is no formula: it is a reference. Two conventions are worth knowing.
+The IEC designation encodes the chemistry in its letters (L alkaline, F
+lithium iron disulfide, C lithium manganese dioxide, R round) and the size
+after them; the Li-ion names encode their dimensions, the first two digits the
+diameter in mm and the next two the length, so a 21700 is 21 × 70 mm.
+
+### Assumptions and limits
+
+- **Capacity depends on the load.** A capacity is meaningful only with the
+  drain it was measured at; the ranges here are orientation, not a spec. For
+  a real design, read the cell's datasheet graph at your current.
+- **NiMH** cells in the same sizes are 1.2 V and have their own capacities.
+
+### What it deliberately does not do
+
+- **Button and coin cells** are their own tool, Button cell sizes.
+- **Runtime** from a capacity is Battery runtime.
+
+### How it was checked
+
+Searching "fr6" finds the lithium AA, "1604" the 9V, "17345" the CR123A with
+1500 mAh and ANSI 5018LC; the Lithium filter starts with the lithium AAA and
+is remembered.
+
+The review made these changes:
+- The lithium AA and AAA showed Energizer's model numbers L91 and L92 where
+  the IEC designation belongs; they now read FR6 and FR03. The CR123A gained
+  its IEC CR17345, and every cell with one its ANSI code.
+- The lithium cells' claimed advantages — a third lighter, below freezing,
+  long shelf life — now carry Energizer's figures; the CR123A's capacity is
+  Energizer's 1500 mAh rather than an approximation.
+- The search covers the ANSI codes; the filter is remembered.
+- It added the first cases (5) and this section.
 
 [↑ Index](#index)
