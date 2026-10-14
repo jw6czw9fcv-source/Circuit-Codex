@@ -88,6 +88,10 @@ will key on, since that is the id the app already holds for each tool.
 - Data conversion → [DAC resolution](#dac-resolution)
 - Data conversion → [SNR estimation](#snr-estimation)
 
+### RF & microwave
+
+- Antennas & propagation → [Radio wavelength](#radio-wavelength)
+
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
 whatever is still missing.
@@ -6859,6 +6863,7 @@ The review made these changes:
 - It added the five examples, checked against their datasheets.
 - In formula search, the cards of renamed tools had lost their link to the
   tool; they now find a tool by its old name too.
+
 [↑ Index](#index)
 
 ---
@@ -7002,6 +7007,7 @@ The review made these changes:
 - The drawing's labels went from 9–10 px to 11 px.
 - It added the five examples, the first cases (13), and in every tool's
   examples a value now stays on one line with its unit.
+
 [↑ Index](#index)
 
 ---
@@ -7200,4 +7206,113 @@ The review made these changes:
   rate's unit was cut to "MS…".
 - The diagram's labels went from 8–9 px to 11 px, with values to one decimal.
 - It added the six examples, the first cases (12) and a formula-search card.
+
+[↑ Index](#index)
+
+---
+
+<a id="wavelength"></a>
+## Radio wavelength
+
+`calc: wavelength` · RF & microwave › Antennas & propagation
+(formerly Wavelength (RF), then Wavelength ↔ frequency)
+
+### What it computes
+
+A frequency and its free-space wavelength, each from the other — type either —
+with the period of one cycle and the ITU band the frequency falls in: its
+symbol and number, its full name, and the name ITU gives its wavelengths
+(metric waves for VHF, decimetric for UHF). The band is the large result,
+since the wavelength already sits in its field, and the drawing carries the
+wavelength's value. A row of buttons jumps to the middle of each named band,
+and a table gives the wavelengths of common allocations.
+
+The units are remembered. When typing one field leaves the other unreadable
+in its unit — 100 Hz is 2 997 925 000 mm — that field moves to the unit that
+reads best, without changing the remembered choice.
+
+Examples: FM radio at 100 MHz, AM radio at 1 MHz, Wi-Fi at 2.4 GHz, GPS L1, a
+1 m wavelength typed as such, and exactly 30 MHz, on a band edge.
+
+### Source
+
+- **c = 299 792 458 m/s**, exact: the metre has been defined from the speed of
+  light since 1983.
+- **The bands** are ITU-R Recommendation V.431-8 (08/2015), table 1, which
+  follows No. 2.1 of the Radio Regulations: band N runs from 0.3 × 10ᴺ to
+  3 × 10ᴺ Hz, "lower limit exclusive, upper limit inclusive", with the symbols
+  ULF (band 3) to EHF (band 11) and a metric name for each band's wavelengths,
+  from hectokilometric to decimillimetric waves. Band 12, 300 GHz to 3 THz,
+  has no symbol in the table.
+- **The reference rows** are US allocations from the FCC: the AM broadcast
+  band, 535 to 1705 kHz (47 CFR 73.14); the FM broadcast band, 88 to 108 MHz
+  (73.310); and Wi-Fi's 6 GHz band, 5.925 to 7.125 GHz (15.407), all read
+  through Cornell's copy of the CFR. GPS L1, 1575.42 MHz, is 154 times the
+  10.23 MHz reference that IS-GPS-200 section 3.3.1.1 specifies: the change
+  notice read here gives the 10.23 MHz, and the multiplier comes from
+  secondary sources.
+
+### Why the formulas are these
+
+    λ = c / f
+    f = c / λ
+    T = 1 / f
+
+A wave travels at c and repeats every period T, so one cycle covers c × T,
+which is the wavelength. In free space only: in a cable or on a PCB the wave
+is slower, by the velocity factor, and so its wavelength is shorter.
+
+**Bands by decade.** ITU's bands are decades of frequency, and since λ = c/f
+each is a decade of wavelength too: band N spans 10^(8−N) to 10^(9−N) m,
+which is where the metric names come from — VHF, 30 to 300 MHz, is 1 to 10 m,
+the metric waves. The decades are nominal: c is not quite 3 × 10⁸ m/s, so
+30 MHz is 9.993 m rather than 10.
+
+**Edges.** Each band includes its upper limit and excludes its lower one, so
+exactly 30 MHz is HF, band 7, and anything above it is VHF.
+
+### Assumptions and limits
+
+- **Free space.** Air is close enough to it for this purpose; coax, twisted
+  pair and PCB traces are not, and need their velocity factor.
+- **ITU bands 3 to 12 only.** Below 300 Hz and above 3 THz the tool shows no
+  band. V.431 also lists URSI's extension to lower bands and bands 13 to 15 up
+  to 3000 THz, which reach the infrared; light has its own tool,
+  Wavelength ↔ color.
+- **The reference table is the US's.** Other regions allocate these bands
+  differently.
+
+### What it deliberately does not do
+
+- **Antenna lengths.** A quarter-wave or half-wave antenna is a fraction of
+  this wavelength, shortened further by end effects: that is the Antenna
+  length tool's job when it is built.
+- **Velocity factor.** Its own future tool.
+- **Band plans.** Amateur, cellular and microwave allocations are reference
+  tools of their own.
+
+### How it was checked
+
+100 MHz gives 2.997925 m: VHF, ITU band 8, metric waves 1–10 m, period
+10 ns. Exactly 30 MHz gives HF and 9.993082 m, and 30.001 MHz gives VHF. A
+1 m wavelength gives 299.7925 MHz. GPS L1 keeps its decimals: 1575.42 MHz,
+19.02937 cm. The EHF button lands on the band's geometric middle,
+94.86833 GHz. 1 kHz is ULF, hectokilometric waves, 100–1000 km; 500 GHz is
+band 12; 100 Hz is outside the bands, its wavelength shown as 2997.925 km.
+
+The review made these changes:
+- It was renamed Radio wavelength, on Pierre's choice: with the examples bulb,
+  "Wavelength ↔ frequency" wrapped.
+- Band edges now follow ITU, the upper limit in the band: the tool had put
+  exactly 30 MHz in VHF.
+- ULF (band 3) and band 12 were added, with each band's number and ITU
+  wavelength name.
+- The AM row read 525 kHz, which is not the US band's edge; it is now the
+  FCC's 535–1705 kHz, and the rows say US.
+- The band and the period became one result; the wave on the drawing went
+  from the domain colour to part blue and carries the wavelength's value.
+- Frequency and wavelength are kept in hertz and metres with remembered units,
+  shown to seven figures so GPS's .42 survives.
+- It added six examples and the first cases (11).
+
 [↑ Index](#index)

@@ -118,7 +118,7 @@ const DOMAINS = [
     bg: "#3B1E22",
     icon: "antenna",
     sections: [
-      { title: "Antennas & propagation", tools: [{ name: "Path loss" }, { name: "Wavelength ↔ frequency", was: "Wavelength", calc: "wavelength" }, { name: "Beamwidth & gain" }, { name: "Fresnel zone" }, { name: "Antenna length (dipole/monopole)" }] },
+      { title: "Antennas & propagation", tools: [{ name: "Path loss" }, { name: "Radio wavelength", was: "Wavelength", calc: "wavelength" }, { name: "Beamwidth & gain" }, { name: "Fresnel zone" }, { name: "Antenna length (dipole/monopole)" }] },
       { title: "Transmission lines", tools: [{ name: "VSWR / Return loss" }, { name: "Velocity factor" }, { name: "Coax impedance" }, { name: "Smith chart matching" }, { name: "Skin depth" }, { name: "Coax cable standards" }] },
       { title: "Power & gain", tools: [{ name: "Cascade gain, noise figure, P1dB" }, { name: "Intercept point" }, { name: "Intermodulation" }, { name: "Attenuator (Pi, T, bridged-T)" }, { name: "Power divider" }] },
       { title: "Mixing & conversion", tools: [{ name: "IF calculator" }, { name: "Image frequency" }] },
@@ -303,7 +303,7 @@ const TOOL_KEYWORDS = {
   "adc": "adc resolution lsb quantization bits analog to digital converter code step vref fsr",
   "dac": "dac resolution lsb output voltage digital to analog converter code vref mcp4725 mcp4822",
   "snr": "snr enob sinad noise jitter oversampling effective bits dbfs quantization process gain aperture 6.02n",
-  "wavelength": "frequency wavelength lambda radio",
+  "wavelength": "frequency wavelength lambda radio rf period itu band vhf uhf metric waves",
   "battery-runtime": "battery life mah runtime capacity",
   "c-rate": "battery charge discharge rate",
   "battery-sizes": "aa aaa 18650 battery sizes",

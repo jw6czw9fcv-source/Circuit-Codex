@@ -10659,41 +10659,58 @@ function renderDebounceRc(domain, tool, favId) {
   paint();
 }
 
-// ---------- Wavelength (RF) ----------
+// ---------- Radio wavelength ----------
 // lambda = c / f, c exact by SI definition (299,792,458 m/s) since 1983 —
 // frequency and free-space wavelength are two names for the same thing,
-// so both fields are editable and typing either one derives the other,
-// same bidirectional pattern as the RC charge/discharge screen's
-// time/voltage pair. This is free-space only; a cable or PCB trace
-// propagates slower than c, which is exactly what a velocity factor is
-// for — that's its own future tool, not folded in here.
+// so both fields are editable and typing either one derives the other.
+// Free-space only: a cable or PCB trace propagates slower than c, which is
+// exactly what a velocity factor is for — its own future tool.
+// The bands are ITU-R V.431-8 table 1 (which follows RR No. 2.1): band N
+// runs from 0.3 x 10^N to 3 x 10^N Hz, lower limit exclusive and upper limit
+// inclusive, so exactly 30 MHz is HF, not VHF. Each band also names its
+// wavelengths by decade: metric waves for VHF, decimetric for UHF.
 const LENGTH_UNITS = { mm: 1e-3, cm: 1e-2, m: 1, km: 1e3 };
 const ITU_BANDS = [
-  { name: "VLF", full: "Very Low Frequency", lo: 3e3, hi: 30e3 },
-  { name: "LF", full: "Low Frequency", lo: 30e3, hi: 300e3 },
-  { name: "MF", full: "Medium Frequency", lo: 300e3, hi: 3e6 },
-  { name: "HF", full: "High Frequency", lo: 3e6, hi: 30e6 },
-  { name: "VHF", full: "Very High Frequency", lo: 30e6, hi: 300e6 },
-  { name: "UHF", full: "Ultra High Frequency", lo: 300e6, hi: 3e9 },
-  { name: "SHF", full: "Super High Frequency", lo: 3e9, hi: 30e9 },
-  { name: "EHF", full: "Extremely High Frequency", lo: 30e9, hi: 300e9 },
+  { n: 3, name: "ULF", full: "Ultra Low Frequency", waves: "hectokilometric waves", lo: 300, hi: 3e3 },
+  { n: 4, name: "VLF", full: "Very Low Frequency", waves: "myriametric waves", lo: 3e3, hi: 30e3 },
+  { n: 5, name: "LF", full: "Low Frequency", waves: "kilometric waves", lo: 30e3, hi: 300e3 },
+  { n: 6, name: "MF", full: "Medium Frequency", waves: "hectometric waves", lo: 300e3, hi: 3e6 },
+  { n: 7, name: "HF", full: "High Frequency", waves: "decametric waves", lo: 3e6, hi: 30e6 },
+  { n: 8, name: "VHF", full: "Very High Frequency", waves: "metric waves", lo: 30e6, hi: 300e6 },
+  { n: 9, name: "UHF", full: "Ultra High Frequency", waves: "decimetric waves", lo: 300e6, hi: 3e9 },
+  { n: 10, name: "SHF", full: "Super High Frequency", waves: "centimetric waves", lo: 3e9, hi: 30e9 },
+  { n: 11, name: "EHF", full: "Extremely High Frequency", waves: "millimetric waves", lo: 30e9, hi: 300e9 },
+  // Band 12 has no symbol in the table.
+  { n: 12, name: "", full: "", waves: "decimillimetric waves", lo: 300e9, hi: 3e12 },
 ];
-// AM/FM are real allocated bands, not single frequencies — shown as their
-// actual range (North America: 525-1705 kHz, 88-108 MHz) with the
-// wavelength range that range maps to, rather than one approximate point.
+// US allocations from the FCC: AM 535-1705 kHz (47 CFR 73.14), FM 88-108 MHz
+// (73.310), Wi-Fi 6 GHz 5.925-7.125 GHz (15.407). GPS L1 is 154 times the
+// 10.23 MHz reference of IS-GPS-200 3.3.1.1.
 const WAVELENGTH_REFS = [
-  { label: "AM broadcast", loHz: 525e3, hiHz: 1705e3 },
-  { label: "FM broadcast", loHz: 88e6, hiHz: 108e6 },
+  { label: "AM broadcast (US)", loHz: 535e3, hiHz: 1705e3 },
+  { label: "FM broadcast (US)", loHz: 88e6, hiHz: 108e6 },
   { label: "Wi-Fi 2.4 GHz (shared with Bluetooth, microwave ovens)", hz: 2.4e9 },
   { label: "Wi-Fi 5 GHz", hz: 5e9 },
-  { label: "Wi-Fi 6 GHz (Wi-Fi 6E / 7)", loHz: 5.925e9, hiHz: 7.125e9 },
+  { label: "Wi-Fi 6 GHz (US, Wi-Fi 6E / 7)", loHz: 5.925e9, hiHz: 7.125e9 },
   { label: "GPS L1", hz: 1575.42e6, digits: 6 }, // the .42 is the point of citing this one
 ];
 
 function renderWavelength(domain, tool, favId) {
   const C = 299792458; // m/s
+  const CALC = "wavelength";
 
-  const state = { freqVal: 100, freqUnit: "MHz", waveVal: C / 1e8, waveUnit: "m" };
+  // Frequency in hertz and wavelength in metres; the units only say how the
+  // fields show them, so a remembered unit cannot change the numbers.
+  const state = {
+    f: 100e6, wl: C / 100e6,
+    freqUnit: pref(CALC, "freqUnit", "MHz", Object.keys(FREQ_UNITS)),
+    waveUnit: pref(CALC, "waveUnit", "m", Object.keys(LENGTH_UNITS)),
+  };
+  // Seven figures: enough that GPS's 1575.42 MHz keeps its .42 when it is
+  // shown rather than typed.
+  const fig7 = (x) => +x.toPrecision(7);
+  const shownF = () => fig7(state.f / FREQ_UNITS[state.freqUnit]);
+  const shownWl = () => fig7(state.wl / LENGTH_UNITS[state.waveUnit]);
 
   // Drop the low end's unit only when it actually matches the high end's —
   // AM's range spans kHz to MHz, where dropping it would misstate the low
@@ -10706,42 +10723,68 @@ function renderWavelength(domain, tool, favId) {
     return loUnit === hiUnit ? `${loStr.split(" ")[0]}–${hiStr}` : `${loStr}–${hiStr}`;
   }
 
-  function freqSI() { return state.freqVal * FREQ_UNITS[state.freqUnit]; }
-  function waveSI() { return state.waveVal * LENGTH_UNITS[state.waveUnit]; }
+  const bandFor = (hz) => (isFinite(hz) && hz > 0 ? ITU_BANDS.find((b) => hz > b.lo && hz <= b.hi) || null : null);
 
-  function bandFor(hz) {
-    if (!isFinite(hz) || hz <= 0) return null;
-    return ITU_BANDS.find((b) => hz >= b.lo && hz < b.hi) || null;
-  }
-
-  // Best-fitting unit for a raw Hz value, same cascade the filter screens
-  // use, so jumping to a band lands on the unit that reads the way typing
-  // it would.
+  // Best-fitting unit for a raw Hz value, so a band jump or an example lands
+  // on the unit that reads the way typing it would.
   function pickFreqUnit(hz) {
     for (const u of ["GHz", "MHz", "kHz"]) { if (Math.abs(hz) >= FREQ_UNITS[u]) return u; }
     return "Hz";
   }
+  function pickWaveUnit(m) {
+    for (const u of ["km", "m", "cm"]) { if (Math.abs(m) >= LENGTH_UNITS[u]) return u; }
+    return "mm";
+  }
 
-  // The geometric mean of a band's edges — centered on it on the log scale
-  // every one of these bands is defined by, so it lands solidly inside
-  // instead of right on a boundary the band itself doesn't include. Only
-  // touches state; the caller repaints, since the frequency field, its
-  // unit select, and the picker's own highlighted chip all need to move
-  // together.
+  // The geometric mean of a band's edges — centred on it on the log scale
+  // every one of these bands is defined by, so it lands solidly inside.
   function jumpToBand(name) {
     const band = ITU_BANDS.find((b) => b.name === name);
     if (!band) return;
-    const hz = Math.sqrt(band.lo * band.hi);
-    const unit = pickFreqUnit(hz);
-    state.freqVal = hz / FREQ_UNITS[unit];
-    state.freqUnit = unit;
-    const wl = C / hz;
-    state.waveVal = wl / LENGTH_UNITS[state.waveUnit];
+    state.f = Math.sqrt(band.lo * band.hi);
+    state.wl = C / state.f;
+    state.freqUnit = pickFreqUnit(state.f);
+    state.waveUnit = pickWaveUnit(state.wl);
   }
 
-  // One full sine cycle sampled into a smooth curve, with lambda
-  // dimensioned underneath — illustrative only, not to scale with the
-  // actual entered frequency.
+  const example = (hz, wl, freqUnit) => () => {
+    state.f = hz ? hz : C / wl;
+    state.wl = wl ? wl : C / hz;
+    state.freqUnit = freqUnit || pickFreqUnit(state.f);
+    state.waveUnit = pickWaveUnit(state.wl);
+    paint();
+  };
+  // Lengths in the unit that reads best, cm included, which siFormat has
+  // not; a range says the unit once when both ends share it ("1–10 m").
+  const lengthText = (m) => { const u = pickWaveUnit(m); return `${trim(m / LENGTH_UNITS[u])} ${u}`; };
+  function lengthRange(lo, hi) {
+    const ul = pickWaveUnit(lo), uh = pickWaveUnit(hi);
+    return ul === uh ? `${trim(lo / LENGTH_UNITS[ul])}–${lengthText(hi)}` : `${lengthText(lo)}–${lengthText(hi)}`;
+  }
+  // When typing one field leaves the other unreadable in its unit (100 Hz is
+  // 2997925000 mm), that field moves to the unit that reads best. Display
+  // only: the remembered unit is the one picked by hand. The same holds on
+  // opening, so a remembered Hz does not show 100 MHz as 100000000.
+  const unreadable = (v) => !(Math.abs(v) >= 1e-2 && Math.abs(v) < 1e4);
+  if (unreadable(state.f / FREQ_UNITS[state.freqUnit])) state.freqUnit = pickFreqUnit(state.f);
+  if (unreadable(state.wl / LENGTH_UNITS[state.waveUnit])) state.waveUnit = pickWaveUnit(state.wl);
+  useExamples([
+    { title: "FM radio, 100 MHz", note: "A 3 m wave: VHF, the band ITU calls metric waves, 1 to 10 m.",
+      apply: example(100e6) },
+    { title: "AM radio, 1 MHz", note: "A 300 m wave: MF, the hectometric band, 100 m to 1 km.",
+      apply: example(1e6) },
+    { title: "Wi-Fi at 2.4 GHz", note: "12.5 cm: UHF, the decimetric band, though it is often called microwave.",
+      apply: example(2.4e9) },
+    { title: "GPS L1, 1575.42 MHz", note: "154 times GPS's 10.23 MHz reference: a 19 cm wave.",
+      apply: example(1575.42e6, 0, "MHz") },
+    { title: "A 1 m wavelength", note: "Typed as a wavelength: 299.8 MHz, the top of VHF; 300 MHz is 99.93 cm.",
+      apply: example(0, 1) },
+    { title: "Exactly 30 MHz", note: "ITU counts a band's upper edge in it: 30 MHz is the top of HF, not VHF.",
+      apply: example(30e6) },
+  ]);
+
+  // One full sine cycle, with lambda dimensioned underneath and its value
+  // written there — illustrative, not to scale with the entered frequency.
   function diagram() {
     const wire = "#5A6169";
     const pts = [];
@@ -10752,23 +10795,49 @@ function renderWavelength(domain, tool, favId) {
       const y = 40 - 25 * Math.sin(t * 2 * Math.PI);
       pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
     }
+    const ok = state.f > 0 && isFinite(state.wl);
     return `<svg width="220" height="108" viewBox="0 0 220 108" fill="none">
       <path d="M20,40 H200" stroke="${wire}" stroke-width="1" stroke-dasharray="2 3"/>
-      <polyline points="${pts.join(" ")}" stroke="${domain.color}" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      <polyline points="${pts.join(" ")}" stroke="#8FC1F5" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
       <path d="M20,84 V90 M20,87 H200 M200,84 V90" stroke="${wire}" stroke-width="1.2"/>
-      <text x="110" y="104" fill="#8A9099" font-size="12" font-weight="600" text-anchor="middle">λ</text>
+      <text x="110" y="104" fill="#9AA4B0" font-size="12" font-weight="600" text-anchor="middle" data-res="lambda">λ${ok ? ` = ${shownWl()} ${state.waveUnit}` : ""}</text>
     </svg>`;
   }
 
-  function updateResults() {
-    const f = freqSI();
-    const wl = waveSI();
-    const T = f > 0 ? 1 / f : NaN;
+  // The band large, since the wavelength itself is in its field above; under
+  // it the band's full name, its ITU wavelength name and range, and the
+  // period.
+  function resultsHTML() {
+    const f = state.f;
+    if (!(f > 0) || !isFinite(state.wl)) return `<div class="error-text">Frequency and wavelength must be greater than zero.</div>`;
     const band = bandFor(f);
-    app.querySelector('[data-res="period"]').textContent = isFinite(T) ? siFormat(T, "s") : "—";
-    app.querySelector('[data-res="band"]').textContent = band ? `${band.name} — ${band.full}` : "—";
-    app.querySelector('[data-res="bandrange"]').textContent = band ? `${siFormat(band.lo, "Hz")} – ${siFormat(band.hi, "Hz")}` : "";
-    app.querySelector('[data-res="err"]').textContent = (f > 0 && isFinite(wl)) ? "" : "Frequency and wavelength must be greater than zero.";
+    const whole = (html) => `<span style="white-space:nowrap">${html}</span>`;
+    const period = whole(`period <span data-res="period">${siFormat(1 / f, "s")}</span>`);
+    if (!band) {
+      return `
+      <div class="result-field">
+        <div class="result-head"><span class="label">ITU band</span></div>
+        <div class="result-value"><span class="num" data-res="band">—</span></div>
+        <div class="result-sub">${whole("outside ITU bands 3 to 12, 300 Hz to 3 THz")} · ${period}</div>
+      </div>`;
+    }
+    // Nominal decade of the band's wavelengths: 10^(8-N) to 10^(9-N) m.
+    const wlLo = Math.pow(10, 8 - band.n), wlHi = Math.pow(10, 9 - band.n);
+    return `
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label" data-res="bandhead">ITU band ${band.n} · ${siRange(band.lo, band.hi, "Hz")}</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="band">${band.name || `Band ${band.n}`}</span></div>
+        <div class="result-sub">${band.full ? `${whole(band.full)} · ` : ""}${whole(`<span data-res="waves">${band.waves}, ${lengthRange(wlLo, wlHi)}</span>`)} · ${period}</div>
+      </div>`;
+  }
+
+  function updateResults() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML();
+    app.querySelector('[data-res="diagram"]').innerHTML = diagram();
+    const band = bandFor(state.f);
     app.querySelectorAll("#wl-band-picker .filter-btn").forEach((btn) => {
       const isActive = !!band && btn.dataset.band === band.name;
       btn.classList.toggle("active", isActive);
@@ -10777,64 +10846,40 @@ function renderWavelength(domain, tool, favId) {
     });
   }
 
-  function fromFreq() {
-    const f = freqSI();
-    if (!(f > 0)) { updateResults(); return; }
-    const wl = C / f;
-    state.waveVal = wl / LENGTH_UNITS[state.waveUnit];
-    const waveField = document.getElementById("wl-wave");
-    if (waveField && document.activeElement !== waveField) waveField.value = trim(state.waveVal);
-    updateResults();
-  }
-
-  function fromWave() {
-    const wl = waveSI();
-    if (!(wl > 0)) { updateResults(); return; }
-    const f = C / wl;
-    state.freqVal = f / FREQ_UNITS[state.freqUnit];
-    const freqField = document.getElementById("wl-freq");
-    if (freqField && document.activeElement !== freqField) freqField.value = trim(state.freqVal);
-    updateResults();
+  function syncField(id, value) {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = value;
   }
 
   function paint() {
-    const currentBand = bandFor(freqSI());
+    const currentBand = bandFor(state.f);
     app.innerHTML = `
       ${calcHeader(tool, favId, "λ = c / f — free-space wavelength")}
 
-      <div class="diagram-box">${diagram()}</div>
+      <div class="diagram-box" data-res="diagram">${diagram()}</div>
 
       <div class="section-label" style="color:#8FC1F5">Either one — edit whichever you know</div>
       <div class="field">
         <label>Frequency</label>
         <div class="field-row">
-          <input type="number" inputmode="decimal" step="any" id="wl-freq" value="${trim(state.freqVal)}" />
+          <input type="number" inputmode="decimal" step="any" id="wl-freq" value="${shownF()}" />
           <select id="wl-freq-unit">${Object.keys(FREQ_UNITS).map((u) => `<option ${state.freqUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
         </div>
       </div>
       <div class="field">
         <label>Wavelength</label>
         <div class="field-row">
-          <input type="number" inputmode="decimal" step="any" id="wl-wave" value="${trim(state.waveVal)}" />
+          <input type="number" inputmode="decimal" step="any" id="wl-wave" value="${shownWl()}" />
           <select id="wl-wave-unit">${Object.keys(LENGTH_UNITS).map((u) => `<option ${state.waveUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
         </div>
       </div>
-      <div class="error-text" data-res="err"></div>
 
-      <div class="section-label" style="color:#5DCAA5">Results</div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">Period (T = 1/f)</span></div>
-        <div class="result-value"><span class="num" data-res="period"></span></div>
-      </div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">ITU radio band</span></div>
-        <div class="result-value"><span class="num" data-res="band"></span></div>
-        <div class="result-sub" data-res="bandrange"></div>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="results">${resultsHTML()}</div>
 
       <div class="section-label" style="color:#8FC1F5">Jump to a band</div>
       <div class="filter-row" id="wl-band-picker">
-        ${ITU_BANDS.map((b) => `
+        ${ITU_BANDS.filter((b) => b.name).map((b) => `
           <button class="filter-btn ${currentBand && currentBand.name === b.name ? "active" : ""}" data-band="${b.name}"
                   style="${currentBand && currentBand.name === b.name ? `background:${domain.bg};color:${domain.color};` : ""}">${b.name}</button>`).join("")}
       </div>
@@ -10844,18 +10889,20 @@ function renderWavelength(domain, tool, favId) {
         ${WAVELENGTH_REFS.map((r) => {
           const isRange = r.loHz && r.hiHz;
           const freqText = isRange ? siRange(r.loHz, r.hiHz, "Hz") : siFormat(r.hz, "Hz", r.digits || 4);
-          const wlText = isRange ? siRange(C / r.hiHz, C / r.loHz, "m") : siFormat(C / r.hz, "m");
+          // In the same units as the wavelength field, cm included.
+          const wlText = isRange ? lengthRange(C / r.hiHz, C / r.loHz) : lengthText(C / r.hz);
           // The frequency detail always sits on its own line rather than
           // wrapping wherever it happens to run out of room next to the
           // label — a fixed second line reads clean at any length.
-          const freqLine = r.showFreq === false ? "" : `<div style="color:var(--text-muted);font-size:11px;margin-top:1px;">${freqText}</div>`;
+          const freqLine = `<div style="color:var(--text-muted);font-size:11px;margin-top:1px;">${freqText}</div>`;
           return `<div class="tt-row"><span>${r.label}${freqLine}</span><span class="tt-out">${wlText}</span></div>`;
         }).join("")}
       </div>
 
       ${formulaSection(
-        ["λ = c / f", "f = c / λ", "c = 299,792,458 m/s (exact, by SI definition)"],
-        "Free-space only. A cable or PCB trace propagates slower than c — that ratio is the velocity factor, its own separate calculator, not folded into this one."
+        ["λ = c / f", "f = c / λ", "T = 1 / f", "c = 299,792,458 m/s (exact, by SI definition)"],
+        "λ, the wavelength, is how far the wave travels in one cycle; T, the period, is how long that cycle lasts. Free-space only: a cable or PCB trace propagates slower than c — that ratio is the velocity factor, its own separate calculator, not folded into this one. "
+        + "ITU names the radio bands by decade, band N running from 0.3 × 10ᴺ to 3 × 10ᴺ Hz and counting its upper edge in, and names their wavelengths by decade too: VHF's are the metric waves, 1 to 10 m."
       )}
       ${calcFooter()}
     `;
@@ -10863,14 +10910,46 @@ function renderWavelength(domain, tool, favId) {
     wireCalc(favId, paint, null);
 
     const freqField = document.getElementById("wl-freq");
-    const freqUnitField = document.getElementById("wl-freq-unit");
     const waveField = document.getElementById("wl-wave");
-    const waveUnitField = document.getElementById("wl-wave-unit");
-
-    freqField.oninput = () => { const v = parseFloat(freqField.value); if (isFinite(v)) { state.freqVal = v; fromFreq(); } };
-    freqUnitField.onchange = (e) => { state.freqUnit = e.target.value; fromWave(); };
-    waveField.oninput = () => { const v = parseFloat(waveField.value); if (isFinite(v)) { state.waveVal = v; fromWave(); } };
-    waveUnitField.onchange = (e) => { state.waveUnit = e.target.value; fromFreq(); };
+    freqField.oninput = () => {
+      const v = parseFloat(freqField.value);
+      if (!isFinite(v)) return;
+      state.f = v * FREQ_UNITS[state.freqUnit];
+      if (state.f > 0) {
+        state.wl = C / state.f;
+        if (unreadable(state.wl / LENGTH_UNITS[state.waveUnit])) {
+          state.waveUnit = pickWaveUnit(state.wl);
+          document.getElementById("wl-wave-unit").value = state.waveUnit;
+        }
+        syncField("wl-wave", shownWl());
+      }
+      updateResults();
+    };
+    waveField.oninput = () => {
+      const v = parseFloat(waveField.value);
+      if (!isFinite(v)) return;
+      state.wl = v * LENGTH_UNITS[state.waveUnit];
+      if (state.wl > 0) {
+        state.f = C / state.wl;
+        if (unreadable(state.f / FREQ_UNITS[state.freqUnit])) {
+          state.freqUnit = pickFreqUnit(state.f);
+          document.getElementById("wl-freq-unit").value = state.freqUnit;
+        }
+        syncField("wl-freq", shownF());
+      }
+      updateResults();
+    };
+    // A unit change re-expresses the same frequency or wavelength.
+    document.getElementById("wl-freq-unit").onchange = (e) => {
+      state.freqUnit = e.target.value;
+      setPref(CALC, "freqUnit", state.freqUnit);
+      syncField("wl-freq", shownF());
+    };
+    document.getElementById("wl-wave-unit").onchange = (e) => {
+      state.waveUnit = e.target.value;
+      setPref(CALC, "waveUnit", state.waveUnit);
+      syncField("wl-wave", shownWl());
+    };
 
     document.getElementById("wl-band-picker").addEventListener("click", (e) => {
       const btn = e.target.closest(".filter-btn");
@@ -10878,8 +10957,6 @@ function renderWavelength(domain, tool, favId) {
       jumpToBand(btn.dataset.band);
       paint();
     });
-
-    updateResults();
   }
 
   paint();

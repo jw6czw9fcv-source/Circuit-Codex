@@ -75,7 +75,7 @@ const FORMULAS = [
     note: "Free-space path loss. d in km, f in MHz.",
   },
   {
-    tool: "Wavelength ↔ frequency",
+    tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f"],
     note: "c = 299,792,458 m/s. In a medium other than vacuum, divide c by the velocity factor first.",
