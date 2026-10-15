@@ -135,6 +135,12 @@ const FORMULAS = [
     note: "θJA (junction-to-ambient) or θJC (junction-to-case), from the datasheet. P is power dissipated in the part.",
   },
   {
+    tool: "Wire gauge",
+    domain: "pcb",
+    formulas: ["AWG: d(mm) = 0.127 × 92^((36 − n) / 39)", "Area = π × (d / 2)²"],
+    note: "Six AWG steps double the diameter, three double the cross-section. SWG has no formula: it is a table.",
+  },
+  {
     tool: "Cable resistance / voltage drop",
     domain: "pcb",
     formulas: ["Vdrop = 2 × I × L × R_per_length"],

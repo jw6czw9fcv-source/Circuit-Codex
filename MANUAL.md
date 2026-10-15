@@ -99,6 +99,10 @@ will key on, since that is the id the app already holds for each tool.
 - Battery → [Battery types & sizes](#battery-types--sizes)
 - Battery → [Button cell sizes](#button-cell-sizes)
 
+### PCB & interconnect
+
+- Cabling → [Wire gauge](#wire-gauge)
+
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
 whatever is still missing.
@@ -7610,5 +7614,94 @@ The review made these changes:
 - IEC and ANSI designations were added; LR1130's IEC name is LR54, and the
   silver-oxide cells' are SR44, SR60, SR66 and SR69. The search covers them.
 - The filter is remembered; it added the first cases (4) and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="wire-gauge"></a>
+## Wire gauge
+
+`calc: wire-gauge` · PCB & interconnect › Cabling
+(formerly Wire gauge (AWG/SWG))
+
+### What it computes
+
+Three linked boxes — an AWG gauge, an SWG gauge and a size in mm² or mm —
+where setting any one updates the others. A gauge picked by hand is exact;
+the boxes that follow show the nearest gauge, the one on the other side, and
+how much more or less copper each has than the size. The output is the
+diameter, large, with the same size in inches, mm² and circular mils, and,
+for AWG, where the size sits as a fractional gauge. The mm²/mm choice is
+remembered.
+
+Examples: the two sizes AWG is defined by (36 and 0000), six gauges doubling
+the diameter, 1.5 and 2.5 mm² cable, and SWG 24.
+
+### Source
+
+**NBS Handbook 100, Copper Wire Tables** (US National Bureau of Standards,
+1966), public domain, read in review:
+
+- **AWG:** "the diameter of No. 0000 is defined as 0.4600 inch and of No. 36
+  as 0.0050 inch", with 38 sizes between in geometric progression; the ratio
+  of successive diameters is the 39th root of 92, 1.1229322, and six steps
+  give 2.0050.
+- **SWG:** table 15, "British Standard Wire Gage", lists every size from 7/0
+  (500 mils) to 50 (1 mil). The tool holds these in mils and converts
+  exactly, 1 mil being 0.0254 mm.
+
+### Why the formulas are these
+
+    AWG:  d(mm) = 0.127 × 92^((36 − n) / 39)
+    Area = π × (d / 2)²
+    Circular mils = (d in thousandths of an inch)²
+
+The AWG formula is the definition itself: 0.127 mm is 0.0050 in, gauge 36,
+and 92 is the ratio of the two defining diameters, 0.4600 / 0.0050, spread
+over the 39 steps between them. Gauges 0, 00, 000 and 0000 are written 1/0
+to 4/0 and sit at 0 to −3 on the formula's scale. SWG has no formula; it is a
+table of round numbers of thousandths of an inch.
+
+**The nearest gauge** is chosen by ratio, not by difference: 1.5 mm² is
+10.0% short of AWG 15 and 12.8% over AWG 16, so 15 is nearer. For carrying
+current, the thicker of the two is the safe side.
+
+### Assumptions and limits
+
+- **Solid round wire.** A stranded conductor is sized by its copper's total
+  cross-section, so the bundle measures wider than the diameter here.
+- **The gauge says nothing about current** on its own: that depends on the
+  insulation, the temperature and how the wire is run, which is the Cable
+  current capacity tool's job.
+
+### What it deliberately does not do
+
+- **Resistance and voltage drop** are Cable resistance / voltage drop.
+- **Current capacity** is its own tool.
+
+### How it was checked
+
+24 AWG gives 0.5106 mm, 0.2047 mm² and 404 CM, nearest SWG 25; 36 AWG
+0.127 mm and 25 CM; 0000 AWG 11.68 mm and 211 600 CM; 10 AWG 2.588 mm. SWG
+lists 7/0 first; SWG 2/0 gives 8.839 mm and 121 104 CM, nearest AWG 2/0;
+SWG 49 gives 0.03048 mm. 1.5 mm² gives nearest AWG 15 (+10.0%) and 16
+(−12.8%), sitting at 15.41, and SWG 17; a 1 mm diameter gives AWG 18 and
+SWG 19.
+
+The review made these changes:
+- The AWG, SWG and metric sizes became one screen of linked boxes, on
+  Pierre's choice, where they had been separate pills; the metric direction,
+  from mm² or mm to the nearest gauges, is new.
+- The SWG table had been held in rounded millimetres, putting 2/0 at
+  8.837 mm (it is 348 mils, 8.839) and 49 at 0.031 mm (1.2 mils, 0.0305);
+  it is now NBS's table in mils, converted exactly. Its attribution to
+  "BS 3737" could not be confirmed and is gone.
+- The SWG sizes had been listed out of order — 1 to 50, then 7/0 to 1/0 —
+  because a JavaScript object puts integer-like keys first; that also made
+  the cable tool's search for the thinnest adequate gauge miss 7/0 to 1/0.
+- Renamed Wire gauge; the title had wrapped.
+- It added six examples, a formula card, the first cases (10) and this
+  section.
 
 [↑ Index](#index)

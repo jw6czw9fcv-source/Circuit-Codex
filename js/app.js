@@ -5127,104 +5127,223 @@ function renderAsciiTable(domain, tool, favId) {
 }
 
 // ---------- Wire gauge (AWG/SWG) ----------
-// Scope kept to gauge -> physical size on purpose: resistance and current
-// capacity are their own tools further down the build queue (Cable
-// resistance, Cable current capacity) and belong there, with the right
-// context (temperature, insulation), not duplicated into a sizing lookup.
-
-// AWG has a real formula — SWG never did; it was fixed by British statute
-// as a table, so it's reproduced here rather than derived.
+// Scope kept to gauge <-> physical size on purpose: resistance and current
+// capacity are their own tools (Cable resistance, Cable current capacity)
+// and belong there, with the right context (temperature, insulation).
+//
+// Both scales from NBS Handbook 100, Copper Wire Tables (1966). AWG has a
+// real formula: No. 0000 is 0.4600 in and No. 36 is 0.0050 in, with 38 sizes
+// between in geometric progression, so each step is the 39th root of 92 and
+// six steps double the diameter. SWG never had one: it is a table, given
+// here in mils as NBS table 15 gives it and converted exactly (1 mil =
+// 0.0254 mm), where rounded millimetres had put 2/0 and 49 slightly off.
 function awgLabel(n) {
   return n <= 0 ? `${1 - n}/0` : String(n);
 }
 function awgDiameterMm(n) {
   return 0.127 * Math.pow(92, (36 - n) / 39);
 }
+// Where a diameter sits on the AWG scale, as a fractional gauge.
+function awgFromDiameterMm(d) {
+  return 36 - 39 * Math.log(d / 0.127) / Math.log(92);
+}
 const AWG_SIZES = [];
 for (let n = -3; n <= 40; n++) AWG_SIZES.push({ value: n, label: awgLabel(n) });
 
-const SWG_TABLE = {
-  "7/0": 12.7, "6/0": 11.786, "5/0": 10.973, "4/0": 10.16, "3/0": 9.449, "2/0": 8.837, "1/0": 8.229,
-  "1": 7.62, "2": 7.01, "3": 6.401, "4": 5.893, "5": 5.385, "6": 4.877, "7": 4.470, "8": 4.064,
-  "9": 3.658, "10": 3.251, "11": 2.946, "12": 2.642, "13": 2.337, "14": 2.032, "15": 1.829,
-  "16": 1.626, "17": 1.422, "18": 1.219, "19": 1.016, "20": 0.914, "21": 0.813, "22": 0.711,
-  "23": 0.610, "24": 0.559, "25": 0.508, "26": 0.457, "27": 0.417, "28": 0.376, "29": 0.345,
-  "30": 0.315, "31": 0.295, "32": 0.274, "33": 0.254, "34": 0.234, "35": 0.213, "36": 0.193,
-  "37": 0.173, "38": 0.152, "39": 0.132, "40": 0.122, "41": 0.112, "42": 0.102, "43": 0.091,
-  "44": 0.081, "45": 0.071, "46": 0.061, "47": 0.051, "48": 0.041, "49": 0.031, "50": 0.025,
-};
-const SWG_SIZES = Object.keys(SWG_TABLE).map((label) => ({ value: label, label }));
+// An array, not an object: a JS object puts integer-like keys ("1".."50")
+// before "7/0".."1/0", which had listed the sizes out of order and made the
+// cable tool's thickest-to-thinnest search miss 7/0 to 1/0.
+const SWG_MILS = [
+  ["7/0", 500], ["6/0", 464], ["5/0", 432], ["4/0", 400], ["3/0", 372], ["2/0", 348], ["1/0", 324],
+  ["1", 300], ["2", 276], ["3", 252], ["4", 232], ["5", 212], ["6", 192], ["7", 176], ["8", 160],
+  ["9", 144], ["10", 128], ["11", 116], ["12", 104], ["13", 92], ["14", 80], ["15", 72],
+  ["16", 64], ["17", 56], ["18", 48], ["19", 40], ["20", 36], ["21", 32], ["22", 28],
+  ["23", 24], ["24", 22], ["25", 20], ["26", 18], ["27", 16.4], ["28", 14.8], ["29", 13.6],
+  ["30", 12.4], ["31", 11.6], ["32", 10.8], ["33", 10], ["34", 9.2], ["35", 8.4], ["36", 7.6],
+  ["37", 6.8], ["38", 6], ["39", 5.2], ["40", 4.8], ["41", 4.4], ["42", 4], ["43", 3.6],
+  ["44", 3.2], ["45", 2.8], ["46", 2.4], ["47", 2], ["48", 1.6], ["49", 1.2], ["50", 1],
+];
+const SWG_TABLE = Object.fromEntries(SWG_MILS.map(([g, mils]) => [g, mils * 0.0254]));
+const SWG_SIZES = SWG_MILS.map(([label]) => ({ value: label, label }));
+const WG_METRIC_UNITS = { "mm²": "area", mm: "diameter" };
 
 function renderWireGauge(domain, tool, favId) {
-  const state = { standard: "awg", awg: 24, swg: "24" };
+  const C = "wire-gauge";
+  // One size of record, the diameter in mm, and the box that set it: picking
+  // an AWG or SWG sets it exactly, typing mm² or mm sets it directly, and the
+  // other boxes follow with their nearest gauge.
+  const state = {
+    d: awgDiameterMm(24), source: "awg", awg: 24, swg: "24",
+    sizeUnit: pref(C, "sizeUnit", "mm²", Object.keys(WG_METRIC_UNITS)),
+  };
 
-  function diameterMm() {
-    return state.standard === "awg" ? awgDiameterMm(state.awg) : SWG_TABLE[state.swg];
+  const area = (d) => Math.PI * (d / 2) ** 2;
+  const byArea = () => WG_METRIC_UNITS[state.sizeUnit] === "area";
+  const sizeShown = () => +(byArea() ? area(state.d) : state.d).toPrecision(4);
+  const swgDia = (g) => SWG_TABLE[g];
+
+  // The gauges either side of a size, with how much more or less copper each
+  // has, and which is nearer (by the ratio, both scales being read on a log
+  // scale).
+  function neighbours(d, sizes, dia) {
+    let above = null, below = null;
+    for (const s of sizes) {
+      const ds = dia(s.value);
+      if (ds >= d) above = { s, d: ds }; // keeps the thinnest that is still at least d
+      if (ds <= d && !below) below = { s, d: ds };
+    }
+    const pct = (x) => x && (area(x.d) / area(d) - 1) * 100;
+    if (above) above.pct = pct(above);
+    if (below) below.pct = pct(below);
+    const nearest = !above ? below : !below ? above
+      : Math.abs(Math.log(above.d / d)) <= Math.abs(Math.log(d / below.d)) ? above : below;
+    return { above, below, nearest };
   }
 
-  function results() {
-    const d = diameterMm();
-    const areaMm2 = Math.PI * (d / 2) ** 2;
-    const dIn = d / 25.4;
+  // The boxes the user did not set follow the size.
+  function settle() {
+    if (state.source !== "awg") state.awg = neighbours(state.d, AWG_SIZES, awgDiameterMm).nearest.s.value;
+    if (state.source !== "swg") state.swg = neighbours(state.d, SWG_SIZES, swgDia).nearest.s.value;
+  }
+
+  const example = (values) => () => { Object.assign(state, values); settle(); paint(); };
+  useExamples([
+    { title: "36 AWG, the scale's anchor", note: "Defined as 0.0050 in, 0.127 mm: the formula is built from it and 0000.",
+      apply: example({ source: "awg", awg: 36, d: awgDiameterMm(36) }) },
+    { title: "4/0 AWG, the other anchor", note: "Defined as 0.4600 in, 11.68 mm; 38 sizes lie between it and 36.",
+      apply: example({ source: "awg", awg: -3, d: awgDiameterMm(-3) }) },
+    { title: "Six gauges halve it", note: "24 AWG is 0.511 mm, 18 AWG 1.024 mm: six steps double the diameter.",
+      apply: example({ source: "awg", awg: 18, d: awgDiameterMm(18) }) },
+    { title: "1.5 mm² cable", note: "Sits at AWG 15.4, between 16 (1.31 mm²) and 15 (1.65 mm²).",
+      apply: example({ source: "size", sizeUnit: "mm²", d: 2 * Math.sqrt(1.5 / Math.PI) }) },
+    { title: "2.5 mm² cable", note: "Sits at AWG 13.2: 13 AWG is 2.62 mm², 5% more copper.",
+      apply: example({ source: "size", sizeUnit: "mm²", d: 2 * Math.sqrt(2.5 / Math.PI) }) },
+    { title: "SWG 24", note: "22 thou exactly, 0.5588 mm: SWG is a table in thousandths of an inch.",
+      apply: example({ source: "swg", swg: "24", d: SWG_TABLE["24"] }) },
+  ]);
+
+  const sign = (p) => `${p >= 0 ? "+" : "−"}${Math.abs(p).toFixed(1)}%`;
+  const whole = (html) => `<span style="white-space:nowrap">${html}</span>`;
+
+  // A gauge set by hand is exact; one that follows the size names its
+  // nearest, the one on the other side, and (for AWG) where the size sits.
+  function gaugeLine(kind) {
+    const isAwg = kind === "awg";
+    const prefix = isAwg ? "AWG" : "SWG";
+    const label = isAwg ? awgLabel(state.awg) : state.swg;
+    if (state.source === kind) return whole(`${prefix} ${label} exactly`);
+    const n = neighbours(state.d, isAwg ? AWG_SIZES : SWG_SIZES, isAwg ? awgDiameterMm : swgDia);
+    const near = n.nearest;
+    const other = near === n.above ? n.below : n.above;
+    const part = (x) => `${prefix} ${x.s.label}: ${trim(area(x.d))} mm², ${sign(x.pct)}`;
+    const pos = isAwg ? awgFromDiameterMm(state.d) : NaN;
+    return [
+      whole(`nearest ${part(near)}`),
+      other ? whole(part(other)) : "",
+      // Not past 1: 1/0 to 4/0 are 0 to −3 on the formula's scale, which
+      // would read as "sits at −0.59"; the two neighbours say it already.
+      pos >= 1 && pos <= 40 ? whole(`sits at ${trim(pos)}`) : "",
+    ].filter(Boolean).join(" · ");
+  }
+
+  function resultsHTML() {
+    if (!(state.d > 0) || !isFinite(state.d)) return `<div class="error-text">The size has to be greater than zero.</div>`;
+    const dIn = state.d / 25.4;
     const circularMils = (dIn * 1000) ** 2;
-    return { d, areaMm2, dIn, circularMils };
+    return `
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Diameter</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value"><span class="num" data-res="dmm">${trim(state.d)} mm</span></div>
+        <div class="result-sub">${whole(`<span data-res="din">${Number(dIn.toPrecision(4))} in</span>`)} · ${whole(`<span data-res="area">${trim(area(state.d))} mm²</span>`)} · ${whole(`<span data-res="cm">${Math.round(circularMils).toLocaleString()} CM</span>`)}</div>
+      </div>
+      <div class="error-text" data-res="awg-line" style="color:var(--text-secondary);margin-top:0">${gaugeLine("awg")}</div>
+      <div class="error-text" data-res="swg-line" style="color:var(--text-secondary);margin-top:0">${gaugeLine("swg")}</div>`;
   }
 
-  function refresh() {
-    const r = results();
-    app.querySelector('[data-res="dmm"]').textContent = `${trim(r.d)} mm`;
-    app.querySelector('[data-res="din"]').textContent = `${Number(r.dIn.toPrecision(4))} in`;
-    app.querySelector('[data-res="area"]').textContent = `${trim(r.areaMm2)} mm²`;
-    app.querySelector('[data-res="cm"]').textContent = `${Math.round(r.circularMils).toLocaleString()} CM`;
-  }
-
-  function sizeOptions() {
-    const sizes = state.standard === "awg" ? AWG_SIZES : SWG_SIZES;
-    const current = state.standard === "awg" ? state.awg : state.swg;
+  function options(sizes, current) {
     return sizes.map((s) => `<option value="${s.value}" ${String(s.value) === String(current) ? "selected" : ""}>${s.label}</option>`).join("");
   }
 
+  // Every box but the one being typed in shows the new state.
+  function sync() {
+    const awgSel = document.getElementById("wg-awg");
+    const swgSel = document.getElementById("wg-swg");
+    const sizeIn = document.getElementById("wg-size");
+    if (awgSel) awgSel.value = String(state.awg);
+    if (swgSel) swgSel.value = state.swg;
+    if (sizeIn && document.activeElement !== sizeIn) sizeIn.value = sizeShown();
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML();
+  }
+
   function paint() {
-    const r = results();
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Gauge number to physical wire size")}
+      ${calcHeader(tool, favId, "AWG, SWG and metric sizes, each from the others")}
 
-      ${pillRow([["awg", "AWG"], ["swg", "SWG"]], state.standard, domain.bg)}
-
-      <div class="section-label" style="color:#8FC1F5">Gauge</div>
+      <div class="section-label" style="color:#8FC1F5">Any one — the others follow</div>
+      <div class="field-pair">
+        <div class="field">
+          <label>AWG</label>
+          <select id="wg-awg">${options(AWG_SIZES, state.awg)}</select>
+        </div>
+        <div class="field">
+          <label>SWG</label>
+          <select id="wg-swg">${options(SWG_SIZES, state.swg)}</select>
+        </div>
+      </div>
       <div class="field">
-        <label>${state.standard === "awg" ? "American Wire Gauge" : "Standard Wire Gauge (British)"}</label>
-        <select id="wg-size">${sizeOptions()}</select>
+        <label>${byArea() ? "Cross-section" : "Diameter"}</label>
+        <div class="field-row">
+          <input type="number" inputmode="decimal" step="any" id="wg-size" value="${sizeShown()}" />
+          <select id="wg-size-unit">${Object.keys(WG_METRIC_UNITS).map((u) => `<option ${state.sizeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        </div>
       </div>
 
-      <div class="section-label" style="color:#5DCAA5">Diameter</div>
-      <div class="result-field">
-        <div class="result-value"><span class="num" data-res="dmm">${trim(r.d)} mm</span></div>
-        <div class="result-sub" data-res="din">${Number(r.dIn.toPrecision(4))} in</div>
-      </div>
-
-      <div class="section-label" style="color:#5DCAA5">Cross-sectional area</div>
-      <div class="result-field">
-        <div class="result-value"><span class="num" data-res="area">${trim(r.areaMm2)} mm²</span></div>
-        <div class="result-sub" data-res="cm">${Math.round(r.circularMils).toLocaleString()} CM</div>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="results">${resultsHTML()}</div>
 
       ${formulaSection(
-        ["AWG: d(mm) = 0.127 × 92^((36 − n) / 39)", "SWG: fixed table, no formula (set by British statute, BS 3737)", "Area = π × (d / 2)² · Circular mils = (d in thousandths of an inch)²"],
-        "Circular mils (CM) is the customary US unit for conductor size — a mil is 0.001 in, so a wire's CM rating is just its diameter in mils, squared."
+        ["AWG: d(mm) = 0.127 × 92^((36 − n) / 39)", "SWG: a fixed table in thousandths of an inch, no formula", "Area = π × (d / 2)² · Circular mils = (d in thousandths of an inch)²"],
+        "A gauge is a number standing for a wire's diameter; the bigger the number, the thinner the wire. AWG is built from two sizes, 0000 at 0.4600 in and 36 at 0.0050 in, with 38 between in a geometric series: six gauges double the diameter, three double the copper. Circular mils (CM) are the US unit for cross-section: a mil is 0.001 in, so a wire's CM is its diameter in mils, squared. Metric cables are sold by cross-section in mm². Pick a gauge and it is exact; type a size and each gauge box shows the nearest, with how much more or less copper it has. A stranded wire is sized by its copper's total cross-section, so the bundle measures wider than the diameter here."
       )}
       ${calcFooter("")}
     `;
 
-    wireCalc(favId, paint, (m) => { state.standard = m; paint(); });
+    wireCalc(favId, paint, null);
 
-    document.getElementById("wg-size").onchange = (e) => {
-      if (state.standard === "awg") state.awg = parseInt(e.target.value, 10);
-      else state.swg = e.target.value;
-      refresh();
+    document.getElementById("wg-awg").onchange = (e) => {
+      state.awg = parseInt(e.target.value, 10);
+      state.source = "awg";
+      state.d = awgDiameterMm(state.awg);
+      settle();
+      sync();
+    };
+    document.getElementById("wg-swg").onchange = (e) => {
+      state.swg = e.target.value;
+      state.source = "swg";
+      state.d = SWG_TABLE[state.swg];
+      settle();
+      sync();
+    };
+    document.getElementById("wg-size").oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      if (!isFinite(v)) return;
+      state.source = "size";
+      state.d = byArea() ? 2 * Math.sqrt(v / Math.PI) : v;
+      if (state.d > 0) settle();
+      sync();
+    };
+    // A unit change re-expresses the same size; nothing is recomputed.
+    document.getElementById("wg-size-unit").onchange = (e) => {
+      state.sizeUnit = e.target.value;
+      setPref(C, "sizeUnit", state.sizeUnit);
+      paint();
     };
   }
 
+  settle();
   paint();
 }
 
