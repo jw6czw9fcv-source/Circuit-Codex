@@ -101,7 +101,7 @@ will key on, since that is the id the app already holds for each tool.
 
 ### PCB & interconnect
 
-- Cabling → [Wire gauge](#wire-gauge)
+- Cabling → [Wire sizing](#wire-gauge)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -7620,88 +7620,157 @@ The review made these changes:
 ---
 
 <a id="wire-gauge"></a>
-## Wire gauge
+## Wire sizing
 
 `calc: wire-gauge` · PCB & interconnect › Cabling
-(formerly Wire gauge (AWG/SWG))
+(formerly Wire gauge (AWG/SWG); Cable resistance / voltage drop and the
+planned Cable current capacity are merged into it)
 
 ### What it computes
 
-Three linked boxes — an AWG gauge, an SWG gauge and a size in mm² or mm —
-where setting any one updates the others. A gauge picked by hand is exact;
-the boxes that follow show the nearest gauge, the one on the other side, and
-how much more or less copper each has than the size. The output is the
-diameter, large, with the same size in inches, mm² and circular mils, and,
-for AWG, where the size sits as a fractional gauge. The mm²/mm choice is
-remembered.
+One copper wire on one run, on one screen:
 
-Examples: the two sizes AWG is defined by (36 and 0000), six gauges doubling
-the diameter, 1.5 and 2.5 mm² cable, and SWG 24.
+- **Its size** on every scale: an AWG gauge, an SWG gauge and a size in mm²
+  or mm are linked boxes, and setting any one updates the others. A gauge
+  picked by hand is exact; the others show their nearest gauge, the one on
+  the other side and how much more or less copper each has. The line under
+  Output gives the diameter, the cross-section, the circular mils and the
+  resistance per metre (or foot) at 20 °C.
+- **Its voltage drop** over the run, large: in volts, as a share of the
+  supply, the power turned to heat in the wire, and the temperature the wire
+  runs at.
+- **Its current limit**, large: the most current it can carry before it
+  reaches its insulation's rating, alone in free air or in a bundle, and how
+  much of that the current uses.
+- **The smallest wire that passes both**, on the scale in use, and which
+  check decided it.
 
-### Source
+The inputs are the gauge, the insulation's temperature rating (60 to
+260 °C), the number of wires in the bundle, the one-way length, the current,
+the supply, the largest drop allowed and the ambient temperature. The mm²/mm
+and m/ft choices and the insulation rating are remembered.
+
+Examples: a 12 V LED strip 5 m away (the drop decides), 5 V at 3 A over 1 m,
+a short 20 A motor lead (the current decides), a harness of 12 wires, 200 °C
+silicone wire for a drone, and 1.5 mm² cable.
+
+### Sources
 
 **NBS Handbook 100, Copper Wire Tables** (US National Bureau of Standards,
 1966), public domain, read in review:
 
 - **AWG:** "the diameter of No. 0000 is defined as 0.4600 inch and of No. 36
-  as 0.0050 inch", with 38 sizes between in geometric progression; the ratio
-  of successive diameters is the 39th root of 92, 1.1229322, and six steps
-  give 2.0050.
-- **SWG:** table 15, "British Standard Wire Gage", lists every size from 7/0
-  (500 mils) to 50 (1 mil). The tool holds these in mils and converts
-  exactly, 1 mil being 0.0254 mm.
+  as 0.0050 inch", with 38 sizes between in geometric progression.
+- **SWG:** table 15, every size from 7/0 (500 mils) to 50 (1 mil), held here
+  in mils and converted exactly.
+- **Copper:** the International Annealed Copper Standard is
+  "1/58 = 0.017241 … ohm square millimetre per metre" at 20 °C, and the best
+  temperature coefficient to assume for commercial annealed copper wire is
+  α20 = 0.003 93 per °C (the IEC values of 1913).
+
+**FAA AC 43.13-1B, Change 1** (2001), chapter 11, section 5, "Electrical wire
+rating", public domain, read in review:
+
+- **Figures 11-4a and 11-4b, "Single copper wire in free air":** current
+  against the temperature difference "wire rating minus the ambient", one
+  straight line per size on log-log paper, sizes 26 to 4/0.
+- **Figure 11-5, "Bundle derating curves":** the factor on each wire's
+  free-air current, for 1 to 41 wires, by the share of the bundle's
+  capacity in use (20 to 100 %).
+- **Paragraph 11-66d(6):** the wire's temperature, T2 = T1 + (TR − T1)(I2 /
+  Imax)², and (4) the copper resistance correction (234.5 °C + T).
+- **Table 11-9:** in-harness ratings at 70 °C, 33 wires, 20 % load and
+  60,000 ft, used here only as a cross-check.
+
+**MIL-W-5088L** (1991, inactive; superseded by SAE AS50881), the military
+wiring specification the FAA charts come from, read in review: figure 3 is
+the same free-air chart (its large-size half was read from here, its scan
+being cleaner), figure 4 the bundle curves; 3.8.8.1.1 states that table I was
+derived from these figures, and 3.8.8.1.2 that connector contacts, relays,
+breakers and switches carry their own, often lower, ratings.
+
+### How the charts were read
+
+The figures are scanned images, so each line was traced off the scan and
+located against the chart's own labelled gridlines, tracked across the page
+so a skewed or unevenly stretched scan does not shift the values. Each wire
+line is straight on the log-log paper, so it is kept as its two ends, the
+current at a 30 °C and at a 240 °C margin; the stored pairs match the traced
+lines within 0.2 %. For the bundle, the lowest curve (100 % loading) was
+traced and smoothed, moving no point by more than 0.8 %.
+
+Checked against every figure the documents quote: 22 AWG at a 140 °C margin
+reads 16.2 A (FAA and MIL: 16.2), 20 AWG 21.4 (21.5), 12 AWG at 175 °C 67.3
+(68) and at 140 °C 60.5 (61), 14 AWG at 150 °C 46.9 (47); the bundle factor
+for 12 wires at full load reads 0.425 (0.43). MIL-W-5088L's table I, built
+from free air × bundle × altitude, implies the same bundle factor for all
+nine sizes from 8 AWG to 4/0 to within 1 %, which checks the large sizes.
 
 ### Why the formulas are these
 
     AWG:  d(mm) = 0.127 × 92^((36 − n) / 39)
-    Area = π × (d / 2)²
-    Circular mils = (d in thousandths of an inch)²
+    R20 = 2L × (1/58 Ω·mm²/m) / A
+    R   = R20 × (1 + 0.00393 (T − 20 °C))
+    Drop = I × R        Loss = I² × R
+    Limit = free-air current at (Tr − Ta) × bundle factor
+    T = Ta + (Tr − Ta) × (I / Limit)²
 
-The AWG formula is the definition itself: 0.127 mm is 0.0050 in, gauge 36,
-and 92 is the ratio of the two defining diameters, 0.4600 / 0.0050, spread
-over the 39 steps between them. Gauges 0, 00, 000 and 0000 are written 1/0
-to 4/0 and sit at 0 to −3 on the formula's scale. SWG has no formula; it is a
-table of round numbers of thousandths of an inch.
-
-**The nearest gauge** is chosen by ratio, not by difference: 1.5 mm² is
-10.0% short of AWG 15 and 12.8% over AWG 16, so 15 is nearer. For carrying
-current, the thicker of the two is the safe side.
+- **2L:** the current goes out on one wire and back on the other, so the
+  run's resistance counts twice its one-way length.
+- **1/58 Ω·mm²/m:** the standard copper of wire tables. The textbook figure
+  for pure copper, 1.68 × 10⁻⁸ Ω·m, which the old cable tool used, is 2.6 %
+  lower than the wire you buy, so it under-stated every drop.
+- **The limit** is the current that heats the wire to its insulation's rating
+  Tr when the air is at Ta: the chart is read at that margin. A size between
+  two chart sizes (an odd AWG, an SWG, a metric size) is read between them,
+  by cross-section on a log scale.
+- **The temperature:** heating grows as the square of the current, reaching
+  Tr at the limit; copper's resistance rises with it, so the drop is worked
+  out at the temperature the wire really runs at. The FAA calls the estimate
+  "quite conservative": it errs warm.
+- **Smallest wire:** a thicker wire passes whatever a thinner one passes, so
+  the answer is the thicker of the thinnest passing the drop and the
+  thinnest passing the current.
 
 ### Assumptions and limits
 
-- **Solid round wire.** A stranded conductor is sized by its copper's total
-  cross-section, so the bundle measures wider than the diameter here.
-- **The gauge says nothing about current** on its own: that depends on the
-  insulation, the temperature and how the wire is run, which is the Cable
-  current capacity tool's job.
-
-### What it deliberately does not do
-
-- **Resistance and voltage drop** are Cable resistance / voltage drop.
-- **Current capacity** is its own tool.
+- **Copper only.** The charts are for copper, and electronics wire is
+  copper; aluminium was dropped in the merge.
+- **26 AWG to 4/0** (0.129 to 107 mm²). Outside, no current limit is shown,
+  and the smallest-wire search stops at 26 AWG, saying so, with the size
+  the drop alone would allow.
+- **A 30 to 245 °C margin**, where the chart's lines run; outside it the line
+  is extended, and the screen says so.
+- **Every wire in the bundle carries current** (the 100 % curve, the lowest).
+  If only some do, the chart allows more; count every wire in the bundle,
+  loaded or not, for a safe figure. Past 41 wires, the chart's last factor.
+- **Free air at sea level.** Wire in conduit, against a hot surface, or at
+  altitude (the FAA's figure 11-6: 0.91 at 20,000 ft) carries less.
+- **Aircraft wire.** The charts were drawn for MIL wire with thin PTFE or
+  polyimide insulation; PVC hookup wire's thicker insulation changes the
+  figures somewhat. Treat the limit as an engineering estimate, not a rating.
+- **The wire, not its ends.** Connectors, terminals, switches and fuses
+  usually limit the current first.
+- **Solid round wire sizes.** A stranded conductor is sized by its copper's
+  total cross-section.
 
 ### How it was checked
 
-24 AWG gives 0.5106 mm, 0.2047 mm² and 404 CM, nearest SWG 25; 36 AWG
-0.127 mm and 25 CM; 0000 AWG 11.68 mm and 211 600 CM; 10 AWG 2.588 mm. SWG
-lists 7/0 first; SWG 2/0 gives 8.839 mm and 121 104 CM, nearest AWG 2/0;
-SWG 49 gives 0.03048 mm. 1.5 mm² gives nearest AWG 15 (+10.0%) and 16
-(−12.8%), sitting at 15.41, and SWG 17; a 1 mm diameter gives AWG 18 and
-SWG 19.
+18 AWG with 3 A over 5 m at 12 V: 644 mV, 5.37 %, wire at 26 °C, limit
+18.6 A in 25 °C air with 80 °C insulation, smallest AWG 15 by the 3 % drop.
+The chart values above; 12 bundled wires ×0.425; 30 AWG has no limit; a
+100 mA load stops at 26 AWG (drop alone: 30 AWG); an ambient at the rating
+gives no safe current; a 20 °C margin and 50 wires are flagged. Sizes: SWG
+2/0 is 8.839 mm and 121,104 CM, nearest AWG 2/0; 4/0 AWG is 11.68 mm and
+211,600 CM; 1.5 mm² sits at AWG 15.41; a 1 mm diameter is AWG 18 and SWG 19.
 
 The review made these changes:
-- The AWG, SWG and metric sizes became one screen of linked boxes, on
-  Pierre's choice, where they had been separate pills; the metric direction,
-  from mm² or mm to the nearest gauges, is new.
-- The SWG table had been held in rounded millimetres, putting 2/0 at
-  8.837 mm (it is 348 mils, 8.839) and 49 at 0.031 mm (1.2 mils, 0.0305);
-  it is now NBS's table in mils, converted exactly. Its attribution to
-  "BS 3737" could not be confirmed and is gone.
-- The SWG sizes had been listed out of order — 1 to 50, then 7/0 to 1/0 —
-  because a JavaScript object puts integer-like keys first; that also made
-  the cable tool's search for the thinnest adequate gauge miss 7/0 to 1/0.
-- Renamed Wire gauge; the title had wrapped.
-- It added six examples, a formula card, the first cases (10) and this
-  section.
+- Wire gauge, Cable resistance / voltage drop and the planned Cable current
+  capacity became one tool, on Pierre's choice, named Wire sizing.
+- The current limit is new, from the FAA and MIL charts; the wire's
+  temperature now sets its resistance.
+- Copper's resistivity is the IACS 1/58 Ω·mm²/m, not 1.68 × 10⁻⁸ Ω·m.
+- Lengths can be in feet; aluminium was dropped.
+- It added six run examples, 17 cases and this section.
 
 [↑ Index](#index)

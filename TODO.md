@@ -12,7 +12,7 @@ bridge · Capacitor series/parallel · Ohm's law · Kirchhoff's laws · Formula
 search · SI prefix converter · Scientific ↔ engineering notation ·
 Percent tolerance / error · Standard & Scientific Calculators ·
 Physical constants · SI-Units · DEC / HEX / OCT / BIN conversion ·
-ASCII table · Wire gauge (AWG/SWG) · Cable resistance / voltage drop ·
+ASCII table · Wire sizing (Wire gauge, Cable resistance / voltage drop and Cable current capacity merged) ·
 Wire & cable colors (merged with the former "Wire color code by
 rating" — one screen covers AC mains (IEC, US, Canada), US three-phase
 by voltage system, DC, and DIN 47100 multi-core numbering, with filter
@@ -376,7 +376,7 @@ Then:
 - [ ] Annular ring calculator
 - [ ] Via aspect ratio calculator
 - [ ] Flex PCB bend radius
-- [ ] Cable current capacity
+- [x] Cable current capacity (merged into Wire sizing)
 - [ ] IEC cable reference
 - [ ] Circuit calculators (divider, attenuator, delta-Y)
 - [ ] Quiescent current

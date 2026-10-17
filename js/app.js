@@ -305,10 +305,11 @@ function tabbarHTMLOnly(activeTab) {
 }
 
 // A built tool found by its calc id, with the route key the app opens it by.
+// A tool merged into another (`merged` in data.js) finds the one it is now.
 function findByCalc(calc) {
   for (const d of DOMAINS) {
     for (let si = 0; si < d.sections.length; si++) {
-      const ti = d.sections[si].tools.findIndex((t) => t.calc === calc);
+      const ti = d.sections[si].tools.findIndex((t) => t.calc === calc || (t.merged || []).includes(calc));
       if (ti >= 0) return { domain: d, section: d.sections[si], tool: d.sections[si].tools[ti], key: `${d.id}:${si}:${ti}` };
     }
   }
@@ -321,7 +322,10 @@ function toolRoute(found) {
 
 // The last tools opened, newest first, by calc id.
 function recentTools() {
-  try { return JSON.parse(localStorage.getItem("cc_recent") || "[]"); } catch (_) { return []; }
+  let list;
+  try { list = JSON.parse(localStorage.getItem("cc_recent") || "[]"); } catch (_) { return []; }
+  // A tool since merged into another counts as that one, once.
+  return [...new Set(list.map((c) => { const f = findByCalc(c); return f ? f.tool.calc : c; }))];
 }
 function noteRecent(calc) {
   if (!calc) return;
@@ -460,6 +464,9 @@ function findTool(key) {
 let CURRENT_CALC = null;
 
 function renderTool(rawKey, calcId) {
+  // A link to a tool since merged into another opens that one.
+  const into = calcId && findByCalc(calcId);
+  if (into && into.tool.calc !== calcId) { location.replace(`#${toolRoute(into)}`); return; }
   CURRENT_CALC = calcId;
   TOOL_EXAMPLES = null;
   EXAMPLE_NOTE = "";
@@ -551,7 +558,6 @@ function renderTool(rawKey, calcId) {
   if (calcId === "dec-hex-bin") return renderDecHexBin(domain, tool, favId);
   if (calcId === "ascii-table") return renderAsciiTable(domain, tool, favId);
   if (calcId === "wire-gauge") return renderWireGauge(domain, tool, favId);
-  if (calcId === "cable-resistance-drop") return renderCableResistanceDrop(domain, tool, favId);
   if (calcId === "cable-colors") return renderCableColors(domain, tool, favId);
   if (calcId === "ip-ratings") return renderIpRatings(domain, tool, favId);
 
@@ -2071,6 +2077,9 @@ function renderSmdCode(domain, tool, favId) {
     if (t.calc) {
       legacy.set(legacyFavoriteId(d, sec, t), favoriteId(d, sec, t));
       legacy.set(`${d.id}:${sec.title}:${t.name}`, favoriteId(d, sec, t));
+      // Tools merged into this one: their calc ids and their names.
+      (t.merged || []).forEach((c) => legacy.set(`calc:${c}`, favoriteId(d, sec, t)));
+      (t.mergedNames || []).forEach((n) => legacy.set(`${d.id}:${sec.title}:${n}`, favoriteId(d, sec, t)));
     }
   })));
   const migrated = [];
@@ -5126,13 +5135,15 @@ function renderAsciiTable(domain, tool, favId) {
   paint();
 }
 
-// ---------- Wire gauge (AWG/SWG) ----------
-// Scope kept to gauge <-> physical size on purpose: resistance and current
-// capacity are their own tools (Cable resistance, Cable current capacity)
-// and belong there, with the right context (temperature, insulation).
+// ---------- Wire sizing ----------
+// One screen for one copper wire: its size on every scale, what it loses
+// over a run and how much current it can carry. These were three tools
+// (Wire gauge, Cable resistance / voltage drop, and a planned Cable current
+// capacity); the question people bring — is this wire right for this job? —
+// needs the drop and the current limit together, so they share one screen.
 //
-// Both scales from NBS Handbook 100, Copper Wire Tables (1966). AWG has a
-// real formula: No. 0000 is 0.4600 in and No. 36 is 0.0050 in, with 38 sizes
+// Sizes from NBS Handbook 100, Copper Wire Tables (1966). AWG has a real
+// formula: No. 0000 is 0.4600 in and No. 36 is 0.0050 in, with 38 sizes
 // between in geometric progression, so each step is the 39th root of 92 and
 // six steps double the diameter. SWG never had one: it is a table, given
 // here in mils as NBS table 15 gives it and converted exactly (1 mil =
@@ -5151,8 +5162,7 @@ const AWG_SIZES = [];
 for (let n = -3; n <= 40; n++) AWG_SIZES.push({ value: n, label: awgLabel(n) });
 
 // An array, not an object: a JS object puts integer-like keys ("1".."50")
-// before "7/0".."1/0", which had listed the sizes out of order and made the
-// cable tool's thickest-to-thinnest search miss 7/0 to 1/0.
+// before "7/0".."1/0", which had listed the sizes out of order.
 const SWG_MILS = [
   ["7/0", 500], ["6/0", 464], ["5/0", 432], ["4/0", 400], ["3/0", 372], ["2/0", 348], ["1/0", 324],
   ["1", 300], ["2", 276], ["3", 252], ["4", 232], ["5", 212], ["6", 192], ["7", 176], ["8", 160],
@@ -5166,25 +5176,129 @@ const SWG_MILS = [
 const SWG_TABLE = Object.fromEntries(SWG_MILS.map(([g, mils]) => [g, mils * 0.0254]));
 const SWG_SIZES = SWG_MILS.map(([label]) => ({ value: label, label }));
 const WG_METRIC_UNITS = { "mm²": "area", mm: "diameter" };
+const WG_LENGTH_UNITS = { m: 1, ft: 0.3048 };
+
+// Copper as wire tables define it: the International Annealed Copper
+// Standard, 1/58 Ω·mm²/m at 20 °C, rising 0.393 % per °C (NBS Handbook 100,
+// the IEC values of 1913). The textbook figure for pure copper, 1.68e-8 Ω·m,
+// which the old cable tool used, is 2.6 % below the wire people buy.
+const IACS_OHM_MM2_PER_M = 1 / 58;
+const CU_ALPHA_20 = 0.00393;
+
+// One copper wire in free air at sea level: the current that takes it to
+// its insulation's rating, for a margin dT = rating − ambient. FAA AC
+// 43.13-1B figure 11-4a (26 to 10 AWG) and MIL-W-5088L figure 3 continued
+// (8 to 4/0), the same charts. Each size is a straight line on their
+// log-log paper, kept as its two ends: [AWG, amps at dT 30 °C, at 240 °C].
+// Read off the scans against their own gridlines, within 1 % of every value
+// the two documents' worked examples quote (22 AWG at 140 °C: 16.2 A).
+const FREE_AIR_AMPS = [
+  [26, 4.63, 11.8], [24, 6.21, 15.7], [22, 8.1, 20.6], [20, 10.5, 27.4], [18, 14.0, 37.1],
+  [16, 16.1, 43.2], [14, 21.9, 58.6], [12, 29.2, 78.1], [10, 39.2, 104], [8, 57.6, 158],
+  [6, 76.7, 217], [4, 103, 296], [2, 146, 400], [1, 171, 464], [0, 196, 542],
+  [-1, 226, 634], [-2, 263, 753], [-3, 314, 889],
+];
+const FREE_AIR_DT = [30, 245];   // where the chart's lines start and stop
+
+// Wires bundled together shed heat worse: FAA figure 11-5, its 100 %
+// loading curve (every wire carrying its full current, the lowest of the
+// five), as the factor on each wire's free-air current, for 1 to 41 wires.
+const BUNDLE_100 = [1, 0.838, 0.751, 0.683, 0.628, 0.583, 0.545, 0.514, 0.486, 0.463, 0.443,
+  0.425, 0.409, 0.395, 0.382, 0.371, 0.361, 0.351, 0.343, 0.335, 0.328, 0.322, 0.316, 0.311,
+  0.306, 0.301, 0.297, 0.293, 0.289, 0.286, 0.283, 0.28, 0.277, 0.275, 0.273, 0.27, 0.268,
+  0.267, 0.265, 0.264, 0.262];
+
+// Insulation ratings hookup and equipment wire comes in: PVC 60–105 °C,
+// irradiated PVC and XLPE 105–125, ETFE and silicone 150–200, PTFE and
+// polyimide 200–260.
+const INSULATION_C = [60, 75, 80, 90, 105, 125, 150, 200, 260];
+
+const wireArea = (d) => Math.PI * (d / 2) ** 2;
+
+// Free-air current at a margin dT, for any size from 26 AWG to 4/0: each
+// chart size on its own line, and a size between two of them in between, by
+// area on a log scale. Off the chart, null. The 0.5 % allows a size typed
+// as shown (26 AWG reads 0.1287 mm², a hair under its 0.12875).
+function freeAirAmps(areaMm2, dT) {
+  const rows = FREE_AIR_AMPS.map(([n, a30, a240]) => ({
+    area: wireArea(awgDiameterMm(n)),
+    amps: a30 * Math.pow(dT / 30, Math.log(a240 / a30) / Math.log(8)),
+  }));
+  const first = rows[0], last = rows[rows.length - 1];
+  if (areaMm2 < first.area * 0.995 || areaMm2 > last.area * 1.005) return null;
+  if (areaMm2 <= first.area) return first.amps;
+  for (let i = 0; i < rows.length - 1; i++) {
+    const lo = rows[i], hi = rows[i + 1];
+    if (areaMm2 <= hi.area) {
+      const t = Math.log(areaMm2 / lo.area) / Math.log(hi.area / lo.area);
+      return lo.amps * Math.pow(hi.amps / lo.amps, t);
+    }
+  }
+  return last.amps;
+}
+
+function bundleFactor(n) {
+  return BUNDLE_100[Math.min(Math.max(1, Math.round(n)), BUNDLE_100.length) - 1];
+}
+
+// Everything about one wire on one run. The wire's temperature is FAA AC
+// 43.13-1B's estimate, T = Ta + (Tr − Ta)(I / Ilimit)²: heating goes as the
+// square of the current, reaching the rating at the limit. Its resistance,
+// and so the drop, are taken at that temperature. Off the chart there is no
+// limit to scale from, so the wire is taken at the ambient.
+function wireRun(d, s) {
+  const area = wireArea(d);
+  const dT = s.ins - s.amb;
+  const free = dT > 0 ? freeAirAmps(area, dT) : null;
+  const factor = bundleFactor(s.wires);
+  const limit = free === null ? null : free * factor;
+  const temp = limit ? s.amb + dT * (s.cur / limit) ** 2 : s.amb;
+  const rPerM20 = IACS_OHM_MM2_PER_M / area;
+  const rPerM = rPerM20 * (1 + CU_ALPHA_20 * (temp - 20));
+  const r = rPerM * 2 * s.lenM;   // out and back: both conductors
+  const drop = s.cur * r;
+  return { area, dT, free, factor, limit, temp, rPerM20, r, drop, pct: (drop / s.supply) * 100, loss: s.cur * drop };
+}
+
+// The thinnest wire on a scale passing both checks, and which one decided:
+// a thicker wire passes whatever a thinner one passes, so it is the thicker
+// of the thinnest passing each. Below 26 AWG the current chart says
+// nothing, so the current check cannot pass there.
+function smallestWire(s, scale) {
+  const sizes = scale === "swg" ? SWG_SIZES : AWG_SIZES;   // thickest first
+  const dia = scale === "swg" ? (g) => SWG_TABLE[g] : awgDiameterMm;
+  let drop = -1, cur = -1;
+  for (let i = sizes.length - 1; i >= 0; i--) {
+    const w = wireRun(dia(sizes[i].value), s);
+    if (drop < 0 && w.pct <= s.maxDrop) drop = i;
+    if (cur < 0 && w.limit !== null && s.cur <= w.limit) cur = i;
+    if (drop >= 0 && cur >= 0) break;
+  }
+  if (drop < 0 || cur < 0) return null;
+  const i = Math.min(drop, cur);
+  return { size: sizes[i], d: dia(sizes[i].value), by: drop === cur ? "both" : drop < cur ? "drop" : "current", dropSize: sizes[drop] };
+}
 
 function renderWireGauge(domain, tool, favId) {
   const C = "wire-gauge";
   // One size of record, the diameter in mm, and the box that set it: picking
   // an AWG or SWG sets it exactly, typing mm² or mm sets it directly, and the
-  // other boxes follow with their nearest gauge.
+  // other boxes follow with their nearest gauge. Length is held in metres.
   const state = {
-    d: awgDiameterMm(24), source: "awg", awg: 24, swg: "24",
+    d: awgDiameterMm(18), source: "awg", awg: 18, swg: "19",
     sizeUnit: pref(C, "sizeUnit", "mm²", Object.keys(WG_METRIC_UNITS)),
+    lenUnit: pref(C, "lenUnit", "m", Object.keys(WG_LENGTH_UNITS)),
+    ins: pref(C, "ins", 80, INSULATION_C),
+    wires: 1, lenM: 5, cur: 3, supply: 12, maxDrop: 3, amb: 25,
   };
 
-  const area = (d) => Math.PI * (d / 2) ** 2;
   const byArea = () => WG_METRIC_UNITS[state.sizeUnit] === "area";
-  const sizeShown = () => +(byArea() ? area(state.d) : state.d).toPrecision(4);
+  const sizeShown = () => +(byArea() ? wireArea(state.d) : state.d).toPrecision(4);
+  const lenShown = () => +(state.lenM / WG_LENGTH_UNITS[state.lenUnit]).toPrecision(4);
   const swgDia = (g) => SWG_TABLE[g];
 
   // The gauges either side of a size, with how much more or less copper each
-  // has, and which is nearer (by the ratio, both scales being read on a log
-  // scale).
+  // has, and which is nearer (by the ratio, both scales being log scales).
   function neighbours(d, sizes, dia) {
     let above = null, below = null;
     for (const s of sizes) {
@@ -5192,7 +5306,7 @@ function renderWireGauge(domain, tool, favId) {
       if (ds >= d) above = { s, d: ds }; // keeps the thinnest that is still at least d
       if (ds <= d && !below) below = { s, d: ds };
     }
-    const pct = (x) => x && (area(x.d) / area(d) - 1) * 100;
+    const pct = (x) => x && (wireArea(x.d) / wireArea(d) - 1) * 100;
     if (above) above.pct = pct(above);
     if (below) below.pct = pct(below);
     const nearest = !above ? below : !below ? above
@@ -5207,82 +5321,160 @@ function renderWireGauge(domain, tool, favId) {
   }
 
   const example = (values) => () => { Object.assign(state, values); settle(); paint(); };
+  const awg = (n) => ({ source: "awg", awg: n, d: awgDiameterMm(n) });
+  const run = (v) => ({ ins: 80, wires: 1, lenM: 5, cur: 3, supply: 12, maxDrop: 3, amb: 25, ...v });
   useExamples([
-    { title: "36 AWG, the scale's anchor", note: "Defined as 0.0050 in, 0.127 mm: the formula is built from it and 0000.",
-      apply: example({ source: "awg", awg: 36, d: awgDiameterMm(36) }) },
-    { title: "4/0 AWG, the other anchor", note: "Defined as 0.4600 in, 11.68 mm; 38 sizes lie between it and 36.",
-      apply: example({ source: "awg", awg: -3, d: awgDiameterMm(-3) }) },
-    { title: "Six gauges halve it", note: "24 AWG is 0.511 mm, 18 AWG 1.024 mm: six steps double the diameter.",
-      apply: example({ source: "awg", awg: 18, d: awgDiameterMm(18) }) },
+    { title: "12 V LED strip, 5 m away", note: "3 A on an 18 AWG pair loses 5.4 %: the drop, not the current, asks for 15 AWG.",
+      apply: example({ ...awg(18), ...run({ wires: 2 }) }) },
+    { title: "5 V at 3 A over 1 m", note: "A 24 AWG pair drops 0.54 V, 11 % of 5 V: keeping it to 5 % takes 20 AWG.",
+      apply: example({ ...awg(24), ...run({ wires: 2, lenM: 1, supply: 5, maxDrop: 5 }) }) },
+    { title: "Motor lead, 20 A over 30 cm", note: "A short run: the current decides, and 80 °C PVC needs 16 AWG in free air.",
+      apply: example({ ...awg(16), ...run({ lenM: 0.3, cur: 20, maxDrop: 5 }) }) },
+    { title: "Harness of 12 wires", note: "Bundled, each wire gets 0.425 of its free-air current: 4.87 A for 22 AWG at 40 °C.",
+      apply: example({ ...awg(22), ...run({ ins: 105, wires: 12, lenM: 2, cur: 2, supply: 24, amb: 40 }) }) },
+    { title: "Silicone wire for a drone", note: "200 °C silicone at 25 °C: 12 AWG takes 67 A in free air, and 40 A needs 15 AWG.",
+      apply: example({ ...awg(12), ...run({ ins: 200, lenM: 0.2, cur: 40, supply: 22.2 }) }) },
     { title: "1.5 mm² cable", note: "Sits at AWG 15.4, between 16 (1.31 mm²) and 15 (1.65 mm²).",
-      apply: example({ source: "size", sizeUnit: "mm²", d: 2 * Math.sqrt(1.5 / Math.PI) }) },
-    { title: "2.5 mm² cable", note: "Sits at AWG 13.2: 13 AWG is 2.62 mm², 5% more copper.",
-      apply: example({ source: "size", sizeUnit: "mm²", d: 2 * Math.sqrt(2.5 / Math.PI) }) },
-    { title: "SWG 24", note: "22 thou exactly, 0.5588 mm: SWG is a table in thousandths of an inch.",
-      apply: example({ source: "swg", swg: "24", d: SWG_TABLE["24"] }) },
+      apply: example({ source: "size", sizeUnit: "mm²", d: 2 * Math.sqrt(1.5 / Math.PI), ...run({ cur: 10 }) }) },
   ]);
 
   const sign = (p) => `${p >= 0 ? "+" : "−"}${Math.abs(p).toFixed(1)}%`;
   const whole = (html) => `<span style="white-space:nowrap">${html}</span>`;
+  const warn = (html) => `<span style="color:#E0A85E">${html}</span>`;
 
-  // A gauge set by hand is exact; one that follows the size names its
-  // nearest, the one on the other side, and (for AWG) where the size sits.
+  // A scale the user did not set names its nearest gauge, the one on the
+  // other side, and (for AWG) where the size sits.
   function gaugeLine(kind) {
     const isAwg = kind === "awg";
     const prefix = isAwg ? "AWG" : "SWG";
-    const label = isAwg ? awgLabel(state.awg) : state.swg;
-    if (state.source === kind) return whole(`${prefix} ${label} exactly`);
     const n = neighbours(state.d, isAwg ? AWG_SIZES : SWG_SIZES, isAwg ? awgDiameterMm : swgDia);
     const near = n.nearest;
     const other = near === n.above ? n.below : n.above;
-    const part = (x) => `${prefix} ${x.s.label}: ${trim(area(x.d))} mm², ${sign(x.pct)}`;
+    const part = (x) => `${prefix} ${x.s.label}: ${trim(wireArea(x.d))} mm², ${sign(x.pct)}`;
     const pos = isAwg ? awgFromDiameterMm(state.d) : NaN;
     return [
       whole(`nearest ${part(near)}`),
       other ? whole(part(other)) : "",
-      // Not past 1: 1/0 to 4/0 are 0 to −3 on the formula's scale, which
-      // would read as "sits at −0.59"; the two neighbours say it already.
+      // Not past 1: 1/0 to 4/0 are 0 to −3 on the formula's scale.
       pos >= 1 && pos <= 40 ? whole(`sits at ${trim(pos)}`) : "",
     ].filter(Boolean).join(" · ");
   }
 
+  function problem() {
+    if (!(state.d > 0) || !isFinite(state.d)) return "The size has to be greater than zero.";
+    if (!(state.lenM > 0)) return "The length has to be greater than zero.";
+    if (!(state.cur > 0)) return "The current has to be greater than zero.";
+    if (!(state.supply > 0)) return "The supply has to be greater than zero.";
+    if (!(state.maxDrop > 0)) return "The max drop has to be greater than zero.";
+    if (!(state.wires >= 1)) return "A bundle has at least one wire.";
+    return "";
+  }
+
   function resultsHTML() {
-    if (!(state.d > 0) || !isFinite(state.d)) return `<div class="error-text">The size has to be greater than zero.</div>`;
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const w = wireRun(state.d, state);
+    const unitM = WG_LENGTH_UNITS[state.lenUnit];
     const dIn = state.d / 25.4;
-    const circularMils = (dIn * 1000) ** 2;
+    const wireLine = [
+      whole(`<span data-res="dmm">Ø ${trim(state.d)} mm</span>`),
+      whole(`<span data-res="area">${trim(w.area)} mm²</span>`),
+      whole(`<span data-res="cm">${Math.round((dIn * 1000) ** 2).toLocaleString()} CM</span>`),
+      whole(`<span data-res="rpm">${siFormat(w.rPerM20 * unitM, "Ω")}/${state.lenUnit} at 20 °C</span>`),
+    ].join(" · ");
+    const lines = [];
+    if (state.source !== "awg") lines.push(`<div class="error-text" data-res="awg-line" style="color:var(--text-secondary);margin-top:0">${gaugeLine("awg")}</div>`);
+    if (state.source !== "swg") lines.push(`<div class="error-text" data-res="swg-line" style="color:var(--text-secondary);margin-top:0">${gaugeLine("swg")}</div>`);
+
+    // The drop, as volts, a share of the supply and the heat it makes.
+    const over = w.pct > state.maxDrop;
+    const hot = w.limit !== null && state.cur > w.limit;
+    const pctText = `${Number(w.pct.toPrecision(3))} % of ${trim(state.supply)} V`;
+    const dropSub = [
+      whole(`<span data-res="pct">${over ? warn(pctText) : pctText}</span>`),
+      whole(`<span data-res="loss">${siFormat(w.loss, "W", 3)} lost</span>`),
+      whole(`<span data-res="temp">${hot ? warn(`wire at ${Math.round(w.temp)} °C`) : `wire at ${Math.round(w.temp)} °C`}</span>`),
+    ].join(" · ");
+
+    // The limit, what it is for, and how much of it the current uses.
+    let limitNum = "—", limitSub;
+    if (w.dT <= 0) {
+      limitSub = warn("the ambient is at or above the insulation's rating");
+    } else if (w.limit === null) {
+      limitSub = "the chart covers 26 AWG to 4/0 only";
+    } else {
+      limitNum = siFormat(w.limit, "A", 3);
+      const n = Math.round(state.wires);
+      const what = n === 1 ? "one wire in free air" : `each of ${n} bundled, ×${bundleFactor(n)}`;
+      const use = hot ? warn(`${trim(state.cur)} A is over it`) : `${trim(state.cur)} A uses ${Math.round((state.cur / w.limit) * 100)} %`;
+      const ext = w.dT < FREE_AIR_DT[0] || w.dT > FREE_AIR_DT[1] ? whole(`${Math.round(w.dT)} °C margin, chart extended`) : "";
+      const past = n > BUNDLE_100.length ? whole(`chart stops at ${BUNDLE_100.length} wires`) : "";
+      limitSub = [whole(what), whole(`<span data-res="use">${use}</span>`), ext, past].filter(Boolean).join(" · ");
+    }
+
+    // The thinnest wire that would do, on the scale in use.
+    const scale = state.source === "swg" ? "swg" : "awg";
+    const best = smallestWire(state, scale);
+    const prefix = scale === "swg" ? "SWG" : "AWG";
+    let bestText;
+    if (w.dT <= 0) {
+      bestText = "No wire is safe: pick an insulation rated above the ambient.";
+    } else if (!best) {
+      bestText = `No wire up to ${scale === "swg" ? "SWG 7/0" : "4/0"} passes: shorten the run, lower the current or allow more drop.`;
+    } else {
+      const why = best.by === "drop" ? `set by the ${trim(state.maxDrop)} % drop`
+        : best.by === "current" ? "set by the current" : "set by both";
+      const thinnest = best.by === "current" && freeAirAmps(wireArea(best.d) * 0.9, Math.max(w.dT, 1)) === null;
+      bestText = `Smallest passing both: ${whole(`${prefix} ${best.size.label}, ${trim(wireArea(best.d))} mm²`)} · `
+        + (thinnest ? whole("the thinnest the current chart covers") + ` · ${whole(`drop alone: ${prefix} ${best.dropSize.label}`)}` : whole(why));
+    }
+
     return `
-      <div class="result-field">
-        <div class="result-head">
-          <span class="label">Diameter</span>
-          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+      <div class="error-text" data-res="wire" style="color:var(--text-secondary);margin-top:0">${wireLine}</div>
+      ${lines.join("")}
+      <div class="result-pair">
+        <div class="result-field">
+          <div class="result-head"><span class="label">Voltage drop</span></div>
+          <div class="result-value"><span class="num" data-res="drop">${siFormat(w.drop, "V", 3)}</span></div>
+          <div class="result-sub">${dropSub}</div>
         </div>
-        <div class="result-value"><span class="num" data-res="dmm">${trim(state.d)} mm</span></div>
-        <div class="result-sub">${whole(`<span data-res="din">${Number(dIn.toPrecision(4))} in</span>`)} · ${whole(`<span data-res="area">${trim(area(state.d))} mm²</span>`)} · ${whole(`<span data-res="cm">${Math.round(circularMils).toLocaleString()} CM</span>`)}</div>
+        <div class="result-field">
+          <div class="result-head"><span class="label">Current limit</span></div>
+          <div class="result-value"><span class="num" data-res="limit">${limitNum}</span></div>
+          <div class="result-sub" data-res="limit-sub">${limitSub}</div>
+        </div>
       </div>
-      <div class="error-text" data-res="awg-line" style="color:var(--text-secondary);margin-top:0">${gaugeLine("awg")}</div>
-      <div class="error-text" data-res="swg-line" style="color:var(--text-secondary);margin-top:0">${gaugeLine("swg")}</div>`;
+      <div class="error-text" data-res="smallest" style="color:var(--text-secondary);margin-top:0">${bestText}</div>`;
   }
 
   function options(sizes, current) {
     return sizes.map((s) => `<option value="${s.value}" ${String(s.value) === String(current) ? "selected" : ""}>${s.label}</option>`).join("");
   }
+  const unitOptions = (units, current) => Object.keys(units).map((u) => `<option ${current === u ? "selected" : ""}>${u}</option>`).join("");
+  const numField = (id, label, value, unit) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" id="${id}" value="${value}" />
+            ${unit}
+          </div>
+        </div>`;
+  const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
 
   // Every box but the one being typed in shows the new state.
   function sync() {
-    const awgSel = document.getElementById("wg-awg");
-    const swgSel = document.getElementById("wg-swg");
-    const sizeIn = document.getElementById("wg-size");
-    if (awgSel) awgSel.value = String(state.awg);
-    if (swgSel) swgSel.value = state.swg;
-    if (sizeIn && document.activeElement !== sizeIn) sizeIn.value = sizeShown();
+    const set = (id, v) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = v; };
+    set("wg-awg", String(state.awg));
+    set("wg-swg", state.swg);
+    set("wg-size", sizeShown());
     app.querySelector('[data-res="results"]').innerHTML = resultsHTML();
   }
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, "AWG, SWG and metric sizes, each from the others")}
+      ${calcHeader(tool, favId, "Size, voltage drop and current limit of a copper wire")}
 
-      <div class="section-label" style="color:#8FC1F5">Any one — the others follow</div>
+      <div class="section-label" style="color:#8FC1F5">Wire</div>
       <div class="field-pair">
         <div class="field">
           <label>AWG</label>
@@ -5292,21 +5484,33 @@ function renderWireGauge(domain, tool, favId) {
           <label>SWG</label>
           <select id="wg-swg">${options(SWG_SIZES, state.swg)}</select>
         </div>
-      </div>
-      <div class="field">
-        <label>${byArea() ? "Cross-section" : "Diameter"}</label>
-        <div class="field-row">
-          <input type="number" inputmode="decimal" step="any" id="wg-size" value="${sizeShown()}" />
-          <select id="wg-size-unit">${Object.keys(WG_METRIC_UNITS).map((u) => `<option ${state.sizeUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+        <div class="field">
+          <label>Insulation</label>
+          <select id="wg-ins">${INSULATION_C.map((t) => `<option value="${t}" ${t === state.ins ? "selected" : ""}>${t} °C</option>`).join("")}</select>
         </div>
+      </div>
+      <div class="field-pair">
+        ${numField("wg-size", byArea() ? "Cross-section" : "Diameter", sizeShown(), `<select id="wg-size-unit">${unitOptions(WG_METRIC_UNITS, state.sizeUnit)}</select>`)}
+        ${numField("wg-wires", "Wires in bundle", state.wires, "")}
+      </div>
+
+      <div class="section-label" style="color:#8FC1F5">Run</div>
+      <div class="field-pair">
+        ${numField("wg-len", "Length, one way", lenShown(), `<select id="wg-len-unit">${unitOptions(WG_LENGTH_UNITS, state.lenUnit)}</select>`)}
+        ${numField("wg-cur", "Current", state.cur, fixed("A"))}
+      </div>
+      <div class="field-pair">
+        ${numField("wg-supply", "Supply", state.supply, fixed("V"))}
+        ${numField("wg-maxdrop", "Max drop", state.maxDrop, fixed("%"))}
+        ${numField("wg-amb", "Ambient", state.amb, fixed("°C"))}
       </div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="results">${resultsHTML()}</div>
 
       ${formulaSection(
-        ["AWG: d(mm) = 0.127 × 92^((36 − n) / 39)", "SWG: a fixed table in thousandths of an inch, no formula", "Area = π × (d / 2)² · Circular mils = (d in thousandths of an inch)²"],
-        "A gauge is a number standing for a wire's diameter; the bigger the number, the thinner the wire. AWG is built from two sizes, 0000 at 0.4600 in and 36 at 0.0050 in, with 38 between in a geometric series: six gauges double the diameter, three double the copper. Circular mils (CM) are the US unit for cross-section: a mil is 0.001 in, so a wire's CM is its diameter in mils, squared. Metric cables are sold by cross-section in mm². Pick a gauge and it is exact; type a size and each gauge box shows the nearest, with how much more or less copper it has. A stranded wire is sized by its copper's total cross-section, so the bundle measures wider than the diameter here."
+        ["AWG: d(mm) = 0.127 × 92^((36 − n) / 39)", "R20 = 2L × (1/58 Ω·mm²/m) / A", "R = R20 × (1 + 0.00393 (T − 20 °C))", "Drop = I × R · Loss = I² × R", "Limit = free air at (Tr − Ta) × bundle", "T = Ta + (Tr − Ta) × (I / Limit)²"],
+        "A gauge is a number standing for a wire's diameter; the bigger the number, the thinner the wire. Circular mils (CM) are the US unit of cross-section: the diameter in thousandths of an inch, squared. The current goes out and back, so the drop counts both wires, twice the length. The current limit is what heats a copper wire in free air to its insulation's rating (Tr) when the air around it is at Ta, read off the FAA and US military charts for 26 AWG to 4/0. Bundled wires shed heat worse: the factor assumes every wire in the bundle carries current. A wire heats as the square of its current, and its resistance rises with it, so the drop is worked out at the temperature the wire runs at. Connectors, terminals and switches often limit the current first: check their ratings too."
       )}
       ${calcFooter("")}
     `;
@@ -5327,6 +5531,11 @@ function renderWireGauge(domain, tool, favId) {
       settle();
       sync();
     };
+    document.getElementById("wg-ins").onchange = (e) => {
+      state.ins = parseInt(e.target.value, 10);
+      setPref(C, "ins", state.ins);
+      sync();
+    };
     document.getElementById("wg-size").oninput = (e) => {
       const v = parseFloat(e.target.value);
       if (!isFinite(v)) return;
@@ -5335,226 +5544,35 @@ function renderWireGauge(domain, tool, favId) {
       if (state.d > 0) settle();
       sync();
     };
-    // A unit change re-expresses the same size; nothing is recomputed.
+    // A unit change re-expresses the same size or length; nothing is recomputed.
     document.getElementById("wg-size-unit").onchange = (e) => {
       state.sizeUnit = e.target.value;
       setPref(C, "sizeUnit", state.sizeUnit);
       paint();
     };
+    document.getElementById("wg-len-unit").onchange = (e) => {
+      state.lenUnit = e.target.value;
+      setPref(C, "lenUnit", state.lenUnit);
+      paint();
+    };
+    // Number fields refresh only the results, keeping the caret where it is.
+    const bind = (id, apply) => {
+      document.getElementById(id).oninput = (e) => {
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        apply(v);
+        sync();
+      };
+    };
+    bind("wg-wires", (v) => { state.wires = v; });
+    bind("wg-len", (v) => { state.lenM = v * WG_LENGTH_UNITS[state.lenUnit]; });
+    bind("wg-cur", (v) => { state.cur = v; });
+    bind("wg-supply", (v) => { state.supply = v; });
+    bind("wg-maxdrop", (v) => { state.maxDrop = v; });
+    bind("wg-amb", (v) => { state.amb = v; });
   }
 
   settle();
-  paint();
-}
-
-// ---------- Cable resistance / voltage drop ----------
-// Shares the gauge tables with Wire gauge rather than redefining them —
-// same underlying question (what does this gauge physically look like), so
-// there is exactly one place that answer can drift out of sync.
-const CABLE_RESISTIVITY = { cu: 1.68e-8, al: 2.82e-8 };
-
-function cableDiameterMm(standard, gaugeValue) {
-  return standard === "awg" ? awgDiameterMm(gaugeValue) : SWG_TABLE[gaugeValue];
-}
-
-// Length is the one-way run; real current makes a round trip through both
-// conductors, so resistance and drop are computed on 2x the entered length.
-function cableRoundTripResistance(standard, gaugeValue, material, lengthM) {
-  const dMm = cableDiameterMm(standard, gaugeValue);
-  const areaM2 = Math.PI * (dMm / 1000 / 2) ** 2;
-  return (CABLE_RESISTIVITY[material] * (2 * lengthM)) / areaM2;
-}
-
-// Smallest (thinnest) gauge in the table whose diameter still meets the
-// minimum — both AWG_SIZES and SWG_SIZES are already ordered thickest to
-// thinnest, so the last one still meeting the minimum is the answer.
-function minAdequateGauge(standard, dMinMm) {
-  const sizes = standard === "awg" ? AWG_SIZES : SWG_SIZES;
-  let chosen = null;
-  for (const s of sizes) {
-    const d = cableDiameterMm(standard, s.value);
-    if (d >= dMinMm) chosen = s; else break;
-  }
-  return chosen;
-}
-
-function renderCableResistanceDrop(domain, tool, favId) {
-  const state = {
-    mode: "drop", standard: "awg", awg: 12, swg: "12", material: "cu",
-    length: 10, current: 10, supplyV: 12, targetPct: 3,
-  };
-
-  function gaugeSelectHTML() {
-    const sizes = state.standard === "awg" ? AWG_SIZES : SWG_SIZES;
-    const current = state.standard === "awg" ? state.awg : state.swg;
-    return sizes.map((s) => `<option value="${s.value}" ${String(s.value) === String(current) ? "selected" : ""}>${s.label}</option>`).join("");
-  }
-
-  function currentGauge() {
-    return state.standard === "awg" ? state.awg : state.swg;
-  }
-
-  function dropResults() {
-    const rRound = cableRoundTripResistance(state.standard, currentGauge(), state.material, state.length);
-    const vDrop = state.current * rRound;
-    const pLoss = state.current * state.current * rRound;
-    return { rRound, vDrop, pLoss };
-  }
-
-  function gaugeResults() {
-    const targetVdrop = state.supplyV * (state.targetPct / 100);
-    const maxRround = targetVdrop / state.current;
-    const maxRone = maxRround / 2;
-    const minAreaM2 = (CABLE_RESISTIVITY[state.material] * state.length) / maxRone;
-    const minDiaMm = Math.sqrt((4 * minAreaM2) / Math.PI) * 1000;
-    const gauge = minAdequateGauge(state.standard, minDiaMm);
-    if (!gauge) return { minDiaMm, gauge: null };
-    const achieved = cableRoundTripResistance(state.standard, gauge.value, state.material, state.length);
-    const achievedVdrop = state.current * achieved;
-    return { minDiaMm, gauge, achievedRround: achieved, achievedVdrop, achievedPct: (achievedVdrop / state.supplyV) * 100 };
-  }
-
-  function problem() {
-    if (state.length <= 0) return "Length must be greater than zero.";
-    if (state.current <= 0) return "Current must be greater than zero.";
-    if (state.mode === "gauge") {
-      if (state.supplyV <= 0) return "Supply voltage must be greater than zero.";
-      if (state.targetPct <= 0) return "Target drop % must be greater than zero.";
-    }
-    return "";
-  }
-
-  function sharedFieldsHTML() {
-    return `
-      <div class="section-label" style="color:#8FC1F5">Wire standard</div>
-      <div class="field">
-        <div class="field-row">
-          <select id="cr-standard" style="flex:1;">
-            <option value="awg" ${state.standard === "awg" ? "selected" : ""}>AWG</option>
-            <option value="swg" ${state.standard === "swg" ? "selected" : ""}>SWG</option>
-          </select>
-          <select id="cr-material" style="flex:1;">
-            <option value="cu" ${state.material === "cu" ? "selected" : ""}>Copper</option>
-            <option value="al" ${state.material === "al" ? "selected" : ""}>Aluminum</option>
-          </select>
-        </div>
-      </div>
-      <div class="field-pair">
-        <div class="field">
-          <label>Length, one-way (m)</label>
-          <input id="cr-length" type="number" inputmode="decimal" step="any" value="${state.length}" />
-        </div>
-        <div class="field">
-          <label>Current (A)</label>
-          <input id="cr-current" type="number" inputmode="decimal" step="any" value="${state.current}" />
-        </div>
-      </div>`;
-  }
-
-  function modeFieldsHTML() {
-    if (state.mode === "drop") {
-      return `
-        <div class="section-label" style="color:#8FC1F5">Gauge</div>
-        <div class="field">
-          <select id="cr-gauge">${gaugeSelectHTML()}</select>
-        </div>`;
-    }
-    return `
-      <div class="field-pair">
-        <div class="field">
-          <label>Supply voltage (V)</label>
-          <input id="cr-supply" type="number" inputmode="decimal" step="any" value="${state.supplyV}" />
-        </div>
-        <div class="field">
-          <label>Target drop (%)</label>
-          <input id="cr-target" type="number" inputmode="decimal" step="any" value="${state.targetPct}" />
-        </div>
-      </div>`;
-  }
-
-  function resultsHTML() {
-    const err = problem();
-    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-
-    if (state.mode === "drop") {
-      const r = dropResults();
-      return `
-        <div class="section-label" style="color:#5DCAA5">Resistance (round-trip)</div>
-        <div class="result-field"><div class="result-value"><span class="num" data-res="r">${formatOhms(r.rRound)}</span></div></div>
-        <div class="section-label" style="color:#5DCAA5">Voltage drop</div>
-        <div class="result-field">
-          <div class="result-value"><span class="num" data-res="v">${siFormat(r.vDrop, "V")}</span></div>
-          <div class="result-sub" data-res="pct">${siFormat(r.pLoss, "W")} power loss</div>
-        </div>`;
-    }
-
-    const g = gaugeResults();
-    if (!g.gauge) {
-      return `<div class="error-text" data-res="err">No gauge in the table is thick enough for that target — try a shorter run, less current, or a higher drop %.</div>`;
-    }
-    return `
-      <div class="section-label" style="color:#5DCAA5">Minimum gauge</div>
-      <div class="result-field">
-        <div class="result-value"><span class="num" data-res="gauge">${state.standard.toUpperCase()} ${g.gauge.label}</span></div>
-        <div class="result-sub">min. diameter ${trim(g.minDiaMm)} mm</div>
-      </div>
-      <div class="section-label" style="color:#5DCAA5">At that gauge</div>
-      <div class="result-field">
-        <div class="result-value"><span class="num">${siFormat(g.achievedVdrop, "V")}</span></div>
-        <div class="result-sub">${trim(g.achievedPct)}% of supply · ${formatOhms(g.achievedRround)} round-trip</div>
-      </div>`;
-  }
-
-  function paint() {
-    app.innerHTML = `
-      ${calcHeader(tool, favId, "Wire gauge, run length and current, both ways")}
-
-      ${pillRow([["drop", "Voltage drop"], ["gauge", "Min. gauge"]], state.mode, domain.bg)}
-
-      ${sharedFieldsHTML()}
-      ${modeFieldsHTML()}
-      <div id="cr-results">${resultsHTML()}</div>
-
-      ${formulaSection(
-        ["R = ρ × 2L / A", "V = I × R"],
-        "Length is one-way; current makes a round trip, so R and V use 2L. Min. gauge solves the same equations backward for the smallest wire that stays under a target % drop. Area is the nominal solid-wire figure for the gauge — real stranded wire runs a bit higher (~1–3%) from strand lay and packing, and that margin isn't a fixed constant, so it isn't modeled here."
-      )}
-      ${calcFooter("")}
-    `;
-
-    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
-
-    // Number fields refresh only the results block, not a full repaint —
-    // paint() would tear down and rebuild the input the user is mid-keystroke
-    // in, dropping focus and the caret after every digit.
-    function refreshResults() {
-      document.getElementById("cr-results").innerHTML = resultsHTML();
-    }
-    const bind = (id, key) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.oninput = () => {
-        const v = parseFloat(el.value);
-        if (isFinite(v)) { state[key] = v; refreshResults(); }
-      };
-    };
-    bind("cr-length", "length");
-    bind("cr-current", "current");
-    bind("cr-supply", "supplyV");
-    bind("cr-target", "targetPct");
-
-    const standardSel = document.getElementById("cr-standard");
-    if (standardSel) standardSel.onchange = (e) => { state.standard = e.target.value; paint(); };
-    const materialSel = document.getElementById("cr-material");
-    if (materialSel) materialSel.onchange = (e) => { state.material = e.target.value; paint(); };
-    const gaugeSel = document.getElementById("cr-gauge");
-    if (gaugeSel) gaugeSel.onchange = (e) => {
-      if (state.standard === "awg") state.awg = parseInt(e.target.value, 10);
-      else state.swg = e.target.value;
-      paint();
-    };
-  }
-
   paint();
 }
 

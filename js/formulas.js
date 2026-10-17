@@ -135,16 +135,10 @@ const FORMULAS = [
     note: "θJA (junction-to-ambient) or θJC (junction-to-case), from the datasheet. P is power dissipated in the part.",
   },
   {
-    tool: "Wire gauge",
+    tool: "Wire sizing",
     domain: "pcb",
-    formulas: ["AWG: d(mm) = 0.127 × 92^((36 − n) / 39)", "Area = π × (d / 2)²"],
-    note: "Six AWG steps double the diameter, three double the cross-section. SWG has no formula: it is a table.",
-  },
-  {
-    tool: "Cable resistance / voltage drop",
-    domain: "pcb",
-    formulas: ["Vdrop = 2 × I × L × R_per_length"],
-    note: "The factor of 2 is the round trip through both conductors — the single-length resistance alone understates it by half.",
+    formulas: ["AWG: d(mm) = 0.127 × 92^((36 − n) / 39)", "R = 2L × (1/58 Ω·mm²/m) / A", "Vdrop = I × R"],
+    note: "Six AWG steps double the diameter, three double the cross-section; SWG is a table. The 2 is the round trip through both wires. Copper is 1/58 Ω·mm²/m at 20 °C, +0.393 % per °C.",
   },
 ];
 
