@@ -103,6 +103,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Cabling → [Wire sizing](#wire-gauge)
 - Cabling → [Wire & cable colors](#cable-colors)
+- Electrical safety → [IP ratings](#ip-ratings)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -7856,5 +7857,119 @@ The review made these changes:
 - DIN 47100's cores 45 to 60 are labelled a makers' extension.
 - A DC filter chip (DC rows had no filter), the remembered filter, a new
   subtitle, the first cases and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="ip-ratings"></a>
+## IP ratings
+
+`calc: ip-ratings` · PCB & interconnect › Electrical safety
+
+### What it shows
+
+The meaning of an IEC 60529 ingress protection code, both ways. You can
+type a code (IP67, IPX4, IP20C, IP54W), or build one with four pickers:
+
+- the first digit, solids;
+- the second digit, water;
+- the optional additional letter;
+- the optional supplementary letter.
+
+The code shows large, with a two-part summary. Each part's meaning follows,
+water with its test conditions. Notes flag the cases people get wrong.
+
+Examples: IP20 terminal blocks, an IP65 outdoor box, IP67 against IP66, an
+IP68 phone, an IP54 enclosure, and IP69K washdown.
+
+### The code
+
+    IP 6 5 C S
+       │ │ │ └ supplementary letter, optional: H, M, S or W
+       │ │ └── additional letter, optional: A, B, C or D
+       │ └──── water, 0–9
+       └────── people and solid objects, 0–6
+
+- **First digit:** two meanings at once. One is how well people are kept
+  from hazardous parts: the back of a hand at 1, a finger at 2, a tool at 3,
+  a wire at 4 and above. The other is how small an object stays out: 50,
+  12.5, 2.5 and 1 mm, then dust protected at 5 and dust-tight at 6.
+- **Second digit:** water, from vertical drips (1) to powerful jets (6).
+  Then come immersion up to 1 m (7), immersion beyond that on the maker's
+  terms (8), and close-range hot high-pressure jets (9).
+- **X** in either place means not tested, which is not the same as 0.
+- **Additional letter:** people are kept from hazardous parts better than
+  the first digit says. It is used when the first digit is low or X.
+- **Supplementary letter:**
+  - H: high-voltage equipment;
+  - M: water-tested with moving parts running;
+  - S: water-tested with them at rest;
+  - W: for stated weather conditions.
+
+### Sources, and what was actually read
+
+**IEC 60529:1989 + A1:1999 + A2:2013**, consolidated edition 2.2. Its
+preview (VDE Verlag) was read in review, but it stops after the
+definitions. It confirms the structure:
+
+- separate tables for people and for objects under the first digit;
+- the additional letter (table 4) and the supplementary letters (clause 8);
+- test 14.2.7, temporary immersion between 0.15 and 1 m;
+- test 14.2.9 for second digit 9 with a spray nozzle, and its IPX9 test
+  device. Digit 9 is IEC's own since amendment 2.
+
+The tables themselves could not be read. The wording and test figures
+follow Wikipedia's IP code article, which reproduces them from the
+standard:
+
+- 1 mm of rain a minute for 1;
+- 3 mm a minute, 2.5 minutes each way for 2;
+- 10 L a minute for 3;
+- a 6.3 mm nozzle at 12.5 L a minute for 5;
+- a 12.5 mm nozzle at 100 L a minute for 6;
+- 30 minutes at 1 m for 7;
+- 80 °C water at 8–10 MPa and 14–16 L a minute for 9.
+
+The same article is the source for the point that water ratings are "not
+cumulative beyond IPX6" and are dual-coded, as in IPX5/IPX7. NEMA's
+complimentary copy of ANSI/IEC 60529 now redirects to a store, and two
+other manufacturer guides could not be fetched.
+
+### Assumptions and limits
+
+- **K codes are not IEC.** IP69K and IP6K9K come from ISO 20653 (formerly
+  DIN 40050-9), for road vehicles. The tool reads them and says so, rather
+  than putting K on IEC's scale.
+- **One supplementary letter.** The standard allows several, in
+  alphabetical order; codes with more than one are rare.
+- **A rating is for the enclosure as tested.** Cable glands, seals and
+  covers must be fitted as the maker says, and ageing seals lose it.
+- **Not NEMA types.** The US NEMA 250 enclosure types (1, 3R, 4X…) test
+  more than IP (corrosion, icing) and don't map one-to-one.
+
+### How it was checked
+
+9 cases:
+- IP65 by default, with its jet test;
+- typing ipx7 sets X and 7, with the warning that immersion excludes jets;
+- IP69K explained as ISO 20653;
+- digit 9 as IEC's hot jet test;
+- IP20C's additional letter;
+- IP40A's letter adds nothing;
+- W from its picker;
+- a malformed code;
+- the IP20 example.
+
+The review made these changes:
+- A code box: type the code instead of picking its digits. It also reads
+  the K codes, so they can be explained.
+- The additional and supplementary letters, which the tool lacked.
+- Test conditions in each water description.
+- The warning that 7 and 8 don't include 5 and 6.
+- The first digit's two meanings, people and objects.
+- "Heavy seas" dropped from 6: it is the old wording, not the current
+  standard's.
+- Six examples, the first cases and this section.
 
 [↑ Index](#index)

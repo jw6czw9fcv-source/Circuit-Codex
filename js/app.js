@@ -5773,90 +5773,186 @@ function renderCableColors(domain, tool, favId) {
 }
 
 // ---------- IP-Ratings ----------
-// IEC 60529 only: the first digit is solid-object/dust protection (0-6, or
-// X if untested), the second is liquid protection (0-9, or X if untested).
-// IP69K is deliberately not in the picker — it comes from a different
-// standard (DIN 40050-9 / ISO 20653, the automotive high-pressure washdown
-// test), not from IEC 60529 itself, so folding it into the same dropdown
-// as 0-9 would misrepresent it as one more step on the same scale rather
-// than a stricter test from elsewhere. It's called out in a note instead.
-// Each entry carries a short label (what the <select> shows, so picking is
-// "what do I need protected against" rather than requiring the digit to
-// already be known) and the full IEC wording (shown below once selected).
+// IEC 60529 (1989 + A1:1999 + A2:2013): IP, a first digit for people and
+// solid objects (0-6), a second for water (0-9), then optionally an
+// additional letter for people (A-D) and a supplementary letter (H, M, S, W).
+// X in a digit means not tested for it, which is not the same as 0. Digit 9
+// is IEC's own hot high-pressure jet test, added by A2:2013; IP69K is a
+// different test from ISO 20653 (formerly DIN 40050-9), recognised in the
+// code box but kept off the scale. Wording and test details follow IEC
+// 60529's tables as Wikipedia's IP code article reproduces them (the
+// standard itself is paywalled; its preview gives only the structure).
 const IP_FIRST_DIGIT = {
-  "0": { short: "No protection", full: "No protection against solid objects or dust." },
-  "1": { short: "Hand contact", full: "Protected against solid objects larger than 50 mm — e.g. accidental contact with the back of a hand." },
-  "2": { short: "Finger contact", full: "Protected against solid objects larger than 12.5 mm — e.g. fingers." },
-  "3": { short: "Tools, thick wire", full: "Protected against solid objects larger than 2.5 mm — tools, thick wires." },
-  "4": { short: "Wires, small tools", full: "Protected against solid objects larger than 1 mm — most wires, small tools." },
-  "5": { short: "Dust protected", full: "Dust protected — ingress isn't fully prevented, but not enough to interfere with operation." },
-  "6": { short: "Dust tight", full: "Dust tight — no ingress of dust at all." },
-  "X": { short: "Untested", full: "Not rated / not tested for solid-object protection." },
+  "0": { short: "No protection", full: "No protection against contact or objects." },
+  "1": { short: "≥ 50 mm, hand", full: "Objects 50 mm across and up: keeps out the back of a hand, but not a finger pushed in on purpose." },
+  "2": { short: "≥ 12.5 mm, finger", full: "Objects 12.5 mm across and up: keeps out fingers." },
+  "3": { short: "≥ 2.5 mm, tool", full: "Objects 2.5 mm across and up: keeps out tools and thick wires." },
+  "4": { short: "≥ 1 mm, wire", full: "Objects 1 mm across and up: keeps out most wires and slender screws." },
+  "5": { short: "Dust protected", full: "Dust protected: some dust gets in, but not enough to stop the equipment working." },
+  "6": { short: "Dust-tight", full: "Dust-tight: no dust gets in, and nothing can touch what is inside." },
+  "X": { short: "Not tested", full: "Not tested for solids: no data, which is not the same as 0." },
 };
 const IP_SECOND_DIGIT = {
   "0": { short: "No protection", full: "No protection against water." },
-  "1": { short: "Dripping water", full: "Protected against vertically falling drops (e.g. condensation)." },
-  "2": { short: "Dripping, tilted", full: "Protected against falling drops with the enclosure tilted up to 15°." },
-  "3": { short: "Spraying water", full: "Protected against water sprayed up to 60° from vertical." },
-  "4": { short: "Splashing water", full: "Protected against water splashed from any direction." },
-  "5": { short: "Low-pressure jets", full: "Protected against low-pressure water jets from any direction." },
-  "6": { short: "Powerful jets", full: "Protected against powerful water jets from any direction — heavy seas." },
-  "7": { short: "Temporary immersion", full: "Protected against temporary immersion — up to 1 m, up to 30 minutes." },
-  "8": { short: "Continuous immersion", full: "Protected against continuous immersion beyond 1 m — exact depth set by the manufacturer." },
-  "9": { short: "High-pressure, hot", full: "Protected against close-range, high-pressure, high-temperature jets (steam-jet cleaning)." },
-  "X": { short: "Untested", full: "Not rated / not tested for liquid protection." },
+  "1": { short: "Dripping", full: "Dripping water falling straight down: 10 minutes at 1 mm of rain a minute." },
+  "2": { short: "Dripping, 15° tilt", full: "Dripping water with the enclosure tilted up to 15°: 2.5 minutes each way, 3 mm a minute." },
+  "3": { short: "Spraying", full: "Spray up to 60° from vertical: 10 L a minute for at least 5 minutes." },
+  "4": { short: "Splashing", full: "Splashing from any direction: at least 5 minutes." },
+  "5": { short: "Water jets", full: "Jets from any direction: 6.3 mm nozzle, 12.5 L a minute from 3 m, at least 3 minutes." },
+  "6": { short: "Powerful jets", full: "Powerful jets from any direction: 12.5 mm nozzle, 100 L a minute from 3 m, at least 3 minutes." },
+  "7": { short: "Immersion to 1 m", full: "Immersion for 30 minutes, up to 1 m deep." },
+  "8": { short: "Beyond 1 m", full: "Continuous immersion, harder than 7: the depth and time are the maker's to state." },
+  "9": { short: "Hot high-pressure jets", full: "Close-range hot jets, as in washdowns: 80 °C water, 8–10 MPa, 14–16 L a minute from 10–15 cm." },
+  "X": { short: "Not tested", full: "Not tested for water: no data, which is not the same as 0." },
+};
+// The additional letter says people are kept from hazardous parts better
+// than the first digit alone says; the supplementary letter adds a detail.
+const IP_EXTRA_LETTER = {
+  "": { short: "None", full: "" },
+  "A": { short: "A: back of hand", full: "A: hazardous parts out of reach of the back of a hand." },
+  "B": { short: "B: finger", full: "B: hazardous parts out of reach of a finger." },
+  "C": { short: "C: tool", full: "C: hazardous parts out of reach of a tool." },
+  "D": { short: "D: wire", full: "D: hazardous parts out of reach of a wire." },
+};
+const IP_SUPP_LETTER = {
+  "": { short: "None", full: "" },
+  "H": { short: "H: high voltage", full: "H: high-voltage equipment." },
+  "M": { short: "M: moving", full: "M: water-tested with its moving parts (a motor's rotor, say) running." },
+  "S": { short: "S: stationary", full: "S: water-tested with its moving parts at rest." },
+  "W": { short: "W: weather", full: "W: for stated weather conditions, with extra protection agreed for them." },
 };
 
-function renderIpRatings(domain, tool, favId) {
-  const state = { first: "6", second: "5" };
+// "IP67", "ipx4", "IP 20 C", "IP54W". The K codes of ISO 20653 are read too,
+// so they can be explained rather than refused.
+function parseIpCode(text) {
+  const m = String(text).toUpperCase().replace(/\s+/g, "").match(/^(?:IP)?([0-6X])([0-9X])(K?)([A-D]?)([HMSW]?)$/);
+  if (!m || (m[3] && m[2] !== "6" && m[2] !== "9")) return null;
+  return { first: m[1], second: m[2], k: m[3] === "K", extra: m[4], supp: m[5] };
+}
 
-  function refresh() {
-    app.querySelector('[data-res="code"]').textContent = `IP${state.first}${state.second}`;
-    app.querySelector('[data-res="first"]').textContent = IP_FIRST_DIGIT[state.first].full;
-    app.querySelector('[data-res="second"]').textContent = IP_SECOND_DIGIT[state.second].full;
+function renderIpRatings(domain, tool, favId) {
+  const state = { first: "6", second: "5", extra: "", supp: "", k: false, bad: false };
+
+  const code = () => `IP${state.first}${state.second}${state.k ? "K" : ""}${state.extra}${state.supp}`;
+  const example = (text) => () => { Object.assign(state, parseIpCode(text), { bad: false }); paint(); };
+  useExamples([
+    { title: "IP20 terminal blocks", note: "Finger-safe on a DIN rail, and no protection at all against water.", apply: example("IP20") },
+    { title: "IP65 outdoor box", note: "Dust-tight and safe from hose jets, but not rated for being submerged.", apply: example("IP65") },
+    { title: "IP67 versus IP66", note: "7 is immersion only: a box that must take jets as well is marked IP66/IP67.", apply: example("IP67") },
+    { title: "IP68 phone", note: "Beyond 1 m: the maker states the depth and time it was tested to.", apply: example("IP68") },
+    { title: "IP54 enclosure", note: "Dust protected and splash-proof from any direction, but not against jets.", apply: example("IP54") },
+    { title: "IP69K washdown", note: "Not IEC 60529: K is ISO 20653's road-vehicle test, close to IEC's own 9.", apply: example("IP69K") },
+  ]);
+
+  // Which IEC level of the first digit already keeps out a probe; the
+  // additional letter only says something when it goes beyond it.
+  const reach = { "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 4, "6": 4, "X": 0 };
+  const letterLevel = { A: 1, B: 2, C: 3, D: 4 };
+
+  function notes() {
+    const out = [];
+    if (state.k) out.push(`IP${state.first}${state.second}K is not an IEC 60529 code: the K tests are ISO 20653's (formerly DIN 40050-9), for road vehicles. ${state.second === "9" ? "IEC's own digit 9 is the nearest test." : "IEC's own digit 6 is the nearest test."}`);
+    if (state.second === "7" || state.second === "8") out.push(`Immersion is not tested against jets: digits above 6 don't include 5 or 6, so a box that must take both is marked twice, as IPX6/IPX${state.second}.`);
+    if (state.extra && letterLevel[state.extra] <= reach[state.first]) out.push(`The ${state.extra} adds nothing: a first digit of ${state.first} already keeps out ${{ A: "the back of a hand", B: "a finger", C: "a tool", D: "a wire" }[state.extra]}.`);
+    return out;
+  }
+
+  function resultsHTML() {
+    if (state.bad) return `<div class="error-text" data-res="err">Not an IP code: write IP, two digits (0–6 and 0–9, or X), then any letters, as in IP67, IPX4 or IP20C.</div>`;
+    const summary = [IP_FIRST_DIGIT[state.first].short, IP_SECOND_DIGIT[state.second].short].join(" · ");
+    const parts = [
+      ["First digit, solids", IP_FIRST_DIGIT[state.first].full, "first"],
+      ["Second digit, water", IP_SECOND_DIGIT[state.second].full, "second"],
+      state.extra ? ["Additional letter", IP_EXTRA_LETTER[state.extra].full, "extra"] : null,
+      state.supp ? ["Supplementary letter", IP_SUPP_LETTER[state.supp].full, "supp"] : null,
+    ].filter(Boolean);
+    return `
+      <div class="result-field">
+        <div class="result-value"><span class="num" data-res="code">${code()}</span></div>
+        <div class="result-sub" data-res="summary">${summary}</div>
+      </div>
+      ${notes().map((n) => `<div class="error-text" data-res="note" style="color:#E0A85E;margin-top:0">${n}</div>`).join("")}
+      ${parts.map(([label, text, key]) => `
+        <div class="section-label" style="color:#8FC1F5">${label}</div>
+        <div class="field"><div class="color-row-note" data-res="${key}">${text}</div></div>`).join("")}`;
   }
 
   function options(map, current) {
-    return Object.keys(map).map((k) => `<option value="${k}" ${k === current ? "selected" : ""}>${k}: ${map[k].short}</option>`).join("");
+    return Object.keys(map).map((k) => `<option value="${k}" ${k === current ? "selected" : ""}>${k === "" || map[k].short.startsWith(k + ":") ? map[k].short : `${k}: ${map[k].short}`}</option>`).join("");
+  }
+
+  // The code box and the pickers show one state; the one being typed in is
+  // left alone.
+  function sync() {
+    const box = document.getElementById("ip-code");
+    if (box && document.activeElement !== box) box.value = code();
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set("ip-first", state.first);
+    set("ip-second", state.second);
+    set("ip-extra", state.extra);
+    set("ip-supp", state.supp);
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML();
   }
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, "IEC 60529 ingress protection code")}
+      ${calcHeader(tool, favId, "IEC 60529 ingress protection code, both ways")}
 
+      <div class="field">
+        <label>Code</label>
+        <input id="ip-code" type="text" autocapitalize="characters" spellcheck="false" value="${code()}" />
+      </div>
       <div class="field-pair">
         <div class="field">
-          <label>1st digit — solids</label>
+          <label>1st digit, solids</label>
           <select id="ip-first">${options(IP_FIRST_DIGIT, state.first)}</select>
         </div>
         <div class="field">
-          <label>2nd digit — liquids</label>
+          <label>2nd digit, water</label>
           <select id="ip-second">${options(IP_SECOND_DIGIT, state.second)}</select>
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label>Additional letter</label>
+          <select id="ip-extra">${options(IP_EXTRA_LETTER, state.extra)}</select>
+        </div>
+        <div class="field">
+          <label>Supplementary</label>
+          <select id="ip-supp">${options(IP_SUPP_LETTER, state.supp)}</select>
         </div>
       </div>
 
       <div class="section-label" style="color:#5DCAA5">Rating</div>
-      <div class="result-field">
-        <div class="result-value"><span class="num" data-res="code">IP${state.first}${state.second}</span></div>
-      </div>
-
-      <div class="section-label" style="color:#8FC1F5">1st digit — solids</div>
-      <div class="field"><div class="color-row-note" data-res="first">${IP_FIRST_DIGIT[state.first].full}</div></div>
-
-      <div class="section-label" style="color:#8FC1F5">2nd digit — liquids</div>
-      <div class="field"><div class="color-row-note" data-res="second">${IP_SECOND_DIGIT[state.second].full}</div></div>
+      <div data-res="results">${resultsHTML()}</div>
 
       ${formulaSection(
-        ["IPxy — x = solids (0-6), y = liquids (0-9)", "X in either position means untested for that criterion, not \"no protection\""],
-        "IP69K (high-pressure, high-temperature washdown) isn't on this scale — it's from DIN 40050-9 / ISO 20653, a stricter automotive test, not an IEC 60529 digit."
+        ["IP 6 5 C S", "6: solids and fingers, 0–6 · 5: water, 0–9", "C: people, A–D · S: H, M, S or W, both optional"],
+        "IP stands for ingress protection. The first digit rates both how well people are kept from what is inside (the back of a hand at 1 up to a wire at 4) and how small an object or how fine a dust stays out; the second rates water, from drips to immersion. X means not tested, not no protection. Up to 6 each water digit includes those below it; 7 and 8 are immersion tests and don't include jets."
       )}
       ${calcFooter("")}
     `;
 
     wireCalc(favId, paint);
 
-    document.getElementById("ip-first").onchange = (e) => { state.first = e.target.value; refresh(); };
-    document.getElementById("ip-second").onchange = (e) => { state.second = e.target.value; refresh(); };
+    const box = document.getElementById("ip-code");
+    box.oninput = () => {
+      const p = parseIpCode(box.value);
+      if (p) Object.assign(state, p, { bad: false }); else state.bad = true;
+      sync();
+    };
+    const pick = (id, key) => {
+      document.getElementById(id).onchange = (e) => {
+        state[key] = e.target.value;
+        if (key === "second") state.k = false;
+        state.bad = false;
+        sync();
+      };
+    };
+    pick("ip-first", "first");
+    pick("ip-second", "second");
+    pick("ip-extra", "extra");
+    pick("ip-supp", "supp");
   }
 
   paint();

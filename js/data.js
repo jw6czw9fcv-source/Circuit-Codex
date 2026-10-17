@@ -310,7 +310,7 @@ const TOOL_KEYWORDS = {
   "button-cells": "cr2032 coin cell button battery",
   "wire-gauge": "awg swg wire gauge size diameter mm2 cross section circular mils metric voltage drop resistance cable length current capacity ampacity amps insulation bundle harness",
   "cable-colors": "wire colour code mains",
-  "ip-ratings": "ingress protection waterproof ip67",
+  "ip-ratings": "ingress protection waterproof dustproof ip65 ip67 ip68 ipx4 ipx7 ip69k iec 60529 enclosure",
   "basic-calculator": "calculator scientific",
   "kirchhoff": "kcl kvl node loop",
   "si-prefix": "prefix kilo mega micro nano pico",
