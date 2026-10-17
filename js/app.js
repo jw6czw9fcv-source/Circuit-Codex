@@ -5628,46 +5628,46 @@ const CABLE_COLORS = [
   // 1. AC mains, single circuit — IEC's phase colors don't change with
   // voltage class the way the US ones do, so its three-phase L2/L3 live
   // here too rather than in a separate "by system" tier.
-  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Live / Line (L)", swatch: "#8B5A2B", note: "Brown" },
-  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Neutral (N)", swatch: "#2255CC", note: "Blue" },
-  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Earth / protective earth (PE)", swatch: "linear-gradient(135deg, #2E8B3D 50%, #E8C820 50%)", note: "Green with a yellow stripe" },
-  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Line 2 — L2 (three-phase)", swatch: "#1A1A1A", note: "Black — same regardless of voltage class" },
-  { cat: "eu", group: "IEC 60445 (int'l / EU) — low-voltage AC, ~230/400 V", label: "Line 3 — L3 (three-phase)", swatch: "#8A8A8A", note: "Grey — same regardless of voltage class" },
-  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Hot / Line", swatch: "#1A1A1A", note: "Black — industry convention, not NEC-mandated" },
-  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Neutral", swatch: "#F2F2ED", note: "White — required by NEC" },
-  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare copper — required by NEC" },
+  { cat: "eu", group: "IEC 60445 / HD 308 (int'l, EU) — low-voltage AC, ~230/400 V", label: "Line L1, or L in single-phase", swatch: "#8B5A2B", note: "Brown" },
+  { cat: "eu", group: "IEC 60445 / HD 308 (int'l, EU) — low-voltage AC, ~230/400 V", label: "Neutral (N)", swatch: "#2255CC", note: "Blue" },
+  { cat: "eu", group: "IEC 60445 / HD 308 (int'l, EU) — low-voltage AC, ~230/400 V", label: "Protective earth (PE)", swatch: "linear-gradient(135deg, #2E8B3D 50%, #E8C820 50%)", note: "Green-and-yellow, never used for anything else" },
+  { cat: "eu", group: "IEC 60445 / HD 308 (int'l, EU) — low-voltage AC, ~230/400 V", label: "Line L2 (three-phase)", swatch: "#1A1A1A", note: "Black — HD 308's order; IEC 60445 lists brown, black and grey without fixing the phases" },
+  { cat: "eu", group: "IEC 60445 / HD 308 (int'l, EU) — low-voltage AC, ~230/400 V", label: "Line L3 (three-phase)", swatch: "#8A8A8A", note: "Grey — HD 308's order, at any voltage" },
+  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Hot / Line", swatch: "#1A1A1A", note: "Black — convention; the NEC only rules out white, grey and green" },
+  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Neutral", swatch: "#F2F2ED", note: "White or grey, or three white stripes — NEC 200.6" },
+  { cat: "us", group: "NFPA 70 / NEC (US) — low-voltage AC, ~120/240 V", label: "Ground", swatch: "#2E8B3D", note: "Green, green with yellow stripes, or bare — NEC 250.119" },
 
   // 2. AC three-phase by voltage system (US) — same function, different
   // color depending which system it's wired into.
   { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Phase A (L1)", swatch: "#1A1A1A", note: "Black — industry convention" },
   { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Phase B (L2)", swatch: "#CC2222", note: "Red — industry convention" },
   { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Phase C (L3)", swatch: "#2255CC", note: "Blue — industry convention" },
-  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Neutral", swatch: "#F2F2ED", note: "White — required by NEC" },
-  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — required by NEC" },
+  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Neutral", swatch: "#F2F2ED", note: "White — the NEC allows white or grey" },
+  { cat: "us", group: "US three-phase — 120/208 V Wye", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — NEC 250.119" },
   { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Phase A (L1)", swatch: "#8B5A2B", note: "Brown — industry convention" },
   { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Phase B (L2)", swatch: "#E08A2E", note: "Orange — industry convention" },
   { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Phase C (L3)", swatch: "#E8C820", note: "Yellow — industry convention" },
-  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Neutral", swatch: "#8A8A8A", note: "Grey — required by NEC" },
-  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — required by NEC" },
+  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Neutral", swatch: "#8A8A8A", note: "Grey — convention, telling it from a 120/208 V neutral; the NEC allows white or grey" },
+  { cat: "us", group: "US three-phase — 277/480 V Wye", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — NEC 250.119" },
   { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Phase A", swatch: "#1A1A1A", note: "Black — industry convention" },
-  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Phase B — high leg", swatch: "#E08A2E", note: "Orange — required by NEC 110.15 (reads ~208 V to ground, not 120 V)" },
+  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Phase B — high leg", swatch: "#E08A2E", note: "Orange, or another lasting marking — NEC 110.15 (reads ~208 V to ground, not 120 V)" },
   { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Phase C", swatch: "#2255CC", note: "Blue — industry convention" },
-  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Neutral", swatch: "#F2F2ED", note: "White — required by NEC" },
-  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — required by NEC" },
+  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Neutral", swatch: "#F2F2ED", note: "White — the NEC allows white or grey" },
+  { cat: "us", group: "US three-phase — 120/240 V high-leg delta", label: "Ground", swatch: "#2E8B3D", note: "Green, or bare — NEC 250.119" },
 
   // 3. Canada — its own code (CSA C22.1 / CEC), not NFPA 70. Genuinely
   // different from the US: phase 1 is red rather than black, and the
   // colors don't change with voltage system the way the US ones do.
-  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Phase 1", swatch: "#CC2222", note: "Red" },
-  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Phase 2", swatch: "#1A1A1A", note: "Black" },
-  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Phase 3", swatch: "#2255CC", note: "Blue" },
-  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Neutral", swatch: "linear-gradient(135deg, #F2F2ED 50%, #8A8A8A 50%)", note: "White or grey" },
-  { cat: "canada", group: "Canada (CSA C22.1 / CEC) — same colours at any voltage", label: "Ground", swatch: "#2E8B3D", note: "Green, bare, or green with a yellow stripe" },
+  { cat: "canada", group: "Canada (CSA C22.1, Rule 4-038)", label: "Phase 1", swatch: "#CC2222", note: "Red" },
+  { cat: "canada", group: "Canada (CSA C22.1, Rule 4-038)", label: "Phase 2", swatch: "#1A1A1A", note: "Black" },
+  { cat: "canada", group: "Canada (CSA C22.1, Rule 4-038)", label: "Phase 3", swatch: "#2255CC", note: "Blue" },
+  { cat: "canada", group: "Canada (CSA C22.1, Rule 4-038)", label: "Neutral", swatch: "linear-gradient(135deg, #F2F2ED 50%, #8A8A8A 50%)", note: "White or grey" },
+  { cat: "canada", group: "Canada (CSA C22.1, Rule 4-038)", label: "Ground", swatch: "#2E8B3D", note: "Green, bare, or green with a yellow stripe" },
 
   // 4. DC — far less formally standardized than AC; mostly convention.
   { cat: "dc", group: "DC", label: "Positive (+)", swatch: "#CC2222", note: "Red — near-universal informal convention (automotive, general DC, solar/PV)" },
   { cat: "dc", group: "DC", label: "Negative (−)", swatch: "#1A1A1A", note: "Black — near-universal informal convention" },
-  { cat: "dc", group: "DC", label: "Grounded conductor, if the system uses one", swatch: "linear-gradient(135deg, #F2F2ED 50%, #8A8A8A 50%)", note: "White or grey — required by NEC 690 for grounded DC systems (e.g. some PV installs), same rule as AC" },
+  { cat: "dc", group: "DC", label: "Grounded conductor, if the system uses one", swatch: "linear-gradient(135deg, #F2F2ED 50%, #8A8A8A 50%)", note: "White or grey — the NEC's grounded-conductor rule (200.6) applies to DC too" },
   { cat: "dc", group: "DC", label: "Telecom −48 V systems", swatch: "linear-gradient(135deg, #1A1A1A 50%, #E8C820 50%)", note: "No universal colour — varies by vendor/telco. Check the equipment's documentation rather than assume." },
 
   // 5. DIN 47100 — cable-core numbering, not a voltage or safety code.
@@ -5680,17 +5680,18 @@ const CABLE_COLORS = [
     note: `${cap(base)} with a ${ring} ring`,
   })),
   ...DIN47100_TRIPLE.map(([base, second], i) => ({
-    cat: "din", group: "DIN 47100 — cores 45–60 (multi-core numbering)", label: `Core ${i + 45}`,
+    cat: "din", group: "DIN 47100 — cores 45–60, makers' extension (the standard repeats 1–44)", label: `Core ${i + 45}`,
     swatch: `linear-gradient(135deg, ${DIN47100_HEX[base]} 0%, ${DIN47100_HEX[base]} 45%, ${DIN47100_HEX[second]} 45%, ${DIN47100_HEX[second]} 75%, ${DIN47100_HEX.black} 75%, ${DIN47100_HEX.black} 100%)`,
     note: `${cap(base)} with ${second} and black rings`,
   })),
 ];
 const CABLE_COLOR_FILTERS = [
-  ["all", "All"], ["eu", "EU/Intl"], ["us", "US"], ["canada", "Canada"], ["din", "DIN 47100"],
+  ["all", "All"], ["eu", "EU/Intl"], ["us", "US"], ["canada", "Canada"], ["dc", "DC"], ["din", "DIN 47100"],
 ];
 
 function renderCableColors(domain, tool, favId) {
-  const state = { filter: "all", query: "" };
+  const C = "cable-colors";
+  const state = { filter: pref(C, "filter", "all", CABLE_COLOR_FILTERS.map(([v]) => v)), query: "" };
 
   function row(c) {
     return `
@@ -5734,7 +5735,7 @@ function renderCableColors(domain, tool, favId) {
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, "AC mains, three-phase by system and multi-core numbering")}
+      ${calcHeader(tool, favId, "Mains, three-phase, DC and multi-core colours")}
 
       <div class="filter-row" id="cc-chips">
         ${CABLE_COLOR_FILTERS.map(([value, label]) => `
@@ -5756,6 +5757,7 @@ function renderCableColors(domain, tool, favId) {
       const btn = e.target.closest(".filter-btn");
       if (!btn) return;
       state.filter = btn.dataset.filter;
+      setPref(C, "filter", state.filter);
       paint();
     });
 

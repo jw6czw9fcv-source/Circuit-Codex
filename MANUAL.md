@@ -102,6 +102,7 @@ will key on, since that is the id the app already holds for each tool.
 ### PCB & interconnect
 
 - Cabling → [Wire sizing](#wire-gauge)
+- Cabling → [Wire & cable colors](#cable-colors)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -7772,5 +7773,88 @@ The review made these changes:
 - Copper's resistivity is the IACS 1/58 Ω·mm²/m, not 1.68 × 10⁻⁸ Ω·m.
 - Lengths can be in feet; aluminium was dropped.
 - It added six run examples, 17 cases and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="cable-colors"></a>
+## Wire & cable colors
+
+`calc: cable-colors` · PCB & interconnect › Cabling
+
+### What it shows
+
+A searchable list of what each wire colour means, grouped by system:
+
+- **IEC / HD 308** (international, EU): low-voltage AC, single- and
+  three-phase.
+- **NEC** (US): single-phase 120/240 V, and three-phase by voltage system:
+  120/208 V wye, 277/480 V wye and 120/240 V high-leg delta.
+- **Canada** (CSA C22.1).
+- **DC**: positive, negative, a grounded conductor, and −48 V telecom.
+- **DIN 47100**: how the cores of a multi-core cable are numbered by
+  colour, cores 1 to 60.
+
+Each row says whether a colour is required by the code or only a
+convention. Filter chips jump to one group (remembered); the search box
+matches a colour, a function or a standard.
+
+### Sources, and what was actually read
+
+- **DIN 47100 and HD 308:** Lapp's selection table T9 (appendix of its
+  catalogue), read in review. Its harmonised-core table for VDE 0293-308 /
+  HD 308 S2 gives the cores of a multi-core power cable as GNYE/BN/BU,
+  GNYE/BN/BK/GY and GNYE/BU/BN/BK/GY: green-and-yellow earth, brown, black
+  and grey lines, blue neutral. Its DIN 47100 table lists cores 1 to 60.
+  All 44 of the standard's colours match the tool's. Lapp notes that its
+  45 to 60 are "in contrast to DIN: without colour repetition after the
+  44th core": DIN 47100 itself (January 1988, withdrawn 1998 but still
+  widely used) starts again at 1 from core 45. The tool now says that 45 to
+  60 are a makers' extension.
+- **IEC 60445:** the standard itself could not be read; only the contents
+  pages of its previews were available. Per a reader quoting BS EN IEC
+  60445:2021 on the IET's Engineering Exchange, clause 6.2.3 lists BLACK,
+  BROWN and GREY for AC line conductors in alphabetical order, and this
+  "does not indicate any preferred phasing". The order L1 brown, L2 black,
+  L3 grey comes from HD 308 S2 (and BS 7671's table 51), so the tool now
+  attributes it there.
+- **NEC (NFPA 70):** the code text could not be read. The rows rest on the
+  sections as trade sources quote them: 200.6 (a grounded conductor is
+  white or grey, or three white stripes), 250.119 (an equipment grounding
+  conductor is green, green with yellow stripes, or bare), 110.15 (the high
+  leg is "durably and permanently marked by an outer finish that is orange
+  in color" or by other effective means), and Southwire's technical note
+  that white and green may not be used on ungrounded conductors.
+- **CSA C22.1:** the code could not be read. Rule 4-038, "Identification of
+  insulated conductors", is named in Electrical Industry News' guide to the
+  code; the colours (red, black, blue phases; white or grey neutral) are as
+  a forum post quotes the rule.
+
+### Assumptions and limits
+
+- **Not a substitute for the code in force.** Local amendments differ: San
+  Francisco, for one, asks for purple on the high leg. Old installations use
+  older colours (the UK's red, yellow and blue before 2004).
+- **Always test.** A colour says what a wire should be, not what it is.
+- **DC is mostly convention.** IEC 60445 has had colours for DC line
+  conductors since 2017, but they could not be read, so they are not
+  listed.
+
+### How it was checked
+
+7 cases: the list opens on IEC/HD 308 with L1 brown; the US hot's note; the
+DC filter; the high leg's NEC 110.15 note; DIN core 45 as an extension; a
+search with no match; the remembered filter.
+
+The review made these changes:
+- The NEC rows had said "required by NEC" for things the code does not
+  require. A white-only neutral, a grey 277/480 V neutral and an
+  orange-only high leg were all marked as required. They now give what the
+  code allows and say where a colour is convention.
+- The IEC phase order is attributed to HD 308, not to IEC 60445.
+- DIN 47100's cores 45 to 60 are labelled a makers' extension.
+- A DC filter chip (DC rows had no filter), the remembered filter, a new
+  subtitle, the first cases and this section.
 
 [↑ Index](#index)
