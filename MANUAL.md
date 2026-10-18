@@ -105,6 +105,10 @@ will key on, since that is the id the app already holds for each tool.
 - Cabling → [Wire & cable colors](#cable-colors)
 - Electrical safety → [IP ratings](#ip-ratings)
 
+### Tools
+
+- Calculators → [Calculator](#basic-calculator)
+
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
 whatever is still missing.
@@ -7971,5 +7975,80 @@ The review made these changes:
 - "Heavy seas" dropped from 6: it is the old wording, not the current
   standard's.
 - Six examples, the first cases and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="basic-calculator"></a>
+## Calculator
+
+`calc: basic-calculator` · Tools › Calculators
+(formerly Standard & Scientific Calculators)
+
+### What it does
+
+A calculator with three keypads, chosen by pills (the choice is remembered):
+
+- **Standard:** the iPhone Calculator's own keys, ⌫ C % ÷ … ± 0 . =.
+- **Scientific:** ( ) x² xʸ eˣ 10ˣ 1/x √ ln log sin cos tan e π and DEG/RAD
+  (remembered), above the standard keys.
+- **Electronics:** ( ), **∥** for parts in parallel, **EE** for a power of
+  ten, and the prefixes **p n µ m k M G**, plus 1/x.
+
+Keys build an expression, worked out on =. A result away from 1 to 1000 is
+also shown in engineering notation under the display: 0.001 reads
+"= 1 m", 1591.549431 reads "= 1.59155 k". A computer keyboard works too:
+digits, + − * / ^, | for ∥, E, and p n u m k M G for the prefixes.
+
+Examples: 1k ∥ 2.2k, an RC time constant, a capacitor's reactance, a gain
+in decibels, the power in a resistor.
+
+### How an expression is read
+
+- **Precedence**, loosest first: + and −; then ×, ÷ and ∥ (and implicit
+  multiplication, "2π" or "2(3+4)"); then a leading minus; then ^, from the
+  right. So 6 + 3 × 2 is 12, 1k ∥ 2.2k + 100 is 787.5, and −2² is −4.
+- **∥** is a × b / (a + b): two resistors in parallel, or two capacitors
+  in series.
+- **A prefix** straight after a number scales it: 4.7k is 4700, 100n is
+  1E-7, and u is accepted for µ. Capital M is mega, small m milli.
+- **E** after a number is a power of ten (1E-3). Lower-case e stays
+  Euler's number, so a result like 1E-18 reads back as a number.
+- **%** works as on a phone: after + or −, it is a percentage of what comes
+  before (50 + 10 % is 55); after × or ÷, or alone, the number over 100.
+- **±** changes the number being typed, not the whole expression.
+- **Degrees** are reduced to a turn before sin, cos and tan, so the exact
+  angles come out exact: sin 180° is 0, and tan 90° has no value (Error).
+
+### Assumptions and limits
+
+- **Ten significant figures** are shown. Past 1E12 and below 1E-9 a result
+  is written with E.
+- **Engineering notation** stops at f and P: smaller or larger results get
+  no second line.
+- **Floating point:** results carry the usual rounding of double-precision
+  arithmetic past about 15 digits.
+
+### How it was checked
+
+12 cases: 6 + 3 × 2, −2², sin 180°, tan 90°, 50 + 10 %, 5 − (−3) by ±, the
+∥, RC and reactance examples (with their engineering lines), 1E3, 1n × 1n
+read back and multiplied by 1E18, and the remembered keypad.
+
+The review made these changes:
+- **Renamed Calculator.** The title had wrapped.
+- **The Electronics keypad**, prefixes typed after numbers, the EE power of
+  ten, ∥, and the engineering line, on Pierre's choice.
+- **−2²** had been 4, because the minus bound tighter than ^.
+- **sin 180°** had read 1.22E-16 and tan 90° a huge number.
+- **%** had divided the whole expression by 100: 50 + 10 % gave 0.6.
+- **±** had negated the whole expression.
+- **A result in E notation** had used a small e, which read back as
+  Euler's number.
+- **At 375×812** the Scientific keypad ran 54 px under the tab bar. With a
+  second keypad shown, keys and display are now tighter.
+- **Remembering:** the keypad and DEG/RAD are now remembered.
+- **First cases, examples and this section.**
 
 [↑ Index](#index)

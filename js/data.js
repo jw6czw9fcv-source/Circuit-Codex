@@ -195,7 +195,7 @@ const DOMAINS = [
       {
         title: "Calculators",
         tools: [
-          { name: "Standard & scientific calculator", was: "Standard & Scientific Calculators", calc: "basic-calculator" },
+          { name: "Calculator", was: "Standard & Scientific Calculators", calc: "basic-calculator" },
           { name: "Ohm's law", calc: "ohms-law" },
           { name: "AC Ohm's law (impedance form)" },
           { name: "Kirchhoff's laws", calc: "kirchhoff" },
@@ -311,7 +311,7 @@ const TOOL_KEYWORDS = {
   "wire-gauge": "awg swg wire gauge size diameter mm2 cross section circular mils metric voltage drop resistance cable length current capacity ampacity amps insulation bundle harness",
   "cable-colors": "wire colour code mains",
   "ip-ratings": "ingress protection waterproof dustproof ip65 ip67 ip68 ipx4 ipx7 ip69k iec 60529 enclosure",
-  "basic-calculator": "calculator scientific",
+  "basic-calculator": "calculator scientific standard engineering si prefix parallel resistors trig log exponent",
   "kirchhoff": "kcl kvl node loop",
   "si-prefix": "prefix kilo mega micro nano pico",
   "sci-eng": "scientific engineering notation exponent",

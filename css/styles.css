@@ -1011,6 +1011,16 @@ html, body {
   cursor: pointer;
 }
 .calc-key--fn { color: var(--text-secondary); }
+/* The result in engineering notation, under the display: one line held open
+   so the keypad doesn't move when it appears. */
+.calc-display-eng { color: var(--result-text-soft); font-size: 15px; min-height: 18px; margin-top: 2px; }
+/* With a second keypad above the standard one (Scientific, Electronics) the
+   keys and display tighten so nine rows clear the tab bar at 375x812; the
+   Scientific pad had run 54 px under it. */
+.calc-display--compact { padding: 10px 14px; margin-bottom: 10px; }
+.calc-display--compact .calc-display-value { font-size: 30px; }
+.calc-keys--compact .calc-keypad { gap: 6px; }
+.calc-keys--compact .calc-key { padding: 10px 0; font-size: 18px; }
 .calc-key--op { background: var(--result-bg); border-color: var(--result-border); color: var(--result-text); }
 
 /* ASCII table: RFC 20's chart, eight columns (the top three bits) by sixteen

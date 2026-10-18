@@ -4116,16 +4116,19 @@ function renderPercentTolerance(domain, tool, favId) {
   paint();
 }
 
-// ---------- Basic calculator ----------
+// ---------- Calculator ----------
 // Expression-based rather than "evaluate immediately on each key press":
 // keys build a text expression, tokenized and parsed only when "=" is
-// pressed. That's what real parentheses require — grouping is meaningless
-// without operator precedence to group against, so adding "(" and ")" meant
-// trading the old chained left-to-right model for a real (if small)
-// recursive-descent parser. One consequence worth knowing: "6+3×2" now
-// evaluates to 12 (standard precedence), not 18 (old left-to-right
-// chaining) — every calculator with real parentheses works this way, only
-// bare four-function calculators chain naively.
+// pressed, which is what real parentheses require. Standard precedence:
+// "6+3×2" is 12, as on every calculator with parentheses.
+//
+// For electronics, a number may carry an SI prefix (4.7k, 100n, 2.2µ, u for
+// µ) or a power of ten (1E-3, the EE key), and ∥ puts two parts in parallel,
+// a×b/(a+b), binding like ×: "1k∥2.2k+100" is 787.5. Euler's e stays the
+// lower-case constant; the exponent mark is a capital E so a result like
+// 1E-18 reads back as a number when the next calculation starts from it.
+const CALC_PREFIX = { p: 1e-12, n: 1e-9, u: 1e-6, "µ": 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9, T: 1e12 };
+
 function calcTokenize(s) {
   const tokens = [];
   let i = 0;
@@ -4134,7 +4137,14 @@ function calcTokenize(s) {
     if (/[0-9.]/.test(c)) {
       let j = i + 1;
       while (j < s.length && /[0-9.]/.test(s[j])) j++;
-      tokens.push({ type: "num", value: parseFloat(s.slice(i, j)) });
+      let value = parseFloat(s.slice(i, j));
+      // A power of ten: E, an optional sign, digits.
+      const exp = s.slice(j).match(/^E([+-]?\d+)/);
+      if (exp) { value *= Math.pow(10, parseInt(exp[1], 10)); j += exp[0].length; }
+      // An SI prefix right after the number, not the start of a word
+      // ("2m" is 2 milli, "2min" is not a prefix).
+      if (s[j] in CALC_PREFIX && !/[a-zA-Z]/.test(s[j + 1] || "")) { value *= CALC_PREFIX[s[j]]; j++; }
+      tokens.push({ type: "num", value });
       i = j;
     } else if (/[a-zA-Z]/.test(c)) {
       // Identifiers may trail digits ("log2") once they've started with a
@@ -4147,7 +4157,7 @@ function calcTokenize(s) {
     } else if (c === "π") {
       tokens.push({ type: "num", value: Math.PI });
       i++;
-    } else if ("+-×÷^".includes(c)) {
+    } else if ("+-×÷^∥".includes(c)) {
       tokens.push({ type: "op", value: c });
       i++;
     } else if (c === "(") {
@@ -4163,19 +4173,30 @@ function calcTokenize(s) {
   return tokens;
 }
 
+// Degrees are reduced to a turn first so the exact angles come out exact:
+// sin 180° had read 1.22e-16, the rounding left in π, and tan 90° a huge
+// number instead of no answer.
+function degTrig(fn, v) {
+  const a = ((v % 360) + 360) % 360;
+  if (fn === "sin") { if (a % 180 === 0) return 0; if (a === 90) return 1; if (a === 270) return -1; }
+  if (fn === "cos") { if (a === 90 || a === 270) return 0; if (a === 0) return 1; if (a === 180) return -1; }
+  if (fn === "tan") { if (a % 180 === 0) return 0; if (a % 180 === 90) return NaN; }
+  return Math[fn]((v * Math.PI) / 180);
+}
+
 const CALC_FN = {
-  sin: (v, deg) => Math.sin(deg ? (v * Math.PI) / 180 : v),
-  cos: (v, deg) => Math.cos(deg ? (v * Math.PI) / 180 : v),
-  tan: (v, deg) => Math.tan(deg ? (v * Math.PI) / 180 : v),
+  sin: (v, deg) => (deg ? degTrig("sin", v) : Math.sin(v)),
+  cos: (v, deg) => (deg ? degTrig("cos", v) : Math.cos(v)),
+  tan: (v, deg) => (deg ? degTrig("tan", v) : Math.tan(v)),
   log: (v) => Math.log10(v),
   ln: (v) => Math.log(v),
   sqrt: (v) => Math.sqrt(v),
   exp: (v) => Math.exp(v),
 };
 
-// Standard precedence: + - loosest, then × ÷ (which also absorb "implicit"
-// multiplication — "2(3+4)" and "2π" both need to parse without an explicit
-// × between the factors), then ^ (right-associative), then unary minus.
+// Precedence, loosest first: + −, then × ÷ ∥ (with implicit multiplication,
+// "2(3+4)" and "2π"), then unary minus, then ^ (right-associative). Minus
+// sits below ^ so −2² is −4, as in maths; it had bound tighter and given 4.
 function calcParse(tokens) {
   let pos = 0;
   const peek = () => tokens[pos];
@@ -4192,21 +4213,12 @@ function calcParse(tokens) {
   }
 
   function parseTerm() {
-    let node = parsePower();
-    while (peek() && ((peek().type === "op" && (peek().value === "×" || peek().value === "÷")) || canStartFactor(peek()))) {
+    let node = parseUnary();
+    while (peek() && ((peek().type === "op" && "×÷∥".includes(peek().value)) || canStartFactor(peek()))) {
       const op = peek().type === "op" ? next().value : "×";
-      node = { op, left: node, right: parsePower() };
+      node = { op, left: node, right: parseUnary() };
     }
     return node;
-  }
-
-  function parsePower() {
-    const base = parseUnary();
-    if (peek() && peek().type === "op" && peek().value === "^") {
-      next();
-      return { op: "^", left: base, right: parsePower() };
-    }
-    return base;
   }
 
   function parseUnary() {
@@ -4214,7 +4226,16 @@ function calcParse(tokens) {
       next();
       return { op: "neg", arg: parseUnary() };
     }
-    return parsePrimary();
+    return parsePower();
+  }
+
+  function parsePower() {
+    const base = parsePrimary();
+    if (peek() && peek().type === "op" && peek().value === "^") {
+      next();
+      return { op: "^", left: base, right: parseUnary() };
+    }
+    return base;
   }
 
   function parsePrimary() {
@@ -4260,25 +4281,47 @@ function calcEval(node, deg) {
   if (node.op === "-") return l - r;
   if (node.op === "×") return l * r;
   if (node.op === "÷") return r === 0 ? NaN : l / r;
+  if (node.op === "∥") return l + r === 0 ? NaN : (l * r) / (l + r);
   if (node.op === "^") return Math.pow(l, r);
   throw new Error("unknown operator");
 }
 
+// Ten significant figures, or a power of ten past 1E12 and below 1E-9,
+// written with the capital E the tokenizer reads back.
 function formatCalcResult(n) {
   if (!isFinite(n)) return "Error";
   if (n === 0) return "0";
   const abs = Math.abs(n);
-  if (abs >= 1e12 || abs < 1e-9) return n.toExponential(6);
+  if (abs >= 1e12 || abs < 1e-9) {
+    const [m, e] = n.toExponential(9).split("e");
+    return `${Number(m)}E${parseInt(e, 10)}`;
+  }
   return Number(n.toPrecision(10)).toString();
 }
 
-const CALC_OP_SYMBOL = { add: "+", subtract: "-", multiply: "×", divide: "÷", power: "^" };
+const CALC_OP_SYMBOL = { add: "+", subtract: "-", multiply: "×", divide: "÷", power: "^", parallel: "∥" };
+const CALC_MODES = ["basic", "sci", "ee"];
 
 function renderBasicCalculator(domain, tool, favId) {
-  const state = { expr: "0", justEvaluated: false, mode: "basic", angle: "deg" };
+  const C = "basic-calculator";
+  const state = {
+    expr: "0", justEvaluated: false, result: null,
+    mode: pref(C, "mode", "basic", CALC_MODES), angle: pref(C, "angle", "deg", ["deg", "rad"]),
+  };
+
+  // The result in engineering notation, the way a part is marked: shown under
+  // the display when it says something the plain number doesn't.
+  function engLine() {
+    if (state.result === null || !isFinite(state.result) || state.result === 0) return "";
+    const abs = Math.abs(state.result);
+    if (abs >= 1 && abs < 1000) return "";
+    if (abs < 1e-15 || abs >= 1e15) return "";
+    return `= ${siFormat(state.result, "", 6).trim()}`;
+  }
 
   function updateDisplay() {
     document.querySelector('[data-res="display"]').textContent = state.expr;
+    document.querySelector('[data-res="eng"]').textContent = engLine();
   }
 
   function currentNumberTail() {
@@ -4322,6 +4365,11 @@ function renderBasicCalculator(domain, tool, favId) {
     state.expr = state.expr === "0" ? text : state.expr + text;
   }
 
+  // A prefix or the exponent mark only follows a digit.
+  function appendAfterNumber(text) {
+    if (/[0-9.]$/.test(state.expr)) state.expr += text;
+  }
+
   function insertFunction(name) {
     appendRaw(`${name}(`);
   }
@@ -4332,24 +4380,44 @@ function renderBasicCalculator(domain, tool, favId) {
       return;
     }
     const last = state.expr.slice(-1);
-    const isOp = (ch) => "+-×÷^".includes(ch);
-    if (isOp(last) && !(sym === "-" && "×÷^(".includes(last))) {
+    const isOp = (ch) => "+-×÷^∥".includes(ch);
+    if (isOp(last) && !(sym === "-" && "×÷^∥(".includes(last))) {
       state.expr = state.expr.slice(0, -1) + sym;
     } else {
       state.expr += sym;
     }
   }
 
+  // ± changes the number being typed, as a phone calculator does; with no
+  // number at the end it negates the whole expression.
   function toggleSign() {
-    if (state.expr.startsWith("-(") && state.expr.endsWith(")")) {
-      state.expr = state.expr.slice(2, -1);
-    } else {
-      state.expr = `-(${state.expr})`;
-    }
+    const m = state.expr.match(/\(-([0-9.]+[pnuµmkMGT]?)\)$/);
+    if (m) { state.expr = state.expr.slice(0, -m[0].length) + m[1]; return; }
+    const tail = state.expr.match(/[0-9.]+[pnuµmkMGT]?$/);
+    if (tail && tail[0] !== state.expr) { state.expr = `${state.expr.slice(0, -tail[0].length)}(-${tail[0]})`; return; }
+    if (tail) { state.expr = state.expr.startsWith("-") ? state.expr.slice(1) : `-${state.expr}`; return; }
+    state.expr = state.expr.startsWith("-(") && state.expr.endsWith(")") ? state.expr.slice(2, -1) : `-(${state.expr})`;
   }
 
+  // % as on a phone: after + or −, a percentage of what comes before it
+  // (50 + 10 % is 55); otherwise the number over a hundred (50 × 10 % is 5).
+  // It had divided the whole expression by 100, giving 0.6 for 50 + 10 %.
   function inputPercent() {
-    state.expr = `(${state.expr})÷100`;
+    const m = state.expr.match(/^(.*)([+\-×÷])([0-9.]+[pnuµmkMGT]?)$/);
+    const deg = state.angle === "deg";
+    try {
+      if (m && (m[2] === "+" || m[2] === "-") && m[1] !== "") {
+        const base = calcEval(calcParse(calcTokenize(m[1])), deg);
+        const pct = calcEval(calcParse(calcTokenize(m[3])), deg);
+        state.expr = `${m[1]}${m[2]}${formatCalcResult((base * pct) / 100)}`;
+      } else if (m) {
+        state.expr = `${m[1]}${m[2]}${formatCalcResult(calcEval(calcParse(calcTokenize(m[3])), deg) / 100)}`;
+      } else {
+        state.expr = formatCalcResult(calcEval(calcParse(calcTokenize(state.expr)), deg) / 100);
+      }
+    } catch (_) {
+      state.expr = "Error";
+    }
   }
 
   function applyReciprocal() {
@@ -4362,8 +4430,10 @@ function renderBasicCalculator(domain, tool, favId) {
       if (!tokens.length) return;
       const result = calcEval(calcParse(tokens), state.angle === "deg");
       state.expr = formatCalcResult(result);
+      state.result = isFinite(result) ? result : null;
     } catch (err) {
       state.expr = "Error";
+      state.result = null;
     }
     state.justEvaluated = true;
   }
@@ -4371,10 +4441,11 @@ function renderBasicCalculator(domain, tool, favId) {
   function press(key) {
     // The angle-mode toggle changes a key's own label (DEG ↔ RAD), which a
     // display-only update can't reach — it needs the keypad re-drawn.
-    if (key === "toggle-angle") { state.angle = state.angle === "deg" ? "rad" : "deg"; paint(); return; }
+    if (key === "toggle-angle") { state.angle = state.angle === "deg" ? "rad" : "deg"; setPref(C, "angle", state.angle); paint(); return; }
     // A leftover "Error" is text, not a number — anything but Clear should
     // discard it first rather than edit it character by character.
     if (state.expr === "Error" && key !== "clear") clearAll();
+    if (key !== "equals") state.result = null;
 
     if (/^[0-9]$/.test(key)) { inputDigit(key); updateDisplay(); return; }
     if (key === "decimal") { inputDecimal(); updateDisplay(); return; }
@@ -4391,6 +4462,8 @@ function renderBasicCalculator(domain, tool, favId) {
     else if (key === "pi") appendRaw("π");
     else if (key === "e") appendRaw("e");
     else if (key === "pow10") appendRaw("10^(");
+    else if (key === "ee") appendAfterNumber("E");
+    else if (key.startsWith("prefix-")) appendAfterNumber(key.slice(7));
     else if (key in CALC_FN) insertFunction(key);
     else if (key in CALC_OP_SYMBOL) appendOperator(CALC_OP_SYMBOL[key]);
     else if (key === "equals") equals();
@@ -4405,9 +4478,10 @@ function renderBasicCalculator(domain, tool, favId) {
     if (!document.querySelector('[data-res="display"]')) { window.removeEventListener("keydown", onKeyDown); return; }
     const map = {
       "0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9",
-      ".": "decimal", "+": "add", "-": "subtract", "*": "multiply", "/": "divide", "^": "power",
+      ".": "decimal", "+": "add", "-": "subtract", "*": "multiply", "/": "divide", "^": "power", "|": "parallel",
       "(": "open", ")": "close", "Enter": "equals", "=": "equals", "Backspace": "backspace",
-      "Escape": "clear", "Delete": "clear", "%": "percent",
+      "Escape": "clear", "Delete": "clear", "%": "percent", "E": "ee",
+      p: "prefix-p", n: "prefix-n", u: "prefix-µ", m: "prefix-m", k: "prefix-k", M: "prefix-M", G: "prefix-G",
     };
     const key = map[e.key];
     if (!key) return;
@@ -4416,11 +4490,8 @@ function renderBasicCalculator(domain, tool, favId) {
   }
   window.addEventListener("keydown", onKeyDown);
 
-  // Matches the iPhone's own Calculator app: Standard carries no parentheses
-  // or power key at all — those, along with backspace, only showed up here
-  // because this screen used to be the only mode. Now that Scientific mode
-  // exists to hold them, Standard goes back to exactly what the real app
-  // ships: ⌫ C % ÷ / 7 8 9 × / 4 5 6 − / 1 2 3 + / ± 0 . =.
+  // Matches the iPhone's own Calculator app: Standard is ⌫ C % ÷ / 7 8 9 × /
+  // 4 5 6 − / 1 2 3 + / ± 0 . =, with no parentheses or power key.
   const BASE_KEYS = [
     ["backspace", "⌫", "fn"], ["clear", "C", "fn"], ["percent", "%", "fn"], ["divide", "÷", "op"],
     ["7", "7"], ["8", "8"], ["9", "9"], ["multiply", "×", "op"],
@@ -4429,14 +4500,9 @@ function renderBasicCalculator(domain, tool, favId) {
     ["sign", "±", "fn"], ["0", "0"], ["decimal", ".", ""], ["equals", "=", "op"],
   ];
 
-  // The parentheses and power operator that Standard no longer carries live
-  // here instead, alongside trig, logs and the constants that show up
-  // constantly in electronics math (reactance angles, RC time constants).
-  // Ordered to track the iPhone's own Scientific layout row by row — reading
-  // its six-column rows left to right and keeping only the functions this
-  // screen actually has, the sequence is: ( ) · x² xʸ eˣ 10ˣ · 1/x √ ln log ·
-  // sin cos tan e · π Deg. That's also why Deg/Rad ends up last: the photo
-  // puts it at the end of its own last row too.
+  // Ordered to track the iPhone's own Scientific layout row by row, keeping
+  // only the functions this screen has: ( ) x² xʸ · eˣ 10ˣ 1/x √ · ln log
+  // sin cos · tan e π Deg.
   function sciKeys() {
     return [
       ["open", "(", "fn"], ["close", ")", "fn"], ["square", "x²", "fn"], ["power", "xʸ", "fn"],
@@ -4446,28 +4512,46 @@ function renderBasicCalculator(domain, tool, favId) {
     ];
   }
 
+  // Electronics: the prefixes a part is marked in, the power of ten, and ∥.
+  const EE_KEYS = [
+    ["open", "(", "fn"], ["close", ")", "fn"], ["parallel", "∥", "op"], ["ee", "EE", "fn"],
+    ["prefix-p", "p", "fn"], ["prefix-n", "n", "fn"], ["prefix-µ", "µ", "fn"], ["prefix-m", "m", "fn"],
+    ["prefix-k", "k", "fn"], ["prefix-M", "M", "fn"], ["prefix-G", "G", "fn"], ["reciprocal", "1/x", "fn"],
+  ];
+
   function keyBtn([key, label, kind]) {
     return `<button class="calc-key${kind ? ` calc-key--${kind}` : ""}" data-key="${key}">${label}</button>`;
   }
 
+  const run = (expr, mode) => () => { state.expr = expr; state.mode = mode; equals(); paint(); };
+  useExamples([
+    { title: "Parallel resistors", note: "1k ∥ 2.2k is 687.5 Ω: the ∥ key works out a × b / (a + b).", apply: run("1k∥2.2k", "ee") },
+    { title: "RC time constant", note: "10 kΩ and 100 nF: τ = R × C, 1 ms.", apply: run("10k×100n", "ee") },
+    { title: "Capacitive reactance", note: "100 nF at 1 kHz: 1 / (2π f C) is 1.592 kΩ.", apply: run("1÷(2π×1k×100n)", "ee") },
+    { title: "Gain in decibels", note: "A voltage gain of 100 is 20 log 100, 40 dB.", apply: run("20log(100)", "sci") },
+    { title: "Power in a resistor", note: "12 V across 470 Ω: V² / R is 306.4 mW.", apply: run("12^2÷470", "sci") },
+  ]);
+
   function paint() {
+    const extra = state.mode === "sci" ? sciKeys() : state.mode === "ee" ? EE_KEYS : null;
     app.innerHTML = `
-      ${calcHeader(tool, favId, "")}
+      ${calcHeader(tool, favId, "Standard, scientific and electronics keys")}
 
-      ${pillRow([["basic", "Standard"], ["sci", "Scientific"]], state.mode, domain.bg)}
+      ${pillRow([["basic", "Standard"], ["sci", "Scientific"], ["ee", "Electronics"]], state.mode, domain.bg)}
 
-      <div class="calc-display">
+      <div class="calc-display${extra ? " calc-display--compact" : ""}">
         <div class="calc-display-value" data-res="display">${state.expr}</div>
+        <div class="calc-display-eng" data-res="eng">${engLine()}</div>
       </div>
-      <div id="calc-keypad">
-        ${state.mode === "sci" ? `<div class="calc-keypad" style="margin-bottom:8px;">${sciKeys().map(keyBtn).join("")}</div>` : ""}
+      <div id="calc-keypad" class="${extra ? "calc-keys--compact" : ""}">
+        ${extra ? `<div class="calc-keypad" style="margin-bottom:6px;">${extra.map(keyBtn).join("")}</div>` : ""}
         <div class="calc-keypad">${BASE_KEYS.map(keyBtn).join("")}</div>
       </div>
 
       ${calcFooter("")}
     `;
 
-    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.mode = m; setPref(C, "mode", m); paint(); });
     document.getElementById("calc-keypad").addEventListener("click", (e) => {
       const btn = e.target.closest(".calc-key");
       if (btn) press(btn.dataset.key);
