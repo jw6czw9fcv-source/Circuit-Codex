@@ -108,6 +108,7 @@ will key on, since that is the id the app already holds for each tool.
 ### Tools
 
 - Calculators → [Calculator](#basic-calculator)
+- Calculators → [Ohm's law](#ohms-law)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8050,5 +8051,85 @@ The review made these changes:
   second keypad shown, keys and display are now tighter.
 - **Remembering:** the keypad and DEG/RAD are now remembered.
 - **First cases, examples and this section.**
+
+[↑ Index](#index)
+
+---
+
+<a id="ohms-law"></a>
+## Ohm's law
+
+`calc: ohms-law` · Tools › Calculators
+
+### What it computes
+
+Any two of voltage (V), current (I), resistance (R) and power (P) give the
+other two. These are the six pairs of the Ohm's-law wheel: V·I, V·R, I·R,
+P·V, P·I and P·R. A schematic marks each quantity where it is: V across the
+source, I along the wire, R and P on the resistor. Inputs are drawn blue,
+results green.
+
+- **A resistance you enter** has a tolerance (picked beside "Your
+  inputs"). Its E-series slider steps through standard values, and the
+  results show their spread at that tolerance.
+- **A resistance worked out** shows the nearest standard part instead.
+- **Remembered:** the pair, the tolerance and each quantity's unit.
+
+Examples: 330 Ω on 3.3 V, a 0.1 Ω current shunt at 2 A, the limits of a
+¼ W 1 kΩ resistor, 60 W at 120 V, and a resistance found from a measured
+voltage and current.
+
+### Why the formulas are these
+
+    V = I × R        I = V / R        R = V / I
+    P = V × I = I² × R = V² / R
+    I = √(P / R)     V = √(P × R)
+
+Ohm's law, V = I × R, ties the first three. Power is the rate the resistor
+turns energy into heat, V × I. Putting one into the other gives the rest.
+
+**Tolerance:** the result moves with R as its own power of R:
+
+| Pair | Result goes as | So at ±t |
+|---|---|---|
+| V·R | I and P go as 1/R | between V/(R(1 + t)) and V/(R(1 − t)) |
+| I·R | V and P go as R | ±t |
+| P·R | I goes as 1/√R, V as √R | about ±t/2 |
+
+### Assumptions and limits
+
+- **A resistor obeys Ohm's law** only at a fixed temperature. A lamp
+  filament's cold resistance is many times lower than the V²/P "working"
+  value, and diodes and LEDs don't follow V = I × R at all.
+- **DC, or AC in RMS values with a purely resistive load.** With
+  reactance, use impedance instead.
+- **A spread is the tolerance alone.** A resistor's temperature
+  coefficient adds to it.
+
+### How it was checked
+
+9 cases:
+- 12 V and 12 mA: 1 kΩ and 144 mW;
+- 330 Ω on 3.3 V: 10 mA, between 9.901 and 10.1 mA at ±1 %;
+- ¼ W in 1 kΩ: 15.81 V or 15.81 mA;
+- 60 W at 120 V: 500 mA and 240 Ω, nearest E96 237 Ω;
+- 4.98 V and 2.2 mA: 2.264 kΩ, nearest 2.26 kΩ;
+- P·I, 1 W at 100 mA: 10 V and 100 Ω;
+- 12 V shown in mV reads 12000;
+- a blank field;
+- the remembered pair, tolerance and unit.
+
+The review made these changes:
+- **Units:** changing one kept the number and changed its meaning (12 V
+  became 12 mV). Values are now held in SI, and the picker only re-expresses
+  them.
+- **Power as an input:** the P·V, P·I and P·R pairs are new, with the
+  tolerance spread through P·R.
+- **Results** pick their own unit: 144 mW, not 0.144 W. Large values had
+  read like 1.20e+3.
+- **A missing input** says what is missing.
+- **Remembering:** the pair, tolerance and units are remembered.
+- **Formula search** had no Ohm's law card; it has one now.
+- **Examples, the first cases and this section.**
 
 [↑ Index](#index)

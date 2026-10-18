@@ -870,23 +870,54 @@ function wireCalc(favId, repaint, onPill) {
   }
 }
 
-// ---------- Ohm's law calculator (fully functional proof of concept) ----------
+// ---------- Ohm's law ----------
+// Any two of voltage, current, resistance and power give the other two: the
+// six pairs of the Ohm's-law wheel. Values are held in SI (V, A, Ω, W) and
+// the unit pickers only change how a value is shown, so switching 12 V to mV
+// reads 12000 mV; it used to keep the number and quietly make it 12 mV.
+const OHMS_LAW_UNITS = {
+  V: { mV: 1e-3, V: 1, kV: 1e3 },
+  I: { "µA": 1e-6, mA: 1e-3, A: 1 },
+  R: { "Ω": 1, "kΩ": 1e3, "MΩ": 1e6 },
+  P: { "µW": 1e-6, mW: 1e-3, W: 1, kW: 1e3 },
+};
+const OHM_NAMES = { V: "Voltage (V)", I: "Current (I)", R: "Resistance (R)", P: "Power (P)" };
+const OHM_MODES = [["vi", "V·I"], ["vr", "V·R"], ["ir", "I·R"], ["pv", "P·V"], ["pi", "P·I"], ["pr", "P·R"]];
+const OHM_INPUTS = { vi: ["V", "I"], vr: ["V", "R"], ir: ["I", "R"], pv: ["P", "V"], pi: ["P", "I"], pr: ["P", "R"] };
+
+// The other two from a pair, in SI.
+function ohmSolve(mode, x) {
+  const { V, I, R, P } = x;
+  if (mode === "vi") return { V, I, R: V / I, P: V * I };
+  if (mode === "vr") return { V, R, I: V / R, P: (V * V) / R };
+  if (mode === "ir") return { I, R, V: I * R, P: I * I * R };
+  if (mode === "pv") return { P, V, I: P / V, R: (V * V) / P };
+  if (mode === "pi") return { P, I, V: P / I, R: P / (I * I) };
+  return { P, R, I: Math.sqrt(P / R), V: Math.sqrt(P * R) };
+}
+
 function renderOhmsLaw(domain, tool, favId) {
-  const state = { mode: "vi", tol: 1, V: 12, I: 250, Ivi_unit: "mA" };
+  const C = "ohms-law";
+  const state = {
+    mode: pref(C, "mode", "vi", OHM_MODES.map(([m]) => m)),
+    tol: pref(C, "tol", 1, [0.1, 0.5, 1, 2, 5, 10]),
+    units: Object.fromEntries(Object.keys(OHMS_LAW_UNITS).map((k) =>
+      [k, pref(C, `unit.${k}`, { V: "V", I: "mA", R: "kΩ", P: "W" }[k], Object.keys(OHMS_LAW_UNITS[k]))])),
+    si: { V: 12, I: 0.012, R: 1000, P: 0.144 },
+  };
+  const inputs = () => OHM_INPUTS[state.mode];
 
   // Series loop with V, I and R marked where they physically are: V across the
-  // source, I as a current arrow along the wire, R on the resistor. The resistor
-  // is the ANSI/IEEE 315 zigzag at the same proportions as every other schematic
-  // in the app: six peaks, body about 2.5 times its width, straight wire either
-  // side. Wires stay
-  // neutral so the labels can carry the mode — a quantity you entered is drawn
-  // in the input blue, one being solved for in the result green, matching the
-  // "Your inputs" and "Results" headings below.
+  // source, I as a current arrow along the wire, R on the resistor, and P, the
+  // power the resistor turns to heat, under it. The resistor is the ANSI/IEEE
+  // 315 zigzag at the proportions of every other schematic in the app. Wires
+  // stay neutral; a quantity you entered is drawn in the input blue, one being
+  // solved for in the result green.
   function diagram() {
-    const known = fieldsForMode(state.mode);
+    const known = inputs();
     const tone = (v) => (known.includes(v) ? "#8FC1F5" : "#5DCAA5");
     const wire = "#5A6169";
-    return `<svg width="220" height="90" viewBox="0 0 220 90" fill="none">
+    return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
       <path d="M34 34 H95 M131 34 H186 M186 34 V84 M186 84 H34 M34 34 V52 M34 62 V84" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M95 34 L98 27 L104 41 L110 27 L116 41 L122 27 L128 41 L131 34" stroke="${tone("R")}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
       <path d="M22 52 H46" stroke="${tone("V")}" stroke-width="2"/>
@@ -895,55 +926,14 @@ function renderOhmsLaw(domain, tool, favId) {
       <text x="12" y="61" fill="${tone("V")}" font-size="12" font-weight="600" text-anchor="middle">V</text>
       <text x="62" y="14" fill="${tone("I")}" font-size="12" font-weight="600" text-anchor="middle">I</text>
       <text x="113" y="18" fill="${tone("R")}" font-size="12" font-weight="600" text-anchor="middle">R</text>
+      <text x="113" y="58" fill="${tone("P")}" font-size="12" font-weight="600" text-anchor="middle">P</text>
     </svg>`;
   }
 
-  function unitScale(unit, base) {
-    // returns factor to convert display value -> base SI unit
-    const scales = { "V": 1, "mV": 1e-3, "A": 1, "mA": 1e-3, "µA": 1e-6, "Ω": 1, "kΩ": 1e3, "MΩ": 1e6, "W": 1, "mW": 1e-3 };
-    return scales[unit] ?? 1;
-  }
-
-  function fieldsForMode(mode) {
-    if (mode === "vi") return ["V", "I"];
-    if (mode === "vr") return ["V", "R"];
-    return ["I", "R"];
-  }
-
-
-  function unitOptionsFor(varName) {
-    if (varName === "V") return ["V", "mV"];
-    if (varName === "I") return ["A", "mA", "µA"];
-    if (varName === "R") return ["Ω", "kΩ", "MΩ"];
-    if (varName === "P") return ["W", "mW"];
-    return [""];
-  }
-
-  function defaultUnit(varName) {
-    return { V: "V", I: "mA", R: "kΩ", P: "W" }[varName];
-  }
-
-  if (!state.units) {
-    state.units = { V: "V", I: "mA", R: "kΩ", P: "W" };
-    state.values = { V: 12, I: 250, R: 1, P: 3 };
-  }
-
-  // A resistor you supply carries a tolerance, so whatever it determines carries
-  // one too. In VI mode R is derived from measured V and I instead, so there is
-  // no tolerance to propagate — only a nearest standard part to suggest.
-  function spreadFor(name, r) {
-    const t = state.tol / 100;
-    if (state.mode === "vi" || !isFinite(r.R) || r.R <= 0) return null;
-    if (state.mode === "vr") {
-      if (name === "I") return { lo: r.V / (r.R * (1 + t)), hi: r.V / (r.R * (1 - t)) };
-      if (name === "P") return { lo: (r.V * r.V) / (r.R * (1 + t)), hi: (r.V * r.V) / (r.R * (1 - t)) };
-    }
-    if (state.mode === "ir") {
-      if (name === "V") return { lo: r.I * r.R * (1 - t), hi: r.I * r.R * (1 + t) };
-      if (name === "P") return { lo: r.I * r.I * r.R * (1 - t), hi: r.I * r.I * r.R * (1 + t) };
-    }
-    return null;
-  }
+  const unitSymbol = { V: "V", I: "A", R: "Ω", P: "W" };
+  const show = (k, v) => (k === "R" ? formatOhms(v) : siFormat(v, unitSymbol[k], 4));
+  const num = (txt) => txt.split(" ")[0];
+  const unit = (txt) => txt.split(" ").slice(1).join(" ");
 
   function seriesHint(ohms) {
     if (!isFinite(ohms) || ohms <= 0) return "";
@@ -952,135 +942,132 @@ function renderOhmsLaw(domain, tool, favId) {
     return near.exact ? series : `${series} → ${formatOhms(near.value)}`;
   }
 
-  function resultSub(v, r) {
-    if (v === "R") return seriesHint(r.R);
-    const spread = spreadFor(v, r);
-    if (!spread) return "";
-    const unit = state.units[v] || defaultUnit(v);
-    const scale = unitScale(unit);
-    return `${fmt(spread.lo / scale)} – ${fmt(spread.hi / scale)} ${unit}`;
+  // A resistor you supply carries a tolerance, so what it determines carries
+  // one too: I and P go as 1/R with V given, V and P as R with I given, and
+  // with P given, I as 1/√R and V as √R. A resistance worked out from the
+  // others has no tolerance, only a nearest standard part.
+  function spread(k, r) {
+    if (!inputs().includes("R") || !(r.R > 0)) return null;
+    const t = state.tol / 100;
+    const range = (x, power) => [x * Math.pow(1 + t, power), x * Math.pow(1 - t, power)].sort((a, b) => a - b);
+    const p = state.mode === "vr" ? { I: -1, P: -1 } : state.mode === "ir" ? { V: 1, P: 1 } : { I: -0.5, V: 0.5 };
+    return p[k] === undefined ? null : range(r[k], p[k]);
   }
 
-  function compute() {
-    const inputs = fieldsForMode(state.mode);
-    const [a, b] = inputs;
-    const va = state.values[a] * unitScale(state.units[a]);
-    const vb = state.values[b] * unitScale(state.units[b]);
-    let V, I, R;
-    if (state.mode === "vi") { V = va; I = vb; R = I !== 0 ? V / I : NaN; }
-    if (state.mode === "vr") { V = va; R = vb; I = R !== 0 ? V / R : NaN; }
-    if (state.mode === "ir") { I = va; R = vb; V = I * R; }
-    const P = V * I;
-    return { V, I, R, P };
+  function problem() {
+    const [a, b] = inputs();
+    for (const k of [a, b]) if (!isFinite(state.si[k])) return `Enter ${OHM_NAMES[k].toLowerCase().replace(/ \(.\)$/, "")}.`;
+    if (state.si.R <= 0 && inputs().includes("R")) return "The resistance has to be greater than zero.";
+    if (state.mode.startsWith("p") && state.si.P <= 0) return "The power has to be greater than zero.";
+    if ((state.mode === "vi" && state.si.I === 0) || (state.mode === "pv" && state.si.V === 0) || (state.mode === "pi" && state.si.I === 0)) return "That would divide by zero.";
+    return "";
   }
 
-  function fmt(num) {
-    if (!isFinite(num)) return "—";
-    if (Math.abs(num) >= 1000 || (Math.abs(num) < 0.001 && num !== 0)) return num.toExponential(2);
-    return Number(num.toPrecision(4)).toString();
-  }
-
-  function displayValue(varName, siValue) {
-    const scale = unitScale(state.units[varName]);
-    return fmt(siValue / scale);
-  }
-
-  // Refresh only the result numbers. The set of result fields depends on the
-  // mode, not on the values, so it is stable while typing — updating in place
-  // keeps the caret alive, which a full paint() would destroy on every keystroke.
-  function updateResults() {
-    const inputs = fieldsForMode(state.mode);
-    const results = compute();
-    ["V", "I", "R", "P"].filter(v => !inputs.includes(v)).forEach(v => {
-      const num = app.querySelector(`.result-field[data-out="${v}"] .num`);
-      if (num) num.textContent = fmt(results[v] / unitScale(state.units[v] || defaultUnit(v)));
-      const sub = app.querySelector(`.result-field[data-out="${v}"] [data-sub]`);
-      if (sub) sub.textContent = resultSub(v, results);
-    });
-    const hint = app.querySelector('[data-hint="R"]');
-    if (hint) hint.textContent = seriesHint(state.values.R * unitScale(state.units.R));
-    if (inputs.includes("R")) {
-      syncSliderPositions(eSeriesForTolerance(state.tol),
-        () => state.values.R * unitScale(state.units.R),
-        () => unitSliderBounds(unitScale(state.units.R)));
-    }
-  }
-
-  function paint() {
-    const inputs = fieldsForMode(state.mode);
-    const outputs = ["V", "I", "R", "P"].filter(v => !inputs.includes(v));
-    const results = compute();
-
-    app.innerHTML = `
-      ${calcHeader(tool, favId, "Voltage, current, resistance")}
-
-      <div class="diagram-box">${diagram()}</div>
-
-      ${pillRow([["vi", "VI"], ["vr", "VR"], ["ir", "IR"]], state.mode, "#1B2A3B")}
-
-      <div class="section-label" style="color:#8FC1F5">Your inputs
-        <select id="ohm-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10].map(t => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
-      ${inputs.map(v => `
-        <div class="field">
-          <label><span class="field-name">${{ V: "Voltage (V)", I: "Current (I)", R: "Resistance (R)" }[v]}</span>${
-            v === "R" ? `<span class="field-hint" data-hint="R">${seriesHint(state.values.R * unitScale(state.units.R))}</span>` : ""}</label>
-          <div class="field-row">
-            <input type="number" inputmode="decimal" data-var="${v}" value="${displayValue(v, state.values[v] === undefined ? 0 : state.values[v] * unitScale(state.units[v]))}" />
-            <select data-unit="${v}">
-              ${unitOptionsFor(v).map(u => `<option value="${u}" ${state.units[v] === u ? "selected" : ""} style="color:#8FC1F5;background:#15181D;">${u}</option>`).join("")}
-            </select>
-          </div>
-          ${v === "R" ? seriesSliderHTML("R", eSeriesForTolerance(state.tol), state.values.R * unitScale(state.units.R), unitSliderBounds(unitScale(state.units.R))) : ""}
-        </div>`).join("")}
-
-      <div class="section-label" style="color:#5DCAA5">Results</div>
-      ${outputs.map(v => `
-        <div class="result-field" data-out="${v}">
+  function resultsHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const r = ohmSolve(state.mode, state.si);
+    return ["V", "I", "R", "P"].filter((k) => !inputs().includes(k)).map((k) => {
+      const txt = show(k, r[k]);
+      const s = spread(k, r);
+      const sub = k === "R" ? seriesHint(r.R) : s ? `${show(k, s[0])} – ${show(k, s[1])} at ±${state.tol} %` : "";
+      return `
+        <div class="result-field" data-out="${k}">
           <div class="result-head">
-            <span class="label">${{ V: "Voltage (V)", I: "Current (I)", R: "Resistance (R)", P: "Power (P)" }[v]}</span>
+            <span class="label">${OHM_NAMES[k]}</span>
             <span class="badge-calc">${ICONS.bolt2}Calculated</span>
           </div>
           <div class="result-value">
-            <span class="num">${fmt(results[v] / unitScale(state.units[v] || defaultUnit(v)))}</span>
-            <span class="unit">${state.units[v] || defaultUnit(v)}</span>
+            <span class="num" data-res="${k}">${num(txt)}</span>
+            <span class="unit" data-res="${k}-unit">${unit(txt)}</span>
           </div>
-          <div class="result-sub" data-sub="${v}">${resultSub(v, results)}</div>
+          <div class="result-sub" data-res="${k}-sub">${sub}</div>
+        </div>`;
+    }).join("");
+  }
+
+  const shown = (k) => +(state.si[k] / OHMS_LAW_UNITS[k][state.units[k]]).toPrecision(6);
+
+  function refresh() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML();
+    const hint = app.querySelector('[data-hint="R"]');
+    if (hint) hint.textContent = seriesHint(state.si.R);
+    if (inputs().includes("R")) {
+      syncSliderPositions(eSeriesForTolerance(state.tol), () => state.si.R, () => unitSliderBounds(OHMS_LAW_UNITS.R[state.units.R]));
+    }
+  }
+
+  const example = (mode, si, units) => () => { state.mode = mode; Object.assign(state.si, si); Object.assign(state.units, units || {}); paint(); };
+  useExamples([
+    { title: "330 Ω on 3.3 V", note: "10 mA through it and 33 mW in it: well inside a ¼ W part.", apply: example("vr", { V: 3.3, R: 330 }, { V: "V", R: "Ω" }) },
+    { title: "Current shunt, 0.1 Ω at 2 A", note: "It drops 200 mV for the meter to read, and turns 400 mW to heat.", apply: example("ir", { I: 2, R: 0.1 }, { I: "A", R: "Ω" }) },
+    { title: "A ¼ W, 1 kΩ resistor", note: "at most 15.81 V across it, or 15.81 mA through it, before it is over its rating.", apply: example("pr", { P: 0.25, R: 1000 }, { P: "W", R: "kΩ" }) },
+    { title: "60 W at 120 V", note: "500 mA, and 240 Ω while it is running: V² / P is the working resistance.", apply: example("pv", { P: 60, V: 120 }, { P: "W", V: "V" }) },
+    { title: "Measured 4.98 V and 2.2 mA", note: "2.264 kΩ: the nearest E96 part shows under it.", apply: example("vi", { V: 4.98, I: 0.0022 }, { V: "V", I: "mA" }) },
+  ]);
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Any two of voltage, current, resistance, power")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(OHM_MODES, state.mode, "#1B2A3B")}
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="ohm-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      ${inputs().map((k) => `
+        <div class="field">
+          <label><span class="field-name">${OHM_NAMES[k]}</span>${
+            k === "R" ? `<span class="field-hint" data-hint="R">${seriesHint(state.si.R)}</span>` : ""}</label>
+          <div class="field-row">
+            <input type="number" inputmode="decimal" step="any" data-var="${k}" id="ohm-${k}" value="${shown(k)}" />
+            <select data-unit="${k}" id="ohm-${k}-unit">
+              ${Object.keys(OHMS_LAW_UNITS[k]).map((u) => `<option value="${u}" ${state.units[k] === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+          ${k === "R" ? seriesSliderHTML("R", eSeriesForTolerance(state.tol), state.si.R, unitSliderBounds(OHMS_LAW_UNITS.R[state.units.R])) : ""}
         </div>`).join("")}
 
+      <div class="section-label" style="color:#5DCAA5">Results</div>
+      <div data-res="results">${resultsHTML()}</div>
+
       ${formulaSection(
-        ["V = I × R", "I = V / R", "R = V / I", "P = V × I", "P = I² × R", "P = V² / R"],
-        "Any two of V, I, R give the third; power follows from any pair."
+        ["V = I × R · I = V / R · R = V / I", "P = V × I = I² × R = V² / R", "I = √(P / R) · V = √(P × R)"],
+        "Voltage (V, in volts) pushes current (I, in amps) through a resistance (R, in ohms): V = I × R. The power (P, in watts) the resistor turns to heat is V × I. Any two of the four give the other two. A resistor's tolerance spreads what it sets: at ±1 %, the current through a given voltage is within about ±1 %."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; paint(); });
-    app.querySelectorAll("input[data-var]").forEach(inp => {
+    wireCalc(favId, paint, (m) => { state.mode = m; setPref(C, "mode", m); paint(); });
+    app.querySelectorAll("input[data-var]").forEach((inp) => {
       inp.oninput = () => {
-        // Store NaN for a blank or half-typed field too: compute() propagates it
-        // and fmt() shows "—", rather than leaving a stale number under a
-        // "Calculated" badge that no longer matches the inputs on screen.
-        state.values[inp.dataset.var] = parseFloat(inp.value);
-        updateResults();
+        // A blank or half-typed field is NaN, so the results say what is
+        // missing rather than keep numbers that no longer match the inputs.
+        const k = inp.dataset.var;
+        state.si[k] = parseFloat(inp.value) * OHMS_LAW_UNITS[k][state.units[k]];
+        refresh();
       };
     });
-    app.querySelectorAll("select[data-unit]").forEach(sel => {
-      sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; paint(); };
+    // A unit change re-expresses the same value; nothing is recomputed.
+    app.querySelectorAll("select[data-unit]").forEach((sel) => {
+      sel.onchange = () => { state.units[sel.dataset.unit] = sel.value; setPref(C, `unit.${sel.dataset.unit}`, sel.value); paint(); };
     });
     document.getElementById("ohm-tol").onchange = (e) => {
       state.tol = parseFloat(e.target.value);
+      setPref(C, "tol", state.tol);
       paint();
     };
-    if (inputs.includes("R")) {
+    if (inputs().includes("R")) {
       wireSlider("R",
-        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(unitScale(state.units.R))),
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(OHMS_LAW_UNITS.R[state.units.R])),
         (ohms) => {
-          state.values.R = ohms / unitScale(state.units.R);
-          app.querySelector('input[data-var="R"]').value = trim(state.values.R);
-          updateResults();
+          state.si.R = ohms;
+          app.querySelector('input[data-var="R"]').value = shown("R");
+          refresh();
         });
     }
   }

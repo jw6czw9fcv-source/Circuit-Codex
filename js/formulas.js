@@ -12,6 +12,12 @@
 // reference tables to build properly, not entries here.
 const FORMULAS = [
   {
+    tool: "Ohm's law",
+    domain: "tools",
+    formulas: ["V = I × R", "P = V × I = I² × R = V² / R", "I = √(P / R) · V = √(P × R)"],
+    note: "Any two of voltage, current, resistance and power give the other two.",
+  },
+  {
     tool: "Wheatstone bridge",
     domain: "passive",
     formulas: ["At balance: R1 / R2 = R3 / Rx", "Rx = R3 × R2 / R1"],
