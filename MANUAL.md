@@ -112,6 +112,7 @@ will key on, since that is the id the app already holds for each tool.
 - Calculators → [Kirchhoff's laws](#kirchhoff)
 - Calculators → [SI prefix converter](#si-prefix)
 - Calculators → [Tolerance & error](#percent-tolerance)
+- Calculators → [dB ratio](#db-ratio)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8391,6 +8392,88 @@ The review made these changes:
   output now says what is wrong.
 - **Signs:** a true minus sign and an explicit plus.
 - **The rest:** the remembered mode, examples, the first cases and this
+  section.
+
+[↑ Index](#index)
+
+---
+
+<a id="db-ratio"></a>
+## dB ratio
+
+`calc: db-ratio` · Tools › Calculators
+(formerly Generic dB ratio calculator)
+
+### What it computes
+
+The ratio of two values of one quantity, in decibels, both ways.
+
+- **Kinds:** power, voltage or current, by pill.
+- **Inputs:** a reference (P1, V1 or I1) and a compared value, each with
+  its unit, in µ to k, or as dB against 1 of the unit (dBW, dBV, dB re
+  1 A). Typing a difference in dB solves the compared value instead.
+- **Output:** the difference large, signed (+ a gain, − a loss), with both
+  the power ratio and the voltage or current ratio.
+- **The table:** −20 to +20 dB as power and voltage ratios.
+- **Remembered:** the kind and each field's unit.
+
+Examples: twice the power, an amplifier from 10 mV to 1 V, half the
+voltage, a cable from 100 W to 79 W, and a 20 dB attenuator on 1 V.
+
+### Source
+
+**BIPM SI Brochure, 9th edition (2019, updated 2022), table 8, note (m)**,
+read in review:
+
+- **The units:** the neper, bel and decibel express values of
+  logarithmic ratio quantities. "It is important that the quantity be
+  specified, and that any reference value used be specified."
+- **The definition:** 1 dB = (1/10) B, and L_X = m dB means m = 10 lg(X/X0),
+  "if X denotes a mean square signal or power-like quantity".
+
+### Why the formulas are these
+
+    power:            dB = 10 · log₁₀(P2 / P1)
+    voltage, current: dB = 20 · log₁₀(V2 / V1)
+    back:             X2 = X1 × 10^(dB / k),  k = 10 or 20
+
+The decibel is defined on power. Into one resistance, P = V²/R = I²R, so a
+voltage or current ratio squared is the power ratio, and 10 lg of a square
+is 20 lg. That way ×2 in voltage and ×4 in power are both +6.02 dB.
+"3 dB is double" is a rounding: ×2 is 3.0103 dB, and an exact 3 dB is
+×1.995.
+
+### Assumptions and limits
+
+- **20 log is a power ratio only across the same impedance.** Between
+  different impedances, compare the powers.
+- **dBW, dBV and dB re 1 A** are a value against 1 W, 1 V or 1 A. dBm, dBu
+  and dBµV are in the dB / dBm tool.
+- **Both values must be positive.** A zero or negative ratio has no
+  decibels.
+
+### How it was checked
+
+9 cases:
+- 1 W to 2 W is +3.01 dB, ×1.414 in voltage;
+- 10 mV to 1 V is +40 dB;
+- half the voltage is −6.021 dB and a quarter of the power;
+- −20 dB on 1 V solves 100 mV;
+- a unit change keeps the value, and 2 W reads 3.0103 dBW;
+- the table's +3 dB row is ×1.995;
+- zero is refused;
+- the remembered kind and unit.
+
+The review made these changes:
+- **Renamed dB ratio** (Pierre's choice). With the examples' bulb, the
+  old name would have wrapped.
+- **Units:** there were only W, V and A, plus a "dB" relative to 1 that
+  was never named. Real units µ to k, and that dB is now named for its
+  reference (dBW, dBV).
+- **Ratios:** the output shows both the power and the voltage or current
+  ratio, and so does the table.
+- **Text:** signs are explicit, and dB keeps its lower-case d.
+- **The rest:** remembered choices, examples, the first cases and this
   section.
 
 [↑ Index](#index)

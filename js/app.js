@@ -8458,163 +8458,134 @@ function renderRmsCalculator(domain, tool, favId) {
   paint();
 }
 
-// ---------- Generic dB ratio calculator ----------
-// The dimensionless core the dBm/dBu/dBV screen builds on: dB always
-// compares two values of the SAME quantity, and the multiplier depends on
-// which kind — 10·log10 for power (energy-like: P = V²/R), 20·log10 for
-// voltage and current (both field-like: either one enters power squared,
-// P = V²/R = I²R). Each kind picks a concrete unit (W, V, A) rather than
-// staying abstract, so the field labels mean something on sight.
-// P1/P2 each still get a unit toggle between the kind's native unit and dB,
-// since it's common to already have one or both values as a dB figure (a
-// meter reading, a spec sheet number) — switching just re-displays the
-// current value, it doesn't change what it means.
+// ---------- dB ratio ----------
+// A decibel compares two values of the same quantity. The SI Brochure (9th
+// edition, table 8, note m) defines it on power-like (mean-square)
+// quantities, m = 10 lg(X/X0), and asks that the quantity and its reference
+// be stated. A voltage or a current enters power squared (P = V²/R = I²R),
+// so for them the same decibels are 20 lg: the extra 2 keeps a dB figure
+// meaning the same power change whichever way it was measured, across one
+// impedance. Values are held in SI (W, V, A); a field's unit picker only
+// changes how it is shown, including as dB relative to 1 of the unit.
 const DB_KIND = {
-  power: { label: "Power", k: 10, sym: "P", unit: "W" },
-  voltage: { label: "Voltage", k: 20, sym: "V", unit: "V" },
-  current: { label: "Current", k: 20, sym: "I", unit: "A" },
+  power: { label: "Power", k: 10, sym: "P", units: { "µW": 1e-6, mW: 1e-3, W: 1, kW: 1e3, dBW: "db" }, def: "W" },
+  voltage: { label: "Voltage", k: 20, sym: "V", units: { "µV": 1e-6, mV: 1e-3, V: 1, kV: 1e3, dBV: "db" }, def: "V" },
+  current: { label: "Current", k: 20, sym: "I", units: { "µA": 1e-6, mA: 1e-3, A: 1, "dB re 1 A": "db" }, def: "A" },
 };
 const DB_REFERENCE = [-20, -10, -6, -3, -1, 0, 1, 3, 6, 10, 20];
 
 function renderDbRatio(domain, tool, favId) {
-  const state = { kind: "power", v1: 1, v1IsDb: false, v2: 2, v2IsDb: false };
+  const C = "db-ratio";
+  const kinds = Object.keys(DB_KIND);
+  const state = { kind: pref(C, "kind", "power", kinds), s1: 1, s2: 2, units: {} };
+  for (const k of kinds) {
+    const names = Object.keys(DB_KIND[k].units);
+    state.units[k] = [pref(C, `u1.${k}`, DB_KIND[k].def, names), pref(C, `u2.${k}`, DB_KIND[k].def, names)];
+  }
+  const kind = () => DB_KIND[state.kind];
+  const unit = (i) => state.units[state.kind][i];
+  const isDb = (u) => kind().units[u] === "db";
+  const shown = (si, u) => (isDb(u) ? kind().k * Math.log10(si) : si / kind().units[u]);
+  const toSi = (v, u) => (isDb(u) ? Math.pow(10, v / kind().k) : v * kind().units[u]);
+  const fmt = (v) => (isFinite(v) ? +v.toPrecision(6) : "");
+  const signed = (v, d = 4) => `${v < 0 ? "−" : v > 0 ? "+" : ""}${Number(Math.abs(v).toPrecision(d))}`;
 
-  function kFor() {
-    return DB_KIND[state.kind].k;
+  const ok = () => state.s1 > 0 && state.s2 > 0 && isFinite(state.s1) && isFinite(state.s2);
+  const db = () => kind().k * Math.log10(state.s2 / state.s1);
+
+  // Both ratios, whichever the kind: the power ratio and the amplitude
+  // (voltage or current) ratio across the same impedance.
+  function resultHTML() {
+    if (!ok()) return `<div class="error-text" data-res="err">Both values must be greater than zero: a zero or negative ratio has no decibels.</div>`;
+    const r = state.s2 / state.s1;
+    const power = state.kind === "power" ? r : r * r;
+    const amp = state.kind === "power" ? Math.sqrt(r) : r;
+    const sym = kind().sym;
+    return `
+      <div class="result-field">
+        <div class="result-head"><span class="label">${sym}2 against ${sym}1</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+        <div class="result-value"><span class="num" data-res="db">${signed(db())} dB</span></div>
+        <div class="result-sub" data-res="ratios">power ×${Number(power.toPrecision(4))} · ${state.kind === "current" ? "current" : "voltage"} ×${Number(amp.toPrecision(4))}</div>
+      </div>`;
   }
 
-  // A field's own dB reading is just its linear value relative to 1 —
-  // there's no separate absolute reference in a *generic* ratio tool the
-  // way dBm has 1mW. That keeps switching a field's unit reversible: dB
-  // in, same linear value out, round-trip exact.
-  function toLinear(value, isDb) {
-    if (!isFinite(value)) return NaN;
-    return isDb ? Math.pow(10, value / kFor()) : value;
-  }
-
-  function fromLinear(value, isDb) {
-    if (!isFinite(value) || value <= 0) return NaN;
-    return isDb ? kFor() * Math.log10(value) : value;
-  }
-
-  function linearV1() { return toLinear(state.v1, state.v1IsDb); }
-  function linearV2() { return toLinear(state.v2, state.v2IsDb); }
-
-  function dbBetween() {
-    const l1 = linearV1(), l2 = linearV2();
-    if (!isFinite(l1) || !isFinite(l2) || l1 <= 0 || l2 <= 0) return NaN;
-    return kFor() * Math.log10(l2 / l1);
-  }
-
-  function refTable() {
-    const k = kFor();
-    return DB_REFERENCE.map((db) => ({ db, ratio: Math.pow(10, db / k) }));
+  function refTableHTML() {
+    // The headers are set in capitals by the stylesheet; dB must keep its d.
+    return `<div class="tt-row tt-head">${["dB", "power ×", "voltage ×"].map((h) => `<span style="text-transform:none">${h}</span>`).join("")}</div>` +
+      DB_REFERENCE.map((d) => `<div class="tt-row"><span>${signed(d)}</span><span class="tt-out">×${Number(Math.pow(10, d / 10).toPrecision(4))}</span><span class="tt-out">×${Number(Math.pow(10, d / 20).toPrecision(4))}</span></div>`).join("");
   }
 
   function refresh(source) {
-    const l1 = linearV1(), l2 = linearV2();
-    const db = dbBetween();
-    const v1Field = app.querySelector("#db-v1");
-    const v2Field = app.querySelector("#db-v2");
-    const dbField = app.querySelector("#db-db");
-    if (source !== "v1" && document.activeElement !== v1Field) v1Field.value = isFinite(state.v1) ? trim(state.v1) : "";
-    if (source !== "v2" && document.activeElement !== v2Field) v2Field.value = isFinite(state.v2) ? trim(state.v2) : "";
-    if (source !== "db" && document.activeElement !== dbField) dbField.value = isFinite(db) ? trim(db) : "";
-    app.querySelector('[data-res="ratio"]').textContent = isFinite(l2 / l1) ? `×${trim(l2 / l1)}` : "—";
-    app.querySelector('[data-res="db"]').textContent = isFinite(db) ? `${trim(db)} dB` : "—";
-    app.querySelector('[data-res="err"]').textContent = l1 > 0 && l2 > 0 ? "" : "Both values must resolve to something greater than zero — dB of a zero or negative ratio isn't defined.";
-    app.querySelector('[data-res="reftable"]').innerHTML = refTable()
-      .map((r) => `<div class="tt-row"><span>${r.db > 0 ? "+" : ""}${r.db} dB</span><span class="tt-out">×${trim(r.ratio)}</span></div>`)
-      .join("");
+    const set = (id, v) => { const el = document.getElementById(id); if (el && el.id !== source && document.activeElement !== el) el.value = v; };
+    set("db-v1", fmt(shown(state.s1, unit(0))));
+    set("db-v2", fmt(shown(state.s2, unit(1))));
+    set("db-db", ok() ? fmt(db()) : "");
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
   }
 
-  function unitSelect(id, isDb) {
-    const nativeUnit = DB_KIND[state.kind].unit;
-    return `<select id="${id}">${[nativeUnit, "dB"].map((u) => `<option ${(u === "dB") === isDb ? "selected" : ""}>${u}</option>`).join("")}</select>`;
-  }
+  const unitSelect = (id, u) => `<select id="${id}">${Object.keys(kind().units).map((n) => `<option ${n === u ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+
+  const example = (k, s1, s2, u) => () => { state.kind = k; state.s1 = s1; state.s2 = s2; if (u) state.units[k] = u; paint(); };
+  useExamples([
+    { title: "Twice the power", note: "+3.01 dB, not exactly 3: a 3 dB step is ×1.995 in power.", apply: example("power", 1, 2, ["W", "W"]) },
+    { title: "10 mV in, 1 V out", note: "An amplifier with a voltage gain of 100: +40 dB.", apply: example("voltage", 0.01, 1, ["mV", "V"]) },
+    { title: "Half the voltage", note: "−6.021 dB, and a quarter of the power into the same load.", apply: example("voltage", 5, 2.5, ["V", "V"]) },
+    { title: "100 W in, 79 W out", note: "A cable losing 21 % of the power: −1.024 dB.", apply: example("power", 100, 79, ["W", "W"]) },
+    { title: "A 20 dB attenuator on 1 V", note: "×0.1 in voltage: 100 mV comes out.", apply: example("voltage", 1, 0.1, ["V", "mV"]) },
+  ]);
 
   function paint() {
-    const sym = DB_KIND[state.kind].sym;
+    const sym = kind().sym;
     app.innerHTML = `
-      ${calcHeader(tool, favId, `dB = ${kFor()} · log₁₀(${sym}2 / ${sym}1)`)}
+      ${calcHeader(tool, favId, `dB = ${kind().k} · log₁₀(${sym}2 / ${sym}1)`)}
 
-      ${pillRow(Object.keys(DB_KIND).map((k) => [k, DB_KIND[k].label]), state.kind, domain.bg)}
+      ${pillRow(kinds.map((k) => [k, DB_KIND[k].label]), state.kind, domain.bg)}
 
-      <div class="field">
-        <label>Reference value (${sym}1)</label>
-        <div class="field-row">
-          <input id="db-v1" type="number" inputmode="decimal" step="any" value="${isFinite(state.v1) ? trim(state.v1) : ""}" />
-          ${unitSelect("db-v1-unit", state.v1IsDb)}
+      <div class="field-pair">
+        <div class="field">
+          <label>Reference (${sym}1)</label>
+          <div class="field-row"><input id="db-v1" type="number" inputmode="decimal" step="any" value="${fmt(shown(state.s1, unit(0)))}" />${unitSelect("db-v1-unit", unit(0))}</div>
+        </div>
+        <div class="field">
+          <label>Compared (${sym}2)</label>
+          <div class="field-row"><input id="db-v2" type="number" inputmode="decimal" step="any" value="${fmt(shown(state.s2, unit(1)))}" />${unitSelect("db-v2-unit", unit(1))}</div>
         </div>
       </div>
       <div class="field">
-        <label>Second value (${sym}2)</label>
-        <div class="field-row">
-          <input id="db-v2" type="number" inputmode="decimal" step="any" value="${isFinite(state.v2) ? trim(state.v2) : ""}" />
-          ${unitSelect("db-v2-unit", state.v2IsDb)}
-        </div>
-      </div>
-      <div class="field">
-        <label>Difference (dB)</label>
-        <div class="field-row"><input id="db-db" type="number" inputmode="decimal" step="any" placeholder="edit to solve for ${sym}2" /></div>
-      </div>
-      <div class="error-text" data-res="err"></div>
-
-      <div class="section-label" style="color:#5DCAA5">Results</div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">Gain (${sym}2 / ${sym}1 ratio)</span></div>
-        <div class="result-value"><span class="num" data-res="ratio"></span></div>
-        <div class="result-sub" data-res="db"></div>
+        <label>Difference, ${sym}2 against ${sym}1 (type to solve for ${sym}2)</label>
+        <div class="field-row"><input id="db-db" type="number" inputmode="decimal" step="any" value="${ok() ? fmt(db()) : ""}" /><span class="unit-fixed">dB</span></div>
       </div>
 
-      <div class="section-label" style="color:#8FC1F5">Quick reference — Gain in dB and as a ratio</div>
-      <div class="truth-table" style="--tt-cols:2" data-res="reftable"></div>
-      <div class="field">
-        <div class="color-row-note">"3 dB ≈ ×2" and "6 dB ≈ ×4" are popular roundings, not exact — 10·log₁₀(2) is 3.0103 dB, so exactly 3.00 dB is really ×1.995. Close enough for almost everything, but not the same number.</div>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Decibels as power and voltage ratios</div>
+      <div class="truth-table" style="--tt-cols:3" data-res="reftable">${refTableHTML()}</div>
 
       ${formulaSection(
-        [`dB = ${kFor()} · log₁₀(${sym}2 / ${sym}1)`, `${sym}2 = ${sym}1 · 10^(dB / ${kFor()})`],
-        "Power uses 10·log₁₀ because power is already a squared (energy-like) quantity; voltage and current use 20·log₁₀ because doubling either one quadruples the power it delivers into a fixed load — the extra factor of 2 keeps a given dB figure meaning the same power change either way you measured it. Mixing the two up is the single most common dB mistake. The 20·log₁₀ shortcut only equals the true power-ratio dB when V1/V2 (or I1/I2) are measured across the same impedance — across different impedances, doubling voltage doesn't quadruple power, so the figure quietly stops meaning a power ratio. A field's own \"dB\" unit reads it relative to 1 (no separate absolute reference here) — that's what makes Gain in dB just the difference of two such readings."
+        ["power: dB = 10 · log₁₀(P2 / P1)", "voltage, current: dB = 20 · log₁₀(V2 / V1)", `${sym}2 = ${sym}1 × 10^(dB / ${kind().k})`],
+        "A decibel compares two values of one quantity: + is a gain, − a loss. Power uses 10 log; voltage and current use 20 log, because power goes as their square, so ×2 in voltage is ×4 in power and both are +6.02 dB. That holds across the same impedance only. \"3 dB is ×2\" is a rounding: ×2 is 3.010 dB. dBW, dBV are a value against 1 W or 1 V; dBm and the rest are in the dB / dBm tool."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => {
-      const l1 = linearV1(), l2 = linearV2();
-      state.kind = v;
-      state.v1 = fromLinear(l1, state.v1IsDb);
-      state.v2 = fromLinear(l2, state.v2IsDb);
-      paint();
+    wireCalc(favId, paint, (k) => { state.kind = k; setPref(C, "kind", k); paint(); });
+
+    const read = (id) => parseFloat(document.getElementById(id).value);
+    document.getElementById("db-v1").oninput = () => { state.s1 = toSi(read("db-v1"), unit(0)); refresh("db-v1"); };
+    document.getElementById("db-v2").oninput = () => { state.s2 = toSi(read("db-v2"), unit(1)); refresh("db-v2"); };
+    document.getElementById("db-db").oninput = () => {
+      const d = read("db-db");
+      if (isFinite(d) && state.s1 > 0) { state.s2 = state.s1 * Math.pow(10, d / kind().k); refresh("db-db"); }
+    };
+    // A unit change re-expresses the same value; nothing is recomputed.
+    [["db-v1-unit", 0], ["db-v2-unit", 1]].forEach(([id, i]) => {
+      document.getElementById(id).onchange = (e) => {
+        state.units[state.kind][i] = e.target.value;
+        setPref(C, `u${i + 1}.${state.kind}`, e.target.value);
+        refresh();
+      };
     });
-
-    const v1Field = document.getElementById("db-v1");
-    const v2Field = document.getElementById("db-v2");
-    const dbField = document.getElementById("db-db");
-    v1Field.oninput = () => { const v = parseFloat(v1Field.value); if (isFinite(v)) { state.v1 = v; refresh("v1"); } };
-    v2Field.oninput = () => { const v = parseFloat(v2Field.value); if (isFinite(v)) { state.v2 = v; refresh("v2"); } };
-    dbField.oninput = () => {
-      const db = parseFloat(dbField.value);
-      const l1 = linearV1();
-      if (isFinite(db) && isFinite(l1) && l1 > 0) {
-        state.v2 = fromLinear(l1 * Math.pow(10, db / kFor()), state.v2IsDb);
-        refresh("db");
-      }
-    };
-    document.getElementById("db-v1-unit").onchange = (e) => {
-      const l1 = linearV1();
-      state.v1IsDb = e.target.value === "dB";
-      state.v1 = fromLinear(l1, state.v1IsDb);
-      refresh();
-    };
-    document.getElementById("db-v2-unit").onchange = (e) => {
-      const l2 = linearV2();
-      state.v2IsDb = e.target.value === "dB";
-      state.v2 = fromLinear(l2, state.v2IsDb);
-      refresh();
-    };
-
-    refresh();
   }
 
   paint();
