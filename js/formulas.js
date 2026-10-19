@@ -93,10 +93,16 @@ const FORMULAS = [
     note: "Γ is the reflection coefficient, 0 (perfect match) to 1 (total reflection).",
   },
   {
-    tool: "dB / dBm / dBu / dBV conversion",
-    domain: "rf",
-    formulas: ["dBm = 10 log10(P / 1 mW)", "dB (power ratio) = 10 log10(P1/P2)", "dB (voltage ratio) = 20 log10(V1/V2)"],
-    note: "Power ratios use a factor of 10, voltage/amplitude ratios use 20 — the usual source of a wrong-by-2x answer.",
+    tool: "dB ratio",
+    domain: "tools",
+    formulas: ["dB = 10 log10(P2 / P1)", "dB = 20 log10(V2 / V1)"],
+    note: "Power ratios use 10, voltage and current ratios 20: the usual source of a wrong-by-2x answer.",
+  },
+  {
+    tool: "dB levels",
+    domain: "tools",
+    formulas: ["dBm = 10 log10(P / 1 mW)", "dBV = 20 log10(V / 1 V)", "dBu = 20 log10(V / 0.7746 V)"],
+    note: "A level is against a fixed reference. Voltages are rms; 0 dBm is 0 dBu only across 600 Ω.",
   },
   {
     tool: "Antenna length (dipole/monopole)",

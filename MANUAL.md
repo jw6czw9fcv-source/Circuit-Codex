@@ -113,6 +113,7 @@ will key on, since that is the id the app already holds for each tool.
 - Calculators → [SI prefix converter](#si-prefix)
 - Calculators → [Tolerance & error](#percent-tolerance)
 - Calculators → [dB ratio](#db-ratio)
+- Calculators → [dB levels](#db-absolute)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8473,6 +8474,110 @@ The review made these changes:
 - **Ratios:** the output shows both the power and the voltage or current
   ratio, and so does the table.
 - **Text:** signs are explicit, and dB keeps its lower-case d.
+- **The rest:** remembered choices, examples, the first cases and this
+  section.
+
+[↑ Index](#index)
+
+---
+
+<a id="db-absolute"></a>
+## dB levels
+
+`calc: db-absolute` · Tools › Calculators
+(formerly dB / dBm / dBu / dBV conversion)
+
+### What it computes
+
+A signal's level in decibels against a fixed reference, both ways, in six
+units, by pill:
+
+| Pill | Kind | Against |
+|---|---|---|
+| dBm | power | 1 mW |
+| dBW | power | 1 W |
+| dBV | voltage | 1 V rms |
+| dBu | voltage | 0.7746 V rms |
+| dBmV | voltage | 1 mV rms (cable TV) |
+| dBµV | voltage | 1 µV rms (RF, EMC) |
+
+- **Inputs:** a value (power µW to kW, or voltage µV to V as rms, peak or
+  peak-to-peak) or a level typed in dB.
+- **The impedance** links power and voltage. It is typed, or picked from
+  8 Ω speaker, 50 Ω RF, 75 Ω video and TV, and 600 Ω telecom.
+- **Output:** the level large, the signal as watts and volts rms, and the
+  same signal in the five other units and as Vrms, Vp and Vpp.
+- **Switching** from a power level to a voltage level keeps the same
+  signal, and a new impedance keeps the level being looked at.
+- **Remembered:** the level, units, reading and impedance preset.
+
+Examples: 0 dBm into 50 Ω, pro +4 dBu and consumer −10 dBV line levels,
+Wi-Fi at 20 dBm, a scope's 2 Vpp, and 0 dBmV on 75 Ω cable TV.
+
+### Source
+
+**ITU-R V.574-5 (08/2015), Use of the decibel and the neper in
+telecommunications** (itu.int, free), read in review:
+
+- **§4.2:** an absolute level is written dB followed by its reference in
+  parentheses, dB(mW), with "simplified symbols, such as dBm instead of
+  dB(mW)" in common use.
+- **§6.1:** dBW is "decibels relative to one watt" and dBm "decibels
+  relative to one milliwatt".
+- **§6.5 Absolute voltage level:** the nature of the voltage, e.g. r.m.s.
+  value, "should be specified in every case". A reference voltage of
+  0.775 V r.m.s. "is generally adopted which corresponds to a 1 milliwatt
+  power dissipated in a resistance of 600 ohms … The absolute voltage level
+  is then expressed in dBu."
+
+dBV, dBmV and dBµV are the same voltage rule against 1 V, 1 mV and 1 µV.
+dBu's reference is held as √0.6 V, 0.774597 V, the exact 1 mW in 600 Ω.
+
+### Why the formulas are these
+
+    power levels:   L = 10 · log₁₀(P / Pref)    dBm: 1 mW, dBW: 1 W
+    voltage levels: L = 20 · log₁₀(V / Vref)    V in rms
+    P = V² / R      sine: Vp = √2 · Vrms,  Vpp = 2√2 · Vrms
+
+A voltage level uses 20 log because power goes as voltage squared. Moving
+between a power level and a voltage level needs the impedance, by
+P = V²/R. That is why 0 dBm is 0 dBu only across 600 Ω: across 50 Ω, 1 mW
+is 223.6 mV rms, −10.8 dBu.
+
+### Assumptions and limits
+
+- **Peak and peak-to-peak readings** are converted as for a sine. For
+  another waveform, measure true rms.
+- **The impedance** only matters for crossing between power and voltage.
+  dBu and dBV themselves are voltages, whatever the load.
+- **Reference levels** (dBr, dBm0, and dB(A) for weighted sound) are not
+  here.
+
+### How it was checked
+
+11 cases:
+- 1 mW is 0 dBm, 0 dBu and −30 dBW across 600 Ω;
+- 0 dBm into 50 Ω is 223.6 mV rms and +107 dBµV;
+- +4 dBu is 1.228 V;
+- a 2 Vpp sine is −3.01 dBV;
+- 0 dBmV at 75 Ω is −48.75 dBm;
+- switching to dBV keeps the signal (−2.218 dBV);
+- a unit change keeps the value;
+- a new impedance keeps the level;
+- 30 dBm solves to 1 W;
+- zero is refused;
+- the remembered level and impedance.
+
+The review made these changes:
+- **Renamed dB levels** (Pierre's choice). The old name wrapped.
+- **Units:** changing one kept the number and changed its meaning (1 mW
+  became 1 µW). Values are now held as the signal itself.
+- **New levels:** dBW and dBmV, and impedance presets.
+- **Switching kinds** keeps the same signal.
+- **The other units** are now in one block, with the signal's rms, peak
+  and peak-to-peak voltage.
+- **The formula card** in Formula search was split into dB ratio and dB
+  levels.
 - **The rest:** remembered choices, examples, the first cases and this
   section.
 
