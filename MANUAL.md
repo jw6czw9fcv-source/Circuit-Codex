@@ -111,6 +111,7 @@ will key on, since that is the id the app already holds for each tool.
 - Calculators → [Ohm's law](#ohms-law)
 - Calculators → [Kirchhoff's laws](#kirchhoff)
 - Calculators → [SI prefix converter](#si-prefix)
+- Calculators → [Tolerance & error](#percent-tolerance)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8305,5 +8306,91 @@ The review made these changes:
 - **Examples, the first cases and this section.**
 
 [↑ Index](#index)
+
+[↑ Index](#index)
+
+---
+
+<a id="percent-tolerance"></a>
+## Tolerance & error
+
+`calc: percent-tolerance` · Tools › Calculators
+(formerly Percent tolerance / error)
+
+### What it computes
+
+Three related questions, one per pill (the choice is remembered):
+
+- **Tolerance:** the range a part can land in, from its nominal value and
+  its tolerance below (−) and above (+). A code picker fills both from the
+  IEC 60062 letters: J for ±5 %, Z for −20 / +80 %. A lopsided tolerance
+  with no letter can be typed. The output gives the range, the distance of
+  each end from nominal, and the span.
+- **Error:** how far a reading is from a value taken as true, signed (+
+  reads high, − reads low), in % and in ppm.
+- **Difference:** how far apart two readings are when neither is the truth,
+  as between two meters, taken against their mean.
+
+Examples: 4.7 kΩ at ±5 % (J), 100 nF Y5V with code Z, a 5 V rail reading
+4.93 V, a 1 % resistor measuring 99.2 Ω, and two meters reading 3.30 and
+3.27 V.
+
+### Source
+
+The tolerance letters are IEC 60062 clause 5, as the Ceramic capacitor code
+section reads them (checked in GOST IEC 60062-2014, the identical text of
+the 2004 edition):
+
+- **Table 6:** B ±0.1, C ±0.25, D ±0.5, F ±1, G ±2, J ±5, K ±10 and
+  M ±20 %.
+- **Table 7, the asymmetrical tolerances:** Q −10/+30, T −10/+50,
+  S −20/+50 and Z −20/+80 %.
+
+Below 10 pF, a capacitor's B to G are absolute picofarads. That is the
+Ceramic capacitor code's business, not this screen's.
+
+### Why the formulas are these
+
+    min = nominal × (1 − below / 100)     max = nominal × (1 + above / 100)
+    error = (measured − expected) / expected × 100 %      1 % = 10 000 ppm
+    difference = |A − B| / ((A + B) / 2) × 100 %
+
+A tolerance is a share of the nominal value, in each direction. An error is
+a share of the true value, so its sign says which way the reading is off.
+With no true value, the difference is taken against the mean, so it comes
+out the same whichever reading is A.
+
+### Assumptions and limits
+
+- **A tolerance is the maker's worst case** at its stated conditions, not a
+  typical spread. Temperature and ageing come on top.
+- **An error is only as good as the "true" value.** It includes the meter's
+  own error.
+- **No units:** the values are numbers in whatever unit you use, the same
+  for each.
+
+### How it was checked
+
+10 cases:
+- 4700 at ±5 % gives 4465 – 4935, recognised as J;
+- code Z sets −20 and +80;
+- a lopsided −3 / +7 % has no letter;
+- 4.93 V against 5 V is −1.4 %, −14000 ppm;
+- a high reading is signed +;
+- 3.30 and 3.27 V are 0.9132 % apart either way round;
+- an expected value of zero is refused;
+- a blank field;
+- the remembered mode.
+
+The review made these changes:
+- **Renamed Tolerance & error** (Pierre's choice). With the examples' bulb,
+  the old name wrapped.
+- **New:** asymmetric tolerances, the letter-code picker, the Difference
+  mode, and ppm with high or low.
+- **Blank fields:** a blank or zero field had left a stale result. The
+  output now says what is wrong.
+- **Signs:** a true minus sign and an explicit plus.
+- **The rest:** the remembered mode, examples, the first cases and this
+  section.
 
 [↑ Index](#index)

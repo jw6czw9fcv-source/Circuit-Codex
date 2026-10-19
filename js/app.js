@@ -3998,123 +3998,172 @@ function fmtMantissa(m) {
 }
 
 // ---------- Percent tolerance / error ----------
-// Two related but distinct questions share this screen: "what range can a
-// toleranced part actually land in" (no measurement involved, just a spec)
-// vs. "how far off was this measurement" (a real reading compared to a known
-// true value). Same shape of arithmetic, different meaning, so a mode toggle
-// rather than one generic screen keeps the labels honest about which is which.
+// Three related but distinct questions share this screen:
+//  - Tolerance: what range a part can land in, from its nominal value and
+//    its tolerance (a spec, no measurement), symmetric or not.
+//  - Error: how far a reading is from a value taken as true.
+//  - Difference: how far apart two readings are when neither is the truth
+//    (two meters), taken against their mean.
+// Same shape of arithmetic, different meaning, so a pill for each keeps the
+// labels honest about which is which.
 function fmtPlain(n) {
   if (!isFinite(n)) return "—";
   return Number(n.toPrecision(6)).toString();
 }
 
+// The tolerance letters of IEC 60062 clause 5 (tables 6 and 7, as the ceramic
+// code reads them): symmetric B to M, and the asymmetric Q, T, S and Z.
+const PCT_TOL_CODES = [
+  ["B", 0.1, 0.1], ["C", 0.25, 0.25], ["D", 0.5, 0.5], ["F", 1, 1], ["G", 2, 2], ["J", 5, 5],
+  ["K", 10, 10], ["M", 20, 20], ["Q", 10, 30], ["T", 10, 50], ["S", 20, 50], ["Z", 20, 80],
+];
+
 function renderPercentTolerance(domain, tool, favId) {
-  const state = { mode: "tol", nominal: 100, tol: 5, measured: 98, expected: 100 };
+  const C = "percent-tolerance";
+  const state = {
+    mode: pref(C, "mode", "tol", ["tol", "err", "diff"]),
+    nominal: 4700, minus: 5, plus: 5, measured: 4.93, expected: 5, a: 3.3, b: 3.27,
+  };
 
-  function computeTol() {
-    const delta = state.nominal * (state.tol / 100);
-    return { min: state.nominal - delta, max: state.nominal + delta, delta };
+  const code = () => {
+    const hit = PCT_TOL_CODES.find(([, m, p]) => m === state.minus && p === state.plus);
+    return hit ? hit[0] : "";
+  };
+  // A true minus (U+2212) and an explicit plus, as on the other screens.
+  const signed = (n, digits = 6) => (n === 0 ? "0" : `${n < 0 ? "−" : "+"}${Number(Math.abs(n).toPrecision(digits))}`);
+  const tolText = (m, p) => (m === p ? `±${fmtPlain(m)} %` : `−${fmtPlain(m)} / +${fmtPlain(p)} %`);
+
+  function problem() {
+    const need = state.mode === "tol" ? ["nominal", "minus", "plus"] : state.mode === "err" ? ["measured", "expected"] : ["a", "b"];
+    if (need.some((k) => !isFinite(state[k]))) return "Every field needs a value.";
+    if (state.mode === "tol" && (state.minus < 0 || state.plus < 0)) return "Write both tolerances as positive numbers: − is how far below, + how far above.";
+    if (state.mode === "err" && state.expected === 0) return "The expected value can't be zero: the error is a share of it.";
+    if (state.mode === "diff" && state.a + state.b === 0) return "The two readings average to zero, so there is nothing to take a share of.";
+    return "";
   }
 
-  function computeErr() {
-    const diff = state.measured - state.expected;
-    const pct = state.expected !== 0 ? (diff / state.expected) * 100 : NaN;
-    return { diff, pct };
-  }
-
-  function refresh() {
+  function resultsHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    let label, big, sub;
     if (state.mode === "tol") {
-      const r = computeTol();
-      app.querySelector('[data-res="range"]').textContent = `${fmtPlain(r.min)} – ${fmtPlain(r.max)}`;
-      app.querySelector('[data-res="delta"]').textContent = `± ${fmtPlain(r.delta)}`;
+      const lo = state.nominal * (1 - state.minus / 100), hi = state.nominal * (1 + state.plus / 100);
+      label = `Range at ${tolText(state.minus, state.plus)}${code() ? `, code ${code()}` : ""}`;
+      big = `${fmtPlain(lo)} – ${fmtPlain(hi)}`;
+      sub = `${signed(lo - state.nominal)} / ${signed(hi - state.nominal)} from ${fmtPlain(state.nominal)} · span ${fmtPlain(hi - lo)}`;
+    } else if (state.mode === "err") {
+      const d = state.measured - state.expected, pct = (d / state.expected) * 100;
+      label = "Percent error";
+      big = `${signed(pct, 4)} %`;
+      sub = `Δ ${signed(d)} · ${signed(pct * 1e4, 4)} ppm · ${d > 0 ? "reads high" : d < 0 ? "reads low" : "exact"}`;
     } else {
-      const r = computeErr();
-      app.querySelector('[data-res="pct"]').textContent = isFinite(r.pct) ? `${fmtPlain(r.pct)} %` : "—";
-      app.querySelector('[data-res="diff"]').textContent = `Δ ${fmtPlain(r.diff)}`;
+      const d = Math.abs(state.a - state.b), mean = (state.a + state.b) / 2;
+      label = "Percent difference";
+      big = `${Number(((d / Math.abs(mean)) * 100).toPrecision(4))} %`;
+      sub = `Δ ${fmtPlain(d)} against their mean, ${fmtPlain(mean)}: neither is taken as true`;
     }
+    return `
+      <div class="result-field">
+        <div class="result-head"><span class="label" data-res="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+        <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+        <div class="result-sub" data-res="sub">${sub}</div>
+      </div>`;
   }
+
+  const num = (id, label, value, unit = "") => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row">
+            <input id="${id}" type="number" inputmode="decimal" step="any" value="${value}" />
+            ${unit ? `<span class="unit-fixed">${unit}</span>` : ""}
+          </div>
+        </div>`;
 
   function fieldsHTML() {
     if (state.mode === "tol") {
       return `
-        <div class="section-label" style="color:#8FC1F5">Nominal value & tolerance</div>
-        <div class="field">
-          <label>Nominal value</label>
-          <input id="pt-nominal" type="number" inputmode="decimal" step="any" value="${state.nominal}" />
+        <div class="field-pair">
+          ${num("pt-nominal", "Nominal value", state.nominal)}
+          <div class="field">
+            <label>Code</label>
+            <select id="pt-code">
+              <option value="" ${code() ? "" : "selected"}>none</option>
+              ${PCT_TOL_CODES.map(([c, m, p]) => `<option value="${c}" ${code() === c ? "selected" : ""}>${c}: ${tolText(m, p)}</option>`).join("")}
+            </select>
+          </div>
         </div>
-        <div class="field">
-          <label>Tolerance (%)</label>
-          <input id="pt-tol" type="number" inputmode="decimal" step="any" value="${state.tol}" />
+        <div class="field-pair">
+          ${num("pt-minus", "Below (−)", state.minus, "%")}
+          ${num("pt-plus", "Above (+)", state.plus, "%")}
         </div>`;
     }
-    return `
-      <div class="section-label" style="color:#8FC1F5">Measured vs expected</div>
-      <div class="field">
-        <label>Measured value</label>
-        <input id="pt-measured" type="number" inputmode="decimal" step="any" value="${state.measured}" />
-      </div>
-      <div class="field">
-        <label>Expected (true) value</label>
-        <input id="pt-expected" type="number" inputmode="decimal" step="any" value="${state.expected}" />
-      </div>`;
+    if (state.mode === "err") {
+      return `<div class="field-pair">${num("pt-measured", "Measured", state.measured)}${num("pt-expected", "Expected (true)", state.expected)}</div>`;
+    }
+    return `<div class="field-pair">${num("pt-a", "Reading A", state.a)}${num("pt-b", "Reading B", state.b)}</div>`;
   }
 
-  function resultsHTML() {
-    if (state.mode === "tol") {
-      const r = computeTol();
-      return `
-        <div class="section-label" style="color:#5DCAA5">Range</div>
-        <div class="result-field">
-          <div class="result-head">
-            <span class="label">min – max</span>
-            <span class="badge-calc">${ICONS.bolt2}Calculated</span>
-          </div>
-          <div class="result-value"><span class="num" data-res="range">${fmtPlain(r.min)} – ${fmtPlain(r.max)}</span></div>
-          <div class="result-sub" data-res="delta">± ${fmtPlain(r.delta)}</div>
-        </div>`;
-    }
-    const r = computeErr();
-    return `
-      <div class="section-label" style="color:#5DCAA5">Percent error</div>
-      <div class="result-field">
-        <div class="result-head">
-          <span class="label">(measured − expected) / expected</span>
-          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
-        </div>
-        <div class="result-value"><span class="num" data-res="pct">${isFinite(r.pct) ? `${fmtPlain(r.pct)} %` : "—"}</span></div>
-        <div class="result-sub" data-res="diff">Δ ${fmtPlain(r.diff)}</div>
-      </div>`;
+  function refresh() {
+    app.querySelector('[data-res="results"]').innerHTML = resultsHTML();
+    const sel = document.getElementById("pt-code");
+    if (sel) sel.value = code();
   }
+
+  const example = (values) => () => { Object.assign(state, values); paint(); };
+  useExamples([
+    { title: "4.7 kΩ, ±5 % (J)", note: "Anywhere from 4465 to 4935 Ω and still in spec.", apply: example({ mode: "tol", nominal: 4700, minus: 5, plus: 5 }) },
+    { title: "100 nF Y5V, code Z", note: "−20 / +80 %: from 80 to 180 nF, a decoupling part, not a timing one.", apply: example({ mode: "tol", nominal: 100, minus: 20, plus: 80 }) },
+    { title: "A 5 V rail reading 4.93 V", note: "−1.4 %: it reads 70 mV, or 14 000 ppm, low.", apply: example({ mode: "err", measured: 4.93, expected: 5 }) },
+    { title: "A 1 % resistor measuring 99.2 Ω", note: "−0.8 % from 100 Ω: inside its ±1 %, if the meter is better than that.", apply: example({ mode: "err", measured: 99.2, expected: 100 }) },
+    { title: "Two meters: 3.30 V and 3.27 V", note: "0.913 % apart; with no true value, the difference is taken against their mean.", apply: example({ mode: "diff", a: 3.3, b: 3.27 }) },
+  ]);
 
   function paint() {
+    const sub = { tol: "Range from a nominal value and its tolerance", err: "How far a reading is from the true value", diff: "How far apart two readings are" }[state.mode];
     app.innerHTML = `
-      ${calcHeader(tool, favId, state.mode === "tol" ? "Range from a nominal value ± tolerance" : "How far a reading is from expected")}
+      ${calcHeader(tool, favId, sub)}
 
-      ${pillRow([["tol", "Tolerance range"], ["err", "Percent error"]], state.mode, domain.bg)}
+      ${pillRow([["tol", "Tolerance"], ["err", "Error"], ["diff", "Difference"]], state.mode, domain.bg)}
 
+      <div class="section-label" style="color:#8FC1F5">Values</div>
       ${fieldsHTML()}
-      ${resultsHTML()}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="results">${resultsHTML()}</div>
 
       ${formulaSection(
+        state.mode === "tol" ? ["min = nominal × (1 − below / 100)", "max = nominal × (1 + above / 100)"]
+          : state.mode === "err" ? ["error = (measured − expected) / expected × 100 %", "1 % = 10 000 ppm"]
+          : ["difference = |A − B| / ((A + B) / 2) × 100 %"],
         state.mode === "tol"
-          ? ["min = nominal × (1 − tol/100)", "max = nominal × (1 + tol/100)"]
-          : ["% error = (measured − expected) / expected × 100"],
-        state.mode === "tol"
-          ? "A component's tolerance is the manufacturer's guaranteed worst case, not a typical spread — a 5% resistor can land anywhere in that band."
-          : "Percent error is signed: positive means the measurement read high, negative means it read low."
+          ? "A part's tolerance is the maker's guaranteed worst case, not a typical spread: a 5 % resistor can land anywhere in its band. Some are lopsided, like the −20 / +80 % of code Z. The letters are IEC 60062's: J is ±5 %, K ±10 %, M ±20 %."
+          : state.mode === "err"
+            ? "Percent error compares a reading with a value taken as true; it is signed: + means the reading is high, − low. ppm (parts per million) is the same thing for small errors: 1 % is 10 000 ppm."
+            : "With no true value, as between two meters, the percent difference takes their gap against their mean, so it comes out the same whichever is A."
       )}
       ${calcFooter("")}
     `;
 
-    wireCalc(favId, paint, (m) => { state.mode = m; paint(); });
+    wireCalc(favId, paint, (m) => { state.mode = m; setPref(C, "mode", m); paint(); });
 
-    if (state.mode === "tol") {
-      document.getElementById("pt-nominal").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.nominal = v; refresh(); } };
-      document.getElementById("pt-tol").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.tol = v; refresh(); } };
-    } else {
-      document.getElementById("pt-measured").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.measured = v; refresh(); } };
-      document.getElementById("pt-expected").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.expected = v; refresh(); } };
-    }
+    // A blank or half-typed field is NaN: the output says so instead of
+    // keeping a result that no longer matches what is on screen.
+    const bind = (id, key) => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = () => { state[key] = parseFloat(el.value); refresh(); };
+    };
+    bind("pt-nominal", "nominal"); bind("pt-minus", "minus"); bind("pt-plus", "plus");
+    bind("pt-measured", "measured"); bind("pt-expected", "expected");
+    bind("pt-a", "a"); bind("pt-b", "b");
+    const sel = document.getElementById("pt-code");
+    if (sel) sel.onchange = () => {
+      const hit = PCT_TOL_CODES.find(([c]) => c === sel.value);
+      if (!hit) return;
+      [, state.minus, state.plus] = hit;
+      document.getElementById("pt-minus").value = state.minus;
+      document.getElementById("pt-plus").value = state.plus;
+      refresh();
+    };
   }
 
   paint();
