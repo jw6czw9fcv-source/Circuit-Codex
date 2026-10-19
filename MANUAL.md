@@ -109,6 +109,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Calculators → [Calculator](#basic-calculator)
 - Calculators → [Ohm's law](#ohms-law)
+- Calculators → [Kirchhoff's laws](#kirchhoff)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8131,5 +8132,81 @@ The review made these changes:
 - **Remembering:** the pair, tolerance and units are remembered.
 - **Formula search** had no Ohm's law card; it has one now.
 - **Examples, the first cases and this section.**
+
+[↑ Index](#index)
+
+---
+
+<a id="kirchhoff"></a>
+## Kirchhoff's laws
+
+`calc: kirchhoff` · Tools › Calculators
+
+### What it computes
+
+The one missing term that balances a node or a loop. Enter two to five
+known terms, each with a sign and a unit, and the tool gives the term that
+brings the signed sum to zero, with what it means.
+
+- **KCL (current):** + is a current flowing into the node, − one flowing
+  out. The diagram draws each term as an arrow into or out of the node.
+- **KVL (voltage):** + is a rise, crossing a source from − to +, and − a
+  drop, across a resistor in the direction of the current. The diagram is
+  a real loop walked clockwise: each rise is a battery, met minus first;
+  each drop is a resistor. They read in walking order, along the top and
+  back along the bottom.
+
+Known terms are drawn in the input blue and the missing one dashed in the
+result green. Each term is held in A or V, and its unit picker only changes
+how it is shown. The law chosen is remembered.
+
+Examples: a node with three branches, a supply current split in mixed
+units, a 9 V battery with an LED and its resistor, two sources and two
+drops in one loop.
+
+### Why the formula is this
+
+    KCL:  ΣI = 0 at a node      (Σ in = Σ out)
+    KVL:  ΣV = 0 around a loop  (Σ rises = Σ drops)
+
+Charge can't build up at a node, so what flows in flows out. Walking a loop
+back to where it started returns to the same voltage, so the rises and the
+drops cancel. Either way the missing term is minus the sum of the others.
+
+### Assumptions and limits
+
+- **Lumped circuits:** the laws hold where wires are short against the
+  wavelength and no changing magnetic field threads the loop. At RF, or
+  around a transformer's core, a "loop voltage" is induced.
+- **Signs are yours:** the tool can't see the circuit, so a wrong sign on
+  one term gives a wrong answer with no warning.
+- **Two to five known terms**, plus the one solved for.
+
+### How it was checked
+
+10 cases:
+- 2 A in and 1.2 A out leave 800 mA flowing out;
+- the three-branch node gives 1.5 A out;
+- mixed units give 30.5 mA;
+- 9 V minus a 2 V LED leaves 7 V for the resistor;
+- two rises and two drops leave 4.7 V;
+- a unit change keeps the value;
+- a flipped sign;
+- a blank term;
+- balanced terms give zero;
+- the remembered law.
+
+The review made these changes:
+- **Units:** changing one kept the number and changed its meaning. Terms
+  are now held in SI.
+- **The KVL diagram** had been ticks on a bare rectangle. It is now a real
+  loop of batteries and resistors, with the walking direction.
+- **Colours:** the diagram had given each term its own colour, red among
+  them. Known terms are now blue and the missing one green, as on every
+  screen. Labels went from 10 px to 11 px.
+- **Text:** the detail line says when the known terms already balance, and
+  what a rise or drop is like.
+- **The rest:** the remembered law, examples, the first cases and this
+  section.
 
 [↑ Index](#index)

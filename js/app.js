@@ -3481,93 +3481,60 @@ function renderCapSeriesParallel(domain, tool, favId) {
 
 // ---------- Kirchhoff's laws ----------
 // Both laws are the same statement — a signed sum around a closed boundary
-// is zero — just applied to a node (KCL, current) or a loop (KVL, voltage).
-// One screen, one mechanism: enter every known signed term, and the missing
-// one is whatever balances the sum back to zero. No topology is assumed —
-// which terms are "into the node" or "a rise" is exactly what the sign on
-// each row means, decided by whoever is filling it in.
+// is zero — applied to a node (KCL, current) or a loop (KVL, voltage). Enter
+// every known signed term, and the missing one is whatever brings the sum
+// back to zero. Which terms are "into the node" or "a rise" is what the sign
+// on each row means, decided by whoever fills it in. Each term is held in SI
+// (A or V); its unit picker only changes how it is shown.
 const KL_MAX = 5;
 
 function renderKirchhoff(domain, tool, favId) {
-  const state = {
-    mode: "kcl",
-    rows: [
-      { value: 2, unit: "A", sign: 1 },
-      { value: 1.2, unit: "A", sign: -1 },
-    ],
-  };
+  const C = "kirchhoff";
+  const state = { mode: pref(C, "mode", "kcl", ["kcl", "kvl"]), rows: [] };
+  const units = () => (state.mode === "kcl" ? AMP_UNITS : VOLT_UNITS);
+  const letter = () => (state.mode === "kcl" ? "I" : "V");
 
-  function unitsFor() {
-    return state.mode === "kcl" ? AMP_UNITS : VOLT_UNITS;
+  function defaultRows() {
+    return state.mode === "kcl"
+      ? [{ si: 2, unit: "A", sign: 1 }, { si: 1.2, unit: "A", sign: -1 }]
+      : [{ si: 9, unit: "V", sign: 1 }, { si: 2, unit: "V", sign: -1 }];
   }
+  state.rows = defaultRows();
 
-  // Rows carry whichever unit was on screen when the mode last changed, so
-  // switching KCL/KVL needs to reset them to a sane default instead of
-  // reading amps as volts.
-  function resetRows() {
-    const unit = state.mode === "kcl" ? "A" : "V";
-    state.rows = [{ value: 2, unit, sign: 1 }, { value: 1.2, unit, sign: -1 }];
-  }
-
-  function signedValue(row) {
-    return row.sign * row.value * unitsFor()[row.unit];
-  }
-
-  function sumKnown() {
-    return state.rows.reduce((a, r) => a + (isFinite(signedValue(r)) ? signedValue(r) : 0), 0);
-  }
-
-  function unknown() {
-    return -sumKnown();
-  }
-
-  // The unknown continues the same I1/I2.../V1/V2... sequence as the known
-  // rows — shared between the diagram and the result label so they always
-  // agree on which term they're both pointing at.
-  function unknownLabel() {
-    return `${state.mode === "kcl" ? "I" : "V"}${state.rows.length + 1}`;
-  }
-
-  function problem() {
-    if (state.rows.some(r => !isFinite(r.value))) return "Every term needs a value.";
-    return "";
-  }
-
-  function resultValue() {
-    return formatSigned(unknown());
-  }
-
-  function formatSigned(v) {
-    const unit = state.mode === "kcl" ? "A" : "V";
-    return `${v < 0 ? "−" : "+"}${siFormat(Math.abs(v), unit, 4)}`;
-  }
+  const sumKnown = () => state.rows.reduce((a, r) => a + r.sign * r.si, 0);
+  const unknown = () => -sumKnown();
+  const unknownLabel = () => `${letter()}${state.rows.length + 1}`;
+  const problem = () => (state.rows.some((r) => !isFinite(r.si)) ? "Every term needs a value." : "");
+  const formatSigned = (v) => `${v < 0 ? "−" : "+"}${siFormat(Math.abs(v), state.mode === "kcl" ? "A" : "V", 4)}`;
 
   function detailLine() {
     if (problem()) return "";
+    const u = unknown();
+    if (u === 0) return "The known terms already balance: the missing one is zero.";
     const dir = state.mode === "kcl"
-      ? (unknown() >= 0 ? "flows into the node" : "flows out of the node")
-      : (unknown() >= 0 ? "is a rise" : "is a drop");
-    return `The missing term ${dir} to bring the sum to zero.`;
+      ? (u > 0 ? "flows into the node" : "flows out of the node")
+      : (u > 0 ? "is a rise, like a source" : "is a drop, like a resistor");
+    return `The missing term ${dir}, bringing the sum to zero.`;
   }
+
+  const shown = (r) => +(r.si / units()[r.unit]).toPrecision(6);
 
   function rowsHTML() {
     return state.rows.map((row, i) => `
       <div class="r-item">
         <div class="r-line">
-          <span class="r-index">${state.mode === "kcl" ? "I" : "V"}${i + 1}</span>
+          <span class="r-index">${letter()}${i + 1}</span>
           <button class="sign-btn" data-sign="${i}" style="color:${row.sign > 0 ? "#8FC1F5" : "#E08585"};border-color:${row.sign > 0 ? "#8FC1F5" : "#E08585"}55;" aria-label="${row.sign > 0 ? "Positive" : "Negative"} — tap to flip">${row.sign > 0 ? "+" : "−"}</button>
-          <input type="number" inputmode="decimal" step="any" data-row="${i}" value="${row.value}" />
-          <select data-unit="${i}">
-            ${Object.keys(unitsFor()).map(u => `<option ${row.unit === u ? "selected" : ""}>${u}</option>`).join("")}
+          <input type="number" inputmode="decimal" step="any" data-row="${i}" id="kl-v${i + 1}" value="${shown(row)}" />
+          <select data-unit="${i}" id="kl-u${i + 1}">
+            ${Object.keys(units()).map((u) => `<option ${row.unit === u ? "selected" : ""}>${u}</option>`).join("")}
           </select>
           <button class="r-drop" data-drop="${i}" aria-label="Remove term ${i + 1}" ${state.rows.length <= 2 ? "disabled" : ""}>×</button>
         </div>
       </div>`).join("");
   }
 
-  // Evenly spaced y-positions for n items between the canvas's top and
-  // bottom margins — shared by both diagrams so an extra row (up to KL_MAX)
-  // just adds another arrow or tick instead of needing a different layout.
+  // Evenly spaced positions for n items between two margins.
   function spread(n, lo, hi) {
     if (n <= 1) return [(lo + hi) / 2];
     const step = (hi - lo) / (n - 1);
@@ -3581,75 +3548,105 @@ function renderKirchhoff(domain, tool, favId) {
     return `M${x1} ${y1} L${x2} ${y2} M${x2} ${y2} L${ax.toFixed(1)} ${ay.toFixed(1)} M${x2} ${y2} L${bx.toFixed(1)} ${by.toFixed(1)}`;
   }
 
-  // KCL: every row draws its own arrow into or out of the centre node —
-  // sign decides which side, row index picks its Iⁿ label — so the diagram
-  // always matches exactly what's in the list below it, the way the
-  // reference screenshot's I1/I2 labels do. KVL: same idea around a loop,
-  // each row a tick with its Vⁿ label and sign-coloured to match its row.
-  // The missing term is drawn too, dashed and marked "?" on whichever side
-  // its computed sign puts it — leaving it out entirely (e.g. when every
-  // known row happens to be "in") drew a node with nothing balancing it,
-  // which looks like current can just vanish.
-  function diagram() {
-    const wire = "#5A6169";
-    // Result green, not gold — every other calculator marks a computed value
-    // this same colour, so the dashed line reads as "this one's calculated"
-    // consistently with the rest of the app instead of introducing a new
-    // meaning for gold. Reserved for the unknown alone: known rows each get
-    // their own colour from this palette (cycling by index) instead of only
-    // two colours split by side, so I2 and I3 are never just "both green"
-    // — position (which side of the node, or +/− on the loop) already says
-    // in/out or rise/drop; colour's job here is telling rows apart.
-    const resultColor = "#5DCAA5";
-    const palette = ["#8FC1F5", "#B98FE0", "#E08585", "#EF9F27", "#5BC4E0"];
-    const label = state.mode === "kcl" ? "I" : "V";
+  // The terms, known ones in the input blue and the missing one dashed in
+  // the result green, as on every screen; which side or which part they are
+  // already says in or out, rise or drop.
+  function items() {
     const u = unknown();
-    const items = state.rows.map((r, i) => ({ sign: r.sign, text: `${label}${i + 1}`, unk: false, color: palette[i % palette.length] }));
-    // No "out" naming — a real node can have more than one outgoing branch,
-    // so singling the unknown out as *the* output would be wrong. It's just
-    // the next term in the same sequence; the dashed styling is what marks
-    // it as calculated rather than entered, not its label.
-    items.push({ sign: u >= 0 ? 1 : -1, text: unknownLabel(), unk: true, color: resultColor });
-    const inItems = items.filter(x => x.sign > 0);
-    const outItems = items.filter(x => x.sign <= 0);
-    if (state.mode === "kcl") {
-      const inYs = spread(inItems.length, 14, 86);
-      const outYs = spread(outItems.length, 14, 86);
-      const inArrows = inItems.map((it, k) => `
-        <path d="${arrowPath(34, inYs[k], 104, 50 - (50 - inYs[k]) * 0.06)}" stroke="${it.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${it.unk ? 'stroke-dasharray="3,2.5"' : ""}/>
-        <text x="26" y="${inYs[k] + 4}" fill="${it.color}" font-size="11" font-weight="600" text-anchor="end">${it.text}</text>`);
-      const outArrows = outItems.map((it, k) => `
-        <path d="${arrowPath(116, 50 - (50 - outYs[k]) * 0.06, 186, outYs[k])}" stroke="${it.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${it.unk ? 'stroke-dasharray="3,2.5"' : ""}/>
-        <text x="194" y="${outYs[k] + 4}" fill="${it.color}" font-size="11" font-weight="600" text-anchor="start">${it.text}</text>`);
-      return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
-        <circle cx="110" cy="50" r="4" fill="${wire}"/>
-        ${inArrows.join("")}
-        ${outArrows.join("")}
-      </svg>`;
-    }
-    // No loop-direction arrow: it only ever collided with whichever tick sat
-    // near top-centre, and traversal direction isn't something this tool
-    // needs to assert — a KVL loop is walked whichever way makes the signs
-    // convenient, which is exactly what each row's own +/− already records.
-    const xs = spread(items.length, 46, 174);
-    const ticks = items.map((it, i) => {
-      const x = xs[i];
-      return `<path d="M${x} 16 V24" stroke="${it.color}" stroke-width="2.2" stroke-linecap="round" ${it.unk ? 'stroke-dasharray="2.5,2"' : ""}/>
-        <text x="${x}" y="11" fill="${it.color}" font-size="10" font-weight="600" text-anchor="middle">${it.text}</text>`;
-    }).join("");
+    const list = state.rows.map((r, i) => ({ sign: r.sign, text: `${letter()}${i + 1}`, unk: false }));
+    list.push({ sign: u >= 0 ? 1 : -1, text: unknownLabel(), unk: true });
+    return list;
+  }
+
+  // KCL: each term an arrow into or out of the node, by its sign.
+  function nodeSVG() {
+    const all = items();
+    const inItems = all.filter((x) => x.sign > 0);
+    const outItems = all.filter((x) => x.sign <= 0);
+    const col = (it) => (it.unk ? "#5DCAA5" : "#8FC1F5");
+    const dash = (it) => (it.unk ? 'stroke-dasharray="3,2.5"' : "");
+    const inYs = spread(inItems.length, 14, 86);
+    const outYs = spread(outItems.length, 14, 86);
     return `<svg width="220" height="100" viewBox="0 0 220 100" fill="none">
-      <path d="M50 20 H170 V80 H50 Z" stroke="${wire}" stroke-width="1.6" stroke-linejoin="round"/>
-      ${ticks}
-      <text x="35" y="24" fill="#8FC1F5" font-size="13" font-weight="700" text-anchor="middle">+</text>
-      <text x="35" y="84" fill="#E08585" font-size="13" font-weight="700" text-anchor="middle">−</text>
+      <circle cx="110" cy="50" r="4" fill="#5A6169"/>
+      ${inItems.map((it, k) => `
+        <path d="${arrowPath(34, inYs[k], 104, 50 - (50 - inYs[k]) * 0.06)}" stroke="${col(it)}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${dash(it)}/>
+        <text x="26" y="${inYs[k] + 4}" fill="${col(it)}" font-size="11" font-weight="600" text-anchor="end">${it.text}</text>`).join("")}
+      ${outItems.map((it, k) => `
+        <path d="${arrowPath(116, 50 - (50 - outYs[k]) * 0.06, 186, outYs[k])}" stroke="${col(it)}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${dash(it)}/>
+        <text x="194" y="${outYs[k] + 4}" fill="${col(it)}" font-size="11" font-weight="600" text-anchor="start">${it.text}</text>`).join("")}
     </svg>`;
   }
 
+  // KVL: a real loop, walked clockwise (the arrow in the middle). Each rise is
+  // drawn as a battery met minus-first, so it lifts the voltage along the way;
+  // each drop as a resistor. The terms go along the top left to right, then
+  // along the bottom right to left, so they read in walking order.
+  function loopSVG() {
+    const all = items();
+    const wire = "#5A6169";
+    const nTop = Math.ceil(all.length / 2);
+    const top = all.slice(0, nTop), bottom = all.slice(nTop);
+    const yT = 26, yB = 78, xL = 30, xR = 190;
+    const xsTop = spread(top.length, 62, 158);
+    const xsBot = spread(bottom.length, 158, 62);   // right to left
+    const parts = [];
+    const breaksT = [], breaksB = [];
+    function part(it, cx, y, dirRight, onTop) {
+      const col = it.unk ? "#5DCAA5" : "#8FC1F5";
+      const dash = it.unk ? 'stroke-dasharray="3,2"' : "";
+      const labelY = onTop ? y - 13 : y + 21;
+      let svg, half;
+      if (it.sign > 0) {
+        // Battery: the short (−) plate met first in the walking direction.
+        half = 4;
+        const xShort = dirRight ? cx - 3 : cx + 3, xLong = dirRight ? cx + 3 : cx - 3;
+        svg = `<path d="M${xLong} ${y - 9} V${y + 9}" stroke="${col}" stroke-width="2" ${dash}/>
+          <path d="M${xShort} ${y - 5} V${y + 5}" stroke="${col}" stroke-width="2.6" ${dash}/>`;
+      } else {
+        half = 14;
+        const pts = [-14, -11, -6, -1, 4, 9, 11, 14].map((dx, k) => `${cx + dx} ${k === 0 || k === 7 ? y : y + (k % 2 ? -6 : 6)}`);
+        svg = `<path d="M${pts.join(" L")}" stroke="${col}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" fill="none" ${dash}/>`;
+      }
+      (onTop ? breaksT : breaksB).push([cx - half, cx + half]);
+      parts.push(`${svg}<text x="${cx}" y="${labelY}" fill="${col}" font-size="11" font-weight="600" text-anchor="middle">${it.text}</text>`);
+    }
+    top.forEach((it, k) => part(it, xsTop[k], yT, true, true));
+    bottom.forEach((it, k) => part(it, xsBot[k], yB, false, false));
+    function edge(y, breaks) {
+      const b = breaks.slice().sort((p, q) => p[0] - q[0]);
+      let x = xL, d = "";
+      for (const [a, z] of b) { d += `M${x} ${y} H${a} `; x = z; }
+      return d + `M${x} ${y} H${xR}`;
+    }
+    return `<svg width="220" height="104" viewBox="0 0 220 104" fill="none">
+      <path d="${edge(yT, breaksT)} ${edge(yB, breaksB)} M${xL} ${yT} V${yB} M${xR} ${yT} V${yB}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M115 43.34 A10 10 0 1 1 105 43.34" stroke="${wire}" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M105 43.34 L102.4 47.6 M105 43.34 L100 43.46" stroke="${wire}" stroke-width="1.4" stroke-linecap="round"/>
+      ${parts.join("")}
+    </svg>`;
+  }
+
+  const diagram = () => (state.mode === "kcl" ? nodeSVG() : loopSVG());
+
   function updateResults() {
-    app.querySelector('[data-res="solved"]').textContent = problem() ? "—" : resultValue();
+    app.querySelector('[data-res="solved"]').textContent = problem() ? "—" : formatSigned(unknown());
     app.querySelector('[data-res="detail"]').textContent = detailLine();
     app.querySelector('[data-res="err"]').textContent = problem();
+    app.querySelector(".diagram-box").innerHTML = diagram();
   }
+
+  const example = (mode, rows) => () => {
+    state.mode = mode;
+    state.rows = rows.map(([v, unit, sign]) => ({ si: v * (mode === "kcl" ? AMP_UNITS : VOLT_UNITS)[unit], unit, sign }));
+    paint();
+  };
+  useExamples([
+    { title: "A node with three branches", note: "3 A arriving, 1 A and 0.5 A leaving: the third branch carries 1.5 A out.", apply: example("kcl", [[3, "A", 1], [1, "A", -1], [0.5, "A", -1]]) },
+    { title: "Supply current, mixed units", note: "120 mA in, 85 mA and 4500 µA out: 30.5 mA goes on to the rest.", apply: example("kcl", [[120, "mA", 1], [85, "mA", -1], [4500, "µA", -1]]) },
+    { title: "9 V battery, LED and resistor", note: "A red LED drops 2 V of the 9 V: the resistor must drop the other 7 V.", apply: example("kvl", [[9, "V", 1], [2, "V", -1]]) },
+    { title: "Two sources in series", note: "5 V and 3.3 V rise, 1.2 V and 2.4 V drop: 4.7 V is left across the load.", apply: example("kvl", [[5, "V", 1], [3.3, "V", 1], [1.2, "V", -1], [2.4, "V", -1]]) },
+  ]);
 
   function paint() {
     app.innerHTML = `
@@ -3674,40 +3671,37 @@ function renderKirchhoff(domain, tool, favId) {
           <span class="badge-calc">${ICONS.bolt2}Calculated</span>
         </div>
         <div class="result-value">
-          <span class="num" data-res="solved">${problem() ? "—" : resultValue()}</span>
+          <span class="num" data-res="solved">${problem() ? "—" : formatSigned(unknown())}</span>
         </div>
         <div class="result-sub" data-res="detail">${detailLine()}</div>
       </div>
 
       ${formulaSection(
+        state.mode === "kcl" ? ["ΣI = 0 at a node", "ΣI in = ΣI out"] : ["ΣV = 0 around a closed loop", "Σ rises = Σ drops"],
         state.mode === "kcl"
-          ? ["ΣIin = ΣIout", "or equivalently: ΣI = 0"]
-          : ["ΣV = 0 around any closed loop"],
-        state.mode === "kcl"
-          ? "Charge can't pile up at a node — whatever current arrives has to leave somewhere. + is a term flowing in, − a term flowing out."
-          : "Energy gained going around a loop and back to the start has to equal energy lost — the signed sum of every rise and drop is zero. + is a rise, − a drop."
+          ? "Kirchhoff's current law: charge can't pile up at a node, so whatever current arrives has to leave. Give + to a current flowing in and − to one flowing out; the missing term is what balances them."
+          : "Kirchhoff's voltage law: walking around any closed loop back to the start, the voltage gained equals the voltage lost. Give + to a rise (crossing a source from − to +) and − to a drop (across a resistor, the way the current flows)."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; resetRows(); paint(); });
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); state.rows = defaultRows(); paint(); });
 
-    app.querySelectorAll("input[data-row]").forEach(input => {
+    app.querySelectorAll("input[data-row]").forEach((input) => {
       input.oninput = () => {
-        state.rows[input.dataset.row].value = parseFloat(input.value);
+        const row = state.rows[input.dataset.row];
+        row.si = parseFloat(input.value) * units()[row.unit];
         updateResults();
       };
     });
-    app.querySelectorAll("select[data-unit]").forEach(select => {
-      select.onchange = () => { state.rows[select.dataset.unit].unit = select.value; updateResults(); };
+    // A unit change re-expresses the same term; nothing is recomputed.
+    app.querySelectorAll("select[data-unit]").forEach((select) => {
+      select.onchange = () => { state.rows[select.dataset.unit].unit = select.value; paint(); };
     });
-    app.querySelectorAll("[data-sign]").forEach(btn => {
-      btn.onclick = () => {
-        state.rows[btn.dataset.sign].sign *= -1;
-        paint();
-      };
+    app.querySelectorAll("[data-sign]").forEach((btn) => {
+      btn.onclick = () => { state.rows[btn.dataset.sign].sign *= -1; paint(); };
     });
-    app.querySelectorAll("[data-drop]").forEach(btn => {
+    app.querySelectorAll("[data-drop]").forEach((btn) => {
       btn.onclick = () => {
         if (state.rows.length <= 2) return;
         state.rows.splice(+btn.dataset.drop, 1);
@@ -3716,8 +3710,7 @@ function renderKirchhoff(domain, tool, favId) {
     });
     document.getElementById("kl-add").onclick = () => {
       if (state.rows.length >= KL_MAX) return;
-      const unit = state.mode === "kcl" ? "A" : "V";
-      state.rows.push({ value: 1, unit, sign: 1 });
+      state.rows.push({ si: 1, unit: state.mode === "kcl" ? "A" : "V", sign: 1 });
       paint();
     };
   }
