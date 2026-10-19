@@ -3798,76 +3798,154 @@ function renderFormulaSearch(domain, tool, favId) {
 }
 
 // ---------- SI prefix converter ----------
-// Every prefix is exactly ×1000 from its neighbor (p → n → µ → m → base → k →
-// M → G → T), so one entered value converts to all of them by dividing the
-// same base quantity by each prefix's own scale — no per-pair formula needed.
+// The 24 SI prefixes of the BIPM SI Brochure (9th edition, table 7, with
+// ronna, ronto, quetta and quecto added by the 27th CGPM in 2022). Every
+// prefix scales the same base quantity, so one entered value converts to
+// all of them by dividing by each prefix's factor. Engineering use keeps to
+// the steps of 1000, femto to tera; the rest are one tap away.
 const SI_PREFIXES = [
-  ["T", "tera", 1e12], ["G", "giga", 1e9], ["M", "mega", 1e6], ["k", "kilo", 1e3],
-  ["", "base", 1], ["m", "milli", 1e-3], ["µ", "micro", 1e-6], ["n", "nano", 1e-9], ["p", "pico", 1e-12],
+  ["Q", "quetta", 30], ["R", "ronna", 27], ["Y", "yotta", 24], ["Z", "zetta", 21], ["E", "exa", 18],
+  ["P", "peta", 15], ["T", "tera", 12], ["G", "giga", 9], ["M", "mega", 6], ["k", "kilo", 3],
+  ["h", "hecto", 2], ["da", "deca", 1], ["", "none", 0], ["d", "deci", -1], ["c", "centi", -2],
+  ["m", "milli", -3], ["µ", "micro", -6], ["n", "nano", -9], ["p", "pico", -12], ["f", "femto", -15],
+  ["a", "atto", -18], ["z", "zepto", -21], ["y", "yocto", -24], ["r", "ronto", -27], ["q", "quecto", -30],
 ];
+const SI_ENGINEERING = ["T", "G", "M", "k", "", "m", "µ", "n", "p", "f"];
+const SI_PREFIX_UNITS = ["", "Ω", "F", "H", "V", "A", "W", "Hz", "s"];
+
+// "4.7k", "100 n", "2.2u" (u for µ), "1.5E-3", "33". The longest prefix
+// symbol is tried first so "da" isn't read as d (deci) and a stray a.
+function parseSiValue(text) {
+  const t = String(text).trim().replace(/u$/, "µ").replace(/\s+/g, "");
+  const m = t.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)(da|[QRYZEPTGMkhdcmµnpfazyrq])?$/);
+  if (!m) return null;
+  const p = SI_PREFIXES.find(([s]) => s === (m[2] || ""));
+  return { value: parseFloat(m[1]), prefix: p[0] };
+}
+
+const SUPERSCRIPT = { "-": "⁻", 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" };
+// Plain up to a million and down to a thousandth; past that, a × 10ⁿ.
+function siCell(v) {
+  if (!isFinite(v)) return "—";
+  if (v === 0) return "0";
+  const abs = Math.abs(v);
+  if (abs >= 1e-3 && abs < 1e6) return Number(v.toPrecision(6)).toString();
+  const e = Math.floor(Math.log10(abs));
+  let m = Number((v / Math.pow(10, e)).toPrecision(6));
+  let n = e;
+  if (Math.abs(m) >= 10) { m /= 10; n += 1; }
+  return `${m} × 10${String(n).split("").map((c) => SUPERSCRIPT[c]).join("")}`;
+}
 
 function renderSiPrefixConverter(domain, tool, favId) {
-  const state = { value: 1, prefix: "" };
+  const C = "si-prefix";
+  const state = {
+    base: 4.7e-9, text: "4700p",
+    unit: pref(C, "unit", "F", SI_PREFIX_UNITS),
+    all: pref(C, "all", false, [true, false]),
+    bad: false,
+  };
 
-  function fmtCell(v) {
-    if (!isFinite(v)) return "—";
-    if (v === 0) return "0";
-    const abs = Math.abs(v);
-    if (abs >= 1e6 || abs < 1e-3) return v.toExponential(3);
-    return Number(v.toPrecision(6)).toString();
+  const factor = (p) => Math.pow(10, SI_PREFIXES.find(([s]) => s === p)[2]);
+  // The engineering prefix that leaves 1 to 999 in front.
+  function best(v) {
+    if (v === 0) return { num: 0, prefix: "" };
+    const e = Math.floor(Math.log10(Math.abs(v)) / 3) * 3;
+    const clamped = Math.max(-15, Math.min(12, e));
+    const p = SI_PREFIXES.find(([, , x]) => x === clamped)[0];
+    return { num: Number((v / Math.pow(10, clamped)).toPrecision(6)), prefix: p };
   }
 
-  function baseValue() {
-    const scale = SI_PREFIXES.find(([p]) => p === state.prefix)[2];
-    return state.value * scale;
-  }
-
-  function table() {
-    const base = baseValue();
-    return SI_PREFIXES.map(([p, name, scale]) => `
-      <div class="eseries-cell${p === state.prefix ? " hit" : ""}">
-        <div style="font-weight:600;">${p || "—"}</div>
-        <div style="font-size:10.5px;color:var(--text-muted);">${name}</div>
-        <div>${fmtCell(base / scale)}</div>
+  function gridHTML() {
+    const list = state.all ? SI_PREFIXES : SI_PREFIXES.filter(([s]) => SI_ENGINEERING.includes(s));
+    const b = best(state.base).prefix;
+    return list.map(([p, name, x]) => `
+      <div class="eseries-cell${p === b ? " hit" : ""}" data-prefix="${p || "none"}">
+        <div style="font-weight:600;">${p ? p + state.unit : state.unit || "—"}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${name} · 10${String(x).split("").map((c) => SUPERSCRIPT[c]).join("")}</div>
+        <div data-res="cell-${p || "none"}">${siCell(state.base / Math.pow(10, x))}</div>
       </div>`).join("");
   }
 
-  function refresh() {
-    document.querySelector('[data-res="grid"]').innerHTML = table();
+  function resultHTML() {
+    if (state.bad) return `<div class="error-text" data-res="err">Write a number, then a prefix if you like: 4.7k, 100n, 2.2u (for µ), 1.5E-3.</div>`;
+    const b = best(state.base);
+    return `
+      <div class="result-field">
+        <div class="result-head"><span class="label">Best written as</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+        <div class="result-value"><span class="num" data-res="best">${b.num} ${b.prefix}${state.unit}</span></div>
+        <div class="result-sub" data-res="base">${siCell(state.base)} ${state.unit || "(no unit)"} without a prefix</div>
+      </div>`;
   }
+
+  function refresh() {
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    app.querySelector('[data-res="grid"]').innerHTML = gridHTML();
+  }
+
+  const example = (text, unit) => () => {
+    const p = parseSiValue(text);
+    Object.assign(state, { base: p.value * factor(p.prefix), text, unit, bad: false });
+    paint();
+  };
+  useExamples([
+    { title: "4700 pF", note: "Marked 472 on a ceramic capacitor: 4.7 nF, 0.0047 µF.", apply: example("4700p", "F") },
+    { title: "0.1 µF decoupling", note: "100 nF, the same part under its other name.", apply: example("0.1u", "F") },
+    { title: "2.2 MΩ", note: "Capital M is mega, 2 200 000 Ω; small m would be milli.", apply: example("2.2M", "Ω") },
+    { title: "32.768 kHz crystal", note: "32 768 Hz, 2¹⁵: a watch crystal divides down to one second.", apply: example("32.768k", "Hz") },
+    { title: "A crystal's 3.4 fF", note: "Motional capacitance is femtofarads: 0.0034 pF.", apply: example("3.4f", "F") },
+  ]);
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, "pico to tera, one value at a time")}
+      ${calcHeader(tool, favId, "Any value in every SI prefix")}
 
-      <div class="section-label" style="color:#8FC1F5">Value</div>
       <div class="field">
-        <label>Enter a value</label>
+        <label>Value, with a prefix if you like</label>
         <div class="field-row">
-          <input id="si-value" type="number" inputmode="decimal" step="any" value="${state.value}" />
-          <select id="si-prefix">${SI_PREFIXES.map(([p, name]) => `<option value="${p}" ${state.prefix === p ? "selected" : ""}>${p || "(none)"} — ${name}</option>`).join("")}</select>
+          <input id="si-value" type="text" inputmode="text" autocapitalize="off" spellcheck="false" value="${state.text}" />
+          <select id="si-unit">${SI_PREFIX_UNITS.map((u) => `<option value="${u}" ${state.unit === u ? "selected" : ""}>${u || "no unit"}</option>`).join("")}</select>
         </div>
       </div>
 
-      <div class="section-label" style="color:#5DCAA5">Every prefix</div>
-      <div class="eseries-grid" data-res="grid">${table()}</div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${pillRow([["eng", "Steps of 1000"], ["all", "All 24"]], state.all ? "all" : "eng", domain.bg)}
+      <div class="eseries-grid" data-res="grid">${gridHTML()}</div>
 
       ${formulaSection(
-        ["value × prefix multiplier = value in base units", "T=10¹², G=10⁹, M=10⁶, k=10³, m=10⁻³, µ=10⁻⁶, n=10⁻⁹, p=10⁻¹²"],
-        "Each step up or down the ladder is ×1000 — the same steps a multimeter range or a datasheet spec uses."
+        ["in a prefix: value ÷ 10ⁿ", "f 10⁻¹⁵ · p 10⁻¹² · n 10⁻⁹", "µ 10⁻⁶ · m 10⁻³ · k 10³", "M 10⁶ · G 10⁹ · T 10¹²"],
+        "A prefix is a power of ten written in front of a unit: 4.7 nF is 4.7 × 10⁻⁹ F. Electronics keeps to steps of 1000 (engineering notation), so the number in front stays between 1 and 999. The SI rules: k is lower case, M (mega) is not m (milli), µ is micro (u when there is no µ), and prefixes are never combined: write nF, not mµF."
       )}
       ${calcFooter("")}
     `;
 
-    wireCalc(favId, paint);
+    wireCalc(favId, paint, (m) => { state.all = m === "all"; setPref(C, "all", state.all); refresh(); paintPills(); });
 
-    const valField = document.getElementById("si-value");
-    const prefField = document.getElementById("si-prefix");
-    valField.oninput = () => {
-      const v = parseFloat(valField.value);
-      if (isFinite(v)) { state.value = v; refresh(); }
+    const field = document.getElementById("si-value");
+    field.oninput = () => {
+      state.text = field.value;
+      const p = parseSiValue(field.value);
+      if (p) { state.base = p.value * factor(p.prefix); state.bad = false; } else state.bad = true;
+      refresh();
     };
-    prefField.onchange = () => { state.prefix = prefField.value; refresh(); };
+    document.getElementById("si-unit").onchange = (e) => {
+      state.unit = e.target.value;
+      setPref(C, "unit", state.unit);
+      refresh();
+    };
+  }
+
+  // The pills' look follows the choice without a repaint, which would drop
+  // the caret from the value box.
+  function paintPills() {
+    app.querySelectorAll(".pill").forEach((b) => {
+      const on = (b.dataset.pill === "all") === state.all;
+      b.classList.toggle("active", on);
+      b.style.background = on ? domain.bg : "";
+      b.style.color = on ? "#8FC1F5" : "";
+    });
   }
 
   paint();

@@ -313,7 +313,7 @@ const TOOL_KEYWORDS = {
   "ip-ratings": "ingress protection waterproof dustproof ip65 ip67 ip68 ipx4 ipx7 ip69k iec 60529 enclosure",
   "basic-calculator": "calculator scientific standard engineering si prefix parallel resistors trig log exponent",
   "kirchhoff": "kcl kvl node loop",
-  "si-prefix": "prefix kilo mega micro nano pico",
+  "si-prefix": "si prefix kilo mega giga milli micro nano pico femto tera engineering notation convert nf uf pf",
   "sci-eng": "scientific engineering notation exponent",
   "percent-tolerance": "percent error tolerance",
   "db-ratio": "decibel ratio gain",

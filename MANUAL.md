@@ -110,6 +110,7 @@ will key on, since that is the id the app already holds for each tool.
 - Calculators → [Calculator](#basic-calculator)
 - Calculators → [Ohm's law](#ohms-law)
 - Calculators → [Kirchhoff's laws](#kirchhoff)
+- Calculators → [SI prefix converter](#si-prefix)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8208,5 +8209,87 @@ The review made these changes:
   what a rise or drop is like.
 - **The rest:** the remembered law, examples, the first cases and this
   section.
+
+[↑ Index](#index)
+
+---
+
+<a id="si-prefix"></a>
+## SI prefix converter
+
+`calc: si-prefix` · Tools › Calculators
+
+### What it does
+
+It writes one value in every SI prefix:
+
+- **The input:** a value typed as it is marked, 4700p, 0.1u, 2.2M,
+  32.768k or 1.5E-3, with u accepted for µ, and a unit picker (none, Ω, F,
+  H, V, A, W, Hz, s).
+- **The output:** the value large in its best prefix, the one leaving 1 to
+  999 in front (4700 pF is 4.7 nF), and its plain value without a prefix.
+- **The grid:** the value in each prefix. By default it shows the steps of
+  1000 from femto to tera, the ones electronics uses. The All 24 pill adds
+  the rest, from quecto to quetta.
+
+Values past a million or under a thousandth are written as × 10ⁿ. The unit
+and the grid choice are remembered.
+
+Examples: 4700 pF, 0.1 µF decoupling, 2.2 MΩ, a 32.768 kHz crystal and a
+crystal's 3.4 fF motional capacitance.
+
+### Source
+
+**BIPM, The International System of Units (SI Brochure), 9th edition**,
+as updated in 2022, read in review:
+
+- **Table 7** lists the 24 prefixes, 10³⁰ quetta (Q) to 10⁻³⁰ quecto (q).
+- **The 27th CGPM (2022)** added ronna, ronto, quetta and quecto.
+- **The rules:** prefix symbols are upright and attached to the unit
+  without a space. All multiple prefixes are upper-case except da, h and k,
+  and all sub-multiples are lower-case. A prefix plus a unit symbol forms
+  one new, inseparable symbol.
+
+### Why the formula is this
+
+    value in a prefix = value / 10ⁿ   (n the prefix's power)
+
+Every prefix scales the same base quantity, so one value converts to all of
+them by dividing by each prefix's factor. The best prefix is the power of
+1000 that leaves 1 to 999 in front.
+
+### Assumptions and limits
+
+- **Only SI prefixes.** The binary ones for bytes (Ki, Mi) belong to IEC
+  80000-13, not the SI, and are not here.
+- **"u" for µ** is the common stand-in when no µ is to hand. It is not
+  SI, so the result always writes µ.
+- **The best prefix stays within femto to tera**, the range electronics
+  uses.
+
+### How it was checked
+
+9 cases:
+- 4700p F is 4.7 nF and 0.0047 µF;
+- 2.2u reads as µ;
+- 3da is 30, deca, not deci followed by atto;
+- 1.5E-3 is 1.5 mF;
+- 2.2M Ω is 2200 kΩ;
+- 3.4 fF is 0.0034 pF;
+- All 24 includes q and Q;
+- a malformed value is explained;
+- the remembered unit and grid choice.
+
+The review made these changes:
+- **More prefixes:** femto (and with All 24, the full list of the SI
+  Brochure). The tool had stopped at pico and tera.
+- **Input:** a value can be typed with its prefix, and a unit can be
+  shown.
+- **The best prefix** is shown large.
+- **× 10ⁿ** replaces "1.000e+15".
+- **Labels** went from 10.5 px to 11 px.
+- **The rules people trip on**, in the note: k lower case, M not m, µ, no
+  combined prefixes.
+- **Examples, the first cases and this section.**
 
 [↑ Index](#index)
