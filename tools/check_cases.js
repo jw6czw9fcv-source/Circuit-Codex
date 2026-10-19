@@ -1156,8 +1156,11 @@ const CHECK_CASES = {
       expect: [['[data-res="err"]', "/^Write a number, then a prefix/"]] },
     { name: "unit and grid choice are remembered", do: [["set", "#si-unit", "Hz"], ["click", '.pill[data-pill="all"]'], ["reopen"]],
       expect: [["#si-unit", "Hz"], ['[data-res="best"]', "4.7 nHz"], ['[data-res="cell-q"]', "4.7 × 10²¹"]] },
-  ],
-  "button-cells": [
+    { name: "47k: scientific 4.7 × 10⁴, engineering 47 × 10³, E form 4.7E4", do: [["set", "#si-value", "47k"]],
+      expect: [['[data-res="sci"]', "4.7 × 10⁴ F"], ['[data-res="eng"]', "47 × 10³ F"], ['[data-res="enot"]', "4.7E4"], ['[data-res="best"]', "47 kF"]] },
+    { name: "999.9999999 rounds up a step: 1 × 10³, 1 k (not 10 × 10², 1000)", do: [["set", "#si-value", "999.9999999"]],
+      expect: [['[data-res="sci"]', "1 × 10³ F"], ['[data-res="best"]', "1 kF"]] },
+  ],  "button-cells": [
     { name: "LR1130's IEC designation is LR54, 80 mAh (Energizer 189)", do: [["set", "#bc-input", "lr54"]],
       expect: [["#bc-results .formula-card-title", "LR1130 (AG10) IEC LR54"], ["#bc-results .breadcrumb", "/80 mAh to 0.9 V/"]] },
     { name: "CR2016 is 100 mAh to 2.0 V, ANSI 5000LC", do: [["set", "#bc-input", "cr2016"]],

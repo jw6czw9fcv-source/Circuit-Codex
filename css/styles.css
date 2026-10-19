@@ -560,6 +560,11 @@ html, body {
 /* IP ratings' four pickers are the fields themselves, and their option text is
    the reading: a size up from the unit-picker style. */
 #ip-first, #ip-second, #ip-extra, #ip-supp { font-size: 15px; padding: 3px 0; }
+/* SI prefix converter: one value written as scientific, engineering and E
+   notation, a label and its reading per line. */
+.notation-box { padding: 8px 14px; }
+.notation-row { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; line-height: 1.7; }
+.notation-row > span:first-child { color: var(--text-secondary); font-size: 14px; }
 /* The pickers that are the whole field (Wire sizing's AWG, SWG and
    insulation) are sized like the numbers beside them in their three-to-a-row
    line, not like the compact unit pickers every other .field select is,

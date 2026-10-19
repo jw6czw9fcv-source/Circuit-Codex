@@ -8215,9 +8215,11 @@ The review made these changes:
 ---
 
 <a id="si-prefix"></a>
+<a id="si-prefix"></a>
 ## SI prefix converter
 
 `calc: si-prefix` · Tools › Calculators
+(Scientific ↔ engineering notation was merged into it)
 
 ### What it does
 
@@ -8228,6 +8230,10 @@ It writes one value in every SI prefix:
   H, V, A, W, Hz, s).
 - **The output:** the value large in its best prefix, the one leaving 1 to
   999 in front (4700 pF is 4.7 nF), and its plain value without a prefix.
+- **Notation:** the same value in scientific notation (one digit before
+  the point, 4.7 × 10⁴), engineering notation (an exponent in steps of 3,
+  the one a prefix names: 47 × 10³), and E notation as calculators,
+  spreadsheets and code read it (4.7E4).
 - **The grid:** the value in each prefix. By default it shows the steps of
   1000 from femto to tera, the ones electronics uses. The All 24 pill adds
   the rest, from quecto to quetta.
@@ -8269,7 +8275,7 @@ them by dividing by each prefix's factor. The best prefix is the power of
 
 ### How it was checked
 
-9 cases:
+11 cases:
 - 4700p F is 4.7 nF and 0.0047 µF;
 - 2.2u reads as µ;
 - 3da is 30, deca, not deci followed by atto;
@@ -8278,7 +8284,9 @@ them by dividing by each prefix's factor. The best prefix is the power of
 - 3.4 fF is 0.0034 pF;
 - All 24 includes q and Q;
 - a malformed value is explained;
-- the remembered unit and grid choice.
+- the remembered unit and grid choice;
+- 47k in scientific, engineering and E notation;
+- 999.9999999 rounds up to 1 × 10³ and 1 k.
 
 The review made these changes:
 - **More prefixes:** femto (and with All 24, the full list of the SI
@@ -8290,6 +8298,12 @@ The review made these changes:
 - **Labels** went from 10.5 px to 11 px.
 - **The rules people trip on**, in the note: k lower case, M not m, µ, no
   combined prefixes.
+- **Scientific ↔ engineering notation** is merged in, on Pierre's choice:
+  it repeated what this screen shows, and its title wrapped. Its favourites
+  and links open this tool. Its rounding put 999.9999999 at 10 × 10²; both
+  notations now round first, then keep the mantissa in its band.
 - **Examples, the first cases and this section.**
+
+[↑ Index](#index)
 
 [↑ Index](#index)

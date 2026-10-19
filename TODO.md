@@ -9,7 +9,7 @@ another."
 **Built**: Resistor color code · Resistor SMD code · E-series value ·
 Resistor series/parallel · Voltage divider · Current divider · Wheatstone
 bridge · Capacitor series/parallel · Ohm's law · Kirchhoff's laws · Formula
-search · SI prefix converter · Scientific ↔ engineering notation ·
+search · SI prefix converter (Scientific ↔ engineering notation merged into it) ·
 Percent tolerance / error · Standard & Scientific Calculators ·
 Physical constants · SI-Units · DEC / HEX / OCT / BIN conversion ·
 ASCII table · Wire sizing (Wire gauge, Cable resistance / voltage drop and Cable current capacity merged) ·

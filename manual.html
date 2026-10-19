@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=19093c42ce" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=eecfa93648" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -7204,7 +7204,7 @@ other manufacturer guides could not be fetched.</p>
 <section class="tool" id="basic-calculator" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>Calculator</h2>
-  <figure class="shot"><img src="manual/img/basic-calculator.jpg?h=bd770ae0a3" loading="lazy" alt="Calculator as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/basic-calculator.jpg?h=3309509e1a" loading="lazy" alt="Calculator as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Standard &amp; Scientific Calculators)</p>
 <h3>What it does</h3>
 <p>A calculator with three keypads, chosen by pills (the choice is remembered):</p>
@@ -7424,8 +7424,9 @@ drops cancel. Either way the missing term is minus the sum of the others.</p>
 <section class="tool" id="si-prefix" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>SI prefix converter</h2>
-  <figure class="shot"><img src="manual/img/si-prefix.jpg?h=71e2deef74" loading="lazy" alt="SI prefix converter as it appears in the app" width="430" height="932"></figure>
-  <h3>What it does</h3>
+  <figure class="shot"><img src="manual/img/si-prefix.jpg?h=f26dd70489" loading="lazy" alt="SI prefix converter as it appears in the app" width="430" height="932"></figure>
+  <p>(Scientific ↔ engineering notation was merged into it)</p>
+<h3>What it does</h3>
 <p>It writes one value in every SI prefix:</p>
 <ul>
 <li><strong>The input:</strong> a value typed as it is marked, 4700p, 0.1u, 2.2M,
@@ -7433,6 +7434,10 @@ drops cancel. Either way the missing term is minus the sum of the others.</p>
   H, V, A, W, Hz, s).</li>
 <li><strong>The output:</strong> the value large in its best prefix, the one leaving 1 to
   999 in front (4700 pF is 4.7 nF), and its plain value without a prefix.</li>
+<li><strong>Notation:</strong> the same value in scientific notation (one digit before
+  the point, 4.7 × 10⁴), engineering notation (an exponent in steps of 3,
+  the one a prefix names: 47 × 10³), and E notation as calculators,
+  spreadsheets and code read it (4.7E4).</li>
 <li><strong>The grid:</strong> the value in each prefix. By default it shows the steps of
   1000 from femto to tera, the ones electronics uses. The All 24 pill adds
   the rest, from quecto to quetta.</li>
@@ -7468,7 +7473,7 @@ them by dividing by each prefix's factor. The best prefix is the power of
   uses.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>9 cases:
+<p>11 cases:
 - 4700p F is 4.7 nF and 0.0047 µF;
 - 2.2u reads as µ;
 - 3da is 30, deca, not deci followed by atto;
@@ -7477,7 +7482,9 @@ them by dividing by each prefix's factor. The best prefix is the power of
 - 3.4 fF is 0.0034 pF;
 - All 24 includes q and Q;
 - a malformed value is explained;
-- the remembered unit and grid choice.</p>
+- the remembered unit and grid choice;
+- 47k in scientific, engineering and E notation;
+- 999.9999999 rounds up to 1 × 10³ and 1 k.</p>
 <p>The review made these changes:
 - <strong>More prefixes:</strong> femto (and with All 24, the full list of the SI
   Brochure). The tool had stopped at pico and tera.
@@ -7488,7 +7495,12 @@ them by dividing by each prefix's factor. The best prefix is the power of
 - <strong>Labels</strong> went from 10.5 px to 11 px.
 - <strong>The rules people trip on</strong>, in the note: k lower case, M not m, µ, no
   combined prefixes.
+- <strong>Scientific ↔ engineering notation</strong> is merged in, on Pierre's choice:
+  it repeated what this screen shows, and its title wrapped. Its favourites
+  and links open this tool. Its rounding put 999.9999999 at 10 × 10²; both
+  notations now round first, then keep the mantissa in its band.
 - <strong>Examples, the first cases and this section.</strong></p>
+<p><a href="#index">↑ Index</a></p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/tools%3A0%3A4/si-prefix">Open the tool</a></p>
 </section>
 </main>
