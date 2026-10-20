@@ -114,6 +114,7 @@ will key on, since that is the id the app already holds for each tool.
 - Calculators → [Tolerance & error](#percent-tolerance)
 - Calculators → [dB ratio](#db-ratio)
 - Calculators → [dB levels](#db-absolute)
+- Calculators → [RMS calculator](#rms-calculator)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8580,5 +8581,118 @@ The review made these changes:
   levels.
 - **The rest:** remembered choices, examples, the first cases and this
   section.
+
+[↑ Index](#index)
+
+---
+
+<a id="rms-calculator"></a>
+## RMS calculator
+
+`calc: rms-calculator` · Tools › Calculators
+
+### What it computes
+
+A periodic waveform's peak, peak-to-peak, rms, mean and rectified average,
+from any one of peak, peak-to-peak, rms or rectified average.
+
+- **Waveforms:** sine, square, triangle, sawtooth, pulse (with its duty
+  cycle D), and half-wave and full-wave rectified sines.
+- **Inputs:** the known value in mV, V, kV, µA, mA or A, and an optional DC
+  offset under the shape.
+- **Output:** the rms large (the peak when the rms was typed), the other
+  levels, and the lowest and highest points with the mean.
+- **On a meter:** what an average-responding meter reads and its error, the
+  true rms a meter's AC range shows, the rectified average, and the crest
+  and form factors.
+- **Remembered:** the waveform, the known value, the unit and the duty cycle.
+
+Examples: 230 V and 120 V mains, a square wave on a cheap meter, 1 A PWM
+pulses at 25 %, a 0 to 3.3 V clock, and a bridge rectifier at 17 V peak.
+
+### Source
+
+**Analog Devices AD737 datasheet, Rev. H, table 5** (read in review, from
+the RS Components copy):
+
+- **Crest factor** is "the ratio of the peak signal amplitude to the rms
+  amplitude".
+- **The table** gives, for a 1 V peak, the crest factor, the true rms and
+  the reading of an average-responding circuit calibrated to a sine's rms:
+  - sine: 1.414, 0.707 V, 0 % error;
+  - square: 1.00, 1.00 V, reading 1.11 V, +11.0 %;
+  - triangle: 1.73, 0.577 V, reading 0.555 V, −3.8 %;
+  - rectangular pulse: 2, 0.5 V, reading 0.278 V, −44 %;
+  - pulse train: 10, 0.1 V, reading 0.011 V, −89 %.
+
+The rectangular row is a 25 % pulse and the pulse train a 1 % one. The
+tool's cases reproduce every row. The datasheet's Gaussian noise and SCR
+rows are not shapes here; phase-controlled sines are in AC phase control.
+The IEC definitions (IEV 103) could not be fetched.
+
+### Why the formulas are these
+
+    Vrms = √(mean of v²)                   the DC value that heats a resistor the same
+    sine:     Vrms = Vp / √2,  Vavg = 2·Vp / π
+    square:   Vrms = Vp,       Vavg = Vp
+    triangle, sawtooth: Vrms = Vp / √3,  Vavg = Vp / 2
+    pulse:    Vrms = Vp · √D,  Vavg = Vp · D
+    half-wave: Vrms = Vp / 2,  Vavg = Vp / π
+    full-wave: as the sine
+    Vrms² = Vmean² + Vac²
+    crest factor = Vpeak / Vrms,  form factor = Vrms / Vavg
+
+Vavg is the rectified average, the mean of |v|. Vmean is the plain mean,
+the DC level. Vac is the rms of what is left around the mean.
+
+- **An average-responding meter** rectifies, averages and multiplies by a
+  sine's form factor, π/(2√2) = 1.111. It is exact on a sine and wrong on
+  any other shape: the error is the shape's form factor over 1.111, less 1.
+- **A meter's AC range** blocks DC, so it reads Vac, not Vrms.
+- **A DC offset** adds to the rms in quadrature only for a zero-mean shape.
+  For a pulse or a rectified sine the cross term 2·DC·Vmean,shape stays.
+  The rectified average with an offset is summed numerically when the
+  signal crosses zero.
+
+### Assumptions and limits
+
+- **Ideal shapes:** sharp edges, no ringing, a symmetric square and
+  triangle. "Peak" is the height above the DC offset, from 0 for the pulse
+  and the rectified shapes.
+- **The meter readings** use the datasheet's model: an average-responding
+  circuit on the whole signal, DC included.
+- **A real true-rms meter** is limited in crest factor and bandwidth; the
+  AD737 is specified to crest factor 5 (table 6). Check the meter's own
+  data.
+
+### How it was checked
+
+15 cases:
+- 230 V rms peaks at 325.3 V, and 120 V rms at 169.7 V;
+- AD737 table 5: square +11.1 %, triangle −3.8 %, 25 % pulse −44.5 % with
+  crest factor 2, 1 % pulse −88.9 % with crest factor 10;
+- a 0 to 3.3 V clock: 2.333 V rms, 1.65 V on an AC range;
+- a full-wave 17 V peak: 12.02 V rms, 10.82 V mean;
+- a 5 V peak sine on 2 V DC: 4.062 V rms;
+- a rectified average with DC solves back to its peak;
+- switching what is known keeps the signal, and a unit change keeps the
+  value;
+- an rms below the offset, and a 100 % duty cycle, are refused;
+- the remembered choices.
+
+The review made these changes:
+- **New shapes:** sawtooth and a pulse with its duty cycle. The waveform is
+  now a picker.
+- **Units:** changing one kept the number and changed its meaning. Values
+  are now held in V or A, and volts and amps share one unit picker.
+- **The result:** the rms is large, the peak when the rms was typed. The
+  peak was always large before, even when it was the typed value.
+- **New:** the average-responding meter's reading and error, and the AC
+  range's true rms.
+- **Fixed:** "RMS of the AC part alone" was, for rectified shapes, the rms
+  with their DC. The rectified average ignored the DC offset.
+- **Text:** true minus signs and 11 px drawing labels.
+- **The rest:** a formula card in Formula search, remembered choices,
+  examples, the first cases and this section.
 
 [↑ Index](#index)

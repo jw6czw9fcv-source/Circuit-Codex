@@ -321,7 +321,7 @@ const TOOL_KEYWORDS = {
   "formula-search": "formulas equations",
   "physical-constants": "constants physics",
   "si-units": "si units base derived",
-  "rms-calculator": "rms peak average ac voltage",
+  "rms-calculator": "rms peak average ac voltage current true rms crest form factor pwm pulse duty sawtooth rectified meter",
 };
 
 // Tools that go together, shown as links at the foot of each tool. Written
@@ -378,5 +378,5 @@ const RELATED = {
   "percent-tolerance": ["ppm-converter"],
   "db-ratio": ["db-absolute"],
   "formula-search": ["physical-constants", "si-units"],
-  "rms-calculator": ["db-absolute"],
+  "rms-calculator": ["db-absolute", "pwm-duty", "rectifier-bridge", "thyristor-firing"],
 };

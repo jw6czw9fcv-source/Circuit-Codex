@@ -105,6 +105,12 @@ const FORMULAS = [
     note: "A level is against a fixed reference. Voltages are rms; 0 dBm is 0 dBu only across 600 Ω.",
   },
   {
+    tool: "RMS calculator",
+    domain: "tools",
+    formulas: ["Vrms = √(mean of v²)", "Sine: Vrms = Vp / √2 · Square: Vp · Triangle: Vp / √3", "Pulse at duty D: Vrms = Vp · √D", "Crest factor = Vpeak / Vrms"],
+    note: "RMS is the DC value that heats a resistor the same. An average-responding meter is right only on a sine.",
+  },
+  {
     tool: "Antenna length (dipole/monopole)",
     domain: "rf",
     formulas: ["Half-wave dipole (ft) = 468 / f(MHz)", "Quarter-wave monopole (ft) = 234 / f(MHz)"],
