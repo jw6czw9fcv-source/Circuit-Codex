@@ -3971,8 +3971,8 @@ function renderSiPrefixConverter(domain, tool, favId) {
 
 // ---------- Scientific and engineering notation (helpers) ----------
 // The Scientific ↔ engineering notation tool was merged into the SI prefix
-// converter, which shows both forms; these helpers stay for it and for the
-// physical constants. Scientific keeps the mantissa in [1, 10) with the
+// converter, which shows both forms; these helpers stay for it, and
+// superscript for every × 10ⁿ in the app. Scientific keeps the mantissa in [1, 10) with the
 // exponent anywhere; engineering keeps the exponent a multiple of 3, at the
 // cost of a mantissa in [1, 1000), so it lines up with an SI prefix.
 function superscript(n) {
@@ -4616,72 +4616,121 @@ function renderBasicCalculator(domain, tool, favId) {
 }
 
 // ---------- Physical constants ----------
-// A browsable reference, same shape as Formula search: full list on open,
-// filtered as you type. Values reuse the scientific-notation formatting
-// built for the sci/eng calculator (splitNotation/fmtMantissa/superscript)
-// rather than SI prefixes — several of these constants are far outside the
-// pico-to-tera range a prefix can name (Planck's constant is 10⁻³⁴).
-// Kept to entries an electronics app actually reaches for — general-physics
-// constants with no circuit-design use (gravitational constant, standard
-// gravity, Avogadro's number, the molar gas constant, proton mass) were cut
-// in favor of ones that show up in real component/device equations.
+// The constants electronics reaches for, from CODATA 2022 as NIST publishes
+// it (physics.nist.gov/constants, "2022 CODATA adjustment"). Each value is
+// held as its published digits, so nothing is rounded on the way to the
+// screen; `unc` is the standard uncertainty in the last digits, CODATA's
+// concise form, and an exact constant has none. Since the 2019 SI, c, h, e
+// and k are exact by definition, and so is anything made only of them (ħ,
+// the Faraday constant, σ); ε₀, μ₀, Z₀ and the electron mass are measured.
+// "…" marks an exact value that goes on. The silicon bandgap is not a
+// CODATA constant: it is the Ioffe Institute's 300 K figure. General-physics
+// constants with no circuit use (G, gn, NA alone, R, proton mass) stay out.
 const PHYSICAL_CONSTANTS = [
-  { symbol: "c", name: "Speed of light in vacuum", value: 299792458, unit: "m/s", note: "Exact by definition since 1983." },
-  { symbol: "e", name: "Elementary charge", value: 1.602176634e-19, unit: "C", note: "Magnitude of the charge on a single electron." },
-  { symbol: "eV", name: "Electronvolt", value: 1.602176634e-19, unit: "J", note: "Numerically identical to e in coulombs — no coincidence: 1 eV is defined as e × 1 volt. Common energy unit in semiconductor and photonics work." },
-  { symbol: "h", name: "Planck constant", value: 6.62607015e-34, unit: "J·s", note: "Relates a photon's energy to its frequency: E = hf." },
-  { symbol: "ħ", name: "Reduced Planck constant", value: 1.054571817e-34, unit: "J·s", note: "h / 2π." },
-  { symbol: "k", name: "Boltzmann constant", value: 1.380649e-23, unit: "J/K", note: "Relates temperature to thermal noise power and energy per particle." },
-  { symbol: "Vₜ", name: "Thermal voltage (at 300 K)", value: 0.025852, unit: "V", note: "kT/q — appears in the diode and BJT equations (the Shockley equation). Unlike the rest of this list it scales with temperature; this is the 300 K value." },
-  { symbol: "ε₀", name: "Vacuum permittivity", value: 8.8541878128e-12, unit: "F/m", note: "Sets the capacitance of free space; appears in Coulomb's law." },
-  { symbol: "μ₀", name: "Vacuum permeability", value: 1.25663706212e-6, unit: "N/A²", note: "Sets the inductance of free space; appears in the Biot–Savart law." },
-  { symbol: "Z₀", name: "Impedance of free space", value: 376.730313668, unit: "Ω", note: "√(μ₀ / ε₀) — the E/H field ratio in a plane wave, central to antenna theory." },
-  { symbol: "F", name: "Faraday constant", value: 96485.33212, unit: "C/mol", note: "Charge per mole of electrons — used in battery and electrochemical-cell capacity calculations." },
-  { symbol: "mₑ", name: "Electron mass", value: 9.1093837015e-31, unit: "kg", note: "Used in semiconductor carrier-mobility and effective-mass calculations." },
-  { symbol: "Eg(Si)", name: "Silicon bandgap energy", value: 1.12, unit: "eV", note: "Room-temperature (300 K) bandgap of silicon; sets the forward-voltage floor of silicon diodes and BJTs." },
-  { symbol: "σ", name: "Stefan–Boltzmann constant", value: 5.670374419e-8, unit: "W/(m²·K⁴)", note: "Total blackbody radiant power per unit area — relevant to heat-sink and thermal-management calculations." },
+  { symbol: "c", name: "Speed of light in vacuum", digits: "299792458", exp: 0, unit: "m/s",
+    note: "Exact: the metre is defined from it. In a nanosecond a signal crosses 30 cm of vacuum, less in a cable or a trace." },
+  { symbol: "e", name: "Elementary charge", digits: "1.602176634", exp: -19, unit: "C",
+    note: "The charge of a proton; an electron carries −e. 1 C is 6.24 × 10¹⁸ of them." },
+  { symbol: "eV", name: "Electronvolt", digits: "1.602176634", exp: -19, unit: "J",
+    note: "The energy one electron gains across 1 V, so it is e in joules: the unit of bandgaps and photon energies." },
+  { symbol: "h", name: "Planck constant", digits: "6.62607015", exp: -34, unit: "J·s",
+    note: "A photon's energy is E = h × f." },
+  { symbol: "ħ", name: "Reduced Planck constant", digits: "1.054571817", more: true, exp: -34, unit: "J·s",
+    note: "h / 2π." },
+  { symbol: "hc", name: "Photon energy × wavelength", digits: "1239.841984", more: true, exp: 0, unit: "eV·nm",
+    note: "E (eV) = 1239.84 / λ (nm): a 620 nm red photon carries 2 eV. CODATA lists it as the inverse metre–electronvolt relationship." },
+  { symbol: "k", name: "Boltzmann constant", digits: "1.380649", exp: -23, unit: "J/K",
+    note: "Ties temperature to energy. A resistor's thermal noise is vn = √(4kTRB), B the bandwidth." },
+  { symbol: "Vt", name: "Thermal voltage kT/e", digits: "25.852", exp: 0, unit: "mV", at: "at 300 K", derived: true,
+    note: "Not a constant: it scales with T, 25.693 mV at 25 °C. It sets the slope of the diode law, I = Is (e^(V/nVt) − 1)." },
+  { symbol: "ε₀", name: "Vacuum electric permittivity", digits: "8.8541878188", unc: "14", exp: -12, unit: "F/m",
+    note: "A parallel-plate capacitor is C = ε₀ εr A / d, εr the dielectric's relative permittivity." },
+  { symbol: "μ₀", name: "Vacuum magnetic permeability", digits: "1.25663706127", unc: "20", exp: -6, unit: "N/A²",
+    note: "Measured since 2019, no longer exactly 4π × 10⁻⁷, though within a part in 10⁹ of it. Sets the inductance of coils in air." },
+  { symbol: "Z₀", name: "Impedance of free space", digits: "376.730313412", unc: "59", exp: 0, unit: "Ω",
+    note: "√(μ₀ / ε₀): the ratio of E to H in a plane wave, close to 120π Ω." },
+  { symbol: "F", name: "Faraday constant", digits: "96485.33212", more: true, exp: 0, unit: "C/mol",
+    note: "The charge of a mole of electrons, NA × e: 26.80 Ah per mole, the basis of a battery's capacity." },
+  { symbol: "mₑ", name: "Electron mass", digits: "9.1093837139", unc: "28", exp: -31, unit: "kg",
+    note: "Effective masses in a semiconductor are given as multiples of it." },
+  { symbol: "σ", name: "Stefan–Boltzmann constant", digits: "5.670374419", more: true, exp: -8, unit: "W/(m²·K⁴)",
+    note: "A surface radiates P = ε σ A T⁴, ε its emissivity and T in kelvin: part of how a heatsink sheds heat." },
+  { symbol: "Eg", name: "Silicon bandgap", digits: "1.12", exp: 0, unit: "eV", at: "at 300 K", derived: true,
+    note: "Not a CODATA constant (Ioffe Institute). Silicon absorbs light only below 1239.84 / 1.12 = 1107 nm, so silicon photodiodes stop near 1.1 µm." },
 ];
 
-function formatConstantValue(v) {
-  if (v === 0) return "0";
-  const abs = Math.abs(v);
-  if (abs >= 1e5 || abs < 1e-3) {
-    const { mantissa, exp } = splitNotation(v, 1);
-    return `${fmtMantissa(mantissa)} × 10${superscript(exp)}`;
+// CODATA's grouping: threes either side of the point, a lone last digit
+// joining the group before it (8.854 187 8188), kept on one line.
+function groupDigits(digits) {
+  const [int, frac] = digits.split(".");
+  const g = (s) => (s.length > 4 ? s.replace(/\B(?=(\d{3})+(?!\d))/g, " ") : s);
+  const groups = frac ? frac.match(/\d{1,3}/g) : [];
+  if (groups.length > 1 && groups[groups.length - 1].length === 1) {
+    const last = groups.pop();
+    groups[groups.length - 1] += last;
   }
-  return Number(v.toPrecision(10)).toString();
+  return groups.length ? `${g(int)}.${groups.join(" ")}` : g(int);
+}
+function constantValueHTML(c) {
+  const body = `${groupDigits(c.digits)}${c.more ? "…" : ""}${c.unc ? `(${c.unc})` : ""}`;
+  return `${body}${c.exp ? ` × 10${superscript(c.exp)}` : ""} ${c.unit}`;
+}
+// What a tap copies: the plain number, in the unit shown.
+const constantPlain = (c) => `${c.digits}${c.exp ? `e${c.exp}` : ""}`;
+function constantTag(c) {
+  return c.derived ? c.at : c.unc ? "measured" : "exact";
+}
+// The concise (14) is the standard uncertainty in the last digits; spelt out
+// here as a fraction of the value.
+function constantUncertainty(c) {
+  if (!c.unc) return "";
+  const rel = Number(c.unc) / Number(c.digits.replace(".", ""));
+  const [m, e] = rel.toExponential(1).split("e");
+  return `Standard uncertainty ±${m} × 10${superscript(Number(e))} of the value`;
 }
 
 function renderPhysicalConstants(domain, tool, favId) {
-  function card(c) {
+  function card(c, i) {
     return `
-      <div class="formula-card formula-card--static">
+      <button class="formula-card" data-const="${i}" aria-label="Copy ${c.name}">
         <div class="formula-card-head">
-          <span class="formula-card-title">${c.symbol} — ${c.name}</span>
+          <span class="formula-card-title">${c.symbol} · ${c.name}</span>
+          <span class="formula-card-go" data-res="tag-${i}">${constantTag(c)}</span>
         </div>
-        <div class="formula-line">${formatConstantValue(c.value)} ${c.unit}</div>
-        ${c.note ? `<div class="formula-card-note">${c.note}</div>` : ""}
-      </div>`;
+        <div class="formula-line" data-res="value-${i}">${constantValueHTML(c)}</div>
+        ${c.unc ? `<div class="breadcrumb" data-res="unc-${i}">${constantUncertainty(c)}</div>` : ""}
+        <div class="formula-card-note">${c.note}</div>
+      </button>`;
   }
 
   function matches(c, q) {
-    return c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q);
+    return [c.name, c.symbol, c.unit, c.note].some((s) => s.toLowerCase().includes(q));
   }
 
-  function renderList(list, emptyQuery) {
+  function renderList(q) {
     const results = document.getElementById("pc-results");
+    const list = PHYSICAL_CONSTANTS.map((c, i) => [c, i]).filter(([c]) => !q || matches(c, q));
     results.innerHTML = list.length
-      ? list.map(card).join("")
-      : `<div class="placeholder">${ICONS.search}<div>No constant for "${emptyQuery}".</div></div>`;
+      ? list.map(([c, i]) => card(c, i)).join("")
+      : `<div class="placeholder">${ICONS.search}<div>No constant for "${q}".</div></div>`;
+    results.querySelectorAll("[data-const]").forEach((btn) => {
+      btn.onclick = async () => {
+        const c = PHYSICAL_CONSTANTS[btn.dataset.const];
+        const tag = btn.querySelector(".formula-card-go");
+        try { await navigator.clipboard.writeText(constantPlain(c)); tag.textContent = "Copied"; }
+        catch (_) { tag.textContent = constantPlain(c); }
+        setTimeout(() => { tag.textContent = constantTag(c); }, 1500);
+      };
+    });
   }
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, `${PHYSICAL_CONSTANTS.length} constants`)}
+      ${calcHeader(tool, favId, "CODATA 2022 values; tap one to copy it")}
 
       <div class="search-box">
         ${ICONS.search}
-        <input id="pc-input" type="text" placeholder="Search a constant" autocapitalize="off" spellcheck="false" />
+        <input id="pc-input" type="text" placeholder="Search a constant, a symbol or a unit" autocapitalize="off" spellcheck="false" />
       </div>
       <div id="pc-results"></div>
       ${tabbarHTML("")}
@@ -4690,11 +4739,8 @@ function renderPhysicalConstants(domain, tool, favId) {
     document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
 
     const input = document.getElementById("pc-input");
-    renderList(PHYSICAL_CONSTANTS, "");
-    input.oninput = () => {
-      const q = input.value.trim().toLowerCase();
-      renderList(q ? PHYSICAL_CONSTANTS.filter((c) => matches(c, q)) : PHYSICAL_CONSTANTS, q);
-    };
+    renderList("");
+    input.oninput = () => renderList(input.value.trim().toLowerCase());
   }
 
   paint();

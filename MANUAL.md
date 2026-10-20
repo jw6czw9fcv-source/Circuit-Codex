@@ -118,6 +118,7 @@ will key on, since that is the id the app already holds for each tool.
 - Converters → [Unit converter](#unit-converter)
 - Converters → [PPM converter](#ppm-converter)
 - Reference → [Formula search](#formula-search)
+- Reference → [Physical constants](#physical-constants)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8983,5 +8984,108 @@ The review made these changes:
 - **Layout:** each formula fits one line at 375 px; long ones were split.
 - **Text:** the subtitle and the empty-search hint no longer say the list
   is "still growing".
+
+[↑ Index](#index)
+
+---
+
+<a id="physical-constants"></a>
+## Physical constants
+
+`calc: physical-constants` · Tools › Reference
+
+### What it computes
+
+A reference list of 15 constants electronics uses, searchable by name,
+symbol, unit or a word of the note. Tapping a card copies its plain value
+(8.8541878188e-12, in the unit shown).
+
+| Symbol | Constant | Kind |
+|---|---|---|
+| c, e, h, k | speed of light, elementary charge, Planck, Boltzmann | exact |
+| eV, ħ, hc, F, σ | electronvolt, h/2π, photon energy × wavelength, Faraday, Stefan–Boltzmann | exact |
+| ε₀, μ₀, Z₀, mₑ | permittivity, permeability, impedance of free space, electron mass | measured |
+| Vt, Eg | thermal voltage at 300 K, silicon bandgap at 300 K | not constants |
+
+- **Values:** shown with all their published digits, grouped in threes as
+  CODATA prints them.
+- **Measured values** carry their standard uncertainty: in the last digits
+  in brackets, (14), and spelt out as a fraction of the value.
+- **Notes:** each gives the constant's use in a circuit, such as thermal
+  noise, a parallel-plate capacitor, a battery's ampere-hours per mole, or
+  silicon's cutoff wavelength.
+
+### Source
+
+**CODATA 2022**, NIST's "Fundamental Physical Constants — Complete
+Listing, 2022 CODATA adjustment" (physics.nist.gov/constants), read in
+review:
+- **Exact:**
+  - c = 299 792 458 m/s;
+  - e = 1.602 176 634 × 10⁻¹⁹ C;
+  - h = 6.626 070 15 × 10⁻³⁴ J Hz⁻¹;
+  - k = 1.380 649 × 10⁻²³ J K⁻¹;
+  - ħ = 1.054 571 817… × 10⁻³⁴ J s;
+  - F = 96 485.332 12… C mol⁻¹;
+  - σ = 5.670 374 419… × 10⁻⁸ W m⁻² K⁻⁴;
+  - the inverse metre–electronvolt relationship, 1.239 841 984… × 10⁻⁶ eV
+    (that is, hc).
+- **Measured:**
+  - ε₀ = 8.854 187 8188(14) × 10⁻¹² F m⁻¹;
+  - μ₀ = 1.256 637 061 27(20) × 10⁻⁶ N A⁻²;
+  - Z₀ = 376.730 313 412(59) Ω;
+  - mₑ = 9.109 383 7139(28) × 10⁻³¹ kg.
+
+**Silicon bandgap:** the Ioffe Institute's semiconductor database (NSM
+archive, Si band structure), "Energy gap 1.12 eV" at 300 K. It is not a
+CODATA constant, and the card says so.
+
+### Why the formulas are these
+
+    Vt = k T / e          25.852 mV at 300 K, 25.693 mV at 25 °C
+    hc / e = 1239.84 eV·nm,  so E (eV) = 1239.84 / λ (nm)
+    Z₀ = √(μ₀ / ε₀) = μ₀ c
+    F = NA × e,  96 485 C = 26.80 Ah per mole of electrons
+
+Since the 2019 SI, c, h, e and k are fixed by definition, so they and
+anything made only of them are exact. ε₀ and μ₀ were exact before (μ₀ was
+4π × 10⁻⁷) and are now measured, so their values change at each CODATA
+adjustment. They are within a part in 10⁹ of the old figures.
+
+### Assumptions and limits
+
+- **Vt and Eg depend on temperature.** The cards give 300 K (and Vt at
+  25 °C).
+- **"…"** marks an exact value whose digits go on. The copy gives the digits
+  shown.
+- **Left out:** general-physics constants with no circuit use, such as G,
+  gn, NA on its own, R and the proton mass.
+
+### How it was checked
+
+11 cases:
+- c, ε₀, μ₀, Z₀ and mₑ exactly as CODATA 2022 prints them, with the
+  uncertainties;
+- hc and the thermal voltage;
+- search by unit (F/m) and by a note's words (thermal noise);
+- a tap copies the plain value;
+- an empty search.
+
+The review made these changes:
+- **CODATA 2022:** ε₀, μ₀, Z₀ and the electron mass were CODATA 2018
+  values.
+- **Precision:** values were cut to 6 figures, so even the exact c read
+  2.99792 × 10⁸. They now show every published digit.
+- **New:**
+  - exact or measured on each card, with the uncertainty;
+  - hc in eV·nm;
+  - Vt at 25 °C;
+  - tap to copy;
+  - search by unit and by note.
+- **Fixed:** the bandgap note claimed it "sets the forward-voltage floor"
+  of silicon diodes. It now gives what follows from it, the 1107 nm
+  absorption edge, and its source.
+- **Notes:** rewritten around each constant's use in a circuit, with this
+  manual section.
 
 [↑ Index](#index)
