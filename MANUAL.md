@@ -8965,7 +8965,8 @@ For the standalone cards, read in review:
 - an empty search says what to try.
 
 The check also fails any card whose tool is not in the app, by its name,
-its old name or a name merged into it.
+its old name or a name merged into it, and any formula line that wraps on
+the phone.
 
 The review made these changes:
 - **Cards:** 25 before, 72 now, one for every built tool that has a
@@ -8979,6 +8980,7 @@ The review made these changes:
     95 % is the end-effect allowance;
   - the thermal card now gives TJ = TA + P × θJA.
 - **Links:** cards also link through merged tool names.
+- **Layout:** each formula fits one line at 375 px; long ones were split.
 - **Text:** the subtitle and the empty-search hint no longer say the list
   is "still growing".
 

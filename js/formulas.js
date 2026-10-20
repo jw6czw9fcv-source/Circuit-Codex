@@ -52,8 +52,8 @@ const FORMULAS = [
   {
     tool: "Delta-Y transform",
     domain: "passive",
-    formulas: ["Δ → Y: Ra = Rab · Rca / (Rab + Rbc + Rca)", "Y → Δ: Rab = (Ra·Rb + Rb·Rc + Rc·Ra) / Rc"],
-    note: "A triangle (Δ) and a star (Y) of three resistors that behave the same between terminals A, B and C. It untangles bridges.",
+    formulas: ["Ra = Rab·Rca / (Rab+Rbc+Rca)", "Rab = (Ra·Rb+Rb·Rc+Rc·Ra) / Rc"],
+    note: "Δ → Y, then Y → Δ; the other legs follow by symmetry. A triangle (Δ) and a star (Y) of three resistors that behave the same between terminals A, B and C. It untangles bridges.",
   },
   {
     tool: "NTC/PTC thermistor",
@@ -108,8 +108,8 @@ const FORMULAS = [
   {
     tool: "BJT biasing",
     domain: "active",
-    formulas: ["Vth = Vcc × R2 / (R1 + R2), Rth = R1 ∥ R2", "Ib = (Vth − Vbe) / (Rth + (hFE + 1) × Re)", "Ic = hFE × Ib, Vce = Vcc − Ic × Rc − Ie × Re"],
-    note: "Voltage-divider bias: Re fixes the emitter current, so the operating point barely depends on hFE.",
+    formulas: ["Vth = Vcc × R2 / (R1 + R2)", "Rth = R1 ∥ R2", "Ib = (Vth − Vbe) / (Rth + (β+1)·Re)", "Ic = β × Ib"],
+    note: "β is hFE, the current gain. Voltage-divider bias: Re fixes the emitter current, so the operating point barely depends on hFE.",
   },
   {
     tool: "BJT as a switch",
@@ -210,7 +210,7 @@ const FORMULAS = [
   {
     tool: "Differential",
     domain: "active",
-    formulas: ["With R3 / R2 = Rf / R1: Vout = (Rf / R1) × (V2 − V1)", "CMRR = 20 × log₁₀(|Ad / Acm|)", "Worst case with ±t: CMRR = (1 + Rf/R1) / 4t"],
+    formulas: ["If R3 / R2 = Rf / R1:", "Vout = (Rf / R1) × (V2 − V1)", "CMRR = 20 × log₁₀(|Ad / Acm|)", "Worst CMRR, ±t: (1 + Rf/R1) / 4t"],
     note: "Amplifies the difference and rejects what both inputs share, only as well as the resistors match.",
   },
   {
@@ -254,14 +254,14 @@ const FORMULAS = [
   {
     tool: "555 timer",
     domain: "digital",
-    formulas: ["t high = ln2 × (R1 + R2) × C, t low = ln2 × R2 × C", "f = 1 / (t high + t low) ≈ 1.44 / ((R1 + 2R2) × C)", "Duty = (R1 + R2) / (R1 + 2R2)"],
+    formulas: ["t high = ln2 × (R1 + R2) × C", "t low = ln2 × R2 × C", "f ≈ 1.44 / ((R1 + 2R2) × C)", "Duty = (R1 + R2) / (R1 + 2R2)"],
     note: "Astable: C charges through R1 + R2 and discharges through R2, between ⅓ and ⅔ Vcc, so the duty is always above 50 %.",
   },
   {
     tool: "Number bases",
     domain: "digital",
-    formulas: ["Value = Σ digit × baseⁿ (n = 0 at the right)", "Signed: −2ʷ⁻¹ … 2ʷ⁻¹ − 1"],
-    note: "One hex digit is 4 bits, one octal digit 3. Two's complement: a set top bit means bits − 2ʷ.",
+    formulas: ["Value = Σ digit × baseⁿ", "Signed: −2ʷ⁻¹ … 2ʷ⁻¹ − 1"],
+    note: "n counts from 0 at the right; w is the width in bits. One hex digit is 4 bits, one octal digit 3. Two's complement: a set top bit means bits − 2ʷ.",
   },
   {
     tool: "ASCII table",
@@ -278,7 +278,7 @@ const FORMULAS = [
   {
     tool: "Switch debounce",
     domain: "digital",
-    formulas: ["Press delay = R2 × C × ln(Vcc / VT−)", "Release delay = (R1 + R2) × C × −ln(1 − VT+ / Vcc)"],
+    formulas: ["Press = R2 · C · ln(Vcc / VT−)", "Release = (R1+R2) · C · −ln(1 − VT+/Vcc)"],
     note: "Into a Schmitt-trigger input, thresholds VT+ and VT−. Size each delay to the bounce time.",
   },
   {
@@ -290,8 +290,8 @@ const FORMULAS = [
   {
     tool: "UART baud rate",
     domain: "digital",
-    formulas: ["Divisor = Clock / (Oversample × Baud), rounded", "Error = (Actual − Baud) / Baud"],
-    note: "The divisor is a whole number, so the rate comes out a little off. 8N1 frames are 10 bits.",
+    formulas: ["Divisor = Clock / (Oversample × Baud)", "Error = (Actual − Baud) / Baud"],
+    note: "The divisor is rounded to a whole number, so the rate comes out a little off. 8N1 frames are 10 bits.",
   },
   {
     tool: "Crystal load",
@@ -352,16 +352,16 @@ const FORMULAS = [
   {
     tool: "Antenna length (dipole/monopole)",
     domain: "rf",
-    formulas: ["Half-wave dipole (ft) = 468 / f(MHz)", "Quarter-wave monopole (ft) = 234 / f(MHz)"],
-    note: "468 is 95 % of a free-space half wave (491.8 / f): the usual allowance for end effect on thin wire. Trim it on the air.",
+    formulas: ["Half-wave dipole = 468 / f", "Quarter-wave monopole = 234 / f"],
+    note: "Length in feet, f in MHz. 468 is 95 % of a free-space half wave (491.8 / f): the usual allowance for end effect on thin wire. Trim it on the air.",
   },
 
   // ---- Power ----
   {
     tool: "Battery runtime",
     domain: "power",
-    formulas: ["Runtime (h) = Capacity (Ah) × Usable % / Current (A)"],
-    note: "Constant current; real cells give less at high rates and below their cutoff voltage.",
+    formulas: ["Runtime = Capacity × Usable % / I"],
+    note: "Runtime in h, capacity in Ah, the load current I in A. Constant current; real cells give less at high rates and below their cutoff voltage.",
   },
   {
     tool: "Battery C-rate",
@@ -372,7 +372,7 @@ const FORMULAS = [
   {
     tool: "Linear regulator (LDO)",
     domain: "power",
-    formulas: ["LM317: Vout = Vref × (1 + R2 / R1) + Iadj × R2", "Vref = 1.25 V, Iadj ≈ 50 µA"],
+    formulas: ["Vout = Vref (1 + R2/R1) + Iadj·R2", "LM317: Vref = 1.25 V, Iadj ≈ 50 µA"],
     note: "R1 from OUT to ADJ, R2 from ADJ to ground (TI LM317 datasheet, eq. 2). Other adjustable regulators name their own pins and Vref.",
   },
   {
@@ -424,8 +424,8 @@ const FORMULAS = [
   {
     tool: "Tolerance & error",
     domain: "tools",
-    formulas: ["min = nominal × (1 − below / 100)", "max = nominal × (1 + above / 100)", "error % = (measured − expected) / expected × 100"],
-    note: "A tolerance is the maker's worst case, not a typical spread. Code letters per IEC 60062: J ±5 %, K ±10 %, M ±20 %.",
+    formulas: ["min = nominal × (1 − below / 100)", "max = nominal × (1 + above / 100)", "error = (measured − expected) / expected"],
+    note: "The error × 100 is in %. A tolerance is the maker's worst case, not a typical spread. Code letters per IEC 60062: J ±5 %, K ±10 %, M ±20 %.",
   },
   {
     tool: "dB ratio",
@@ -442,7 +442,7 @@ const FORMULAS = [
   {
     tool: "RMS calculator",
     domain: "tools",
-    formulas: ["Vrms = √(mean of v²)", "Sine: Vrms = Vp / √2 · Square: Vp · Triangle: Vp / √3", "Pulse at duty D: Vrms = Vp × √D", "Crest factor = Vpeak / Vrms"],
+    formulas: ["Vrms = √(mean of v²)", "Sine: Vp / √2 · Triangle: Vp / √3", "Square: Vp · Pulse at duty D: Vp × √D", "Crest factor = Vpeak / Vrms"],
     note: "RMS is the DC value that heats a resistor the same. An average-responding meter is right only on a sine.",
   },
   {
@@ -454,8 +454,8 @@ const FORMULAS = [
   {
     tool: "PPM converter",
     domain: "tools",
-    formulas: ["deviation = value × ppm / 10⁶ · 1 % = 10 000 ppm", "error (ppm) = (measured − nominal) / nominal × 10⁶", "R(T2) = R(T1) × (1 + α × (T2 − T1)), α in ppm/K"],
-    note: "ppm is a relative value of 10⁻⁶ (SI Brochure §5.4.7), for crystal tolerances, counter errors and tempcos.",
+    formulas: ["deviation = value × ppm / 10⁶", "1 % = 10 000 ppm", "error = (Vm − Vn) / Vn × 10⁶ ppm", "R(T2) = R(T1) × (1 + α·ΔT)"],
+    note: "ppm is a relative value of 10⁻⁶ (SI Brochure §5.4.7). Vm is the measured value, Vn the nominal; α is the tempco, ppm/K × 10⁻⁶, and ΔT = T2 − T1.",
   },
 ];
 

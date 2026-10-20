@@ -1326,7 +1326,7 @@ const CHECK_CASES = {
     { name: "a card for a tool not built yet stands alone: path loss per ITU-R P.525", do: [["set", "#fs-input", "path loss"]],
       expect: [[".formula-card-title", "Path loss"], [".formula-card-go", "(missing)"], [".formula-line", "Lbf = 20 log₁₀(4πd / λ)"]] },
     { name: "the LM317 card follows TI's naming: R2 / R1", do: [["set", "#fs-input", "LM317"]],
-      expect: [[".formula-line", "LM317: Vout = Vref × (1 + R2 / R1) + Iadj × R2"]] },
+      expect: [[".formula-line", "Vout = Vref (1 + R2/R1) + Iadj·R2"]] },
     { name: "a search that finds nothing says what to try", do: [["set", "#fs-input", "zzzz"]],
       expect: [[".placeholder", "/^No formula for .zzzz./"]] },
   ],

@@ -97,6 +97,10 @@ async function checkTool(t) {
     const lost = win.eval(`FORMULAS.filter((f) => !DOMAINS.some((d) => d.sections.some((s) => s.tools.some((x) =>
       x.name === f.tool || x.was === f.tool || (x.mergedNames || []).includes(f.tool))))).map((f) => f.tool)`);
     if (lost.length) r.problems.push(`formula card(s) naming no tool: ${lost.join(", ")}`);
+    // A formula broken over two lines reads as two; each must fit one.
+    const lh = parseFloat(win.getComputedStyle(doc.querySelector(".formula-line")).lineHeight) || 20;
+    const wrapped = [...doc.querySelectorAll("#fs-results .formula-line")].filter((e) => e.getBoundingClientRect().height > lh * 1.5);
+    if (wrapped.length) r.problems.push(`${wrapped.length} formula line(s) wrap: "${wrapped[0].textContent.slice(0, 40)}"`);
   }
 
   // Text cut off inside a card: a value wider than its cell.
