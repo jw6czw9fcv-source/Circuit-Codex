@@ -12088,64 +12088,167 @@ function renderUnitConverter(domain, tool, favId) {
   paint();
 }
 
-function renderPpmConverter(domain, tool, favId) {
-  const state = { tolPpm: 20, base: 16000000 };
+// ---------- PPM converter ----------
+// ppm is a relative value of 10⁻⁶, "parts in 10⁶", as per cent is parts per
+// hundred (SI Brochure, 9th edition, §5.4.7). The brochure says ppb and ppt
+// should be avoided, their meaning being language dependent, so finer
+// ratios are written as powers of ten. Three uses: a ± tolerance on a value,
+// the error of a measured value against its nominal, and a temperature
+// coefficient in ppm/K over a change of temperature, R(T) = R0 (1 + α ΔT).
+// Values are held in SI; the unit picker only says how they are shown.
+const PPM_UNITS = { "": 1, Hz: 1, kHz: 1e3, MHz: 1e6, mV: 1e-3, V: 1, "Ω": 1, "kΩ": 1e3, "MΩ": 1e6 };
+const PPM_BASE_UNIT = { "": "", Hz: "Hz", kHz: "Hz", MHz: "Hz", mV: "V", V: "V", "Ω": "Ω", "kΩ": "Ω", "MΩ": "Ω" };
+const PPM_MODES = { tol: "Tolerance", err: "Error", tc: "Tempco" };
 
-  function compute() {
-    const deviation = state.base * (state.tolPpm / 1e6);
-    const pct = state.tolPpm / 10000;
-    return { deviation, pct, min: state.base - deviation, max: state.base + deviation };
+function renderPpmConverter(domain, tool, favId) {
+  const C = "ppm-converter";
+  const state = {
+    mode: pref(C, "mode", "tol", Object.keys(PPM_MODES)),
+    unit: pref(C, "unit", "MHz", Object.keys(PPM_UNITS)),
+    ppm: 20,
+    base: 16e6,
+    measured: 16.00032e6,
+    tc: 100,
+    t1: 25,
+    t2: 85,
+  };
+  const minus = (s) => s.replace(/-/g, "−");
+  const unitOf = () => PPM_BASE_UNIT[state.unit];
+  const shown = (v) => (isFinite(v) ? String(Number((v / PPM_UNITS[state.unit]).toPrecision(10))) : "");
+  // A value to as many figures as it takes for a ppm-sized difference to show.
+  const show = (v, digits = 4) => minus(unitOf() ? siFormat(v, unitOf(), digits) : String(Number(v.toPrecision(digits))));
+  const signed = (s, v) => (v > 0 ? `+${s}` : s);
+  const pow10 = (x) => {
+    if (x === 0) return "0";
+    const e = Math.floor(Math.log10(Math.abs(x)) + 1e-9), m = x / 10 ** e;
+    return minus(`${Number(m.toPrecision(4))} × 10${superscript(e)}`);
+  };
+  const ratioLine = (ppm) => `${minus(String(Number(ppm.toPrecision(4))))} ppm = ${minus(String(Number((ppm / 1e4).toPrecision(4))))} % = ${pow10(ppm * 1e-6)}`;
+  // Figures for a range: enough that base ± deviation reads apart.
+  const rangeDigits = (base, dev) => Math.min(12, Math.max(4, Math.ceil(Math.log10(Math.abs(base) / Math.abs(dev))) + 3));
+  const clockLine = (ppm) => {
+    if (unitOf() !== "Hz") return "";
+    const day = Math.abs(ppm) * 1e-6 * 86400, year = day * 365.25;
+    const yr = year >= 120 ? `${trim(year / 60)} min` : `${trim(year)} s`;
+    const sign = state.mode === "tol" ? "±" : ppm < 0 ? "−" : ppm > 0 ? "+" : "";
+    return `As a clock: ${sign}${trim(day)} s a day, ${sign}${yr} a year`;
+  };
+
+  function problem() {
+    const v = state.mode === "tc" ? [state.base, state.tc, state.t1, state.t2] : state.mode === "err" ? [state.base, state.measured] : [state.base, state.ppm];
+    if (v.some((x) => !isFinite(x))) return "Fill in every field.";
+    if (state.base === 0) return "The value must not be zero: ppm is a fraction of it.";
+    if (state.mode === "tol" && state.ppm < 0) return "A tolerance is a ± limit, so it cannot be negative.";
+    return "";
   }
 
-  // trim()'s 4 sig figs rounds min/max straight back to the base value at
-  // ppm scale (16000000 ± 320 both read "16000000") — the offset needs far
-  // more precision to survive display than the deviation figure itself does.
-  function precise(n) {
-    if (!isFinite(n)) return "—";
-    return Number(n.toPrecision(10)).toString();
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const head = (label, big, subs) => `
+      <div class="result-field">
+        <div class="result-head"><span class="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+        <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+        ${subs.filter(Boolean).map(([k, s]) => `<div class="result-sub" data-res="${k}">${s}</div>`).join("")}
+      </div>`;
+    if (state.mode === "tol") {
+      const dev = Math.abs(state.base) * state.ppm * 1e-6;
+      const d = dev > 0 ? rangeDigits(state.base, dev) : 6;
+      return head("Deviation", `±${show(dev)}`, [
+        ["range", `${show(state.base - dev, d)} to ${show(state.base + dev, d)}`],
+        ["ratio", ratioLine(state.ppm)],
+        clockLine(state.ppm) && ["clock", clockLine(state.ppm)],
+      ]);
+    }
+    if (state.mode === "err") {
+      const diff = state.measured - state.base, ppm = (diff / Math.abs(state.base)) * 1e6;
+      return head("Error", `${signed(minus(String(Number(ppm.toPrecision(4)))), ppm)} ppm`, [
+        ["diff", `${signed(show(diff), diff)} from ${show(state.base, rangeDigits(state.base, diff || state.base))}`],
+        ["ratio", ratioLine(ppm)],
+        clockLine(ppm) && ["clock", clockLine(ppm)],
+      ]);
+    }
+    const dT = state.t2 - state.t1, ppm = state.tc * dT, change = state.base * ppm * 1e-6;
+    return head(`Change from ${minus(trim(state.t1))} to ${minus(trim(state.t2))} °C`, signed(show(change), change), [
+      ["value", `${show(state.base + change, change ? rangeDigits(state.base, change) : 6)} at ${minus(trim(state.t2))} °C`],
+      ["ratio", `${signed(minus(String(Number(ppm.toPrecision(4)))), ppm)} ppm over ${minus(trim(dT))} K = ${signed(minus(String(Number((ppm / 1e4).toPrecision(4)))), ppm)} %`],
+    ]);
   }
 
   function refresh() {
-    const r = compute();
-    app.querySelector('[data-res="dev"]').textContent = `± ${trim(r.deviation)}`;
-    app.querySelector('[data-res="range"]').textContent = `${precise(r.min)} – ${precise(r.max)}`;
-    app.querySelector('[data-res="pct"]').textContent = `= ${trim(r.pct)} %`;
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
   }
 
+  const example = (mode, values) => () => { Object.assign(state, { mode }, values); paint(); };
+  useExamples([
+    { title: "16 MHz crystal, ±20 ppm", note: "±320 Hz: anywhere from 15.99968 to 16.00032 MHz.", apply: example("tol", { unit: "MHz", base: 16e6, ppm: 20 }) },
+    { title: "A counter reads 16.00032 MHz", note: "320 Hz high on 16 MHz is +20 ppm.", apply: example("err", { unit: "MHz", base: 16e6, measured: 16.00032e6 }) },
+    { title: "Watch crystal at ±20 ppm", note: "±655.4 mHz on 32.768 kHz: a clock off by up to 1.728 s a day.", apply: example("tol", { unit: "kHz", base: 32768, ppm: 20 }) },
+    { title: "A 0.1 % resistor in ppm", note: "0.1 % is 1000 ppm: ±10 Ω on 10 kΩ.", apply: example("tol", { unit: "kΩ", base: 1e4, ppm: 1000 }) },
+    { title: "10 kΩ at 100 ppm/K, at 85 °C", note: "60 K above 25 °C is +6000 ppm: +60 Ω, 10.06 kΩ.", apply: example("tc", { unit: "kΩ", base: 1e4, tc: 100, t1: 25, t2: 85 }) },
+  ]);
+
   function paint() {
-    const r = compute();
+    const m = state.mode;
+    const num = (id, key, v) => `<input id="${id}" data-key="${key}" type="number" inputmode="decimal" step="any" value="${v}" />`;
+    const unitSel = `<select id="ppm-unit">${Object.keys(PPM_UNITS).map((u) => `<option value="${u}" ${u === state.unit ? "selected" : ""}>${u || "none"}</option>`).join("")}</select>`;
+    const baseLabel = m === "err" ? "Nominal" : m === "tc" ? "Value at the first temperature" : "Value";
+    const baseField = `<div class="field"><label>${baseLabel}</label><div class="field-row">${num("ppm-base", "base", shown(state.base))}${unitSel}</div></div>`;
+    let fields;
+    if (m === "tol") {
+      fields = `<div class="field-pair">${baseField}
+        <div class="field"><label>Tolerance, ±</label><div class="field-row">${num("ppm-tol", "ppm", state.ppm)}<span class="unit-fixed">ppm</span></div></div></div>`;
+    } else if (m === "err") {
+      fields = `<div class="field-pair">${baseField}
+        <div class="field"><label>Measured</label><div class="field-row">${num("ppm-meas", "measured", shown(state.measured))}<span class="unit-fixed">${state.unit}</span></div></div></div>`;
+    } else {
+      fields = `${baseField}
+        <div class="field-pair">
+          <div class="field"><label>Tempco</label><div class="field-row">${num("ppm-tc", "tc", state.tc)}<span class="unit-fixed">ppm/K</span></div></div>
+          <div class="field"><label>From</label><div class="field-row">${num("ppm-t1", "t1", state.t1)}<span class="unit-fixed">°C</span></div></div>
+          <div class="field"><label>To</label><div class="field-row">${num("ppm-t2", "t2", state.t2)}<span class="unit-fixed">°C</span></div></div>
+        </div>`;
+    }
+    const formulas = {
+      tol: ["deviation = value × ppm / 10⁶", "range = value ± deviation", "% = ppm / 10 000"],
+      err: ["error (ppm) = (measured − nominal) / nominal × 10⁶"],
+      tc: ["change = value × tempco × (T2 − T1) / 10⁶", "R(T2) = R(T1) × (1 + α · ΔT)"],
+    }[m];
     app.innerHTML = `
-      ${calcHeader(tool, favId, "ppm tolerance applied to a value")}
+      ${calcHeader(tool, favId, "Parts per million of a value")}
 
-      <div class="section-label" style="color:#8FC1F5">Tolerance & base value</div>
-      <div class="field">
-        <label>Tolerance (ppm)</label>
-        <input id="ppm-tol" type="number" inputmode="decimal" step="any" value="${state.tolPpm}" />
-      </div>
-      <div class="field">
-        <label>Base value (any unit — Hz, V, Ω, ...)</label>
-        <input id="ppm-base" type="number" inputmode="decimal" step="any" value="${state.base}" />
-      </div>
+      ${pillRow(Object.keys(PPM_MODES).map((k) => [k, PPM_MODES[k]]), m, domain.bg)}
 
-      <div class="section-label" style="color:#5DCAA5">Deviation</div>
-      <div class="result-field">
-        <div class="result-head"><span class="label">± deviation from base</span></div>
-        <div class="result-value"><span class="num" data-res="dev">± ${trim(r.deviation)}</span></div>
-        <div class="result-sub" data-res="range">${precise(r.min)} – ${precise(r.max)}</div>
-        <div class="result-sub" data-res="pct" style="font-size:11px;color:var(--text-muted);">= ${trim(r.pct)} %</div>
-      </div>
+      ${fields}
 
-      ${formulaSection(
-        ["deviation = base × (ppm / 1,000,000)", "range = base ± deviation", "% = ppm / 10,000"],
-        "A 16 MHz crystal rated ±20 ppm can sit anywhere within ±320 Hz of nominal — same math as a component's percent tolerance, just at a finer scale ppm is built for. Works for any quantity: enter the base in Hz, V, Ω, whatever the datasheet's ppm spec is against."
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(formulas,
+        "ppm (parts per million) is a fraction of 10⁻⁶ of a value, as % is a fraction of 10⁻², so 1 % is 10 000 ppm. It suits small, precise figures: a crystal's tolerance, a counter's error, a resistor's or a reference's temperature coefficient (tempco), in ppm per kelvin, a step of 1 K being one of 1 °C. A frequency off by some ppm makes a clock gain or lose the same fraction of its time. ppb and ppt are avoided: the SI Brochure notes that their meaning depends on the language."
       )}
       ${calcFooter()}
     `;
 
-    wireCalc(favId, paint);
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
-    document.getElementById("ppm-tol").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.tolPpm = v; refresh(); } };
-    document.getElementById("ppm-base").oninput = (e) => { const v = parseFloat(e.target.value); if (isFinite(v)) { state.base = v; refresh(); } };
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const v = parseFloat(el.value), key = el.dataset.key;
+        state[key] = key === "base" || key === "measured" ? v * PPM_UNITS[state.unit] : v;
+        refresh();
+      };
+    });
+    // A unit of the same quantity keeps the value; another quantity keeps the numbers.
+    document.getElementById("ppm-unit").onchange = (e) => {
+      const old = state.unit, next = e.target.value;
+      if (PPM_BASE_UNIT[old] !== PPM_BASE_UNIT[next]) {
+        state.base = (state.base / PPM_UNITS[old]) * PPM_UNITS[next];
+        state.measured = (state.measured / PPM_UNITS[old]) * PPM_UNITS[next];
+      }
+      state.unit = next; setPref(C, "unit", next);
+      paint();
+    };
   }
 
   paint();

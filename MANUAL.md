@@ -116,6 +116,7 @@ will key on, since that is the id the app already holds for each tool.
 - Calculators → [dB levels](#db-absolute)
 - Calculators → [RMS calculator](#rms-calculator)
 - Converters → [Unit converter](#unit-converter)
+- Converters → [PPM converter](#ppm-converter)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8810,5 +8811,97 @@ The review made these changes:
   An unsupported claim about IP ratings and pressure was removed.
 - **The rest:** a formula card in Formula search, the remembered
   category, examples, the first cases and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="ppm-converter"></a>
+## PPM converter
+
+`calc: ppm-converter` · Tools › Converters
+
+### What it computes
+
+Parts per million of a value, three ways, by pill:
+
+| Pill | Inputs | Output |
+|---|---|---|
+| Tolerance | a value and a ± tolerance in ppm | the ± deviation, the range |
+| Error | a nominal and a measured value | the error in ppm, and the difference |
+| Tempco | a value, a tempco in ppm/K, two temperatures | the change, and the value at the second temperature |
+
+- **Units:** the value is in Hz, kHz, MHz, mV, V, Ω, kΩ, MΩ or none, held
+  in SI.
+- **Conversions:** every result gives the same fraction in ppm, in % and as
+  a power of ten.
+- **For a frequency,** the tool also gives the drift of a clock run from
+  it, in seconds a day and a year.
+- **The range** is shown to as many figures as it takes for the deviation
+  to show.
+- **Remembered:** the mode and the unit.
+
+Examples: a 16 MHz crystal at ±20 ppm, a counter reading 16.00032 MHz, a
+watch crystal at ±20 ppm, a 0.1 % resistor in ppm, and a 10 kΩ resistor
+at 100 ppm/K heated to 85 °C.
+
+### Source
+
+**BIPM SI Brochure, 9th edition (2019, updated 2022), §5.4.7**, read in
+review:
+- **ppm:** the term "parts per million" or "ppm", "meaning 10⁻⁶ relative
+  value, or parts in 10⁶, is also used. This is analogous to the meaning
+  of per cent as parts per hundred."
+- **ppb and ppt:** their "meanings are language dependent. For this reason
+  the abbreviations ppb and ppt should be avoided." The tool writes finer
+  fractions as powers of ten instead.
+
+The tempco is the linear temperature coefficient, R(T) = R0 (1 + α ΔT), as
+the resistor colour code gives it in ppm/K. Crystal budgets (tolerance,
+temperature, ageing, the tuning fork's parabola) are in Oscillator
+stability.
+
+### Why the formulas are these
+
+    deviation = value × ppm / 10⁶          1 % = 10 000 ppm
+    error (ppm) = (measured − nominal) / |nominal| × 10⁶
+    change = value × α × (T2 − T1) / 10⁶     α in ppm/K
+    clock drift = ppm × 10⁻⁶ × 86 400 s a day
+
+A ppm is a fraction like a per cent, a ten-thousand times finer. A step of
+1 K is a step of 1 °C, so ppm/K and ppm/°C are the same coefficient. A
+clock counts cycles, so a frequency off by some ppm makes it gain or lose
+that fraction of its time: 20 ppm is 1.728 s a day.
+
+### Assumptions and limits
+
+- **The tempco is linear.** Real parts curve, and a datasheet's figure is
+  often a bound over its range rather than a slope. For crystals use
+  Oscillator stability.
+- **The tolerance is symmetric,** ± the same both ways.
+- **A zero value** is refused, since ppm is a fraction of it.
+
+### How it was checked
+
+12 cases:
+- 16 MHz at ±20 ppm: ±320 Hz, 15.99968 to 16.00032 MHz, ±1.728 s a day;
+- 16.00032 MHz read is +20 ppm, and 15.99984 MHz is −10 ppm;
+- 32.768 kHz at ±20 ppm is ±655.4 mHz;
+- 0.1 % is 1000 ppm, ±10 Ω on 10 kΩ;
+- 10 kΩ at 100 ppm/K gains 60 Ω at 85 °C and loses 65 Ω at −40 °C;
+- a unit change keeps the value, and with no unit the deviation is a
+  plain number;
+- zero and a negative tolerance are refused;
+- the remembered mode and unit.
+
+The review made these changes:
+- **New modes:** Error (measured against nominal) and Tempco. The tool
+  only applied a tolerance before.
+- **Units:** the value had none ("any unit"). It now has real units, and
+  the result is shown in them.
+- **Conversions:** ppm, % and a power of ten, without ppb.
+- **New:** a clock's drift for a frequency.
+- **The rest:** a formula card in Formula search, remembered choices,
+  examples, the first cases and this section.
 
 [↑ Index](#index)

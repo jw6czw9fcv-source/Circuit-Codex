@@ -317,7 +317,7 @@ const TOOL_KEYWORDS = {
   "db-ratio": "decibel db ratio gain loss attenuation amplifier 3 db 6 db 20 log 10 log dbw dbv",
   "db-absolute": "dbm dbw dbv dbu dbmv dbuv decibel level reference 600 ohm 50 ohm rf audio line level power voltage rms",
   "unit-converter": "units convert inch mm mil thou temperature celsius fahrenheit kelvin data bytes kib mib time energy wh joule calorie angle degree radian pressure hpa psi bar force newton gf lbf mass area volume speed",
-  "ppm-converter": "ppm parts per million",
+  "ppm-converter": "ppm parts per million tolerance error deviation tempco temperature coefficient ppm/k drift crystal clock seconds per day percent",
   "formula-search": "formulas equations",
   "physical-constants": "constants physics",
   "si-units": "si units base derived",

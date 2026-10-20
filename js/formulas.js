@@ -111,6 +111,12 @@ const FORMULAS = [
     note: "Temperature is the one offset scale; every other unit is a fixed factor (NIST SP 811).",
   },
   {
+    tool: "PPM converter",
+    domain: "tools",
+    formulas: ["deviation = value × ppm / 10⁶ · 1 % = 10 000 ppm", "error (ppm) = (measured − nominal) / nominal × 10⁶", "R(T2) = R(T1) × (1 + α · (T2 − T1)), α in ppm/K"],
+    note: "ppm is a relative value of 10⁻⁶ (SI Brochure §5.4.7), for crystal tolerances, counter errors and tempcos.",
+  },
+  {
     tool: "RMS calculator",
     domain: "tools",
     formulas: ["Vrms = √(mean of v²)", "Sine: Vrms = Vp / √2 · Square: Vp · Triangle: Vp / √3", "Pulse at duty D: Vrms = Vp · √D", "Crest factor = Vpeak / Vrms"],
