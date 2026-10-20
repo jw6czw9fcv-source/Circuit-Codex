@@ -3723,15 +3723,16 @@ function renderKirchhoff(domain, tool, favId) {
 // itself. When a real calculator later exists for the same tool name, the
 // card links straight to it — this list and the navigation tree are separate
 // data, joined only by that name match at render time. A renamed tool is
-// found by its old name too (`was`): matching the current name alone had
-// quietly unlinked the 555 timer, both battery tools and Wavelength.
+// found by its old name too (`was`), and a merged one by the name it had
+// (`mergedNames`): matching the current name alone had quietly unlinked the
+// 555 timer, both battery tools and Wavelength.
 function findToolForFormula(name) {
   for (const d of DOMAINS) {
     for (let si = 0; si < d.sections.length; si++) {
       const sec = d.sections[si];
       for (let ti = 0; ti < sec.tools.length; ti++) {
         const t = sec.tools[ti];
-        if ((t.name === name || t.was === name) && t.calc) {
+        if ((t.name === name || t.was === name || (t.mergedNames || []).includes(name)) && t.calc) {
           return { name: t.name, route: `/tool/${encodeURIComponent(`${d.id}:${si}:${ti}`)}/${t.calc}` };
         }
       }
@@ -3766,12 +3767,12 @@ function renderFormulaSearch(domain, tool, favId) {
     const results = document.getElementById("fs-results");
     results.innerHTML = list.length
       ? list.map(card).join("")
-      : `<div class="placeholder">${ICONS.search}<div>No formula for "${emptyQuery}" yet.</div><div style="font-size:12px;margin-top:6px;">Still growing — most topics don't have an entry here yet.</div></div>`;
+      : `<div class="placeholder">${ICONS.search}<div>No formula for "${emptyQuery}".</div><div style="font-size:12px;margin-top:6px;">Try a tool's name, a symbol such as fc or Vout, or a word such as cutoff.</div></div>`;
   }
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, `${FORMULAS.length} formulas so far`)}
+      ${calcHeader(tool, favId, `${FORMULAS.length} topics, by name or by formula`)}
 
       <div class="search-box">
         ${ICONS.search}

@@ -91,6 +91,14 @@ async function checkTool(t) {
   const hasRelated = typeof win.relatedTools === "function" && win.relatedTools(t.calc).length;
   if (hasRelated && !doc.querySelector(".chip-row.related")) r.problems.push("related tools not shown");
 
+  // Every Formula search card names a tool in the tree, by its name, its old
+  // name or a name merged into it: a rename must not unlink a card.
+  if (t.calc === "formula-search") {
+    const lost = win.eval(`FORMULAS.filter((f) => !DOMAINS.some((d) => d.sections.some((s) => s.tools.some((x) =>
+      x.name === f.tool || x.was === f.tool || (x.mergedNames || []).includes(f.tool))))).map((f) => f.tool)`);
+    if (lost.length) r.problems.push(`formula card(s) naming no tool: ${lost.join(", ")}`);
+  }
+
   // Text cut off inside a card: a value wider than its cell.
   const clipped = [...doc.querySelectorAll(".eseries-cell, .result-value, .field-row")]
     .filter((el) => el.getBoundingClientRect().height > 0 && el.scrollWidth > el.clientWidth + 1);

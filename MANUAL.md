@@ -117,6 +117,7 @@ will key on, since that is the id the app already holds for each tool.
 - Calculators → [RMS calculator](#rms-calculator)
 - Converters → [Unit converter](#unit-converter)
 - Converters → [PPM converter](#ppm-converter)
+- Reference → [Formula search](#formula-search)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8903,5 +8904,82 @@ The review made these changes:
 - **New:** a clock's drift for a frequency.
 - **The rest:** a formula card in Formula search, remembered choices,
   examples, the first cases and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="formula-search"></a>
+## Formula search
+
+`calc: formula-search` · Tools › Reference
+
+### What it computes
+
+Nothing: it finds. It holds the main formulas of 72 topics, one card each,
+searchable by a tool's name, by a formula or a symbol in it (fc, Vout,
+2π × R × C), or by a word of its note (cutoff, duty).
+
+- **Linked cards:** 65 cards are for built tools. Tapping one opens the
+  tool, and its lines are the tool's own Formula section, cut to the main
+  ones.
+- **Standalone cards:** 7 cards are for tools not built yet (path loss,
+  VSWR, antenna length, LDO, buck, boost, thermal resistance). They stand
+  on their own, each sourced.
+- **Left out:** lookup tables, which have no formula to give: marking
+  codes, packages, battery and button-cell sizes, cable colours, IP
+  ratings, the Karnaugh map, constants and units.
+
+### Source
+
+Each linked card follows its tool, whose manual section gives the source.
+For the standalone cards, read in review:
+- **Path loss:** ITU-R P.525-5 (11/2024), eq. 5, Lbf = 20 log₁₀(4πd/λ),
+  and eq. 6, Lbf = 32.4 + 20 log₁₀ f + 20 log₁₀ d, with f in MHz and d in
+  km. The card gives the constant as 32.45, which is 20 log₁₀(4π × 10⁹/c).
+- **LDO:** TI LM317 datasheet, eq. 2, VO = VREF (1 + R2/R1) + IADJ × R2.
+  IADJ is "typically 50 µA and negligible in most applications"; VREF is
+  1.25 V.
+- **Antenna:** 468 / f is 95 % of the free-space half wave, 491.8 / f in
+  feet. No antenna handbook was read in review, so the card gives the
+  arithmetic and says to trim on the air.
+- **VSWR, buck, boost, thermal:** the definitions and the ideal relations,
+  stated as such.
+
+### Assumptions and limits
+
+- **A card is a summary.** The tool has the full set, the modes and the
+  checks; open it for a number.
+- **Search is plain text,** case-insensitive, on the name, the formulas
+  and the note.
+
+### How it was checked
+
+7 cases:
+- the 72 topics, listed by name;
+- a formula finds its tool;
+- a symbol finds its tool;
+- a renamed tool's card opens under its new name;
+- a standalone card has no link;
+- the LM317 card's naming;
+- an empty search says what to try.
+
+The check also fails any card whose tool is not in the app, by its name,
+its old name or a name merged into it.
+
+The review made these changes:
+- **Cards:** 25 before, 72 now, one for every built tool that has a
+  formula (Pierre's choice). The new ones are taken from each tool's
+  Formula section.
+- **Fixed:**
+  - the LDO card had R1 and R2 the other way round from the LM317 it
+    named, and lacked the IADJ term;
+  - path loss used 32.44;
+  - the antenna note said 468 "ignores the velocity factor", where the
+    95 % is the end-effect allowance;
+  - the thermal card now gives TJ = TA + P × θJA.
+- **Links:** cards also link through merged tool names.
+- **Text:** the subtitle and the empty-search hint no longer say the list
+  is "still growing".
 
 [↑ Index](#index)
