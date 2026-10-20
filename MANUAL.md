@@ -119,6 +119,7 @@ will key on, since that is the id the app already holds for each tool.
 - Converters → [PPM converter](#ppm-converter)
 - Reference → [Formula search](#formula-search)
 - Reference → [Physical constants](#physical-constants)
+- Reference → [SI units](#si-units)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -9087,5 +9088,96 @@ The review made these changes:
   absorption edge, and its source.
 - **Notes:** rewritten around each constant's use in a circuit, with this
   manual section.
+
+[↑ Index](#index)
+
+---
+
+<a id="si-units"></a>
+## SI units
+
+`calc: si-units` · Tools › Reference
+
+### What it computes
+
+A reference list of 25 SI units, searchable by name, symbol, quantity, a
+word of the note, or a unit expression (A/V finds the siemens).
+
+- **Base units:** the seven base units, each with the defining constant
+  whose fixed value defines it.
+- **Derived units:** 18 of the 22 units with special names, each written
+  in base units and in other SI units, as the SI Brochure's table 4 gives
+  them (V = kg·m²·s⁻³·A⁻¹ = W/A).
+- **Notes:** each gives the unit's use in a circuit.
+
+### Source
+
+**BIPM SI Brochure, 9th edition (2019, updated 2022)**, read in review:
+- **Table 2 and §2.3.1:** the base units and their definitions:
+
+  | Unit | Fixed constant |
+  |---|---|
+  | second | ΔνCs = 9 192 631 770 Hz |
+  | metre | c = 299 792 458 m/s |
+  | kilogram | h = 6.626 070 15 × 10⁻³⁴ J s |
+  | ampere | e = 1.602 176 634 × 10⁻¹⁹ C |
+  | kelvin | k = 1.380 649 × 10⁻²³ J/K |
+  | mole | NA = 6.022 140 76 × 10²³ mol⁻¹ |
+  | candela | Kcd = 683 lm/W at 540 × 10¹² Hz |
+
+- **Table 4:** the 22 units with special names, in base units in the
+  order the CCU restored in 2013 (kg m² s⁻³ A⁻¹), and in other SI units.
+- **Its notes:**
+  - (b) one radian is the angle whose arc equals the radius, and phase
+    advances 2π rad in a period;
+  - (d) the hertz "shall only be used for periodic phenomena";
+  - (e) electric potential difference is "also called voltage";
+  - (f) a temperature difference has the same number in °C and K.
+- **§2.3.4:** angular frequency is given in rad/s, never Hz or s⁻¹: "Ignoring
+  this fact may cause an error of 2π."
+- **Chapter 3:** prefixes go on the gram, not the kilogram (mg, not µkg).
+
+### Why the formulas are these
+
+    V = W/A,  Ω = V/A,  S = A/V,  F = C/V,  H = Wb/A,  Wb = V·s,  T = Wb/m²
+    lm = cd·sr,  lx = lm/m²
+    t / °C = T / K − 273.15
+
+Every derived unit is a product of powers of the base units with a factor
+of one, which makes the set coherent: an equation between quantities, such
+as V = I × R, holds between their numbers with no factor when they are in
+volts, amperes and ohms.
+
+### Assumptions and limits
+
+- **Left out of table 4:** the becquerel, gray, sievert and katal, which
+  are units of radiation and catalysis, not circuits.
+- **Not here:** the prefixes (in SI prefix converter) and the non-SI units
+  that are accepted, such as the hour and the electronvolt (in Unit
+  converter and Physical constants).
+
+### How it was checked
+
+11 cases:
+- the second and the ampere's fixed constants;
+- the volt, farad, henry and tesla in table 4's forms and order;
+- a degree Celsius as a step of 1 K;
+- the base and derived groups;
+- search by expression (A/V), by quantity (inductance) and by note (the
+  2π warning);
+- an empty search.
+
+The review made these changes:
+- **Sourced:** the cards cite the SI Brochure's tables 2 and 4.
+- **Base units:** each now gives the value its definition fixes. Before,
+  only the constant's name was given, or a phrase.
+- **Derived units:** each gives its form in other SI units (W/A, C/V), as
+  table 4 does, and the farad's base units are in the table's order.
+- **New units:** radian, steradian, newton, pascal, degree Celsius, lumen
+  and lux.
+- **New:** the base and derived groups, and the hertz card's warning about
+  rad/s.
+- **Search:** also by note and by unit expression.
+- **The rest:** keywords, the first cases and this section.
 
 [↑ Index](#index)

@@ -4747,64 +4747,101 @@ function renderPhysicalConstants(domain, tool, favId) {
 }
 
 // ---------- SI units ----------
-// Same browsable-reference shape as Physical constants. The seven base units
-// are here as the foundation the electrical ones are built from — a volt is
-// only "kg·m²·s⁻³·A⁻¹" if you know what kg, m, s and A are — but the real
-// content is the eleven derived units electronics actually runs on. Purely
-// mechanical derived units (newton, pascal) are left out on the same
-// electronics-only basis the physical-constants trim used.
+// From the BIPM SI Brochure, 9th edition (2019, updated 2022). The seven base
+// units of table 2, each with the defining constant its definition fixes
+// (section 2.3.1), and the units with special names of table 4 that circuits
+// use, written in base units in the table's order (kg m² s⁻³ A⁻¹) and in
+// other SI units. Of table 4's 22, the becquerel, gray, sievert and katal are
+// left out: radiation and catalysis, not electronics.
 const SI_UNITS = [
-  { symbol: "m", name: "Metre", quantity: "Length", definition: "SI base unit", note: "Defined by fixing the speed of light c." },
-  { symbol: "kg", name: "Kilogram", quantity: "Mass", definition: "SI base unit", note: "Defined by fixing the Planck constant h." },
-  { symbol: "s", name: "Second", quantity: "Time", definition: "SI base unit", note: "Defined by a fixed number of caesium-133 hyperfine transitions." },
-  { symbol: "A", name: "Ampere", quantity: "Electric current", definition: "SI base unit", note: "Defined by fixing the elementary charge e — the base unit every electrical unit below is ultimately built from." },
-  { symbol: "K", name: "Kelvin", quantity: "Thermodynamic temperature", definition: "SI base unit", note: "Defined by fixing the Boltzmann constant k." },
-  { symbol: "mol", name: "Mole", quantity: "Amount of substance", definition: "SI base unit", note: "Defined by fixing the Avogadro constant." },
-  { symbol: "cd", name: "Candela", quantity: "Luminous intensity", definition: "SI base unit", note: "Rarely used directly in circuit work; relevant mainly to LED photometry." },
-  { symbol: "Hz", name: "Hertz", quantity: "Frequency", definition: "s⁻¹", note: "Cycles per second — clock speeds, signal frequency, sample rates." },
-  { symbol: "J", name: "Joule", quantity: "Energy", definition: "kg·m²·s⁻²", note: "= 1 W·s. Battery capacity in watt-hours is a scaled joule." },
-  { symbol: "W", name: "Watt", quantity: "Power", definition: "kg·m²·s⁻³", note: "= 1 J/s = 1 V·A. Power dissipation, ratings, and P = VI all live here." },
-  { symbol: "C", name: "Coulomb", quantity: "Electric charge", definition: "A·s", note: "= 1 A for 1 s. Battery capacity in amp-hours is a scaled coulomb." },
-  { symbol: "V", name: "Volt", quantity: "Electric potential", definition: "kg·m²·s⁻³·A⁻¹", note: "= 1 W/A = 1 J/C." },
-  { symbol: "F", name: "Farad", quantity: "Capacitance", definition: "s⁴·A²·kg⁻¹·m⁻²", note: "= 1 C/V. A real 1 F capacitor is enormous — µF, nF and pF are the everyday sizes." },
-  { symbol: "Ω", name: "Ohm", quantity: "Electrical resistance", definition: "kg·m²·s⁻³·A⁻²", note: "= 1 V/A." },
-  { symbol: "S", name: "Siemens", quantity: "Electrical conductance", definition: "kg⁻¹·m⁻²·s³·A²", note: "= 1/Ω — the reciprocal of resistance." },
-  { symbol: "Wb", name: "Weber", quantity: "Magnetic flux", definition: "kg·m²·s⁻²·A⁻¹", note: "= 1 V·s. Flux linkage in transformer and motor design." },
-  { symbol: "T", name: "Tesla", quantity: "Magnetic flux density", definition: "kg·s⁻²·A⁻¹", note: "= 1 Wb/m². Field strength in inductor and motor design." },
-  { symbol: "H", name: "Henry", quantity: "Inductance", definition: "kg·m²·s⁻²·A⁻²", note: "= 1 Wb/A = 1 V·s/A." },
+  { base: true, symbol: "s", name: "second", quantity: "time", fixed: "ΔνCs = 9 192 631 770 Hz",
+    note: "The duration of 9 192 631 770 periods of the caesium-133 hyperfine transition." },
+  { base: true, symbol: "m", name: "metre", quantity: "length", fixed: "c = 299 792 458 m/s",
+    note: "The distance light travels in vacuum in 1 / 299 792 458 of a second." },
+  { base: true, symbol: "kg", name: "kilogram", quantity: "mass", fixed: "h = 6.626 070 15 × 10⁻³⁴ J s",
+    note: "The one base unit with a prefix in its name, so prefixes go on the gram: mg, not µkg." },
+  { base: true, symbol: "A", name: "ampere", quantity: "electric current", fixed: "e = 1.602 176 634 × 10⁻¹⁹ C",
+    note: "1 A carries 1 / e elementary charges a second, about 6.24 × 10¹⁸. Every electrical unit below is built on it." },
+  { base: true, symbol: "K", name: "kelvin", quantity: "thermodynamic temperature", fixed: "k = 1.380 649 × 10⁻²³ J/K",
+    note: "Starts at absolute zero. A step of 1 K is a step of 1 °C." },
+  { base: true, symbol: "mol", name: "mole", quantity: "amount of substance", fixed: "NA = 6.022 140 76 × 10²³ mol⁻¹",
+    note: "That many entities, which must be named: atoms, electrons. A mole of electrons is the Faraday constant, 96 485 C." },
+  { base: true, symbol: "cd", name: "candela", quantity: "luminous intensity", fixed: "Kcd = 683 lm/W at 540 × 10¹² Hz",
+    note: "Light in a given direction, weighted for the eye. LED datasheets give it in mcd." },
+  { symbol: "rad", name: "radian", quantity: "plane angle, phase angle", siBase: "1", other: "m/m",
+    note: "The arc equal to the radius. A period is 2π rad of phase." },
+  { symbol: "sr", name: "steradian", quantity: "solid angle", siBase: "1", other: "m²/m²",
+    note: "A whole sphere is 4π sr. With the candela it makes the lumen." },
+  { symbol: "Hz", name: "hertz", quantity: "frequency", siBase: "s⁻¹",
+    note: "For periodic phenomena only. Angular frequency ω = 2πf is in rad/s, not Hz: mixing them is an error of 2π." },
+  { symbol: "N", name: "newton", quantity: "force", siBase: "kg·m·s⁻²",
+    note: "A switch's operating force; 1 kgf is 9.806 65 N." },
+  { symbol: "Pa", name: "pascal", quantity: "pressure", siBase: "kg·m⁻¹·s⁻²", other: "N/m²",
+    note: "Standard sea-level pressure is 101 325 Pa, 1013.25 hPa." },
+  { symbol: "J", name: "joule", quantity: "energy, work, heat", siBase: "kg·m²·s⁻²", other: "N·m",
+    note: "1 Wh is 3600 J." },
+  { symbol: "W", name: "watt", quantity: "power", siBase: "kg·m²·s⁻³", other: "J/s",
+    note: "P = V × I: 1 W is 1 V × 1 A." },
+  { symbol: "C", name: "coulomb", quantity: "electric charge", siBase: "A·s",
+    note: "1 mAh of battery capacity is 3.6 C." },
+  { symbol: "V", name: "volt", quantity: "electric potential difference", siBase: "kg·m²·s⁻³·A⁻¹", other: "W/A",
+    note: "Electric potential difference, also called voltage. 1 V is 1 J per coulomb." },
+  { symbol: "F", name: "farad", quantity: "capacitance", siBase: "kg⁻¹·m⁻²·s⁴·A²", other: "C/V",
+    note: "1 F is huge: the everyday sizes are µF, nF and pF." },
+  { symbol: "Ω", name: "ohm", quantity: "electric resistance", siBase: "kg·m²·s⁻³·A⁻²", other: "V/A",
+    note: "R = V / I." },
+  { symbol: "S", name: "siemens", quantity: "electric conductance", siBase: "kg⁻¹·m⁻²·s³·A²", other: "A/V",
+    note: "1 / Ω. A transistor's transconductance gm is in siemens." },
+  { symbol: "Wb", name: "weber", quantity: "magnetic flux", siBase: "kg·m²·s⁻²·A⁻¹", other: "V·s",
+    note: "A volt for a second across a one-turn coil changes the flux through it by 1 Wb." },
+  { symbol: "T", name: "tesla", quantity: "magnetic flux density", siBase: "kg·s⁻²·A⁻¹", other: "Wb/m²",
+    note: "Flux per area: what a Hall sensor measures, often in mT." },
+  { symbol: "H", name: "henry", quantity: "inductance", siBase: "kg·m²·s⁻²·A⁻²", other: "Wb/A",
+    note: "V = L × dI/dt: 1 H makes 1 V for a change of 1 A a second." },
+  { symbol: "°C", name: "degree Celsius", quantity: "Celsius temperature", siBase: "K", line: "a step of 1 °C = 1 K",
+    note: "t / °C = T / K − 273.15. A difference is the same number in °C and in K." },
+  { symbol: "lm", name: "lumen", quantity: "luminous flux", siBase: "cd·sr",
+    note: "All the light a source gives, weighted for the eye: an LED's total output." },
+  { symbol: "lx", name: "lux", quantity: "illuminance", siBase: "cd·sr·m⁻²", other: "lm/m²",
+    note: "Light falling on a surface: what a light sensor or an LDR is rated at." },
 ];
 
 function renderSiUnits(domain, tool, favId) {
-  function card(u) {
+  function card(u, i) {
+    const title = `${u.symbol} · ${u.name[0].toUpperCase()}${u.name.slice(1)}`;
     return `
-      <div class="formula-card formula-card--static">
+      <div class="formula-card formula-card--static" data-unit="${i}">
         <div class="formula-card-head">
-          <span class="formula-card-title">${u.symbol} — ${u.name}</span>
+          <span class="formula-card-title">${title}</span>
         </div>
         <div class="breadcrumb">${u.quantity}</div>
-        <div class="formula-line">${u.definition}</div>
-        ${u.note ? `<div class="formula-card-note">${u.note}</div>` : ""}
+        ${u.base
+          ? `<div class="formula-line" data-res="fixed-${i}">Fixed: ${u.fixed.replace(/(\d) (?=\d)/g, "$1\u202f")}</div>`
+          : `<div class="formula-line" data-res="base-${i}">${u.line || `${u.symbol} = ${u.siBase}${u.other ? ` = ${u.other}` : ""}`}</div>`}
+        <div class="formula-card-note">${u.note}</div>
       </div>`;
   }
 
   function matches(u, q) {
-    return u.name.toLowerCase().includes(q) || u.symbol.toLowerCase().includes(q) || u.quantity.toLowerCase().includes(q);
+    return [u.name, u.symbol, u.quantity, u.note, u.siBase || "", u.other || ""].some((s) => s.toLowerCase().includes(q));
   }
 
-  function renderList(list, emptyQuery) {
+  function renderList(q) {
     const results = document.getElementById("su-results");
-    results.innerHTML = list.length
-      ? list.map(card).join("")
-      : `<div class="placeholder">${ICONS.search}<div>No unit for "${emptyQuery}".</div></div>`;
+    const hits = SI_UNITS.map((u, i) => [u, i]).filter(([u]) => !q || matches(u, q));
+    const group = (label, list) => (list.length ? `<div class="section-label" style="color:#8FC1F5">${label}</div>${list.map(([u, i]) => card(u, i)).join("")}` : "");
+    results.innerHTML = hits.length
+      ? group("Base units", hits.filter(([u]) => u.base)) + group("Derived units with special names", hits.filter(([u]) => !u.base))
+      : `<div class="placeholder">${ICONS.search}<div>No unit for "${q}".</div></div>`;
   }
 
   function paint() {
     app.innerHTML = `
-      ${calcHeader(tool, favId, `${SI_UNITS.length} units`)}
+      ${calcHeader(tool, favId, "The base units, and the derived ones circuits use")}
 
       <div class="search-box">
         ${ICONS.search}
-        <input id="su-input" type="text" placeholder="Search a unit or quantity" autocapitalize="off" spellcheck="false" />
+        <input id="su-input" type="text" placeholder="Search a unit, a symbol or a quantity" autocapitalize="off" spellcheck="false" />
       </div>
       <div id="su-results"></div>
       ${tabbarHTML("")}
@@ -4813,11 +4850,8 @@ function renderSiUnits(domain, tool, favId) {
     document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
 
     const input = document.getElementById("su-input");
-    renderList(SI_UNITS, "");
-    input.oninput = () => {
-      const q = input.value.trim().toLowerCase();
-      renderList(q ? SI_UNITS.filter((u) => matches(u, q)) : SI_UNITS, q);
-    };
+    renderList("");
+    input.oninput = () => renderList(input.value.trim().toLowerCase());
   }
 
   paint();

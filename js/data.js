@@ -320,7 +320,7 @@ const TOOL_KEYWORDS = {
   "ppm-converter": "ppm parts per million tolerance error deviation tempco temperature coefficient ppm/k drift crystal clock seconds per day percent",
   "formula-search": "formulas equations",
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
-  "si-units": "si units base derived",
+  "si-units": "si units base derived bipm volt ohm farad henry siemens weber tesla watt joule coulomb hertz radian lumen lux candela kelvin ampere dimensions",
   "rms-calculator": "rms peak average ac voltage current true rms crest form factor pwm pulse duty sawtooth rectified meter",
 };
 
