@@ -115,6 +115,7 @@ will key on, since that is the id the app already holds for each tool.
 - Calculators → [dB ratio](#db-ratio)
 - Calculators → [dB levels](#db-absolute)
 - Calculators → [RMS calculator](#rms-calculator)
+- Converters → [Unit converter](#unit-converter)
 
 Tools finished before this file existed get their section when they are next
 touched. The completeness pass under **Before release** in `TODO.md` catches
@@ -8694,5 +8695,120 @@ The review made these changes:
 - **Text:** true minus signs and 11 px drawing labels.
 - **The rest:** a formula card in Formula search, remembered choices,
   examples, the first cases and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="unit-converter"></a>
+## Unit converter
+
+`calc: unit-converter` · Tools › Converters
+
+### What it computes
+
+One value shown in every unit of its quantity. All the fields are linked:
+type into any one and the rest follow.
+
+| Category | Units |
+|---|---|
+| Length | µm, mm, cm, m, mil, in, ft |
+| Temperature | °C, °F, K |
+| Data | bit, byte, kB, KiB, MB, MiB, GB, GiB |
+| Time | ns, µs, ms, s, min, h |
+| Energy | J, kJ, mWh, Wh, kWh, cal |
+| Angle | degree, radian, turn |
+| Pressure | Pa, hPa (mbar), kPa, bar, psi, atm |
+| Force | N, kN, gf, kgf, ozf, lbf |
+| Mass | mg, g, kg, oz, lb |
+| Area | mm², cm², m², in², ft² |
+| Volume | mL (cm³), L, m³, in³, ft³ |
+| Speed | m/s, km/h, mph, ft/s |
+
+- **Shown to** 6 significant figures, and 12 for data, so byte counts
+  stay exact.
+- **Remembered:** the category.
+
+Examples: a 10 mil trace, 85 °C, a 128 Mbit flash, an 18650 cell's
+energy, sea-level pressure, and a 90° phase shift.
+
+### Source
+
+**NIST Special Publication 811 (2008), Guide for the Use of the SI,
+appendix B** (nist.gov, free), read in review. Its factors in bold are
+exact, and these are:
+- 1 in = 0.0254 m, 1 ft = 0.3048 m, 1 mil = 2.54 × 10⁻⁵ m;
+- 1 lb = 0.453 592 37 kg (footnote 22);
+- 1 lbf = 4.448 221 615 260 5 N (footnote 23), from 1 kgf = 9.806 65 N;
+- 1 atm = 101 325 Pa, 1 bar = 10⁵ Pa, 1 mbar = 100 Pa;
+- 1 calth = 4.184 J, against 4.1868 J for the International Table calorie;
+- 1 in³ = 1.638 706 4 × 10⁻⁵ m³ (footnote 13);
+- 1 mi/h = 0.447 04 m/s, 1 W·h = 3600 J;
+- T/K = t/°C + 273.15, and t/°C = (t/°F − 32)/1.8.
+
+psi is built from them, as 1 lbf over 1 in²: 6894.757 Pa, as SP 811 lists.
+
+**BIPM SI Brochure, 9th edition (2019, updated 2022)**, read in review:
+- **Table 8:** the hour is "h", 1 h = 3600 s.
+- **§3:** SI prefixes "refer strictly to powers of 10. They should not be
+  used to indicate powers of 2 (for example, one kilobit represents 1000
+  bits and not 1024 bits)". The prefixes for powers of 2 are kibi (Ki),
+  mebi (Mi), gibi (Gi) and up, per IEC 80000-13.
+
+### Why the formulas are these
+
+    every unit but temperature:  value in base unit = value × factor
+    °F = °C × 1.8 + 32,   K = °C + 273.15
+    psi = lbf / in² = 4.448 221 615 260 5 N / (0.0254 m)²
+
+A unit is a fixed multiple of the category's base unit, so each category
+holds one value in its base unit and every field shows it in its own.
+Temperature is the exception: °C, °F and K have different zeros, so it
+needs the offset.
+
+### Assumptions and limits
+
+- **The calorie** is the thermochemical one, and **oz and lb** are the
+  avoirdupois ones.
+- **gf and kgf** are the weight of 1 g and 1 kg under standard gravity,
+  9.806 65 m/s².
+- **A flash sold as "128 Mbit"** counts in powers of 2: 128 × 2²⁰ bits,
+  16 MiB.
+- **Below absolute zero** is refused.
+- **Not here:** wire sizes (in Wire sizing), dB (in dB ratio and dB
+  levels), and SI prefixes alone (in SI prefix converter).
+
+### How it was checked
+
+14 cases:
+- 10 mil is 0.254 mm, and 1 in is 25.4 mm and 1000 mil;
+- 100 °F is 37.7778 °C and 310.928 K, and −1 K is refused;
+- 16 MiB is 16 777 216 bytes and 16.777216 MB;
+- 11.52 Wh is 41 472 J, and 1 cal is 4.184 J;
+- 1 psi is 6894.76 Pa, and 1 atm is 1013.25 hPa and 14.6959 psi;
+- 1 lbf is 4.44822 N, 16 ozf and 453.592 gf;
+- 1 in³ is 16.3871 mL;
+- 1 h is 3600 s;
+- 90° is 1.5708 rad and a quarter turn;
+- the remembered category.
+
+The review made these changes:
+- **Factors:** the cubic inch and the pound-force had rounded values where
+  SP 811 gives exact ones.
+- **Symbols:** "hr" is now "h", and the calorie is labelled.
+- **New units:**
+  - ft;
+  - ns;
+  - mWh;
+  - hPa (mbar);
+  - bit and byte;
+  - gf and ozf;
+  - turn.
+- **Layout:** the fields are two per row, so every category fits the
+  screen, and are shown to 6 figures instead of 4.
+- **Notes:** each category defines its units (mil, KiB, gf, the calorie).
+  An unsupported claim about IP ratings and pressure was removed.
+- **The rest:** a formula card in Formula search, the remembered
+  category, examples, the first cases and this section.
 
 [↑ Index](#index)

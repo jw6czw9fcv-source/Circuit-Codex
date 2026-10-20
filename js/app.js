@@ -11899,175 +11899,168 @@ function renderThermistor(domain, tool, favId) {
 }
 
 // ---------- Unit converter ----------
-// Scoped to what electronics work actually needs and doesn't already have
-// its own screen for: temperature (datasheets split between C and F, K for
-// physics), length (mil is the working unit for PCB fab, everything else
-// shows up on a caliper or a drawing), and angle (AC phase, RF). All the
-// fields in a category stay linked — type into any one, the rest follow —
-// rather than a fixed "from/to" pair.
-// Every category but Temperature is a straight proportional conversion —
-// one base unit, everything else a fixed multiple of it. linearCategory()
-// builds the shared fromUnit() for those so each entry below only has to
-// state its base-unit factors, not repeat the conversion math.
-function linearCategory(label, short, fields, toBase, def, formula, note) {
-  return {
-    label, short, fields, toBase, default: def, formula, note: note || "",
-    fromUnit(unit, v) {
-      const base = v * this.toBase[unit];
-      const r = {};
-      Object.keys(this.toBase).forEach((u) => { r[u] = base / this.toBase[u]; });
-      return r;
-    },
-    problem: () => "",
-  };
-}
-
+// The quantities electronics work meets outside its own tools. Every field in
+// a category stays linked: type into any one and the rest follow. Each unit
+// is a factor to the category's base unit, from NIST SP 811 (2008),
+// appendix B, where most are exact: 1 in = 0.0254 m, 1 lb = 0.453 592 37 kg,
+// 1 lbf = 4.448 221 615 260 5 N, 1 kgf = 9.806 65 N, 1 atm = 101 325 Pa,
+// 1 cal(th) = 4.184 J. The hour is "h", per the SI Brochure's table 8, and
+// SI prefixes are powers of 10, with Ki, Mi and Gi for powers of 2 (SI
+// Brochure §3, IEC 80000-13). Temperature is the one offset scale.
+const LBF_N = 4.4482216152605;
 const UNIT_CONVERTER_CATEGORIES = {
+  length: {
+    label: "Length",
+    fields: [["um", "µm", 1e-6], ["mm", "mm", 1e-3], ["cm", "cm", 1e-2], ["m", "m", 1], ["mil", "mil", 2.54e-5], ["in", "in", 0.0254], ["ft", "ft", 0.3048]],
+    default: ["mil", 10],
+    formula: ["1 in = 25.4 mm (exact)", "1 mil = 0.001 in = 25.4 µm", "1 ft = 12 in = 0.3048 m"],
+    note: "A mil is a thousandth of an inch, the working unit of PCB drawings: a 10 mil trace is 0.254 mm. It is not a millimetre.",
+  },
   temp: {
     label: "Temperature",
-    short: "Temp",
     fields: [["c", "°C"], ["f", "°F"], ["k", "K"]],
     default: ["c", 25],
-    fromC: (c) => ({ c, f: c * 9 / 5 + 32, k: c + 273.15 }),
-    fromUnit(unit, v) {
-      const c = unit === "c" ? v : unit === "f" ? (v - 32) * 5 / 9 : v - 273.15;
-      return this.fromC(c);
-    },
-    problem: (r) => (r.k < 0 ? "Temperature cannot go below absolute zero (0 K)." : ""),
-    formula: ["°F = °C × 9/5 + 32", "K = °C + 273.15"],
+    toBase: (unit, v) => (unit === "c" ? v : unit === "f" ? (v - 32) / 1.8 : v - 273.15),
+    fromBase: (unit, c) => (unit === "c" ? c : unit === "f" ? c * 1.8 + 32 : c + 273.15),
+    problem: (c) => (c < -273.15 ? "That is below absolute zero, 0 K." : ""),
+    formula: ["°F = °C × 1.8 + 32", "K = °C + 273.15"],
+    note: "Kelvin starts at absolute zero; a step of 1 K is a step of 1 °C, and of 1.8 °F.",
   },
-  length: linearCategory(
-    "Length", "Length",
-    [["mm", "mm"], ["cm", "cm"], ["m", "m"], ["in", "in"], ["mil", "mil"], ["um", "µm"]],
-    { mm: 1e-3, cm: 1e-2, m: 1, in: 0.0254, mil: 0.0000254, um: 1e-6 },
-    ["in", 1],
-    ["1 in = 25.4 mm = 1000 mil", "1 mil = 0.001 in = 0.0254 mm"],
-    "Mil (thousandth of an inch) is the working unit on most PCB fab drawings and stackup specs — not to be confused with mm, and definitely not with \"millimeter\" despite the name."
-  ),
-  area: linearCategory(
-    "Area", "Area",
-    [["mm2", "mm²"], ["cm2", "cm²"], ["m2", "m²"], ["in2", "in²"], ["ft2", "ft²"]],
-    { mm2: 1e-6, cm2: 1e-4, m2: 1, in2: 0.00064516, ft2: 0.09290304 },
-    ["cm2", 1],
-    ["1 in² = 645.16 mm²", "1 ft² = 0.0929 m²"]
-  ),
-  volume: linearCategory(
-    "Volume", "Volume",
-    [["cm3", "cm³"], ["l", "L"], ["m3", "m³"], ["in3", "in³"], ["ft3", "ft³"]],
-    { cm3: 1e-3, l: 1, m3: 1000, in3: 0.0163871, ft3: 28.316846592 },
-    ["cm3", 100],
-    ["1 in³ = 16.387 cm³", "1 L = 1000 cm³"]
-  ),
-  mass: linearCategory(
-    "Mass", "Mass",
-    [["mg", "mg"], ["g", "g"], ["kg", "kg"], ["oz", "oz"], ["lb", "lb"]],
-    { mg: 1e-3, g: 1, kg: 1000, oz: 28.349523125, lb: 453.59237 },
-    ["g", 100],
-    ["1 oz = 28.3495 g", "1 lb = 453.592 g"]
-  ),
-  speed: linearCategory(
-    "Speed", "Speed",
-    [["mps", "m/s"], ["kmh", "km/h"], ["mph", "mph"], ["fps", "ft/s"]],
-    { mps: 1, kmh: 1000 / 3600, mph: 0.44704, fps: 0.3048 },
-    ["mps", 1],
-    ["1 m/s = 3.6 km/h", "1 mph = 0.44704 m/s"]
-  ),
-  force: linearCategory(
-    "Force", "Force",
-    [["n", "N"], ["kn", "kN"], ["kgf", "kgf"], ["lbf", "lbf"]],
-    { n: 1, kn: 1000, kgf: 9.80665, lbf: 4.4482216153 },
-    ["n", 1],
-    ["1 kgf = 9.80665 N", "1 lbf = 4.4482 N"],
-    "Connector mating force and switch/button actuation force are usually specced in N or kgf on datasheets."
-  ),
-  pressure: linearCategory(
-    "Pressure", "Pressure",
-    [["pa", "Pa"], ["kpa", "kPa"], ["bar", "bar"], ["psi", "psi"], ["atm", "atm"]],
-    { pa: 1, kpa: 1000, bar: 100000, psi: 6894.757293168, atm: 101325 },
-    ["kpa", 100],
-    ["1 bar = 100 kPa = 14.5038 psi", "1 atm = 101.325 kPa"],
-    "Shows up on IP-rated enclosure specs (waterproof depth/pressure ratings) and pressure-sensor datasheets."
-  ),
-  energy: linearCategory(
-    "Energy", "Energy",
-    [["j", "J"], ["kj", "kJ"], ["wh", "Wh"], ["kwh", "kWh"], ["cal", "cal"]],
-    { j: 1, kj: 1000, wh: 3600, kwh: 3600000, cal: 4.184 },
-    ["wh", 10],
-    ["1 Wh = 3600 J", "1 kWh = 1000 Wh"],
-    "Wh/kWh is how battery capacity is usually rated once you go past mAh — see Battery runtime for the mAh↔Wh conversion at a given voltage."
-  ),
-  data: linearCategory(
-    "Data", "Data",
-    [["kb", "kB"], ["kib", "KiB"], ["mb", "MB"], ["mib", "MiB"], ["gb", "GB"], ["gib", "GiB"]],
-    { bit: 1, byte: 8, kb: 8000, kib: 8192, mb: 8e6, mib: 8388608, gb: 8e9, gib: 8589934592 },
-    ["kib", 64],
-    ["1 byte = 8 bits", "1 kB = 1000 B, 1 KiB = 1024 B"],
-    "Decimal (kB/MB/GB, ×1000) is how storage is marketed; binary (KiB/MiB/GiB, ×1024) is how RAM and flash datasheets actually work — the gap between the two grows at each step up."
-  ),
-  time: linearCategory(
-    "Time", "Time",
-    [["us", "µs"], ["ms", "ms"], ["s", "s"], ["min", "min"], ["hr", "hr"]],
-    { us: 1e-6, ms: 1e-3, s: 1, min: 60, hr: 3600 },
-    ["ms", 100],
-    ["1 min = 60 s", "1 hr = 3600 s"]
-  ),
-  angle: linearCategory(
-    "Angle", "Angle",
-    [["deg", "degrees"], ["rad", "radians"]],
-    { deg: Math.PI / 180, rad: 1 },
-    ["deg", 45],
-    ["radians = degrees × π / 180"]
-  ),
+  data: {
+    label: "Data",
+    digits: 12,
+    fields: [["bit", "bit", 1], ["byte", "byte", 8], ["kb", "kB", 8e3], ["kib", "KiB", 8 * 1024], ["mb", "MB", 8e6], ["mib", "MiB", 8 * 1024 ** 2], ["gb", "GB", 8e9], ["gib", "GiB", 8 * 1024 ** 3]],
+    default: ["mib", 16],
+    formula: ["1 byte = 8 bit", "1 kB = 1000 byte · 1 KiB = 1024 byte", "1 MiB = 1024 KiB · 1 GiB = 1024 MiB"],
+    note: "kB, MB and GB are powers of 10; KiB, MiB and GiB (kibi, mebi, gibi) powers of 2. Memory chips count in powers of 2: a flash sold as \"128 Mbit\" holds 128 × 2²⁰ bits, 16 MiB.",
+  },
+  time: {
+    label: "Time",
+    fields: [["ns", "ns", 1e-9], ["us", "µs", 1e-6], ["ms", "ms", 1e-3], ["s", "s", 1], ["min", "min", 60], ["h", "h", 3600]],
+    default: ["ms", 100],
+    formula: ["1 h = 60 min = 3600 s", "1 s = 1000 ms = 10⁶ µs = 10⁹ ns"],
+    note: "",
+  },
+  energy: {
+    label: "Energy",
+    fields: [["j", "J", 1], ["kj", "kJ", 1e3], ["mwh", "mWh", 3.6], ["wh", "Wh", 3600], ["kwh", "kWh", 3.6e6], ["cal", "cal", 4.184]],
+    default: ["wh", 11.52],
+    formula: ["1 Wh = 3600 J", "1 cal = 4.184 J (thermochemical)"],
+    note: "A battery's energy is its voltage times its capacity: 3.6 V × 3.2 Ah = 11.52 Wh. The calorie here is the thermochemical one; the International Table calorie is 4.1868 J.",
+  },
+  angle: {
+    label: "Angle",
+    fields: [["deg", "degree", Math.PI / 180], ["rad", "radian", 1], ["turn", "turn", 2 * Math.PI]],
+    default: ["deg", 90],
+    formula: ["1 turn = 360° = 2π rad", "1 rad = 180° / π ≈ 57.30°"],
+    note: "A phase angle is often given in degrees, but ω = 2πf and every formula with it work in radians.",
+  },
+  pressure: {
+    label: "Pressure",
+    fields: [["pa", "Pa", 1], ["hpa", "hPa (mbar)", 100], ["kpa", "kPa", 1e3], ["bar", "bar", 1e5], ["psi", "psi", LBF_N / 0.0254 ** 2], ["atm", "atm", 101325]],
+    default: ["atm", 1],
+    formula: ["1 atm = 101 325 Pa = 1013.25 hPa", "1 bar = 100 kPa · 1 hPa = 1 mbar", "1 psi = 1 lbf / in² ≈ 6.895 kPa"],
+    note: "Barometric pressure is usually given in hPa, the same as mbar. Standard sea-level pressure is 1 atm.",
+  },
+  force: {
+    label: "Force",
+    fields: [["n", "N", 1], ["kn", "kN", 1e3], ["gf", "gf", 9.80665e-3], ["kgf", "kgf", 9.80665], ["ozf", "ozf", LBF_N / 16], ["lbf", "lbf", LBF_N]],
+    default: ["gf", 100],
+    formula: ["1 kgf = 9.806 65 N", "1 lbf = 4.448 222 N · 1 ozf = 1/16 lbf"],
+    note: "Gram-force and kilogram-force are the weight of 1 g and 1 kg under standard gravity, 9.806 65 m/s². Switch and connector forces are quoted in N, gf or ozf.",
+  },
+  mass: {
+    label: "Mass",
+    fields: [["mg", "mg", 1e-6], ["g", "g", 1e-3], ["kg", "kg", 1], ["oz", "oz", 0.028349523125], ["lb", "lb", 0.45359237]],
+    default: ["g", 100],
+    formula: ["1 lb = 0.453 592 37 kg (exact)", "1 oz = 1/16 lb ≈ 28.35 g"],
+    note: "Ounce and pound are the avoirdupois ones.",
+  },
+  area: {
+    label: "Area",
+    fields: [["mm2", "mm²", 1e-6], ["cm2", "cm²", 1e-4], ["m2", "m²", 1], ["in2", "in²", 0.0254 ** 2], ["ft2", "ft²", 0.3048 ** 2]],
+    default: ["in2", 1],
+    formula: ["1 in² = 645.16 mm²", "1 ft² = 0.092 903 04 m²"],
+    note: "Wire cross-sections in mm², AWG and circular mils are in Wire sizing.",
+  },
+  volume: {
+    label: "Volume",
+    fields: [["ml", "mL (cm³)", 1e-6], ["l", "L", 1e-3], ["m3", "m³", 1], ["in3", "in³", 0.0254 ** 3], ["ft3", "ft³", 0.3048 ** 3]],
+    default: ["l", 1],
+    formula: ["1 L = 1000 mL = 1000 cm³", "1 in³ = 16.387 064 cm³"],
+    note: "",
+  },
+  speed: {
+    label: "Speed",
+    fields: [["mps", "m/s", 1], ["kmh", "km/h", 1 / 3.6], ["mph", "mph", 0.44704], ["fps", "ft/s", 0.3048]],
+    default: ["kmh", 100],
+    formula: ["1 m/s = 3.6 km/h", "1 mph = 1.609 344 km/h"],
+    note: "",
+  },
 };
 
 function renderUnitConverter(domain, tool, favId) {
-  const state = { category: "temp" };
-  Object.keys(UNIT_CONVERTER_CATEGORIES).forEach((k) => {
-    const c = UNIT_CONVERTER_CATEGORIES[k];
-    state[k] = c.fromUnit(c.default[0], c.default[1]);
-  });
+  const C = "unit-converter";
+  const cats = UNIT_CONVERTER_CATEGORIES;
+  // Each category holds one value in its base unit (m, °C, bit, s, J, rad,
+  // Pa, N, kg, m², m³, m/s).
+  const state = { category: pref(C, "category", "length", Object.keys(cats)), base: {} };
+  const cat = () => cats[state.category];
+  const toBase = (c, unit, v) => (c.toBase ? c.toBase(unit, v) : v * c.fields.find(([u]) => u === unit)[2]);
+  const fromBase = (c, unit, b) => (c.fromBase ? c.fromBase(unit, b) : b / c.fields.find(([u]) => u === unit)[2]);
+  Object.keys(cats).forEach((k) => { const c = cats[k]; state.base[k] = toBase(c, c.default[0], c.default[1]); });
+  const shown = (unit) => {
+    const c = cat(), v = fromBase(c, unit, state.base[state.category]);
+    return isFinite(v) ? String(Number(v.toPrecision(c.digits || 6))) : "";
+  };
+  const problem = () => (cat().problem ? cat().problem(state.base[state.category]) : "");
 
-  function cat() { return UNIT_CONVERTER_CATEGORIES[state.category]; }
-
-  function applyUnit(unit, val) {
-    if (!isFinite(val)) return;
-    state[state.category] = cat().fromUnit(unit, val);
-    syncFields(unit);
-  }
-
-  function syncFields(sourceUnit) {
-    const values = state[state.category];
-    const issue = cat().problem(values);
-    app.querySelector('[data-res="err"]').textContent = issue;
+  function sync(source) {
+    const err = problem();
+    app.querySelector('[data-res="err"]').textContent = err;
     cat().fields.forEach(([unit]) => {
-      const field = document.getElementById(`uc-${unit}`);
-      if (field && unit !== sourceUnit && document.activeElement !== field) {
-        field.value = trim(values[unit]);
-      }
+      const f = document.getElementById(`uc-${unit}`);
+      if (f && unit !== source) f.value = err ? "" : shown(unit);
     });
   }
 
+  const example = (category, unit, value) => () => {
+    state.category = category;
+    state.base[category] = toBase(cats[category], unit, value);
+    paint();
+  };
+  useExamples([
+    { title: "A 10 mil trace", note: "0.254 mm: a mil is a thousandth of an inch, not a millimetre.", apply: example("length", "mil", 10) },
+    { title: "Rated to 85 °C", note: "85 °C is 185 °F, or 358.15 K.", apply: example("temp", "c", 85) },
+    { title: "A 128 Mbit flash", note: "128 × 2²⁰ bits is 16 MiB: 16 777 216 bytes, 16.78 MB.", apply: example("data", "mib", 16) },
+    { title: "An 18650 cell's energy", note: "3.6 V × 3.2 Ah = 11.52 Wh, 41.47 kJ.", apply: example("energy", "wh", 11.52) },
+    { title: "Sea-level pressure", note: "1 atm is 1013.25 hPa, 14.70 psi.", apply: example("pressure", "atm", 1) },
+    { title: "A 90° phase shift", note: "π/2 = 1.571 rad, a quarter turn.", apply: example("angle", "deg", 90) },
+  ]);
+
   function paint() {
-    const values = state[state.category];
-    const issue = cat().problem(values);
+    const c = cat();
+    const err = problem();
+    const field = ([unit, label]) => `
+      <div class="field">
+        <label>${label}</label>
+        <div class="field-row"><input type="number" inputmode="decimal" step="any" id="uc-${unit}" value="${err ? "" : shown(unit)}" /></div>
+      </div>`;
+    const rows = [];
+    for (let i = 0; i < c.fields.length; i += 2) rows.push(`<div class="field-pair">${c.fields.slice(i, i + 2).map(field).join("")}</div>`);
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Type into any field — the rest follow")}
+      ${calcHeader(tool, favId, "Type into any field, the rest follow")}
 
       <div class="filter-row" id="uc-cats" style="flex-wrap:wrap;justify-content:flex-start;gap:6px;row-gap:8px;">
-        ${Object.keys(UNIT_CONVERTER_CATEGORIES).map((k) => `
+        ${Object.keys(cats).map((k) => `
           <button class="filter-btn ${k === state.category ? "active" : ""}" data-cat="${k}"
-                  style="${k === state.category ? `background:${domain.bg};color:${domain.color};` : ""}">${UNIT_CONVERTER_CATEGORIES[k].short}</button>`).join("")}
+                  style="${k === state.category ? `background:${domain.bg};color:#8FC1F5;` : ""}">${cats[k].label}</button>`).join("")}
       </div>
 
-      <div class="section-label" style="color:#8FC1F5">${cat().label}</div>
-      ${cat().fields.map(([unit, label]) => `
-        <div class="field">
-          <label>${label}</label>
-          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="uc-${unit}" value="${trim(values[unit])}" /></div>
-        </div>`).join("")}
-      <div class="error-text" data-res="err">${issue}</div>
+      ${rows.join("")}
+      <div class="error-text" data-res="err">${err}</div>
 
-      ${formulaSection(cat().formula, cat().note)}
+      ${formulaSection(c.formula, c.note)}
       ${calcFooter()}
     `;
 
@@ -12077,12 +12070,18 @@ function renderUnitConverter(domain, tool, favId) {
       const btn = e.target.closest(".filter-btn");
       if (!btn) return;
       state.category = btn.dataset.cat;
+      setPref(C, "category", state.category);
       paint();
     });
 
-    cat().fields.forEach(([unit]) => {
-      const field = document.getElementById(`uc-${unit}`);
-      field.oninput = () => applyUnit(unit, parseFloat(field.value));
+    c.fields.forEach(([unit]) => {
+      const f = document.getElementById(`uc-${unit}`);
+      f.oninput = () => {
+        const v = parseFloat(f.value);
+        if (!isFinite(v)) return;
+        state.base[state.category] = toBase(c, unit, v);
+        sync(unit);
+      };
     });
   }
 

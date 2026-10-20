@@ -105,6 +105,12 @@ const FORMULAS = [
     note: "A level is against a fixed reference. Voltages are rms; 0 dBm is 0 dBu only across 600 Ω.",
   },
   {
+    tool: "Unit converter",
+    domain: "tools",
+    formulas: ["°F = °C × 1.8 + 32 · K = °C + 273.15", "1 in = 25.4 mm = 1000 mil", "1 KiB = 1024 byte · 1 kB = 1000 byte"],
+    note: "Temperature is the one offset scale; every other unit is a fixed factor (NIST SP 811).",
+  },
+  {
     tool: "RMS calculator",
     domain: "tools",
     formulas: ["Vrms = √(mean of v²)", "Sine: Vrms = Vp / √2 · Square: Vp · Triangle: Vp / √3", "Pulse at duty D: Vrms = Vp · √D", "Crest factor = Vpeak / Vrms"],
