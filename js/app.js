@@ -7261,7 +7261,7 @@ function renderFilmCapacitorCode(domain, tool, favId) {
   paint();
 }
 
-// ---------- Capacitor SMD code ----------
+// ---------- SMD cap code ----------
 // The black chip visual belongs here, unlike the ceramic disc and film box
 // screens next to it — this is the one capacitor "code" screen that's
 // actually decoding an SMD part. Most small MLCC ceramic chips (0402–0805)
@@ -7572,7 +7572,7 @@ function renderSmdPackageSizes(domain, tool, favId) {
   paint();
 }
 
-// ---------- Resistor power rating ----------
+// ---------- Resistor power ----------
 // Two genuinely different kinds of table, not one. SMD power rating follows
 // the package: these are the general-purpose thick-film ratings at 70 °C and
 // the maximum working voltages from Yageo's RC_L datasheet, the conventional
@@ -10251,7 +10251,7 @@ function renderRcFilter(domain, tool, favId) {
     // Whichever control moved (typed value, unit, slider drag, or a nudge
     // button) writes the canonical Hz value into state, then this repaints
     // the other two so all three always agree — same bidirectional pattern
-    // as the RC charge/discharge screen's time/voltage pair.
+    // as the RC time constant screen's time/voltage pair.
     function applyRatio(ratio) {
       const r = compute();
       if (!isFinite(r.fc) || r.fc <= 0 || !isFinite(ratio) || ratio <= 0) return;

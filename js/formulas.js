@@ -14,7 +14,7 @@
 const FORMULAS = [
   // ---- Passive ----
   {
-    tool: "Resistor power rating",
+    tool: "Resistor power",
     domain: "passive",
     formulas: ["P = V² / R = I² × R", "Vmax = √(P × R), or the V max if lower"],
     note: "The power a resistor turns to heat; pick a rating above it. Small chips also have a maximum working voltage.",
@@ -68,7 +68,7 @@ const FORMULAS = [
     note: "The opposite of resistors. In series the smallest capacitor takes the largest share of the voltage.",
   },
   {
-    tool: "RC charge/discharge",
+    tool: "RC time constant",
     domain: "passive",
     formulas: ["τ = R × C", "Charging: V(t) = Vs × (1 − e^(−t/τ))", "Discharging: V(t) = V0 × e^(−t/τ)"],
     note: "τ, the time constant: 63 % of the way after one τ, 99.3 % after five.",

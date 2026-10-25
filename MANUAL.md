@@ -22,7 +22,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Resistors → [Resistor color code](#resistor-color-code)
 - Resistors → [SMD resistor code](#smd-resistor-code)
-- Resistors → [Resistor power rating](#resistor-power-rating)
+- Resistors → [Resistor power](#resistor-power-rating)
 - Resistors → [E-series values](#e-series-values)
 - Resistors → [Series/parallel (R)](#seriesparallel-r)
 - Resistors → [Voltage divider](#voltage-divider)
@@ -32,9 +32,9 @@ will key on, since that is the id the app already holds for each tool.
 - Resistors → [NTC/PTC thermistor](#ntcptc-thermistor)
 - Capacitors → [Ceramic cap code](#ceramic-cap-code)
 - Capacitors → [Film capacitor code](#film-capacitor-code)
-- Capacitors → [SMD capacitor code](#smd-capacitor-code)
+- Capacitors → [SMD cap code](#cap-smd-code)
 - Capacitors → [Series/parallel (C)](#seriesparallel-c)
-- Capacitors → [RC charge and discharge](#rc-charge-and-discharge)
+- Capacitors → [RC time constant](#rc-charge)
 - Capacitors → [Capacitor energy](#capacitor-energy)
 - Inductors → [Inductor color code](#inductor-color-code)
 - Inductors → [Inductor SMD code](#inductor-smd-code)
@@ -369,9 +369,10 @@ was itself wrong: milliohms take the letter L, not R. The tool had printed
 ---
 
 <a id="resistor-power-rating"></a>
-## Resistor power rating
+## Resistor power
 
 `calc: resistor-power-rating` · Passive components › Resistors
+(formerly Resistor power rating)
 
 ### What it computes
 
@@ -1316,9 +1317,10 @@ from a marking now shows in its own unit, n33 as 330 pF.
 ---
 
 <a id="cap-smd-code"></a>
-## SMD capacitor code
+## SMD cap code
 
 `calc: cap-smd-code` · Passive components › Capacitors
+(formerly Capacitor SMD code)
 
 ### What it computes
 
@@ -1498,9 +1500,10 @@ The ranges are the total × (1 ± t).
 ---
 
 <a id="rc-charge"></a>
-## RC charge and discharge
+## RC time constant
 
 `calc: rc-charge` · Passive components › Capacitors
+(formerly RC charge/discharge)
 
 ### What it computes
 
@@ -1646,7 +1649,7 @@ voltages, and subtract.
 
 ### What it deliberately does not do
 
-- **Discharge time** through a load is the RC charge and discharge tool's job.
+- **Discharge time** through a load is the RC time constant tool's job.
 - **Hold-up time** from the usable energy is not calculated directly; it is the
   usable energy divided by the power drawn.
 
@@ -2074,7 +2077,7 @@ millimetres converted, as KEMET prints them.
 
 - **Pad (footprint) dimensions** depend on the soldering process and the
   maker; take them from the part's datasheet or IPC-7351.
-- **Power ratings** by size are in the Resistor power rating tool.
+- **Power ratings** by size are in the Resistor power tool.
 
 ### How it was checked
 
@@ -2085,7 +2088,7 @@ datasheets do not support for 1210. 0805 was listed as 1.2 mm wide, the
 metric name, where the parts are 1.25 mm. And 1806 (4516), found only in
 online size charts and in no maker's datasheet read, was replaced by 1808,
 from KEMET's; 1218, a common power-resistor size, was added from Vishay's. The
-inches in the Resistor power rating table were aligned to the same
+inches in the Resistor power table were aligned to the same
 figures.
 
 [↑ Index](#index)
@@ -2208,7 +2211,7 @@ up the rest of the supply's voltage and so sets the current:
 with **n** LEDs in series, each dropping Vf, and **I** the current you want —
 typically 10–20 mA for an indicator, and the datasheet's maximum is the
 limit. The resistor turns P = (Vs − n·Vf) × I into heat; choose its power
-rating from that (see Resistor power rating).
+rating from that (see Resistor power).
 
 **The colour sets Vf.** Red and yellow LEDs are about 1.9–2 V; blue, white
 and the bright green ones about 3.3 V. The old, dimmer green is about 2 V —
