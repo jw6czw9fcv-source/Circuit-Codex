@@ -201,6 +201,24 @@ async function checkTool(t) {
     }
   }
 
+  // A smaller phone, 375 x 812: the main result must still be in view on
+  // opening, before anything is typed. The main result is the large figure's
+  // card where there is one; the cells under it may run below the fold here,
+  // though not at 430.
+  if (tab) {
+    win.localStorage.removeItem("cc_prefs");
+    frame.width = 375; frame.height = 812;
+    win.location.hash = "#/home";
+    await wait(40);
+    win.location.hash = `#/tool/${encodeURIComponent(t.route)}/${t.calc}`;
+    await wait(120);
+    const main = [...doc.querySelectorAll(".result-field")].find((el) => el.getBoundingClientRect().height > 0);
+    const res3 = main || firstResult(doc), tab3 = doc.querySelector(".tabbar");
+    const gap3 = res3 && tab3 ? tab3.getBoundingClientRect().top - res3.getBoundingClientRect().bottom : 0;
+    if (gap3 < 0) r.problems.push(`at 375 x 812 the first result is ${Math.round(-gap3)} px under the tab bar`);
+    frame.width = 430; frame.height = 932;
+  }
+
   for (const c of (CHECK_CASES[t.calc] || [])) {
     r.cases++;
     try {
@@ -236,6 +254,12 @@ async function main() {
   // (DOMAINS is a top-level const, so it is not on the window to test for.)
   while (!(frame.contentDocument.URL.includes("index.html") && frame.contentDocument.querySelector(".tabbar"))) await wait(50);
   const win = frame.contentWindow;
+  // A phone's scrollbar floats over the page; desktop Chrome's takes 15 px
+  // of the frame's width, which would lay every screen out narrower than
+  // the phone it stands for. Hidden here, as on the phone.
+  const noBar = frame.contentDocument.createElement("style");
+  noBar.textContent = "html { scrollbar-width: none; } html::-webkit-scrollbar { display: none; }";
+  frame.contentDocument.head.appendChild(noBar);
   win.addEventListener("error", (e) => (win.__errors || []).push(e.message));
   const origError = win.console.error;
   win.console.error = (...a) => { (win.__errors || []).push(a.join(" ")); origError.apply(win.console, a); };

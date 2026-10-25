@@ -1278,3 +1278,21 @@ a.icon-btn { text-decoration: none; }
 .card-key-alt { font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-left: 8px; }
 .manual-link-row { margin: 4px 16px 12px; }
 .card-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+/* A smaller phone (375 x 812): the main result must still show on opening.
+   The 430 px layout keeps its spacing; below 400 px the gaps between blocks
+   tighten a little, which is worth 20 to 40 px on a full calculator. */
+@media (max-width: 400px) {
+  .section-label { padding: 6px 16px 3px; }
+  .field, .field-pair, .result-field { margin-bottom: 8px; }
+  .diagram-box { padding: 4px; margin-bottom: 8px; }
+  .mode-pills { margin-bottom: 10px; }
+  .field { padding: 6px 12px; }
+  .field label { margin-bottom: 2px; }
+  .field-pair > .field:first-child:nth-last-child(3),
+  .field-pair > .field:first-child:nth-last-child(3) ~ .field { padding: 6px 9px; }
+  .result-field { padding: 8px 12px; }
+  /* The slot kept for an example's two-line note: on opening it holds the
+     one-line subtitle, so it need not be reserved here. */
+  .head-slot--examples { min-height: 0; }
+}

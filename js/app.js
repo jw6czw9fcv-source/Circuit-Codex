@@ -17,6 +17,24 @@ app.addEventListener("click", (e) => {
   el.select();
 });
 
+// A tool's name sits on one line beside the back, bulb and star buttons.
+// Names are chosen to fit at 430 px; on a narrower phone one that would wrap
+// steps down a pixel at a time, to 17 px, instead of taking a second line
+// and pushing the result below the fold. Run after every paint.
+function fitTitle() {
+  const h1 = app.querySelector(".topbar h1");
+  if (!h1) return;
+  h1.style.fontSize = "";
+  const lines = () => {
+    const range = document.createRange();
+    range.selectNodeContents(h1);
+    return new Set([...range.getClientRects()].map((q) => Math.round(q.top))).size;
+  };
+  for (let px = parseFloat(getComputedStyle(h1).fontSize) - 1; px >= 17 && lines() > 1; px--) h1.style.fontSize = `${px}px`;
+}
+new MutationObserver(fitTitle).observe(app, { childList: true });
+window.addEventListener("resize", fitTitle);
+
 // ---------- Value entry ----------
 // Every numeric field in the app is a text field with the decimal keypad
 // (inputmode) rather than type="number", so it can take what an engineer
@@ -2885,15 +2903,15 @@ function renderWheatstoneBridge(domain, tool, favId) {
     const known = inputsFor(state.solve);
     const tone = (n) => (known.includes(n) ? "#8FC1F5" : "#5DCAA5");
     const wire = "#5A6169";
-    const cx = 110, cy = 76, rad = 54;
+    const cx = 110, cy = 62, rad = 42;
     const A = [cx, cy - rad], B = [cx - rad, cy], D = [cx + rad, cy], C = [cx, cy + rad];
     const labelPos = {
-      r1: [70, 44, "end"], r2: [150, 44, "start"],
-      r3: [70, 112, "end"], rx: [150, 112, "start"],
+      r1: [79, 38, "end"], r2: [141, 38, "start"],
+      r3: [79, 94, "end"], rx: [141, 94, "start"],
     };
     const edges = [["r1", A, B], ["r2", A, D], ["r3", B, C], ["rx", D, C]];
-    return `<svg width="220" height="150" viewBox="0 0 220 150" fill="none">
-      <path d="M${cx} 10 V${A[1]} M${cx} ${C[1]} V138" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+    return `<svg width="220" height="120" viewBox="0 0 220 120" fill="none">
+      <path d="M${cx} 15 V${A[1]} M${cx} ${C[1]} V108" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M${B[0]} ${B[1]} H${D[0]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
       <circle cx="${cx}" cy="${cy}" r="11" fill="#15181D" stroke="${wire}" stroke-width="1.6"/>
       <text x="${cx}" y="${cy + 4}" fill="${wire}" font-size="10" font-weight="700" text-anchor="middle">G</text>
@@ -2903,8 +2921,8 @@ function renderWheatstoneBridge(domain, tool, favId) {
       ${Object.entries(labelPos).map(([name, [x, y, anchor]]) =>
         `<text x="${x}" y="${y}" fill="${tone(name)}" font-size="11" font-weight="600" text-anchor="${anchor}">${name === "rx" ? "Rx" : name.toUpperCase()}</text>`
       ).join("")}
-      <text x="${cx}" y="7" fill="${wire}" font-size="11" font-weight="600" text-anchor="middle" dy="6">V</text>
-      <path d="M103 138 H117 M105.5 141 H114.5 M108 144 H112" stroke="${wire}" stroke-width="1.5" stroke-linecap="round"/>
+      <text x="${cx}" y="11" fill="${wire}" font-size="11" font-weight="600" text-anchor="middle">V</text>
+      <path d="M103 108 H117 M105.5 111 H114.5 M108 114 H112" stroke="${wire}" stroke-width="1.5" stroke-linecap="round"/>
     </svg>`;
   }
 
@@ -14580,18 +14598,24 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
 
       <div class="field-pair">
         <div class="field">
-          <label>${state.mode === "ct" ? "Vac (one half, RMS)" : "Vac (RMS)"}</label>
+          <label>${state.mode === "ct" ? "Vac, one half" : "Vac (RMS)"}</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="rhc-vin" value="${trim(state.vin)}" />
             <span class="unit-fixed">V</span>
           </div>
         </div>
         <div class="field">
-          <label>Vf (per diode)</label>
+          <label>Vf, each</label>
           <div class="field-row">
             <input type="number" inputmode="decimal" step="any" id="rhc-vf" value="${trim(state.vf)}" />
             <span class="unit-fixed">V</span>
           </div>
+        </div>
+        <div class="field">
+          <label>Mains</label>
+          <select id="rhc-freq">
+            ${[50, 60].map((f) => `<option value="${f}" ${state.freq === f ? "selected" : ""}>${f} Hz</option>`).join("")}
+          </select>
         </div>
       </div>
       <div class="field-pair">
@@ -14609,12 +14633,6 @@ function renderRectifierHalfwaveCap(domain, tool, favId) {
             <select id="rhc-cap-unit">${Object.keys(RIPPLE_C_UNITS).map((u) => `<option ${state.capUnit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
           </div>
         </div>
-      </div>
-      <div class="field">
-        <label>Mains frequency</label>
-        <select id="rhc-freq">
-          ${[50, 60].map((f) => `<option value="${f}" ${state.freq === f ? "selected" : ""}>${f} Hz</option>`).join("")}
-        </select>
       </div>
 
       <div data-res="results">${resultsHTML(r)}</div>
@@ -14932,13 +14950,14 @@ function renderThyristorFiring(domain, tool, favId) {
           </div>
         </div>
         <div class="field">
-          <label>Mains frequency</label>
+          <label>Mains</label>
           <select id="tf-freq">
             ${[50, 60].map((v) => `<option value="${v}" ${state.freq === v ? "selected" : ""}>${v} Hz</option>`).join("")}
           </select>
         </div>
-      </div>
-      <div class="field-pair">
+      ${/* SCR and TRIAC take Rload on the same row; the MOSFET pair adds
+           Rds(on), so its load and switch share a second row. */ state.device === "mosfet" ? `</div>
+      <div class="field-pair">` : ""}
         <div class="field">
           <label>Rload</label>
           <div class="field-row">
