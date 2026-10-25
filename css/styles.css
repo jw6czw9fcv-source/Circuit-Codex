@@ -1296,3 +1296,106 @@ a.icon-btn { text-decoration: none; }
      one-line subtitle, so it need not be reserved here. */
   .head-slot--examples { min-height: 0; }
 }
+
+/* ---------- Light theme ----------
+   Active when <html data-theme="light">. The dark theme above is unchanged.
+   The interface follows its variables. The drawings and a few inline styles
+   carry the dark theme's colours as literals (parts #8FC1F5, the calculated
+   part #5DCAA5, wires #5A6169, labels #8A9099 and the rest); each is mapped
+   here to a deeper shade of the same hue, so a meaning keeps its colour and
+   reads on white: 4.5:1 or better for text, 3:1 or better for lines. Real
+   colours (resistor bands, chip bodies, cable insulation, the spectrum) are
+   not touched. */
+:root[data-theme="light"] {
+  --bg: #F3F4F6;
+  --card: #FFFFFF;
+  --card-border: #DCE0E5;
+  --input-border: #CBD0D7;
+  --text: #121519;
+  --text-secondary: #4C535C;
+  --text-muted: #5B626B;
+  --result-bg: #E8F5EF;
+  --result-border: #B5DECB;
+  --result-text: #0E7A55;
+  --result-text-soft: #2C6B55;
+  --accent-blue: #2C6CB0;
+  --danger: #C62D2C;
+  --part: #2C6CB0;
+  --calc: #0E7A55;
+  --wire: #5A6169;
+  --label: #5B626B;
+  --amber: #9A5B0C;
+  --soft-red: #B53A39;
+  --grid: #E1E5EA;
+  --grid-dash: #C9CED5;
+  --ink: #1F2328;
+  color-scheme: light;
+}
+
+/* Interface rules that name a dark colour directly. */
+:root[data-theme="light"] .icon-btn.active,
+:root[data-theme="light"] .example-btn { color: #A87400; }
+:root[data-theme="light"] .pill.active,
+:root[data-theme="light"] .filter-btn.active { color: var(--text); }
+:root[data-theme="light"] .tabbar { background: rgba(243, 244, 246, 0.96); border-top-color: var(--card-border); }
+:root[data-theme="light"] .formula-note { border-top-color: var(--card-border); }
+:root[data-theme="light"] .roller-window::after { border-color: var(--grid-dash); }
+:root[data-theme="light"] .formula-line,
+:root[data-theme="light"] .bit-hex,
+:root[data-theme="light"] .manual-link { color: var(--part); }
+:root[data-theme="light"] .toast { background: var(--card); border-color: var(--card-border); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
+:root[data-theme="light"] .series-slider { background: #A9B0B9; }
+:root[data-theme="light"] .series-slider::-webkit-slider-thumb { background: var(--part); }
+:root[data-theme="light"] .series-slider::-moz-range-thumb { background: var(--part); }
+:root[data-theme="light"] .tt-out { color: var(--calc); }
+:root[data-theme="light"] .bit-idx.bit-sign { color: var(--soft-red); }
+:root[data-theme="light"] .example-note { background: #FFF4D6; border-color: #E5CF8F; color: #5E4500; }
+:root[data-theme="light"] .diagram-box svg text[fill="#5A6169"] { fill: var(--label); }
+
+/* Inline colours written by the tools' templates. */
+:root[data-theme="light"] [style*="color:#8FC1F5" i] { color: var(--part) !important; }
+:root[data-theme="light"] [style*="color:#5DCAA5" i] { color: var(--calc) !important; }
+:root[data-theme="light"] [style*="color:#9AA0A8" i],
+:root[data-theme="light"] [style*="color:#8A9099" i] { color: var(--label) !important; }
+:root[data-theme="light"] [style*="color:#E0A85E" i] { color: var(--amber) !important; }
+:root[data-theme="light"] [style*="color:#E08585" i] { color: var(--soft-red) !important; }
+:root[data-theme="light"] [style*="border-color:#8FC1F5" i] { border-color: var(--part) !important; }
+:root[data-theme="light"] [style*="border-color:#E08585" i] { border-color: var(--soft-red) !important; }
+
+/* Drawings: the schematic palette, the grids and the dark fills. */
+:root[data-theme="light"] svg [stroke="#8FC1F5" i] { stroke: var(--part); }
+:root[data-theme="light"] svg [fill="#8FC1F5" i] { fill: var(--part); }
+:root[data-theme="light"] svg [stroke="#5DCAA5" i] { stroke: var(--calc); }
+:root[data-theme="light"] svg [fill="#5DCAA5" i] { fill: var(--calc); }
+:root[data-theme="light"] svg [fill="#8A9099" i],
+:root[data-theme="light"] svg [fill="#858B93" i],
+:root[data-theme="light"] svg [fill="#9AA0A8" i],
+:root[data-theme="light"] svg [fill="#9AA4B0" i] { fill: var(--label); }
+:root[data-theme="light"] svg [stroke="#8A9099" i],
+:root[data-theme="light"] svg [stroke="#9AA0A8" i] { stroke: var(--label); }
+:root[data-theme="light"] svg [stroke="#E0A85E" i] { stroke: var(--amber); }
+:root[data-theme="light"] svg [fill="#E0A85E" i] { fill: var(--amber); }
+:root[data-theme="light"] svg [stroke="#E08585" i] { stroke: var(--soft-red); }
+:root[data-theme="light"] svg [fill="#E08585" i] { fill: var(--soft-red); }
+:root[data-theme="light"] svg [stroke="#22262D" i],
+:root[data-theme="light"] svg [stroke="#2A2F36" i] { stroke: var(--grid); }
+:root[data-theme="light"] svg [stroke="#3A4048" i] { stroke: var(--grid-dash); }
+:root[data-theme="light"] svg [fill="#15181D" i],
+:root[data-theme="light"] svg [fill="#1B1F24" i] { fill: var(--card); }
+:root[data-theme="light"] svg [stroke="#0E1013" i] { stroke: var(--card); }
+:root[data-theme="light"] svg [stroke="#E8EAED" i],
+:root[data-theme="light"] svg [stroke="#E6E8EB" i] { stroke: var(--ink); }
+:root[data-theme="light"] svg [fill="#E6ECF3" i],
+:root[data-theme="light"] svg [fill="#E6E8EB" i] { fill: var(--ink); }
+/* Karnaugh groups and the oscillator budget: six distinct hues, deepened. */
+:root[data-theme="light"] svg [stroke="#6FB3F2" i] { stroke: #2A6FB8; }
+:root[data-theme="light"] svg [fill="#6FB3F2" i] { fill: #2A6FB8; }
+:root[data-theme="light"] svg [stroke="#3FD69A" i] { stroke: #138A5E; }
+:root[data-theme="light"] svg [fill="#3FD69A" i] { fill: #138A5E; }
+:root[data-theme="light"] svg [stroke="#F5C242" i] { stroke: #A87A00; }
+:root[data-theme="light"] svg [fill="#F5C242" i] { fill: #A87A00; }
+:root[data-theme="light"] svg [stroke="#FF6B5B" i] { stroke: #D2433A; }
+:root[data-theme="light"] svg [fill="#FF6B5B" i] { fill: #D2433A; }
+:root[data-theme="light"] svg [stroke="#9D7BF0" i] { stroke: #6A4FC0; }
+:root[data-theme="light"] svg [stroke="#FF6FC3" i] { stroke: #C2368E; }
+:root[data-theme="light"] svg [stroke="#DFE5EC" i] { stroke: #3A4048; }

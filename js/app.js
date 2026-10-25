@@ -17,6 +17,33 @@ app.addEventListener("click", (e) => {
   el.select();
 });
 
+// ---------- Theme ----------
+// Dark is the app's own look; light marks <html data-theme="light">, and the
+// stylesheet's light block does the rest. The seven domain colours are read
+// by the templates as they paint (pills, tiles, chart lines), so the light
+// set is swapped into DOMAINS here rather than mapped in CSS.
+const DOMAIN_LIGHT = {
+  passive: { color: "#2C6CB0", bg: "#E4EEF9" },
+  active: { color: "#7A4FB0", bg: "#EFE7F8" },
+  digital: { color: "#0E7A55", bg: "#E2F3EC" },
+  rf: { color: "#B53A39", bg: "#F8E6E6" },
+  power: { color: "#A35F05", bg: "#FAEEDC" },
+  pcb: { color: "#117489", bg: "#DDF1F6" },
+  tools: { color: "#5B626B", bg: "#ECEDEF" },
+};
+const DOMAIN_DARK = Object.fromEntries(DOMAINS.map((d) => [d.id, { color: d.color, bg: d.bg }]));
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  DOMAINS.forEach((d) => Object.assign(d, (theme === "light" ? DOMAIN_LIGHT : DOMAIN_DARK)[d.id] || {}));
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = theme === "light" ? "#F3F4F6" : "#0B0D10";
+}
+// ?theme=light or ?theme=dark in the address overrides the choice without
+// saving it: for previews and the manual's screenshots.
+applyTheme(["dark", "light"].includes(new URLSearchParams(location.search).get("theme"))
+  ? new URLSearchParams(location.search).get("theme")
+  : pref("app", "theme", "dark", ["dark", "light"]));
+
 // A tool's name sits on one line beside the back, bulb and star buttons.
 // Names are chosen to fit at 430 px; on a narrower phone one that would wrap
 // steps down a pixel at a time, to 17 px, instead of taking a second line
