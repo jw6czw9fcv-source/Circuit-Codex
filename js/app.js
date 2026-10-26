@@ -626,6 +626,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "dec-hex-bin") return renderDecHexBin(domain, tool, favId);
   if (calcId === "ascii-table") return renderAsciiTable(domain, tool, favId);
   if (calcId === "wire-gauge") return renderWireGauge(domain, tool, favId);
+  if (calcId === "trace-width") return renderTraceWidth(domain, tool, favId);
   if (calcId === "cable-colors") return renderCableColors(domain, tool, favId);
   if (calcId === "ip-ratings") return renderIpRatings(domain, tool, favId);
 
@@ -5912,6 +5913,219 @@ function renderWireGauge(domain, tool, favId) {
   }
 
   settle();
+  paint();
+}
+
+// ---------- Trace width ----------
+// How hot a copper trace runs for its current, by IPC-2152 (2009), through
+// the equations Brooks and Adam fitted to its curves ("Trace Currents and
+// Temperatures Revisited", UltraCAD, 2015, table 3-1 and appendix 6):
+//   ΔT = K · I^c · W^w · Th^t,  W and Th in mils, I in amperes.
+// One equation fits every external thickness; internal traces have one per
+// copper weight, and for 0.5 and 3 oz the constant moves a little with the
+// width, as the appendix lists it. Their worked example checks the units: a
+// 100 mil, 2 oz trace at 10 A rises "just under 40 °C" outside and "only
+// 33 °C" inside (39.4 and 32.5 here, with 2 oz = 2.74 mil). IPC-2152 is
+// the standard used (Pierre); the older IPC-2221 curves are not.
+const TRACE_OZ = [0.5, 1, 2, 3];
+const TRACE_OZ_MIL = 1.37;                 // 1 oz/ft² of copper, in mils (34.8 µm)
+const TRACE_W_UNITS = { mil: 1, mm: 1 / 0.0254 };          // to mils
+const TRACE_L_UNITS = { mm: 1, cm: 10, in: 25.4 };         // to mm
+const TRACE_MODES = { width: "Width", current: "Current", rise: "Rise" };
+
+// The IPC-2152 fit for a layer and a copper weight: the constant (as a
+// function of the width, in mils) and the three exponents.
+function ipc2152Fit(layer, oz) {
+  const lerp = (pts) => (w) => {
+    if (w <= pts[0][0]) return pts[0][1];
+    for (let i = 1; i < pts.length; i++) {
+      if (w <= pts[i][0]) {
+        const [w0, k0] = pts[i - 1], [w1, k1] = pts[i];
+        return k0 + ((k1 - k0) * (w - w0)) / (w1 - w0);
+      }
+    }
+    return pts[pts.length - 1][1];
+  };
+  if (layer === "external") return { K: () => 215.3, c: 2, w: -1.15, t: -1.0 };
+  if (oz === 0.5) return { K: lerp([[20, 130], [50, 125], [100, 110]]), c: 2, w: -1.10, t: -1.52 };
+  if (oz === 1) return { K: () => 200, c: 1.9, w: -1.10, t: -1.52 };
+  if (oz === 2) return { K: () => 300.3, c: 2, w: -1.15, t: -1.52 };
+  return { K: lerp([[5, 200], [10, 225], [15, 240], [20, 235], [50, 300]]), c: 1.9, w: -1.15, t: -1.52 };
+}
+
+// Rise, current or width from the other two. Widths in mils.
+function traceSolve(mode, layer, oz, { wMil, amps, rise }) {
+  const th = oz * TRACE_OZ_MIL;
+  const f = ipc2152Fit(layer, oz);
+  const riseOf = (w, i) => f.K(w) * i ** f.c * w ** f.w * th ** f.t;
+  if (mode === "rise") {
+    return { wMil, amps, rise: riseOf(wMil, amps) };
+  }
+  if (mode === "current") {
+    return { wMil, rise, amps: (rise / (f.K(wMil) * wMil ** f.w * th ** f.t)) ** (1 / f.c) };
+  }
+  // The width: closed form when the constant is fixed, else settled by
+  // iteration, the constant moving slowly with the width.
+  let w = 50;
+  for (let n = 0; n < 40; n++) w = ((f.K(w) * amps ** f.c * th ** f.t) / rise) ** (1 / -f.w);
+  return { amps, rise, wMil: w };
+}
+
+function renderTraceWidth(domain, tool, favId) {
+  const C = "trace-width";
+  const state = {
+    mode: pref(C, "mode", "width", Object.keys(TRACE_MODES)),
+    layer: pref(C, "layer", "external", ["external", "internal"]),
+    oz: pref(C, "oz", 1, TRACE_OZ),
+    wUnit: pref(C, "wUnit", "mm", Object.keys(TRACE_W_UNITS)),
+    lUnit: pref(C, "lUnit", "mm", Object.keys(TRACE_L_UNITS)),
+    amps: 2, rise: 10, wMil: 10, lenMm: 50, amb: 25,
+  };
+  const um = (oz) => Math.round(oz * TRACE_OZ_MIL * 25.4);
+  const fig3 = (v) => String(Number(v.toPrecision(3)));
+  const showW = (mil) => (state.wUnit === "mm" ? `${fig3(mil * 0.0254)} mm` : `${fig3(mil)} mil`);
+  const otherW = (mil) => (state.wUnit === "mm" ? `${fig3(mil)} mil` : `${fig3(mil * 0.0254)} mm`);
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(5)) : "");
+
+  function problem() {
+    const need = { width: ["amps", "rise"], current: ["wMil", "rise"], rise: ["wMil", "amps"] }[state.mode];
+    const names = { amps: "current", rise: "temperature rise", wMil: "width" };
+    for (const n of need) if (!(state[n] > 0)) return `The ${names[n]} has to be greater than zero.`;
+    if (!(state.lenMm >= 0)) return "The length cannot be negative.";
+    if (!isFinite(state.amb)) return "Enter the ambient temperature.";
+    return "";
+  }
+
+  // The trace in cross-section on its board: on top when external, inside
+  // when internal, its width marked above it. Green when it is the answer.
+  function diagram() {
+    const ext = state.layer === "external";
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5";
+    const tone = state.mode === "width" ? calc : part;
+    const y = ext ? 33 : 54, h = 7, top = 26;
+    return `<svg width="300" height="115" viewBox="0 0 260 100" fill="none">
+      <rect x="30" y="40" width="200" height="40" rx="2" stroke="${wire}" stroke-width="1.4"/>
+      ${ext ? "" : `<path d="M30 49 H230 M30 70 H230" stroke="${wire}" stroke-width="1" stroke-dasharray="3 3"/>`}
+      <rect x="100" y="${y}" width="60" height="${h}" fill="${part}"/>
+      <path d="M100 ${top - 6} V${y - 2} M160 ${top - 6} V${y - 2} M100 ${top - 2} H160" stroke="${tone}" stroke-width="1.2"/>
+      <text x="130" y="${top - 6}" fill="${tone}" font-size="11" font-weight="600" text-anchor="middle">W</text>
+      <text x="166" y="${ext ? y + h - 3 : y + h - 1}" fill="#8A9099" font-size="11" font-weight="600">${state.oz} oz, ${um(state.oz)} µm</text>
+      <text x="130" y="95" fill="#8A9099" font-size="11" font-weight="600" text-anchor="middle">${ext ? "outer layer, in air" : "inner layer, inside the board"}</text>
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const r = traceSolve(state.mode, state.layer, state.oz, state);
+    const tempC = state.amb + r.rise;
+    const areaMm2 = r.wMil * 0.0254 * state.oz * TRACE_OZ_MIL * 0.0254;
+    const R = (IACS_OHM_MM2_PER_M * (state.lenMm / 1000)) / areaMm2 * (1 + CU_ALPHA_20 * (tempC - 20));
+    const head = { width: "Width", current: "Current", rise: "Temperature rise" }[state.mode];
+    const big = state.mode === "width" ? showW(r.wMil) : state.mode === "current" ? siFormat(r.amps, "A", 3) : `${trim(r.rise)} °C`;
+    const density = r.amps / areaMm2;
+    const sub = state.mode === "width" ? `${otherW(r.wMil)} · ${trim(density)} A/mm²`
+      : state.mode === "current" ? `${trim(density)} A/mm² · trace at ${trim(tempC)} °C`
+      : `trace at ${trim(tempC)} °C · ${trim(density)} A/mm²`;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    return `
+      <div class="result-field">
+        <div class="result-head"><span class="label">${head}, IPC-2152</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+        <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+        <div class="result-sub" data-res="sub">${sub}</div>
+      </div>
+      <div class="section-label" style="color:#8FC1F5">Along ${trim(state.lenMm / TRACE_L_UNITS[state.lUnit])} ${state.lUnit}, at ${trim(tempC)} °C</div>
+      <div class="field notation-box">
+        ${row("Resistance", siFormat(R, "Ω", 3), "r")}
+        ${row("Voltage drop", siFormat(r.amps * R, "V", 3), "drop")}
+        ${row("Power lost", siFormat(r.amps * r.amps * R, "W", 3), "loss")}
+      </div>`;
+  }
+
+  function refresh() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (values) => () => { Object.assign(state, { lenMm: 50, amb: 25 }, values); paint(); };
+  useExamples([
+    { title: "2 A on 1 oz, 10 °C rise", note: "An outer trace needs about 0.93 mm, by IPC-2152.",
+      apply: example({ mode: "width", layer: "external", oz: 1, amps: 2, rise: 10, wUnit: "mm" }) },
+    { title: "10 A on 100 mil of 2 oz", note: "Brooks and Adam's example: 39.4 °C outside, 32.5 °C on an inner layer.",
+      apply: example({ mode: "rise", layer: "external", oz: 2, amps: 10, wMil: 100, wUnit: "mil" }) },
+    { title: "What a 10 mil trace carries", note: "1 oz outside at a 10 °C rise: 0.95 A, plenty for a signal.",
+      apply: example({ mode: "current", layer: "external", oz: 1, wMil: 10, rise: 10, wUnit: "mil" }) },
+    { title: "Inner layer, 3 A, 20 °C", note: "1 oz inside needs 0.89 mm: the board carries the heat away.",
+      apply: example({ mode: "width", layer: "internal", oz: 1, amps: 3, rise: 20, wUnit: "mm" }) },
+    { title: "Drop on a 5 cm power trace", note: "0.5 mm of 1 oz at 2 A runs 20 °C up: 54.5 mΩ, a 0.11 V drop.",
+      apply: example({ mode: "rise", layer: "external", oz: 1, amps: 2, wMil: 0.5 / 0.0254, wUnit: "mm", lenMm: 50 }) },
+  ]);
+
+  function paint() {
+    const m = state.mode;
+    const numField = (id, label, value, unit) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" id="${id}" value="${value}" />${unit}</div>
+        </div>`;
+    const sel = (id, opts, cur) => `<select id="${id}">${opts.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const widthField = numField("tw-w", "Width", fmt(state.wMil / TRACE_W_UNITS[state.wUnit]), sel("tw-w-unit", Object.keys(TRACE_W_UNITS).map((u) => [u, u]), state.wUnit));
+    const ampsField = numField("tw-i", "Current", fmt(state.amps), fixed("A"));
+    const riseField = numField("tw-rise", "Temp. rise", fmt(state.rise), fixed("°C"));
+    const known = m === "width" ? ampsField + riseField : m === "current" ? widthField + riseField : widthField + ampsField;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Width, current and heating of a PCB trace")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.entries(TRACE_MODES), m, domain.bg)}
+
+      <div class="field-pair">
+        <div class="field"><label>Layer</label>${sel("tw-layer", [["external", "Outer"], ["internal", "Inner"]], state.layer)}</div>
+        <div class="field"><label>Copper</label>${sel("tw-oz", TRACE_OZ.map((oz) => [oz, `${oz} oz, ${um(oz)} µm`]), state.oz)}</div>
+      </div>
+      <div class="field-pair">${known}</div>
+      <div class="field-pair">
+        ${numField("tw-len", "Length", fmt(state.lenMm / TRACE_L_UNITS[state.lUnit]), sel("tw-len-unit", Object.keys(TRACE_L_UNITS).map((u) => [u, u]), state.lUnit))}
+        ${numField("tw-amb", "Ambient", fmt(state.amb), fixed("°C"))}
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["ΔT = K · I^c · W^w · Th^t  (IPC-2152 fit)", "outer: ΔT = 215.3 · I² · W^−1.15 · Th^−1", "R = ρ · L / (W·Th) · (1 + 0.00393 (T − 20 °C))"],
+        "A trace heats with its current until the board and the air carry the heat away as fast as it comes; the temperature rise ΔT is how far above the ambient it then sits. IPC-2152 (2009) measured this; the equations are Brooks and Adam's fits to its curves, W and Th (width and thickness) in mils. Inner traces cool through the board and run a little cooler than outer ones. Older calculators use IPC-2221, which allows about 25 % more current outside. Copper weight is ounces per square foot: 1 oz is 34.8 µm thick. Nearby planes and pours cool a trace further, so both are cautious for a real board."
+      )}
+      ${calcFooter("")}
+    `;
+
+    // A new mode starts from the answer of the last: a width just solved is
+    // the width the Rise mode then heats.
+    wireCalc(favId, paint, (v) => {
+      if (!problem()) {
+        const r = traceSolve(state.mode, state.layer, state.oz, state);
+        Object.assign(state, { wMil: r.wMil, amps: r.amps, rise: r.rise });
+      }
+      state.mode = v; setPref(C, "mode", v); paint();
+    });
+
+    const read = (id) => parseFloat(document.getElementById(id).value);
+    const bind = (id, apply) => { const el = document.getElementById(id); if (el) el.oninput = () => { apply(read(id)); refresh(); }; };
+    bind("tw-w", (v) => { state.wMil = v * TRACE_W_UNITS[state.wUnit]; });
+    bind("tw-i", (v) => { state.amps = v; });
+    bind("tw-rise", (v) => { state.rise = v; });
+    bind("tw-len", (v) => { state.lenMm = v * TRACE_L_UNITS[state.lUnit]; });
+    bind("tw-amb", (v) => { state.amb = v; });
+    const onSel = (id, apply) => { const el = document.getElementById(id); if (el) el.onchange = () => { apply(el.value); paint(); }; };
+    onSel("tw-layer", (v) => { state.layer = v; setPref(C, "layer", v); });
+    onSel("tw-oz", (v) => { state.oz = parseFloat(v); setPref(C, "oz", state.oz); });
+    // A unit change re-expresses the same width or length.
+    onSel("tw-w-unit", (v) => { state.wUnit = v; setPref(C, "wUnit", v); });
+    onSel("tw-len-unit", (v) => { state.lUnit = v; setPref(C, "lUnit", v); });
+  }
+
   paint();
 }
 

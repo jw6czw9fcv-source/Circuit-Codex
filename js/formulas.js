@@ -402,6 +402,13 @@ const FORMULAS = [
     note: "Six AWG steps double the diameter. The 2 is the round trip through both wires. Copper is 1/58 Ω·mm²/m at 20 °C, +0.393 % per °C.",
   },
 
+  {
+    tool: "Trace width",
+    domain: "pcb",
+    formulas: ["ΔT = 215.3 · I² · W^−1.15 · Th^−1 (outer)", "R = ρ · L / (W · Th)"],
+    note: "IPC-2152, as fitted by Brooks and Adam: W and Th in mils, 1 oz = 1.37 mil. Inner traces have their own fits.",
+  },
+
   // ---- Tools ----
   {
     tool: "Ohm's law",

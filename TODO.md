@@ -319,7 +319,8 @@ Empty — every Tier 1 item is built. Next up is Tier 2.
 Priority first — the tools most asked for in apps like this (Pierre,
 2026-09-27):
 
-- [ ] PCB trace width / resistance
+- [x] PCB trace width / resistance — built as Trace width (IPC-2152 via
+      Brooks & Adam's fits, Pierre: the new standard only), 2026-10-26
 - [ ] AC Ohm's law (impedance form)
 - [ ] Inductor series/parallel
 - [ ] Internal resistance (battery)
@@ -362,7 +363,7 @@ Then:
 - [ ] RPM ↔ frequency conversion
 - [ ] Starting current estimation
 - [ ] Relay driver
-- [ ] Trace current capacity (ampacity)
+- [x] Trace current capacity (ampacity) — merged into Trace width
 - [ ] Via current capacity
 - [ ] Signal propagation delay
 - [ ] Planar (PCB) inductor
@@ -413,7 +414,7 @@ Then:
 - [ ] Trace inductance
 - [ ] BGA land pattern
 - [ ] Padstack calculator
-- [ ] Trace current — IPC-2152 method
+- [x] Trace current — IPC-2152 method — merged into Trace width
 - [ ] Laminate material reference (Dk/Df) — IPC-4101
 - [ ] IPC-7351 land pattern calculator
 

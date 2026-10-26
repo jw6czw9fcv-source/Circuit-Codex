@@ -101,6 +101,7 @@ will key on, since that is the id the app already holds for each tool.
 
 ### PCB & interconnect
 
+- Trace current & resistance → [Trace width](#trace-width)
 - Cabling → [Wire sizing](#wire-gauge)
 - Cabling → [Wire & cable colors](#cable-colors)
 - Electrical safety → [IP ratings](#ip-ratings)
@@ -9182,5 +9183,109 @@ The review made these changes:
   rad/s.
 - **Search:** also by note and by unit expression.
 - **The rest:** keywords, the first cases and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="trace-width"></a>
+## Trace width
+
+`calc: trace-width` · PCB & interconnect › Trace current & resistance
+(replaces PCB trace width / resistance, Trace current capacity (ampacity)
+and Trace current — IPC-2152 method)
+
+### What it computes
+
+How hot a copper trace on a PCB runs for its current, by IPC-2152, three
+ways, by pill:
+
+| Pill | Inputs | Output |
+|---|---|---|
+| Width | the current and the temperature rise allowed | the width needed |
+| Current | the width and the temperature rise | the current it carries |
+| Rise | the width and the current | how far above the ambient it runs |
+
+- **The trace:** an outer layer (in air) or an inner one (inside the
+  board), in 0.5, 1, 2 or 3 oz copper, the width in mm or mil.
+- **Along its length:** the resistance at the temperature it runs at, the
+  voltage drop and the power lost, for a length in mm, cm or in and an
+  ambient temperature.
+- **Also shown:** the width in the other unit and the current density, in
+  A/mm².
+- **Switching pills** keeps the answer: a width just solved is the width
+  the Rise pill then heats.
+- **Remembered:** the pill, the layer, the copper and the units.
+
+Examples: 2 A at a 10 °C rise, Brooks and Adam's 10 A on 100 mil of 2 oz,
+what a 10 mil trace carries, 3 A on an inner layer, and the drop along a
+5 cm power trace.
+
+### Source
+
+**IPC-2152 (2009), Standard for Determining Current Carrying Capacity in
+Printed Board Design**, through **Brooks and Adam, "Trace Currents and
+Temperatures Revisited", UltraCAD Design, 2015**, read in review. The
+standard itself is sold by IPC and was not read; the paper digitised its
+curves and fitted equations to them.
+
+- **Table 3-1 and appendix 6:** ΔT = K · I^c · W^w · Th^t, with W the
+  width and Th the thickness in mils and I in amperes:
+
+  | Trace | K | c | w | t |
+  |---|---|---|---|---|
+  | outer, any copper | 215.3 | 2 | −1.15 | −1.0 |
+  | inner, 0.5 oz | 130 to 110 (by width) | 2 | −1.10 | −1.52 |
+  | inner, 1 oz | 200 | 1.9 | −1.10 | −1.52 |
+  | inner, 2 oz | 300.3 | 2 | −1.15 | −1.52 |
+  | inner, 3 oz | 200 to 300 (by width) | 1.9 | −1.15 | −1.52 |
+
+  For 0.5 and 3 oz the appendix lists the constant at a few widths; the
+  tool interpolates between them. One appendix row prints the 0.5 oz
+  thickness exponent as +1.52; taken as −1.52 like its neighbours.
+- **The paper's example** checks the units: a 100 mil, 2 oz trace at 10 A
+  rises "just under 40 °C" outside and "only 33 °C" inside. The tool gives
+  39.38 °C and 32.52 °C.
+- **Its findings:** IPC-2152 allows "approximately 25 % lower" current
+  than the older IPC-2221 curves on outer layers, and inner traces "cool
+  almost as well or better" than outer ones, through the board.
+
+IPC-2221 is not used, as Pierre chose: IPC-2152 is the newer standard.
+
+### Why the formulas are these
+
+    ΔT = K · I^c · W^w · Th^t                    IPC-2152, as fitted
+    R = ρ · L / (W · Th) · (1 + 0.00393 (T − 20 °C)),  ρ = 1/58 Ω·mm²/m
+    T = Tambient + ΔT,  drop = I · R,  loss = I² · R
+
+A trace heats as I²R and sheds the heat into the board and the air; it
+settles where the two balance. The width and the thickness do not count
+alike (−1.15 against −1.0), so the shape of the trace matters, not only
+its cross-section. Copper weight is the mass per area: 1 oz/ft² is taken
+as 1.37 mil, 34.8 µm, the figure with which the paper's example comes out.
+The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
+20 °C, rising 0.393 % per °C, at the temperature the trace runs at.
+
+### Assumptions and limits
+
+- **The fits follow IPC-2152's test conditions:** a trace alone on a
+  board, without the planes and pours that cool real ones further. A real
+  board usually runs cooler.
+- **Copper weights:** 0.5, 1, 2 and 3 oz, the ones the paper fits.
+- **Not here:** vias, which carry their own current limit, and traces in a
+  vacuum, which the paper fits separately.
+
+### How it was checked
+
+10 cases:
+- 2 A at a 10 °C rise needs 0.93 mm, 36.6 mil;
+- the paper's 10 A on 100 mil of 2 oz: 39.38 °C outside, 32.52 °C inside;
+- 10 mil of 1 oz carries 948 mA at a 10 °C rise;
+- 3 A on an inner 1 oz layer at 20 °C needs 0.889 mm;
+- 5 cm of 0.5 mm at 2 A: 54.5 mΩ, 109 mV, 218 mW;
+- a width solved and heated again gives back its 10 °C;
+- a unit change keeps the width;
+- a zero current is refused;
+- the remembered choices.
 
 [↑ Index](#index)

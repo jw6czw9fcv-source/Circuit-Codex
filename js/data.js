@@ -159,7 +159,7 @@ const DOMAINS = [
       {
         title: "Trace current & resistance",
         tools: [
-          { name: "PCB trace width / resistance" }, { name: "Trace current capacity (ampacity)" }, { name: "Trace current — IPC-2152 method" },
+          { name: "Trace width", was: "PCB trace width / resistance", calc: "trace-width", mergedNames: ["Trace current capacity (ampacity)", "Trace current — IPC-2152 method"] },
           { name: "Via current capacity" }, { name: "Trace inductance" },
         ],
       },
@@ -320,6 +320,7 @@ const TOOL_KEYWORDS = {
   "ppm-converter": "ppm parts per million tolerance error deviation tempco temperature coefficient ppm/k drift crystal clock seconds per day percent",
   "formula-search": "formulas equations",
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
+  "trace-width": "pcb trace width current ampacity capacity ipc-2152 ipc 2152 ipc-2221 copper oz weight temperature rise heating resistance voltage drop",
   "si-units": "si units base derived bipm volt ohm farad henry siemens weber tesla watt joule coulomb hertz radian lumen lux candela kelvin ampere dimensions",
   "rms-calculator": "rms peak average ac voltage current true rms crest form factor pwm pulse duty sawtooth rectified meter",
 };
@@ -376,6 +377,7 @@ const RELATED = {
   "basic-calculator": ["si-prefix"],
   "si-prefix": ["unit-converter", "si-units"],
   "unit-converter": ["si-prefix", "si-units", "wire-gauge"],
+  "trace-width": ["wire-gauge", "unit-converter"],
   "percent-tolerance": ["ppm-converter"],
   "db-ratio": ["db-absolute"],
   "formula-search": ["physical-constants", "si-units"],
