@@ -1309,13 +1309,13 @@ a.icon-btn { text-decoration: none; }
 :root[data-theme="light"] {
   --bg: #F3F4F6;
   --card: #FFFFFF;
-  --card-border: #DCE0E5;
-  --input-border: #CBD0D7;
+  --card-border: #8F96A0;
+  --input-border: #7D848E;
   --text: #121519;
   --text-secondary: #4C535C;
   --text-muted: #5B626B;
   --result-bg: #E8F5EF;
-  --result-border: #B5DECB;
+  --result-border: #4FA582;
   --result-text: #0E7A55;
   --result-text-soft: #2C6B55;
   --accent-blue: #2C6CB0;
@@ -1332,7 +1332,10 @@ a.icon-btn { text-decoration: none; }
   color-scheme: light;
 }
 
-/* Interface rules that name a dark colour directly. */
+/* Interface rules that name a dark colour directly. The pill and filter
+   bars have no outline in dark; in light every box gets one. */
+:root[data-theme="light"] .mode-pills,
+:root[data-theme="light"] .filter-row { border: 1px solid var(--card-border); }
 :root[data-theme="light"] .icon-btn.active,
 :root[data-theme="light"] .example-btn { color: #A87400; }
 :root[data-theme="light"] .pill.active,
@@ -1347,6 +1350,7 @@ a.icon-btn { text-decoration: none; }
 :root[data-theme="light"] .series-slider { background: #A9B0B9; }
 :root[data-theme="light"] .series-slider::-webkit-slider-thumb { background: var(--part); }
 :root[data-theme="light"] .series-slider::-moz-range-thumb { background: var(--part); }
+:root[data-theme="light"] .badge-calc { background: #CDEBDD; color: var(--result-text); }
 :root[data-theme="light"] .tt-out { color: var(--calc); }
 :root[data-theme="light"] .bit-idx.bit-sign { color: var(--soft-red); }
 :root[data-theme="light"] .example-note { background: #FFF4D6; border-color: #E5CF8F; color: #5E4500; }
