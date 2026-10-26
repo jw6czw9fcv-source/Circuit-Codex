@@ -23,20 +23,20 @@ app.addEventListener("click", (e) => {
 // by the templates as they paint (pills, tiles, chart lines), so the light
 // set is swapped into DOMAINS here rather than mapped in CSS.
 const DOMAIN_LIGHT = {
-  passive: { color: "#2C6CB0", bg: "#E4EEF9" },
-  active: { color: "#7A4FB0", bg: "#EFE7F8" },
-  digital: { color: "#0E7A55", bg: "#E2F3EC" },
-  rf: { color: "#B53A39", bg: "#F8E6E6" },
-  power: { color: "#A35F05", bg: "#FAEEDC" },
-  pcb: { color: "#117489", bg: "#DDF1F6" },
-  tools: { color: "#5B626B", bg: "#ECEDEF" },
+  passive: { color: "#1F5A9E", bg: "#D6E4F5" },
+  active: { color: "#643C9A", bg: "#E6DAF4" },
+  digital: { color: "#0A6646", bg: "#D3ECE1" },
+  rf: { color: "#9E2E2D", bg: "#F3D8D8" },
+  power: { color: "#8A4F04", bg: "#F5E2C8" },
+  pcb: { color: "#0C5F72", bg: "#CFE9F0" },
+  tools: { color: "#464C55", bg: "#DDE0E4" },
 };
 const DOMAIN_DARK = Object.fromEntries(DOMAINS.map((d) => [d.id, { color: d.color, bg: d.bg }]));
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   DOMAINS.forEach((d) => Object.assign(d, (theme === "light" ? DOMAIN_LIGHT : DOMAIN_DARK)[d.id] || {}));
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = theme === "light" ? "#F3F4F6" : "#0B0D10";
+  if (meta) meta.content = theme === "light" ? "#E4E7EB" : "#0B0D10";
 }
 // ?theme=light or ?theme=dark in the address overrides the choice without
 // saving it: for previews and the manual's screenshots.
