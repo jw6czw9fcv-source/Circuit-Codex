@@ -1,6 +1,7 @@
 """Check every tool of the app, as it runs, on the target phone's screen.
 
-    python tools/check_app.py
+    python tools/check_app.py            (the dark theme, the app's own)
+    python tools/check_app.py --light    (the same checks on the light theme)
 
 For each tool: it opens, nothing is wider than the screen, the first result
 sits above the tab bar, no JavaScript error is raised, and the reference
@@ -39,7 +40,7 @@ def dump_dom(url):
 def main():
     httpd = serve()
     try:
-        dom = dump_dom(f"http://127.0.0.1:{PORT}/tools/check.html")
+        dom = dump_dom(f"http://127.0.0.1:{PORT}/tools/check.html" + ("?theme=light" if "--light" in sys.argv else ""))
     finally:
         httpd.shutdown()
     # Anchored on the <pre>: the page's own script also contains the markers.

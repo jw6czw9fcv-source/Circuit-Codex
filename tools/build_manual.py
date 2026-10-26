@@ -178,7 +178,7 @@ def run_chrome(args):
 
 def take_shot(cid, route):
     png = os.path.join(tempfile.gettempdir(), f"cc-shot-{cid}.png")
-    app_url = f"/index.html%23/tool/{route.replace(':', '%253A')}/{cid}"
+    app_url = f"/index.html%3Ftheme=dark%23/tool/{route.replace(':', '%253A')}/{cid}"
     url = f"http://127.0.0.1:{PORT}/__frame?{app_url}"
     run_chrome([f"--window-size={SHOT_W + 120},{SHOT_H + 40}", f"--force-device-scale-factor={SHOT_SCALE}",
                 "--hide-scrollbars", "--virtual-time-budget=4000", f"--screenshot={png}", url])

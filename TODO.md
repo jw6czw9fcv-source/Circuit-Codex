@@ -453,8 +453,10 @@ an Example, then continue the review at tool 18)
 - [x] Comfort — copy a result (tap it), remember the last units chosen
       (pref()/setPref(); applied per tool during the re-walk — done so far
       on the voltage divider).
-- [ ] Light mode — at the end, after the re-walk (Pierre, 2026-09-27):
+- [x] Light mode — at the end, after the re-walk (Pierre, 2026-09-27):
       follows the iPhone's appearance, with an Auto / Light / Dark choice.
+      Done 2026-10-25: the ⋯ on Home opens Settings (appearance, manual,
+      version); check_app.py --light runs every check on the light theme.
 - [x] TODO priorities — PCB trace width, AC Ohm's law, inductor
       series/parallel, battery internal resistance first.
 

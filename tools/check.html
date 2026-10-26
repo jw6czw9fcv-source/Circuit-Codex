@@ -13,7 +13,11 @@
 </style>
 </head>
 <body>
-<iframe id="app" width="430" height="932" src="../index.html#/home"></iframe>
+<iframe id="app" width="430" height="932"></iframe>
+<script>
+  // Dark by default; check.html?theme=light (check_app.py --light) audits the light theme.
+  document.getElementById("app").src = `../index.html?theme=${new URLSearchParams(location.search).get("theme") === "light" ? "light" : "dark"}#/home`;
+</script>
 <pre id="report"></pre>
 <script src="../js/data.js"></script>
 <script src="check_cases.js"></script>
@@ -120,18 +124,25 @@ async function checkTool(t) {
       .map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
     return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
   };
-  const BOX = lum("#15181D");
+  // The drawing box as shown, dark or light: the checks run dark, and a
+  // light run (?theme=light on the frame) audits the light theme the same way.
+  const boxEl = doc.querySelector(".diagram-box");
+  const BOX = lum(boxEl ? win.getComputedStyle(boxEl).backgroundColor : "#15181D") ?? lum("#15181D");
+  const lightBox = BOX > 0.5;
   const texts = [...doc.querySelectorAll(".diagram-box svg text")].filter((t) => t.getBoundingClientRect().width > 0 && t.textContent.trim());
   const small = new Set(), faint = new Set();
   texts.forEach((t) => {
     const size = parseFloat(win.getComputedStyle(t).fontSize) * (t.getScreenCTM() ? t.getScreenCTM().a : 1);
     if (size > 1 && size < 10.95) small.add(`${t.textContent.trim().slice(0, 12)}@${size.toFixed(1)}`);
     // The colour actually shown (a stylesheet rule can override the
-    // attribute). Text darker than the box sits on a light fill of its own —
-    // a marking on a part, a value in a bar — so it is not measured here.
+    // attribute). Text on the wrong side of the box (darker than a dark box,
+    // lighter than a light one) sits on a fill of its own, a marking on a
+    // part or a value in a bar, so it is not measured here.
     const fill = win.getComputedStyle(t).fill;
     const L = lum(fill);
-    if (L !== null && L > 0.03 && (L + 0.05) / (BOX + 0.05) < 4.5) faint.add(`${t.textContent.trim().slice(0, 12)}(${fill})`);
+    const own = L === null || (lightBox ? L > BOX - 0.03 : L < 0.03);
+    const ratio = own ? 99 : (Math.max(L, BOX) + 0.05) / (Math.min(L, BOX) + 0.05);
+    if (ratio < 4.5) faint.add(`${t.textContent.trim().slice(0, 12)}(${fill})`);
   });
   const boxes = texts.map((t) => ({ t, b: t.getBoundingClientRect() }));
   const overlaps = [];

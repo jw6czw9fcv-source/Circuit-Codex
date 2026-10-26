@@ -32,6 +32,14 @@ const DOMAIN_LIGHT = {
   tools: { color: "#464C55", bg: "#DDE0E4" },
 };
 const DOMAIN_DARK = Object.fromEntries(DOMAINS.map((d) => [d.id, { color: d.color, bg: d.bg }]));
+// The choice is Auto, Light or Dark; Auto follows the phone's appearance
+// and changes with it, at sunset for an iPhone set to switch by itself.
+const THEME_CHOICES = { auto: "Auto", light: "Light", dark: "Dark" };
+const PREFERS_LIGHT = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+function resolvedTheme(choice) {
+  if (choice === "light" || choice === "dark") return choice;
+  return PREFERS_LIGHT && PREFERS_LIGHT.matches ? "light" : "dark";
+}
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   DOMAINS.forEach((d) => Object.assign(d, (theme === "light" ? DOMAIN_LIGHT : DOMAIN_DARK)[d.id] || {}));
@@ -39,10 +47,24 @@ function applyTheme(theme) {
   if (meta) meta.content = theme === "light" ? "#E4E7EB" : "#0B0D10";
 }
 // ?theme=light or ?theme=dark in the address overrides the choice without
-// saving it: for previews and the manual's screenshots.
-applyTheme(["dark", "light"].includes(new URLSearchParams(location.search).get("theme"))
-  ? new URLSearchParams(location.search).get("theme")
-  : pref("app", "theme", "dark", ["dark", "light"]));
+// saving it: for previews, the checks and the manual's screenshots.
+const THEME_OVERRIDE = ["dark", "light"].includes(new URLSearchParams(location.search).get("theme"))
+  ? new URLSearchParams(location.search).get("theme") : null;
+const themeChoice = () => pref("app", "theme", "auto", Object.keys(THEME_CHOICES));
+applyTheme(THEME_OVERRIDE || resolvedTheme(themeChoice()));
+// Auto follows a change of the phone's setting as it happens, and checks
+// again whenever the app comes back to the front: an iPhone that switched at
+// sunset while the app sat in the background shows the right theme on return.
+function followPhoneTheme() {
+  if (THEME_OVERRIDE || themeChoice() !== "auto") return;
+  const theme = resolvedTheme("auto");
+  if (document.documentElement.dataset.theme === theme) return;
+  applyTheme(theme);
+  render();
+}
+if (PREFERS_LIGHT && PREFERS_LIGHT.addEventListener) PREFERS_LIGHT.addEventListener("change", followPhoneTheme);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) followPhoneTheme(); });
+window.addEventListener("focus", followPhoneTheme);
 
 // A tool's name sits on one line beside the back, bulb and star buttons.
 // Names are chosen to fit at 430 px; on a narrower phone one that would wrap
@@ -307,6 +329,7 @@ const ICONS = {
   bulb: `<svg viewBox="0 0 24 24" fill="none"><path d="M9 18 H15 M10 21 H14 M12 3 C8.1 3 5.5 6 5.5 9.3 C5.5 11.6 6.7 13.2 8.2 14.4 C8.9 15 9.2 15.7 9.2 16.5 V17 H14.8 V16.5 C14.8 15.7 15.1 15 15.8 14.4 C17.3 13.2 18.5 11.6 18.5 9.3 C18.5 6 15.9 3 12 3 Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
   info: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11 V16 M12 8 V8.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   bolt2: `<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 L4 14 H11 L9 22 L20 9 H13 L15 2 Z" fill="currentColor"/></svg>`,
+  more: `<svg viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="19" cy="12" r="1.9" fill="currentColor"/></svg>`,
   reset: `<svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 4 V9 H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 
@@ -318,6 +341,7 @@ function render() {
   if (parts[0] === "home") return renderHome();
   if (parts[0] === "search") return renderSearch();
   if (parts[0] === "favorites") return renderFavorites();
+  if (parts[0] === "settings") return renderSettings();
   if (parts[0] === "domain" && parts[1]) return renderDomain(parts[1]);
   if (parts[0] === "task" && parts[1]) return renderTask(parts[1]);
   if (parts[0] === "tool" && parts[1] !== undefined) return renderTool(parts[1], parts[2]);
@@ -394,9 +418,9 @@ function renderHome() {
   const recent = recentTools().filter((c) => findByCalc(c));
   app.innerHTML = `
     <div class="topbar back-row">
-      <span class="icon-btn" style="visibility:hidden">${ICONS.book}</span>
+      <span class="icon-btn" style="visibility:hidden">${ICONS.more}</span>
       <h1>Circuit Codex</h1>
-      <a class="icon-btn" href="manual.html" aria-label="Manual">${ICONS.book}</a>
+      <button class="icon-btn" onclick="location.hash='/settings'" aria-label="Settings, manual and version">${ICONS.more}</button>
     </div>
     <div class="sub">Electronics reference and tools</div>
     <button class="search-box search-launch" onclick="location.hash='/search'">${ICONS.search}<span>Search tools</span></button>
@@ -698,6 +722,58 @@ function renderFavorites() {
   });
 }
 
+// ---------- Settings ----------
+// Opened from the ⋯ on Home: the appearance, the manual and the version
+// the phone is running. The version is the one the page loaded app.js with,
+// so after an update it says whether the new files have arrived.
+function appVersion() {
+  const s = document.querySelector('script[src*="js/app.js"]');
+  const v = s ? new URL(s.src, location.href).searchParams.get("v") : null;
+  return v ? `v${v}` : "—";
+}
+
+function renderSettings() {
+  const choice = themeChoice();
+  const tools = DOMAINS.find((d) => d.id === "tools");
+  app.innerHTML = `
+    <div class="topbar back-row">
+      <button class="icon-btn" onclick="history.back()" aria-label="Back">${ICONS.chevronLeft}</button>
+      <h1>Settings</h1>
+      <span class="icon-btn" style="visibility:hidden">${ICONS.more}</span>
+    </div>
+
+    <div class="section-label">Appearance</div>
+    ${pillRow(Object.entries(THEME_CHOICES), choice, tools.bg)}
+    <div class="settings-note" data-res="theme-note">${choice === "auto"
+      ? `Follows the iPhone's light or dark setting: ${document.documentElement.dataset.theme} now.`
+      : `Always ${choice}, whatever the iPhone is set to.`}</div>
+
+    <div class="section-label">Help</div>
+    <div class="tool-list">
+      <a class="tool-row" href="manual.html">
+        <span class="settings-row-label">${ICONS.book}User manual</span>
+        <span class="chev">${ICONS.chevronRight}</span>
+      </a>
+    </div>
+
+    <div class="section-label">About</div>
+    <div class="tool-list">
+      <div class="tool-row">
+        <span>Circuit Codex</span>
+        <span class="breadcrumb" data-res="version">${appVersion()}</span>
+      </div>
+    </div>
+    ${tabbarHTMLOnly("")}
+  `;
+
+  app.querySelectorAll(".pill").forEach((btn) => {
+    btn.onclick = () => {
+      setPref("app", "theme", btn.dataset.pill);
+      if (!THEME_OVERRIDE) applyTheme(resolvedTheme(btn.dataset.pill));
+      renderSettings();
+    };
+  });
+}
 
 // ---------- Shared calculator screen ----------
 // Every calculator is the same shape: header, an optional illustration, an
