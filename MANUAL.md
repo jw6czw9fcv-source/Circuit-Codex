@@ -110,7 +110,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Calculators → [Calculator](#basic-calculator)
 - Calculators → [Ohm's law](#ohms-law)
-- Calculators → [Impedance](#impedance)
+- Calculators → [AC Ohm's law](#impedance)
 - Calculators → [Kirchhoff's laws](#kirchhoff)
 - Calculators → [SI prefix converter](#si-prefix)
 - Calculators → [Tolerance & error](#percent-tolerance)
@@ -9294,7 +9294,7 @@ The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
 ---
 
 <a id="impedance"></a>
-## Impedance
+## AC Ohm's law
 
 `calc: impedance` · Tools › Calculators
 (formerly AC Ohm's law (impedance form))

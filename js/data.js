@@ -197,7 +197,7 @@ const DOMAINS = [
         tools: [
           { name: "Calculator", was: "Standard & Scientific Calculators", calc: "basic-calculator" },
           { name: "Ohm's law", calc: "ohms-law" },
-          { name: "Impedance", was: "AC Ohm's law (impedance form)", calc: "impedance" },
+          { name: "AC Ohm's law", was: "AC Ohm's law (impedance form)", calc: "impedance" },
           { name: "Kirchhoff's laws", calc: "kirchhoff" },
           { name: "SI prefix converter", calc: "si-prefix", merged: ["sci-eng"], mergedNames: ["Scientific ↔ engineering notation"] },
          { name: "Tolerance & error", was: "Percent tolerance / error", calc: "percent-tolerance" },

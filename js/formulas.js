@@ -417,10 +417,10 @@ const FORMULAS = [
     note: "Any two of voltage, current, resistance and power give the other two.",
   },
   {
-    tool: "Impedance",
+    tool: "AC Ohm's law",
     domain: "tools",
     formulas: ["XL = 2πfL · XC = 1 / (2πfC)", "Series: Z = R + j(XL − XC)", "V = I × Z · PF = P / S = cos φ"],
-    note: "AC Ohm's law. In parallel the admittances 1/Z add. At resonance, f₀ = 1 / (2π√(LC)), XL and XC cancel.",
+    note: "V = I × Z for R, L and C. In parallel the admittances 1/Z add. At resonance, f₀ = 1 / (2π√(LC)), XL and XC cancel.",
   },
   {
     tool: "Kirchhoff's laws",

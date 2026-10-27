@@ -3610,7 +3610,7 @@ function renderCapSeriesParallel(domain, tool, favId) {
   paint();
 }
 
-// ---------- Impedance ----------
+// ---------- AC Ohm's law ----------
 // Ohm's law for AC: V = I × Z, with Z the complex impedance of R, L and C in
 // series or in parallel. The relations are the textbook ones, as Kuphaldt's
 // Lessons in Electric Circuits, Vol. II (AC, 6th edition, 2021) states them:
@@ -3798,7 +3798,7 @@ function renderImpedance(domain, tool, favId) {
         </div>`;
     const srcLabel = `<select id="imp-src-kind" class="label-select">${Object.entries(IMP_SRC).map(([k, s]) => `<option value="${k}" ${k === state.srcKind ? "selected" : ""}>${s.label}</option>`).join("")}</select>`;
     app.innerHTML = `
-      ${calcHeader(tool, favId, "AC Ohm's law: V = I × Z for R, L and C")}
+      ${calcHeader(tool, favId, "V = I × Z for R, L and C, in series or parallel")}
 
       <div class="diagram-box">${diagram()}</div>
 
