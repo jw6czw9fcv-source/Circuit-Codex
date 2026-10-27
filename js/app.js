@@ -355,8 +355,13 @@ window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); }
 // A tool screen asks for the tab bar with no active tab; every one does,
 // including the reference tables that skip calcFooter, so the related tools
 // go in here and no tool can miss them.
+// A reference screen with no Formula box (a table, a list) gets its manual
+// link here, above the related tools, so every tool with a section links it.
 function tabbarHTML(activeTab) {
-  if (activeTab === "" && CURRENT_CALC) return relatedHTML() + tabbarHTMLOnly(activeTab);
+  if (activeTab === "" && CURRENT_CALC) {
+    const more = MANUAL_LINK_SHOWN ? "" : manualLink();
+    return (more ? `<div class="manual-link-row">${more}</div>` : "") + relatedHTML() + tabbarHTMLOnly(activeTab);
+  }
   return tabbarHTMLOnly(activeTab);
 }
 
@@ -531,12 +536,15 @@ function findTool(key) {
 // The tool on screen, so shared pieces like formulaSection can link to its
 // manual section without every calculator passing its id along.
 let CURRENT_CALC = null;
+// Set once a screen has shown its manual link, so the tab bar does not add a second.
+let MANUAL_LINK_SHOWN = false;
 
 function renderTool(rawKey, calcId) {
   // A link to a tool since merged into another opens that one.
   const into = calcId && findByCalc(calcId);
   if (into && into.tool.calc !== calcId) { location.replace(`#${toolRoute(into)}`); return; }
   CURRENT_CALC = calcId;
+  MANUAL_LINK_SHOWN = false;
   TOOL_EXAMPLES = null;
   EXAMPLE_NOTE = "";
   noteRecent(calcId);
@@ -967,8 +975,9 @@ function relatedHTML() {
 // a calculator screen, this section only exists to be read, not glanced at.
 // The link to the tool's section in the manual, when it has one.
 function manualLink() {
-  return typeof MANUAL_SECTIONS !== "undefined" && MANUAL_SECTIONS.has(CURRENT_CALC)
-    ? `<a class="manual-link" href="manual.html#${CURRENT_CALC}">${ICONS.book}Read more in the manual</a>` : "";
+  if (typeof MANUAL_SECTIONS === "undefined" || !MANUAL_SECTIONS.has(CURRENT_CALC)) return "";
+  MANUAL_LINK_SHOWN = true;
+  return `<a class="manual-link" href="manual.html#${CURRENT_CALC}">${ICONS.book}Read more in the manual</a>`;
 }
 
 function formulaSection(lines, note) {
@@ -6096,7 +6105,7 @@ function renderTraceWidth(domain, tool, favId) {
 
       ${formulaSection(
         ["ΔT = K · I^c · W^w · Th^t  (IPC-2152 fit)", "outer: ΔT = 215.3 · I² · W^−1.15 · Th^−1", "R = ρ · L / (W·Th) · (1 + 0.00393 (T − 20 °C))"],
-        "A trace heats with its current until the board and the air carry the heat away as fast as it comes; the temperature rise ΔT is how far above the ambient it then sits. IPC-2152 (2009) measured this; the equations are Brooks and Adam's fits to its curves, W and Th (width and thickness) in mils. Inner traces cool through the board and run a little cooler than outer ones. Older calculators use IPC-2221, which allows about 25 % more current outside. Copper weight is ounces per square foot: 1 oz is 34.8 µm thick. Nearby planes and pours cool a trace further, so both are cautious for a real board."
+        "A trace heats with its current until the board and the air carry the heat away as fast as it comes; the temperature rise ΔT is how far above the ambient it then sits. IPC-2152 (2009) measured this; the equations are Brooks and Adam's fits to its curves, W and Th (width and thickness) in mils. Inner traces cool through the board and run a little cooler than outer ones. Older calculators use IPC-2221, which allows about 25 % more current outside. Copper weight is ounces per square foot: 1 oz is 34.8 µm thick. Nearby planes and pours cool a trace further, so on a real board the result is cautious."
       )}
       ${calcFooter("")}
     `;
