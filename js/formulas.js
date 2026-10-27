@@ -481,12 +481,13 @@ FORMULAS.sort((a, b) => a.tool.localeCompare(b.tool, undefined, { sensitivity: "
 // "duty cycle" should find the 555 timer even though "duty cycle" is not in
 // its tool name. Markup (the overline spans) is left out of the match.
 function searchFormulas(query) {
-  const q = query.trim().toLowerCase();
+  // searchFold (app.js) lower-cases and drops apostrophes: Ohm’s finds Ohm's.
+  const q = searchFold(query.trim());
   if (!q) return [];
-  const text = (s) => s.replace(/<[^>]+>/g, "").toLowerCase();
+  const text = (s) => searchFold(s.replace(/<[^>]+>/g, ""));
   return FORMULAS.filter(f =>
-    f.tool.toLowerCase().includes(q) ||
+    text(f.tool).includes(q) ||
     f.formulas.some(x => text(x).includes(q)) ||
-    f.note.toLowerCase().includes(q)
+    text(f.note).includes(q)
   );
 }

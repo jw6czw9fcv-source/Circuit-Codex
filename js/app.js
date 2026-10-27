@@ -658,6 +658,13 @@ function renderTool(rawKey, calcId) {
   document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); render(); };
 }
 
+// Text as every search compares it: lower case, and without apostrophes,
+// so the iPhone keyboard's curly ’ finds "Ohm's law", and so do "ohms" and
+// "ohm's".
+function searchFold(s) {
+  return String(s).toLowerCase().replace(/['’‘`´]/g, "");
+}
+
 function renderSearch() {
   app.innerHTML = `
     <div class="topbar"><h1>Search</h1></div>
@@ -671,7 +678,7 @@ function renderSearch() {
   const input = document.getElementById("search-input");
   const results = document.getElementById("search-results");
   input.addEventListener("input", () => {
-    const q = input.value.trim().toLowerCase();
+    const q = searchFold(input.value.trim());
     results.innerHTML = "";
     if (!q) return;
     // Built tools only. A match on the name ranks first, then one on the
@@ -683,8 +690,8 @@ function renderSearch() {
       d.sections.forEach((sec, si) => {
         sec.tools.forEach((t, ti) => {
           if (!t.calc) return;
-          const name = t.name.toLowerCase();
-          const hay = [name, (t.was || "").toLowerCase(), TOOL_KEYWORDS[t.calc] || "", sec.title.toLowerCase(), d.title.toLowerCase()].join(" ");
+          const name = searchFold(t.name);
+          const hay = [name, searchFold(t.was || ""), searchFold(TOOL_KEYWORDS[t.calc] || ""), searchFold(sec.title), searchFold(d.title)].join(" ");
           if (!words.every((w) => hay.includes(w))) return;
           matches.push({ d, sec, t, key: `${d.id}:${si}:${ti}`, rank: name.includes(q) ? 0 : 1 });
         });
@@ -5076,7 +5083,7 @@ function renderPhysicalConstants(domain, tool, favId) {
   }
 
   function matches(c, q) {
-    return [c.name, c.symbol, c.unit, c.note].some((s) => s.toLowerCase().includes(q));
+    return [c.name, c.symbol, c.unit, c.note].some((s) => searchFold(s).includes(searchFold(q)));
   }
 
   function renderList(q) {
@@ -5195,7 +5202,7 @@ function renderSiUnits(domain, tool, favId) {
   }
 
   function matches(u, q) {
-    return [u.name, u.symbol, u.quantity, u.note, u.siBase || "", u.other || ""].some((s) => s.toLowerCase().includes(q));
+    return [u.name, u.symbol, u.quantity, u.note, u.siBase || "", u.other || ""].some((s) => searchFold(s).includes(searchFold(q)));
   }
 
   function renderList(q) {
@@ -6508,7 +6515,8 @@ function renderCableColors(domain, tool, favId) {
   }
 
   function matchesQuery(c, q) {
-    return c.label.toLowerCase().includes(q) || c.note.toLowerCase().includes(q) || c.group.toLowerCase().includes(q);
+    const f = searchFold(q);
+    return searchFold(c.label).includes(f) || searchFold(c.note).includes(f) || searchFold(c.group).includes(f);
   }
 
   function filteredList() {

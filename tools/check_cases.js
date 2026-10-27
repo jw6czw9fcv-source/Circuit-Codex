@@ -1327,6 +1327,8 @@ const CHECK_CASES = {
       expect: [[".formula-card-title", "Path loss"], [".formula-card-go", "(missing)"], [".formula-line", "Lbf = 20 log₁₀(4πd / λ)"]] },
     { name: "the LM317 card follows TI's naming: R2 / R1", do: [["set", "#fs-input", "LM317"]],
       expect: [[".formula-line", "Vout = Vref (1 + R2/R1) + Iadj·R2"]] },
+    { name: "the iPhone's curly apostrophe finds Ohm's law: Ohm’s", do: [["set", "#fs-input", "Ohm’s"]],
+      expect: [[".formula-card-title", "AC Ohm's law"]] },
     { name: "a search that finds nothing says what to try", do: [["set", "#fs-input", "zzzz"]],
       expect: [[".placeholder", "/^No formula for .zzzz./"]] },
   ],
