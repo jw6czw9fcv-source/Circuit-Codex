@@ -626,6 +626,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "kirchhoff") return renderKirchhoff(domain, tool, favId);
   if (calcId === "series-parallel") return renderSeriesParallel(domain, tool, favId);
   if (calcId === "cap-series-parallel") return renderCapSeriesParallel(domain, tool, favId);
+  if (calcId === "ind-series-parallel") return renderIndSeriesParallel(domain, tool, favId);
   if (calcId === "formula-search") return renderFormulaSearch(domain, tool, favId);
   if (calcId === "si-prefix") return renderSiPrefixConverter(domain, tool, favId);
   if (calcId === "percent-tolerance") return renderPercentTolerance(domain, tool, favId);
@@ -3608,6 +3609,225 @@ function renderCapSeriesParallel(domain, tool, favId) {
         () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(CAP_UNITS[state.rows[i].unit], CAP_SLIDER_MIN, CAP_SLIDER_MAX)),
         (farads) => {
           state.rows[i].value = trim(farads / CAP_UNITS[state.rows[i].unit]);
+          app.querySelector(`input[data-row="${i}"]`).value = state.rows[i].value;
+          updateResults();
+        });
+    });
+  }
+
+  paint();
+}
+
+// ---------- Series / parallel inductors ----------
+// Inductors combine like resistors, not like capacitors: in series the
+// inductances add, in parallel their reciprocals do. Kuphaldt, Lessons in
+// Electric Circuits Vol. I (DC, 5th edition, 2021), §15.4 gives both, and
+// §15.5 the catches: a coil carries a rated current and a resistance of its
+// own, and two coils whose fields link add a mutual inductance these sums
+// leave out. Same shape as the capacitor version (rows, tolerance-driven
+// E-series, the standard-value slider), with coils for the plates.
+const IND_UNITS = { nH: 1e-9, "µH": 1e-6, mH: 1e-3, H: 1 };
+const IND_SLIDER_MIN = 1e-9;
+const IND_SLIDER_MAX = 1;
+
+function formatHenries(v) {
+  if (!isFinite(v)) return "—";
+  if (v === 0) return "0 H";
+  for (const [scale, unit] of [[1, "H"], [1e-3, "mH"], [1e-6, "µH"], [1e-9, "nH"]]) {
+    if (Math.abs(v) >= scale) return `${trim(v / scale)} ${unit}`;
+  }
+  return `${trim(v / 1e-9)} nH`;
+}
+
+function renderIndSeriesParallel(domain, tool, favId) {
+  const C = "ind-series-parallel";
+  const state = {
+    mode: pref(C, "mode", "series", ["series", "parallel"]),
+    tol: pref(C, "tol", 20, [5, 10, 20]),
+    rows: [
+      { value: 10, unit: "µH" },
+      { value: 10, unit: "µH" },
+    ],
+  };
+
+  const example = (mode, tol, rows) => () => {
+    Object.assign(state, { mode, tol, rows: rows.map(([value, unit]) => ({ value, unit })) });
+    paint();
+  };
+  useExamples([
+    { title: "Two 10 µH in series", note: "Series inductances add like resistances: 20 µH, if the two fields do not link.",
+      apply: example("series", 20, [[10, "µH"], [10, "µH"]]) },
+    { title: "Two 22 µH in parallel", note: "Half of one, 11 µH: the current divides between them.",
+      apply: example("parallel", 20, [[22, "µH"], [22, "µH"]]) },
+    { title: "15 µH from 10 and 4.7 µH", note: "In series: 14.7 µH, within 2 % of the 15 µH not in the drawer.",
+      apply: example("series", 20, [[10, "µH"], [4.7, "µH"]]) },
+    { title: "100 µH beside 47 µH", note: "In parallel: 31.97 µH, less than the smaller of the two.",
+      apply: example("parallel", 20, [[100, "µH"], [47, "µH"]]) },
+  ]);
+
+  const henriesOf = (row) => row.value * IND_UNITS[row.unit];
+  const values = () => state.rows.map(henriesOf);
+
+  // Swapped back from the capacitor version: like resistors, inductors in
+  // series add and in parallel combine as reciprocals, always less than the
+  // smallest.
+  function total() {
+    const v = values();
+    if (v.some((x) => !isFinite(x) || x < 0)) return NaN;
+    if (state.mode === "series") return v.reduce((a, b) => a + b, 0);
+    if (v.some((x) => x === 0)) return 0;
+    const inv = v.reduce((a, b) => a + 1 / b, 0);
+    return inv === 0 ? NaN : 1 / inv;
+  }
+
+  function problem() {
+    if (values().some((x) => !isFinite(x) || x < 0)) return "Every inductance must be zero or more.";
+    return "";
+  }
+
+  function seriesHint(henries) {
+    if (!isFinite(henries) || henries <= 0) return "";
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(henries, name);
+    return near.exact ? name : `${name} ${formatHenries(near.value)}`;
+  }
+
+  function detailLine() {
+    const r = total();
+    if (problem() || !isFinite(r) || r <= 0) return "";
+    const t = state.tol / 100;
+    const name = eSeriesForTolerance(state.tol);
+    const near = nearestESeries(r, name);
+    const single = near.exact ? `one ${name} part would do it` : `nearest single ${name} ${formatHenries(near.value)}`;
+    return `${formatHenries(r * (1 - t))} – ${formatHenries(r * (1 + t))} &nbsp;·&nbsp; ${single}`;
+  }
+
+  const SLOT = 196 / SP_MAX;
+  const BODY = 36;
+  const centres = (n) => { const start = (220 - n * SLOT) / 2; return Array.from({ length: n }, (_, i) => start + SLOT * (i + 0.5)); };
+
+  function diagram() {
+    const n = state.rows.length;
+    const wire = "#5A6169", ink = "#8FC1F5";
+    if (state.mode === "series") {
+      // Four humps across each body, on the same pitch as the resistor chain.
+      const gap = SLOT - BODY;
+      const width = n * BODY + (n + 1) * gap;
+      const x0 = (220 - width) / 2;
+      const bodyStart = (i) => x0 + gap + i * (BODY + gap);
+      const bodies = Array.from({ length: n }, (_, i) => {
+        const x = bodyStart(i), c = x + BODY / 2;
+        return `<path d="M${x} 35 H${x + 2}${" a4 4 0 0 1 8 0".repeat(4)} H${x + BODY}" stroke="${ink}" stroke-width="2" stroke-linecap="round" fill="none"/>`
+          + `<text x="${c}" y="22" fill="${ink}" font-size="11" font-weight="600" text-anchor="middle">L${i + 1}</text>`;
+      });
+      const links = Array.from({ length: n + 1 }, (_, i) =>
+        `M${i === 0 ? x0 : bodyStart(i - 1) + BODY} 35 H${i === n ? x0 + width : bodyStart(i)}`);
+      return `<svg width="220" height="50" viewBox="0 0 220 50" fill="none">
+        <path d="${links.join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+        ${bodies.join("")}
+      </svg>`;
+    }
+    // Parallel: each coil stands on its drop between the rails.
+    const cx = centres(n);
+    const coil = (x, t) => `<path d="M${x} ${t} V${t + 3}${" a4 4 0 0 1 0 6".repeat(4)} V${t + 30}" stroke="${ink}" stroke-width="2" stroke-linecap="round" fill="none"/>`;
+    return `<svg width="220" height="96" viewBox="0 0 220 96" fill="none">
+      <path d="M${cx[0]} 24 H${cx[n - 1]} M${cx[0]} 76 H${cx[n - 1]}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="${cx.map((x) => `M${x} 24 V35 M${x} 65 V76`).join(" ")}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M110 12 V24 M110 76 V88" stroke="${wire}" stroke-width="1.6" stroke-linecap="round"/>
+      ${cx.map((x) => coil(x, 35)).join("")}
+      ${cx.map((x, i) => `<text x="${x}" y="54" fill="${ink}" font-size="11" font-weight="600" text-anchor="${i === n - 1 ? "start" : "end"}" dx="${i === n - 1 ? 10 : -8}">L${i + 1}</text>`).join("")}
+    </svg>`;
+  }
+
+  function rowsHTML() {
+    return state.rows.map((row, i) => `
+      <div class="r-item">
+        <div class="r-line">
+          <span class="r-index">L${i + 1}</span>
+          <input type="number" inputmode="decimal" step="any" data-row="${i}" value="${row.value}" />
+          <span class="r-hint" data-hint="${i}">${seriesHint(henriesOf(row))}</span>
+          <select data-unit="${i}">
+            ${Object.keys(IND_UNITS).map((u) => `<option ${row.unit === u ? "selected" : ""}>${u}</option>`).join("")}
+          </select>
+          <button class="r-drop" data-drop="${i}" aria-label="Remove L${i + 1}" ${state.rows.length <= 2 ? "disabled" : ""}>×</button>
+        </div>
+        ${seriesSliderHTML(i, eSeriesForTolerance(state.tol), henriesOf(row), unitSliderBounds(IND_UNITS[row.unit], IND_SLIDER_MIN, IND_SLIDER_MAX))}
+      </div>`).join("");
+  }
+
+  function updateResults() {
+    app.querySelector('[data-res="total"]').textContent = problem() ? "—" : formatHenries(total());
+    app.querySelector('[data-res="detail"]').innerHTML = detailLine();
+    app.querySelector('[data-res="err"]').textContent = problem();
+    app.querySelectorAll("[data-hint]").forEach((el) => { el.textContent = seriesHint(henriesOf(state.rows[el.dataset.hint])); });
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    syncSliderPositions(eSeriesForTolerance(state.tol), (i) => henriesOf(state.rows[i]),
+      (i) => unitSliderBounds(IND_UNITS[state.rows[i].unit], IND_SLIDER_MIN, IND_SLIDER_MAX));
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, `${state.rows.length} inductors, ${state.mode === "series" ? "end to end" : "across each other"}`)}
+
+      <div class="diagram-box" style="padding:6px 10px;">${diagram()}</div>
+
+      ${pillRow([["series", "Series"], ["parallel", "Parallel"]], state.mode, domain.bg)}
+
+      <div class="section-label split" style="color:#8FC1F5">
+        <span>Inductors</span>
+        <button class="label-btn" id="sp-add" ${state.rows.length >= SP_MAX ? "disabled" : ""}>+ add</button>
+        <select id="sp-tol" class="label-select">
+          ${[5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="r-list">${rowsHTML()}</div>
+      <div class="error-text" data-res="err">${problem()}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Result</div>
+      <div class="result-field">
+        <div class="result-head">
+          <span class="label">Total inductance</span>
+          <span class="badge-calc">${ICONS.bolt2}Calculated</span>
+        </div>
+        <div class="result-value">
+          <span class="num" data-res="total">${problem() ? "—" : formatHenries(total())}</span>
+        </div>
+        <div class="result-sub" data-res="detail">${detailLine()}</div>
+      </div>
+
+      ${formulaSection(
+        ["Series: L = L1 + L2 + L3 + …", "Parallel: 1/L = 1/L1 + 1/L2 + 1/L3 + …", "Parallel (2 only): L = L1 × L2 / (L1 + L2)"],
+        "Inductors combine like resistors. In series the same current changes through each, so their voltages add and so do the inductances. In parallel the current divides, so the total is less than the smallest: two equal inductors give half of one. The sums hold only if the coils' magnetic fields do not link: two inductors close together, or on one core, add a mutual inductance and can come out more or less. Each coil also has its own resistance and a rated current; in series the lowest rating limits the chain. The total keeps the parts' tolerance, worst case."
+      )}
+      ${calcFooter()}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+
+    app.querySelectorAll("input[data-row]").forEach((input) => {
+      input.oninput = () => { state.rows[input.dataset.row].value = parseFloat(input.value); updateResults(); };
+    });
+    app.querySelectorAll("select[data-unit]").forEach((select) => {
+      select.onchange = () => { state.rows[select.dataset.unit].unit = select.value; updateResults(); };
+    });
+    app.querySelectorAll("[data-drop]").forEach((btn) => {
+      btn.onclick = () => { if (state.rows.length <= 2) return; state.rows.splice(+btn.dataset.drop, 1); paint(); };
+    });
+    document.getElementById("sp-add").onclick = () => {
+      if (state.rows.length >= SP_MAX) return;
+      state.rows.push({ value: 10, unit: "µH" });
+      paint();
+    };
+    document.getElementById("sp-tol").onchange = (e) => {
+      state.tol = parseFloat(e.target.value);
+      setPref(C, "tol", state.tol);
+      updateResults();
+    };
+    state.rows.forEach((row, i) => {
+      wireSlider(i,
+        () => eSeriesRange(eSeriesForTolerance(state.tol), ...unitSliderBounds(IND_UNITS[state.rows[i].unit], IND_SLIDER_MIN, IND_SLIDER_MAX)),
+        (henries) => {
+          state.rows[i].value = trim(henries / IND_UNITS[state.rows[i].unit]);
           app.querySelector(`input[data-row="${i}"]`).value = state.rows[i].value;
           updateResults();
         });

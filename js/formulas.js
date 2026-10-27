@@ -68,6 +68,12 @@ const FORMULAS = [
     note: "The opposite of resistors. In series the smallest capacitor takes the largest share of the voltage.",
   },
   {
+    tool: "Series/parallel (L)",
+    domain: "passive",
+    formulas: ["Series: L = L1 + L2 + …", "Parallel: 1/L = 1/L1 + 1/L2 + …"],
+    note: "Like resistors, provided the coils' fields do not link: coupled coils add a mutual inductance.",
+  },
+  {
     tool: "RC time constant",
     domain: "passive",
     formulas: ["τ = R × C", "Charging: V(t) = Vs × (1 − e^(−t/τ))", "Discharging: V(t) = V0 × e^(−t/τ)"],
