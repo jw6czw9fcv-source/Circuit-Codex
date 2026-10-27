@@ -622,6 +622,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "voltage-divider") return renderVoltageDivider(domain, tool, favId);
   if (calcId === "current-divider") return renderCurrentDivider(domain, tool, favId);
   if (calcId === "wheatstone-bridge") return renderWheatstoneBridge(domain, tool, favId);
+  if (calcId === "impedance") return renderImpedance(domain, tool, favId);
   if (calcId === "kirchhoff") return renderKirchhoff(domain, tool, favId);
   if (calcId === "series-parallel") return renderSeriesParallel(domain, tool, favId);
   if (calcId === "cap-series-parallel") return renderCapSeriesParallel(domain, tool, favId);
@@ -3604,6 +3605,246 @@ function renderCapSeriesParallel(domain, tool, favId) {
           updateResults();
         });
     });
+  }
+
+  paint();
+}
+
+// ---------- Impedance ----------
+// Ohm's law for AC: V = I × Z, with Z the complex impedance of R, L and C in
+// series or in parallel. The relations are the textbook ones, as Kuphaldt's
+// Lessons in Electric Circuits, Vol. II (AC, 6th edition, 2021) states them:
+// XL = 2πfL, XC = 1/(2πfC), an inductor at +90°, a capacitor at −90°; series
+// impedances add, parallel ones add as reciprocals; true power P (W),
+// reactive Q (VAR) and apparent S (VA) form the power triangle, and the power
+// factor is P / S = cos φ. Its worked examples are the cases: 250 Ω, 650 mH
+// and 1.5 µF at 120 V, 60 Hz in series (1.5437 kΩ ∠ −80.680°, 77.734 mA) and
+// in parallel (639 mA at −41.31°), and 60 Ω with 160 mH (0.705).
+// A part typed as 0 or left empty is not fitted: a wire in series, an open
+// branch in parallel.
+const IMP_F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+const IMP_L_UNITS = { nH: 1e-9, "µH": 1e-6, mH: 1e-3, H: 1 };
+const IMP_C_UNITS = { pF: 1e-12, nF: 1e-9, "µF": 1e-6, mF: 1e-3 };
+const IMP_SRC = { v: { label: "Voltage", units: VOLT_UNITS, unit: "V" }, i: { label: "Current", units: AMP_UNITS, unit: "A" } };
+
+// Z of the network, as re + j·im, and what each part sees.
+function impedanceOf(mode, f, R, L, C) {
+  const w = 2 * Math.PI * f;
+  const XL = L > 0 ? w * L : 0, XC = C > 0 ? 1 / (w * C) : Infinity;
+  if (mode === "series") {
+    return { re: R > 0 ? R : 0, im: (L > 0 ? XL : 0) - (C > 0 ? XC : 0), XL, XC };
+  }
+  // Parallel: add the admittances, Y = 1/R − j/XL + j/XC, and invert.
+  const g = R > 0 ? 1 / R : 0, b = (C > 0 ? 1 / XC : 0) - (L > 0 ? 1 / XL : 0);
+  const mag2 = g * g + b * b;
+  return mag2 === 0 ? { re: Infinity, im: 0, XL, XC, open: true } : { re: g / mag2, im: -b / mag2, XL, XC };
+}
+
+function renderImpedance(domain, tool, favId) {
+  const C = "impedance";
+  const unitPref = (key, units, fallback) => pref(C, `unit.${key}`, fallback, Object.keys(units));
+  const state = {
+    mode: pref(C, "mode", "series", ["series", "parallel"]),
+    srcKind: pref(C, "srcKind", "v", Object.keys(IMP_SRC)),
+    si: { f: 60, R: 250, L: 0.65, C: 1.5e-6, src: 120 },
+    units: {
+      f: unitPref("f", IMP_F_UNITS, "Hz"), R: unitPref("R", DIVIDER_R_UNITS, "Ω"),
+      L: unitPref("L", IMP_L_UNITS, "mH"), C: unitPref("C", IMP_C_UNITS, "µF"), src: "V",
+    },
+  };
+  state.units.src = pref(C, `unit.src.${state.srcKind}`, IMP_SRC[state.srcKind].unit, Object.keys(IMP_SRC[state.srcKind].units));
+  const unitsOf = (k) => ({ f: IMP_F_UNITS, R: DIVIDER_R_UNITS, L: IMP_L_UNITS, C: IMP_C_UNITS, src: IMP_SRC[state.srcKind].units })[k];
+  const shown = (k) => (isFinite(state.si[k]) ? String(+(state.si[k] / unitsOf(k)[state.units[k]]).toPrecision(6)) : "");
+  const minus = (s) => s.replace(/-/g, "−");
+  const deg = (rad) => { const d = Number((rad * 180 / Math.PI).toFixed(2)); return minus(`${d > 0 ? "+" : ""}${d}°`); };
+  // Rounded before the prefix is chosen: 0.99999 A is 1 A, not 1000 mA.
+  const val = (v, u) => minus(siFormat(Number(v.toPrecision(4)), u, 4));
+  const fitted = (k) => state.si[k] > 0;
+
+  function problem() {
+    const { f, R, L, C: c, src } = state.si;
+    if (!(f > 0)) return "The frequency has to be greater than zero.";
+    if ([R, L, c].some((v) => !isFinite(v) || v < 0)) return "R, L and C cannot be negative; 0 means the part is not fitted.";
+    if (!fitted("R") && !fitted("L") && !fitted("C")) return "Fit at least one of R, L and C.";
+    if (!(src > 0)) return `The ${IMP_SRC[state.srcKind].label.toLowerCase()} has to be greater than zero.`;
+    const z = impedanceOf(state.mode, f, R, L, c);
+    if (z.open) return "L and C are at resonance with no R across them: the parallel circuit is an open circuit, Z is infinite.";
+    if (z.re === 0 && z.im === 0) return "L and C are at resonance with no R: the series circuit is a short, Z = 0.";
+    return "";
+  }
+
+  // The source on the left; in series the parts run round the loop, in
+  // parallel each is a branch between the rails. A part not fitted is a
+  // plain wire in series and absent in parallel.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", label = "#8A9099";
+    const lbl = (x, y, t, anchor = "start") => `<text x="${x}" y="${y}" fill="${part}" font-size="11" font-weight="600" text-anchor="${anchor}">${t}</text>`;
+    const zigH = (x1, x2, y) => { let d = `M${x1} ${y}`; const n = 6, s = (x2 - x1) / n; for (let i = 0; i < n; i++) d += ` L${x1 + s * (i + 0.5)} ${y + (i % 2 ? 5 : -5)}`; return `${d} L${x2} ${y}`; };
+    const zigV = (x, y1, y2) => { let d = `M${x} ${y1}`; const n = 6, s = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + s * (i + 0.5)}`; return `${d} L${x} ${y2}`; };
+    const coilH = (x1, y) => `M${x1} ${y}` + " a5 5 0 0 1 10 0".repeat(4);
+    const coilV = (x, y1) => `M${x} ${y1}` + " a5 5 0 0 1 0 10".repeat(4);
+    const v = (k) => siFormat(state.si[k], { R: "Ω", L: "H", C: "F" }[k], 3);
+    const src = `<circle cx="30" cy="60" r="13" stroke="${part}" stroke-width="1.6"/>
+      <path d="M23 60 Q26.5 52 30 60 T37 60" stroke="${part}" stroke-width="1.4"/>
+      <path d="M30 20 V47 M30 73 V100" stroke="${wire}" stroke-width="1.6"/>`;
+    let body;
+    if (state.mode === "series") {
+      const seg = [];
+      seg.push(fitted("R") ? `<path d="M30 20 H75" stroke="${wire}" stroke-width="1.6"/><path d="${zigH(75, 115, 20)}" stroke="${part}" stroke-width="1.6" fill="none"/>${lbl(95, 10, `R ${v("R")}`, "middle")}` : `<path d="M30 20 H115" stroke="${wire}" stroke-width="1.6"/>`);
+      seg.push(fitted("L") ? `<path d="M115 20 H150" stroke="${wire}" stroke-width="1.6"/><path d="${coilH(150, 20)}" stroke="${part}" stroke-width="1.6" fill="none"/>${lbl(170, 10, `L ${v("L")}`, "middle")}<path d="M190 20 H230" stroke="${wire}" stroke-width="1.6"/>` : `<path d="M115 20 H230" stroke="${wire}" stroke-width="1.6"/>`);
+      seg.push(fitted("C") ? `<path d="M230 20 V56 M230 64 V100" stroke="${wire}" stroke-width="1.6"/><path d="M220 56 H240 M220 64 H240" stroke="${part}" stroke-width="2"/>${lbl(246, 64, `C ${v("C")}`)}` : `<path d="M230 20 V100" stroke="${wire}" stroke-width="1.6"/>`);
+      body = `${seg.join("")}<path d="M30 100 H230" stroke="${wire}" stroke-width="1.6"/>`;
+    } else {
+      const branches = [];
+      const xs = { R: 105, L: 170, C: 235 };
+      if (fitted("R")) branches.push(`<path d="M105 20 V40 M105 80 V100" stroke="${wire}" stroke-width="1.6"/><path d="${zigV(105, 40, 80)}" stroke="${part}" stroke-width="1.6" fill="none"/>${lbl(117, 56, "R")}${lbl(117, 70, v("R"))}`);
+      if (fitted("L")) branches.push(`<path d="M170 20 V40 M170 80 V100" stroke="${wire}" stroke-width="1.6"/><path d="${coilV(170, 40)}" stroke="${part}" stroke-width="1.6" fill="none"/>${lbl(182, 56, "L")}${lbl(182, 70, v("L"))}`);
+      if (fitted("C")) branches.push(`<path d="M235 20 V56 M235 64 V100" stroke="${wire}" stroke-width="1.6"/><path d="M225 56 H245 M225 64 H245" stroke="${part}" stroke-width="2"/>${lbl(251, 56, "C")}${lbl(251, 70, v("C"))}`);
+      const last = Math.max(...["R", "L", "C"].filter(fitted).map((k) => xs[k]), 105);
+      body = `<path d="M30 20 H${last} M30 100 H${last}" stroke="${wire}" stroke-width="1.6"/>${branches.join("")}`;
+    }
+    return `<svg width="336" height="123" viewBox="0 0 300 110" fill="none">${src}${body}
+      <text x="50" y="64" fill="${label}" font-size="11" font-weight="600">${val(state.si.f, "Hz")}</text></svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const { f, R, L, C: c, src } = state.si;
+    const z = impedanceOf(state.mode, f, R, L, c);
+    // What is left of a part that cancels (L against C at resonance, a
+    // resistance absent) is rounding, not a reactance.
+    const mag0 = Math.hypot(z.re, z.im);
+    if (Math.abs(z.im) < mag0 * 1e-6) z.im = 0;
+    if (Math.abs(z.re) < mag0 * 1e-6) z.re = 0;
+    const mag = Math.hypot(z.re, z.im), phi = Math.atan2(z.im, z.re);
+    const given = state.srcKind;
+    const V = given === "v" ? src : src * mag, I = given === "v" ? src / mag : src;
+    const S = V * I, P = z.re === 0 ? 0 : S * Math.cos(phi), Q = z.im === 0 ? 0 : S * Math.sin(phi);
+    const kind = z.im === 0 ? "resistive" : z.im > 0 ? "inductive" : "capacitive";
+    const rect = `${val(z.re, "Ω")} ${z.im < 0 ? "−" : "+"} j${val(Math.abs(z.im), "Ω")}`;
+    // The phase of what was worked out, against the one given (at 0°).
+    const outAngle = given === "v" ? -phi : phi;
+    const lead = given === "v"
+      ? (kind === "resistive" ? "in phase" : kind === "inductive" ? "lags the voltage" : "leads the voltage")
+      : (kind === "resistive" ? "in phase" : kind === "inductive" ? "leads the current" : "lags the current");
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    // What each part sees: its own voltage in series, its own current in parallel.
+    const parts = ["R", "L", "C"].filter(fitted).map((k) => {
+      const zk = k === "R" ? R : k === "L" ? z.XL : z.XC;
+      return state.mode === "series"
+        ? row(`Across ${k}`, val(I * zk, "V"), `part-${k}`)
+        : row(`Through ${k}`, val(V / zk, "A"), `part-${k}`);
+    }).join("");
+    const pf = z.re === 0 ? 0 : Math.cos(phi);
+    const pfText = `${Number(pf.toFixed(3))}${kind === "resistive" ? "" : kind === "inductive" ? ", lagging" : ", leading"}`;
+    const f0 = fitted("L") && fitted("C") ? 1 / (2 * Math.PI * Math.sqrt(L * c)) : null;
+    return `
+      <div class="result-pair">
+        <div class="result-field">
+          <div class="result-head"><span class="label">Impedance |Z|</span></div>
+          <div class="result-value"><span class="num" data-res="z">${val(mag, "Ω")}</span></div>
+          <div class="result-sub" data-res="z-sub">∠ ${deg(phi)} · ${kind}</div>
+        </div>
+        <div class="result-field">
+          <div class="result-head"><span class="label">${given === "v" ? "Current" : "Voltage"}</span></div>
+          <div class="result-value"><span class="num" data-res="out">${given === "v" ? val(I, "A") : val(V, "V")}</span></div>
+          <div class="result-sub" data-res="out-sub">∠ ${deg(outAngle)}, ${lead}</div>
+        </div>
+      </div>
+      <div class="section-label" style="color:#8FC1F5">Rectangular, power and parts</div>
+      <div class="field notation-box">
+        ${row("Z = R + jX", rect, "rect")}
+        ${row("XL · XC", `${fitted("L") ? val(z.XL, "Ω") : "—"} · ${fitted("C") ? val(z.XC, "Ω") : "—"}`, "x")}
+        ${row("Power factor", pfText, "pf")}
+        ${row("P · Q · S", `${val(P, "W")} · ${val(Math.abs(Q), "VAR")} · ${val(S, "VA")}`, "power")}
+        ${parts}
+        ${f0 ? row("Resonance f₀", val(f0, "Hz"), "f0") : ""}
+      </div>`;
+  }
+
+  function refresh() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (mode, si, units, srcKind = "v") => () => {
+    Object.assign(state, { mode, srcKind });
+    Object.assign(state.si, si);
+    Object.assign(state.units, units, { src: IMP_SRC[srcKind].unit });
+    paint();
+  };
+  const book = { f: 60, R: 250, L: 0.65, C: 1.5e-6, src: 120 };
+  const bookU = { f: "Hz", R: "Ω", L: "mH", C: "µF" };
+  useExamples([
+    { title: "Series R, L and C", note: "Kuphaldt's example: 250 Ω, 650 mH, 1.5 µF at 120 V, 60 Hz is 1.544 kΩ at −80.68°.",
+      apply: example("series", book, bookU) },
+    { title: "The same parts in parallel", note: "Each branch takes its own current: 639 mA in all, at −41.31°.",
+      apply: example("parallel", book, bookU) },
+    { title: "Power factor of an R-L load", note: "60 Ω with 160 mH on 120 V: 119.4 W true, 169.3 VA apparent, 0.705.",
+      apply: example("series", { f: 60, R: 60, L: 0.16, C: 0, src: 120 }, { f: "Hz", R: "Ω", L: "mH", C: "µF" }) },
+    { title: "Series resonance", note: "10 µH and 100 nF at 159.2 kHz: only the 1 Ω is left, yet L and C each hold 10 V.",
+      apply: example("series", { f: 159154.94, R: 1, L: 10e-6, C: 100e-9, src: 1 }, { f: "kHz", R: "Ω", L: "µH", C: "nF" }) },
+    { title: "A capacitor alone", note: "100 nF at 1 kHz: 1.592 kΩ at −90°, the current leading by a quarter cycle.",
+      apply: example("series", { f: 1000, R: 0, L: 0, C: 100e-9, src: 5 }, { f: "kHz", R: "Ω", L: "mH", C: "nF" }) },
+  ]);
+
+  function paint() {
+    const numField = (key, label) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${shown(key)}" />
+            <select data-unit="${key}">${Object.keys(unitsOf(key)).map((u) => `<option ${u === state.units[key] ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+        </div>`;
+    const srcLabel = `<select id="imp-src-kind" class="label-select">${Object.entries(IMP_SRC).map(([k, s]) => `<option value="${k}" ${k === state.srcKind ? "selected" : ""}>${s.label}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "AC Ohm's law: V = I × Z for R, L and C")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow([["series", "Series"], ["parallel", "Parallel"]], state.mode, domain.bg)}
+
+      <div class="field-pair">${numField("R", "R")}${numField("L", "L")}${numField("C", "C")}</div>
+      <div class="field-pair">
+        ${numField("f", "Frequency")}
+        ${numField("src", srcLabel)}
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["XL = 2πfL · XC = 1 / (2πfC)", state.mode === "series" ? "Z = R + j(XL − XC)" : "1/Z = 1/R − j/XL + j/XC", "V = I × Z,  φ = atan(X / R)", "P = S cos φ · Q = S sin φ · S = V × I"],
+        "Impedance Z is the AC form of resistance: how much a circuit opposes an alternating current, in ohms, and how far it shifts the current in time, the phase angle φ. A resistor only opposes; an inductor's reactance XL grows with frequency and makes the current lag; a capacitor's XC shrinks with it and makes the current lead. True power P (W) is what the resistance turns into heat, reactive power Q (VAR) goes back and forth, apparent power S (VA) is V × I, and the power factor P / S says how much of it does work. At resonance, f₀, XL and XC cancel. A part at 0 is not fitted."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key, v = parseFloat(el.value);
+        state.si[k] = el.value.trim() === "" ? 0 : v * unitsOf(k)[state.units[k]];
+        refresh();
+      };
+    });
+    // A unit change re-expresses the same value.
+    app.querySelectorAll("select[data-unit]").forEach((el) => {
+      el.onchange = () => {
+        const k = el.dataset.unit;
+        state.units[k] = el.value;
+        setPref(C, k === "src" ? `unit.src.${state.srcKind}` : `unit.${k}`, el.value);
+        paint();
+      };
+    });
+    // Giving the current instead keeps the circuit and starts from 1 A.
+    document.getElementById("imp-src-kind").onchange = (e) => {
+      state.srcKind = e.target.value; setPref(C, "srcKind", state.srcKind);
+      state.units.src = pref(C, `unit.src.${state.srcKind}`, IMP_SRC[state.srcKind].unit, Object.keys(IMP_SRC[state.srcKind].units));
+      state.si.src = state.srcKind === "v" ? 120 : 1;
+      paint();
+    };
   }
 
   paint();

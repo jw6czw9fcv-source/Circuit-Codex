@@ -110,6 +110,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Calculators → [Calculator](#basic-calculator)
 - Calculators → [Ohm's law](#ohms-law)
+- Calculators → [Impedance](#impedance)
 - Calculators → [Kirchhoff's laws](#kirchhoff)
 - Calculators → [SI prefix converter](#si-prefix)
 - Calculators → [Tolerance & error](#percent-tolerance)
@@ -9286,6 +9287,116 @@ The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
 - a width solved and heated again gives back its 10 °C;
 - a unit change keeps the width;
 - a zero current is refused;
+- the remembered choices.
+
+[↑ Index](#index)
+
+---
+
+<a id="impedance"></a>
+## Impedance
+
+`calc: impedance` · Tools › Calculators
+(formerly AC Ohm's law (impedance form))
+
+### What it computes
+
+Ohm's law for alternating current, V = I × Z, for a resistor, an inductor
+and a capacitor in series or in parallel, by pill.
+
+- **Inputs:** R, L and C with their units, the frequency, and the source,
+  given as a voltage or as a current (rms). A part at 0, or left empty,
+  is not fitted: a plain wire in series, an open branch in parallel. So
+  the same screen covers R-L, R-C, L-C or a single part.
+- **Output, large:**
+  - the impedance |Z|, with its phase angle and whether the circuit is
+    inductive, capacitive or resistive;
+  - the current (or the voltage, when the current was given), with its
+    phase against the source and whether it leads or lags.
+- **Below:**
+  - Z in rectangular form, R + jX;
+  - the reactances XL and XC;
+  - the power factor, leading or lagging;
+  - true power P, reactive power Q and apparent power S;
+  - the voltage across each part in series, or the current through each
+    branch in parallel;
+  - the resonant frequency f₀ when both L and C are fitted.
+- **Drawing:** the source with the parts round the loop or in branches, a
+  part not fitted shown as a wire or left out.
+- **Remembered:** the pill, whether a voltage or a current is given, and
+  every unit.
+
+Examples: Kuphaldt's series and parallel R, L and C, the power factor of
+an R-L load, series resonance, and a capacitor alone.
+
+### Source
+
+**Tony R. Kuphaldt, Lessons in Electric Circuits, Volume II, AC, 6th
+edition (2021)**, the free textbook (ibiblio.org/kuphaldt), read in
+review:
+- **Reactance:** XL = 2πfL and XC = 1/(2πfC). An inductive reactance is a
+  positive imaginary impedance (+90°), a capacitive one negative (−90°).
+- **Combining:** series impedances add, Ztotal = ZR + ZL + ZC; parallel
+  ones add as reciprocals, Ztotal = 1/(1/ZR + 1/ZL + 1/ZC).
+- **Power, chapter 11:**
+  - true power P in watts;
+  - reactive power Q in "Volt-Amps-Reactive (VAR)";
+  - apparent power S in volt-amps (VA);
+  - P, Q and S form the power triangle, whose angle is the impedance's
+    phase angle;
+  - the power factor is P / S, "equal to the cosine of that phase angle".
+- **Its examples**, the tool's cases:
+  - **series:** 250 Ω, 650 mH and 1.5 µF at 120 V, 60 Hz give
+    250 − j1.5233 kΩ, 1.5437 kΩ ∠ −80.680°, and 77.734 mA;
+  - **parallel:** the same parts draw 480, 489.71 and 67.858 mA by branch,
+    639 mA in all at −41.31°;
+  - **power:** 60 Ω with 160 mH on 120 V, 60 Hz give 119.365 W, 119.998 VAR
+    and 169.256 VA, a power factor of 0.705.
+
+### Why the formulas are these
+
+    XL = 2πfL,  XC = 1 / (2πfC)
+    series:   Z = R + j(XL − XC)
+    parallel: 1/Z = 1/R − j/XL + j/XC
+    |Z| = √(R² + X²),  φ = atan(X / R),  I = V / Z
+    S = V × I,  P = S cos φ,  Q = S sin φ,  PF = P / S = cos φ
+    f₀ = 1 / (2π √(LC))
+
+An inductor's opposition grows with frequency and a capacitor's shrinks,
+and they shift the current in opposite directions, so in a circuit they
+partly cancel. When XL = XC, at f₀, they cancel entirely. A series circuit
+is then only its R, and the voltage across L and across C can be many
+times the source's. A parallel L and C then draw no current between them
+from the source. A positive angle is inductive: the current lags the
+voltage, and the power factor is lagging. A negative one is capacitive and
+leading.
+
+### Assumptions and limits
+
+- **Ideal parts:** an inductor with no resistance of its own, a capacitor
+  with no loss, as in the book's examples. A real coil's resistance can be
+  typed into R in series.
+- **Sine waves only,** at the one frequency. Distorted waveforms carry
+  harmonics that see other reactances.
+- **Values are rms**, the source taken as the 0° reference.
+- **At exact resonance** with no R, a series L-C is a short and a parallel
+  one an open circuit; the tool says so instead of dividing by zero.
+
+### How it was checked
+
+10 cases:
+- the book's series circuit: 1.544 kΩ at −80.68°, 77.73 mA,
+  250 − j1.523 kΩ;
+- the book's parallel circuit: 639 mA at −41.31°, branches 480, 489.7 and
+  67.86 mA;
+- the book's R-L load: power factor 0.705 lagging, 119.4 W, 120 VAR,
+  169.3 VA;
+- series resonance: 1 Ω, 0°, 10 V across L and across C, f₀ 159.2 kHz;
+- a capacitor alone: −90°, no true power;
+- given 1 A, the series circuit needs 1.544 kV;
+- R and L alone (C at 0): 350.1 Ω at +44.43°;
+- a unit change keeps the value;
+- nothing fitted is refused;
 - the remembered choices.
 
 [↑ Index](#index)
