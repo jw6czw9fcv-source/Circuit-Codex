@@ -10367,7 +10367,7 @@ function renderLinearRegulator(domain, tool, favId) {
     const iSel = `<select data-iunit="1">${Object.keys(AMP_UNITS).map((u) => `<option ${u === state.iUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const opt = ([k, v]) => `<option value="${k}" ${k === state.part ? "selected" : ""}>${v.label}</option>`;
     const parts = Object.entries(LDO_PARTS);
-    const partSel = `<select id="ldo-part"><optgroup label="Adjustable">${parts.filter(([, v]) => !v.fixed).map(opt).join("")}</optgroup><optgroup label="Fixed">${parts.filter(([, v]) => v.fixed).map(opt).join("")}</optgroup></select>`;
+    const partSel = `<select id="ldo-part"><optgroup label="Variable">${parts.filter(([, v]) => !v.fixed).map(opt).join("")}</optgroup><optgroup label="Fixed">${parts.filter(([, v]) => v.fixed).map(opt).join("")}</optgroup></select>`;
     const pkgSel = p.pkgs.length ? `<select id="ldo-pkg">${p.pkgs.map(([n, t], i) => `<option value="${i}" ${i === state.pkg ? "selected" : ""}>${n}, ${t} °C/W</option>`).join("")}</select>` : "";
     let fields = `<div class="field-pair"><div class="field"><label>Regulator</label>${partSel}</div>${m === "heat" && pkgSel ? `<div class="field"><label>Package</label>${pkgSel}</div>` : ""}</div>`;
     if (p.custom) fields += `<div class="field-pair">${field("cvref", "Vref", fixed("V"))}${m === "heat" ? field("cdrop", "Dropout", fixed("V")) : ""}</div>`;

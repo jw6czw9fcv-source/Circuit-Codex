@@ -9585,8 +9585,8 @@ R, and half of it then heats the cell.
 
 ### What it computes
 
-A linear regulator, picked from the common ones:
-- **Adjustable:** LM317, LM1117-ADJ, AMS1117-ADJ, LM1086-ADJ, the negative
+A linear regulator, picked from the common ones, in two groups:
+- **Variable** (adjustable with two resistors): LM317, LM1117-ADJ, AMS1117-ADJ, LM1086-ADJ, the negative
   LM337, or a custom part with your own Vref and dropout.
 - **Fixed:** 7805, 7812, 7815, AMS1117-3.3, AP2112-3.3, MCP1700-3.3.
 

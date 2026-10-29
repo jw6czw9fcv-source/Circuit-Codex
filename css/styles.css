@@ -563,6 +563,13 @@ div.tool-row { cursor: default; }
   color: var(--text);
   background: var(--card);
 }
+/* A group heading in the list (Variable / Fixed regulators) needs the same,
+   or it is painted white on the platform's white. */
+.field select optgroup {
+  color: var(--text-secondary);
+  background: var(--card);
+  font-style: normal;
+}
 /* IP ratings' four pickers are the fields themselves, and their option text is
    the reading: a size up from the unit-picker style. */
 #ip-first, #ip-second, #ip-extra, #ip-supp { font-size: 15px; padding: 3px 0; }
