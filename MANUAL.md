@@ -97,6 +97,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Battery → [Battery runtime](#battery-runtime)
 - Battery → [Battery C-rate](#battery-c-rate)
+- Battery → [Internal resistance](#internal-resistance)
 - Battery → [Battery types & sizes](#battery-types--sizes)
 - Battery → [Button cell sizes](#button-cell-sizes)
 
@@ -9477,5 +9478,98 @@ capacitors.
 - 10 µH + 10 mH is 10.01 mH;
 - a negative value is refused;
 - the remembered connection and tolerance.
+
+[↑ Index](#index)
+
+---
+
+<a id="internal-resistance"></a>
+## Internal resistance
+
+`calc: internal-resistance` · Power electronics › Battery
+(formerly Battery internal resistance)
+
+### What it computes
+
+A battery's internal resistance, and the voltage it costs under load,
+three ways, by pill:
+
+| Pill | Inputs | Output |
+|---|---|---|
+| Two loads | the voltage at a light and at a heavy current | R, and the open-circuit voltage extrapolated |
+| Resistor | the voltage open, then across a known resistor | R, and the current drawn |
+| Drop | the open-circuit voltage, R and a load current | the voltage at the terminals |
+
+- **Measured modes also give:**
+  - the short-circuit current, Voc / R, in theory;
+  - the most power the cell can deliver, into a load equal to R.
+- **Drop mode also gives:**
+  - the power lost inside the cell, I²R;
+  - the power delivered;
+  - the current that would pull the cell down to a cutoff voltage you set.
+- **Units:** currents in µA, mA or A, resistance in mΩ or Ω.
+- **Drawing:** the cell as an ideal source behind its resistance, in a
+  dashed box, feeding the load.
+- **Remembered:** the pill and the units.
+
+Examples: Energizer's dual pulse and voltage-drop examples, a 9 V battery
+with a 100 Ω resistor, a lithium-ion cell at two loads, and that cell at
+10 A.
+
+### Source
+
+**Energizer, "Battery Internal Resistance", technical bulletin, version
+1.1.0, December 2005** (data.energizer.com), read in review:
+- **The definition:** internal resistance is "the opposition to the flow
+  of current within the battery", electronic plus ionic.
+- **The dual pulse:** a low stabilising drain, then a heavier pulse of
+  about 100 ms; the resistance is "the change in voltage by the change in
+  current". Its example: 5 mA then 505 mA, 1.485 V to 1.378 V, 0.107 V /
+  500 mA = 0.214 Ω. Fresh alkaline cylindrical cells run "approximately
+  150 to 300 milliohms".
+- **Voltage under load:** "multiplying the total effective resistance by
+  the current". Its example: 1 A on 0.1 Ω from 1.6 V leaves 1.5 V.
+- **Its cautions:**
+  - a 1000 Hz impedance test reads less than this total effective
+    resistance;
+  - the resistance rises as the cell discharges and as the temperature
+    drops;
+  - results depend on the technique, and are "a general guideline and not
+    a precise value".
+
+### Why the formulas are these
+
+    two loads:  R = (V1 − V2) / (I2 − I1),  Voc = V1 + I1 × R
+    resistor:   I = V / RL,  R = (Voc − V) / I
+    under load: V = Voc − I × R,  loss = I² × R
+    Isc = Voc / R,  Pmax = Voc² / (4R)
+
+A cell is modelled as a perfect source of its open-circuit voltage behind
+its resistance. The voltage falls in step with the current, so two
+readings give the slope, R. The most power comes out when the load equals
+R, and half of it then heats the cell.
+
+### Assumptions and limits
+
+- **One resistance:** a real cell's resistance has a fast electronic part
+  and a slower ionic part, and changes with charge, age and temperature.
+  The figure is for the conditions it was measured in.
+- **The open-circuit voltage** in Two loads is extrapolated along the
+  straight line; it may differ from a cell left at rest.
+- **The short-circuit current** is a limit, not a test: shorting a cell,
+  a lithium one above all, can burn it.
+
+### How it was checked
+
+10 cases:
+- Energizer's dual pulse is 214 mΩ, extrapolating to 1.486 V open;
+- Energizer's drop leaves 1.5 V and loses 100 mW;
+- a 9 V battery at 8.6 V across 100 Ω has 6.977 Ω inside, at 86 mA;
+- a lithium-ion cell at two loads is 50 mΩ;
+- that cell at 10 A keeps 3.5 V, loses 5 W, and reaches 3.0 V at 20 A;
+- equal currents, readings the wrong way round, and a loaded voltage above
+  the open one are refused;
+- a unit change keeps the value;
+- the remembered choices.
 
 [↑ Index](#index)

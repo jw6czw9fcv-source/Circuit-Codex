@@ -376,6 +376,12 @@ const FORMULAS = [
     note: "1C moves the full rated capacity in one hour: a 2000 mAh cell at 1C draws 2 A.",
   },
   {
+    tool: "Internal resistance",
+    domain: "power",
+    formulas: ["R = (V1 − V2) / (I2 − I1)", "V = Voc − I × R"],
+    note: "Energizer's dual pulse: a light drain, then a heavier pulse. The resistance rises as the cell discharges and in the cold.",
+  },
+  {
     tool: "Linear regulator (LDO)",
     domain: "power",
     formulas: ["Vout = Vref (1 + R2/R1) + Iadj·R2", "LM317: Vref = 1.25 V, Iadj ≈ 50 µA"],

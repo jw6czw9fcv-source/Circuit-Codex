@@ -572,6 +572,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "db-absolute") return renderDbAbsolute(domain, tool, favId);
   if (calcId === "battery-runtime") return renderBatteryRuntime(domain, tool, favId);
   if (calcId === "c-rate") return renderCRate(domain, tool, favId);
+  if (calcId === "internal-resistance") return renderInternalResistance(domain, tool, favId);
   if (calcId === "battery-sizes") return renderBatterySizes(domain, tool, favId);
   if (calcId === "button-cells") return renderButtonCells(domain, tool, favId);
   if (calcId === "rc-charge") return renderRcCharge(domain, tool, favId);
@@ -10073,6 +10074,193 @@ function renderCRate(domain, tool, favId) {
     });
 
     updateResults();
+  }
+
+  paint();
+}
+
+// ---------- Internal resistance ----------
+// A cell behaves like an ideal voltage source behind a resistance: the
+// terminal voltage falls by I × R as the current rises. Energizer's technical
+// bulletin "Battery Internal Resistance" (v1.1.0, 2005) measures it with a
+// dual pulse, a small stabilising drain then a heavier pulse: "dividing the
+// change in voltage by the change in current" (5 mA then 505 mA, 1.485 V to
+// 1.378 V: 0.214 Ω), and predicts the voltage under load the same way (1 A on
+// 0.1 Ω from 1.6 V leaves 1.5 V). Both are cases. It also notes that a
+// 1 kHz impedance reads lower, and that the resistance rises in the cold and
+// as the cell discharges.
+const BIR_MODES = { pair: "Two loads", resistor: "Resistor", drop: "Drop" };
+const BIR_R_UNITS = { "mΩ": 1e-3, "Ω": 1 };
+
+function renderInternalResistance(domain, tool, favId) {
+  const C = "internal-resistance";
+  const state = {
+    mode: pref(C, "mode", "pair", Object.keys(BIR_MODES)),
+    iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
+    rUnit: pref(C, "rUnit", "mΩ", Object.keys(BIR_R_UNITS)),
+    si: { v1: 1.485, i1: 0.005, v2: 1.378, i2: 0.505, voc: 1.6, vl: 1.5, rl: 15, r: 0.1, iload: 1, cut: 0 },
+  };
+  const val = (v, u) => siFormat(Number(v.toPrecision(4)), u, 4).replace(/^-/, "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(6)) : "");
+  const unitOf = { v1: null, v2: null, voc: null, vl: null, cut: null, i1: "i", i2: "i", iload: "i", rl: "rl", r: "r" };
+  const scale = (k) => (unitOf[k] === "i" ? AMP_UNITS[state.iUnit] : unitOf[k] === "r" ? BIR_R_UNITS[state.rUnit] : 1);
+
+  // R and the open-circuit voltage from the readings of the mode in use.
+  function solve() {
+    const s = state.si;
+    if (state.mode === "pair") {
+      if (![s.v1, s.i1, s.v2, s.i2].every(isFinite)) return { err: "Enter both voltages and both currents." };
+      if (s.i1 < 0 || s.i2 < 0) return { err: "The currents cannot be negative." };
+      if (s.i2 === s.i1) return { err: "The two currents must differ: the resistance is the change in voltage over the change in current." };
+      const R = (s.v1 - s.v2) / (s.i2 - s.i1);
+      if (!(R > 0)) return { err: "The voltage must fall as the current rises; check which reading is which." };
+      return { R, voc: s.v1 + s.i1 * R, dV: s.v1 - s.v2, dI: s.i2 - s.i1 };
+    }
+    if (state.mode === "resistor") {
+      if (!(s.voc > 0) || !(s.vl > 0) || !(s.rl > 0)) return { err: "Enter the open-circuit voltage, the loaded voltage and the resistor." };
+      if (!(s.vl < s.voc)) return { err: "The loaded voltage must be below the open-circuit voltage." };
+      const I = s.vl / s.rl;
+      return { R: (s.voc - s.vl) / I, voc: s.voc, I };
+    }
+    if (!(s.voc > 0) || !(s.r >= 0) || !(s.iload >= 0)) return { err: "Enter the open-circuit voltage, the resistance and the current." };
+    return { R: s.r, voc: s.voc };
+  }
+
+  // The cell inside the dashed box, an ideal source behind its resistance,
+  // feeding the load. R is green when it is the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const rTone = state.mode === "drop" ? part : calc;
+    const zig = (x1, x2, y) => { let d = `M${x1} ${y}`; const n = 6, w = (x2 - x1) / n; for (let i = 0; i < n; i++) d += ` L${x1 + w * (i + 0.5)} ${y + (i % 2 ? 5 : -5)}`; return `${d} L${x2} ${y}`; };
+    const zigV = (x, y1, y2) => { let d = `M${x} ${y1}`; const n = 6, h = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + h * (i + 0.5)}`; return `${d} L${x} ${y2}`; };
+    const load = state.mode === "resistor" ? "RL" : "load";
+    return `<svg width="320" height="118" viewBox="0 0 290 107" fill="none">
+      <rect x="22" y="10" width="138" height="92" rx="6" stroke="${grey}" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="30" y="98" fill="${grey}" font-size="11" font-weight="600">the cell</text>
+      <path d="M60 28 V50 M60 60 V82 M60 82 H210 M60 28 H82 M122 28 H210" stroke="${wire}" stroke-width="1.6"/>
+      <path d="M46 50 H74" stroke="${part}" stroke-width="2"/>
+      <path d="M53 60 H67" stroke="${part}" stroke-width="3"/>
+      <text x="42" y="48" fill="${part}" font-size="11" font-weight="600" text-anchor="end">+</text>
+      <text x="80" y="64" fill="${part}" font-size="11" font-weight="600">Voc</text>
+      <path d="${zig(82, 122, 28)}" stroke="${rTone}" stroke-width="1.6" fill="none"/>
+      <text x="102" y="18" fill="${rTone}" font-size="11" font-weight="600" text-anchor="middle">R</text>
+      <circle cx="160" cy="28" r="3" fill="${wire}"/><circle cx="160" cy="82" r="3" fill="${wire}"/>
+      <text x="168" y="59" fill="${grey}" font-size="11" font-weight="600">V</text>
+      <path d="M210 28 V40 M210 70 V82" stroke="${wire}" stroke-width="1.6"/>
+      <path d="${zigV(210, 40, 70)}" stroke="${part}" stroke-width="1.6" fill="none"/>
+      <text x="220" y="59" fill="${part}" font-size="11" font-weight="600">${load}</text>
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const r = solve();
+    if (r.err) return `<div class="error-text" data-res="err">${r.err}</div>`;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const isc = r.voc / r.R, pmax = (r.voc * r.voc) / (4 * r.R);
+    if (state.mode !== "drop") {
+      const sub = state.mode === "pair"
+        ? `ΔV ${val(r.dV, "V")} over ΔI ${val(r.dI, "A")}`
+        : `${val(r.I, "A")} through ${val(state.si.rl, "Ω")}`;
+      return `
+        <div class="result-field">
+          <div class="result-head"><span class="label">Internal resistance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="r">${val(r.R, "Ω")}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="section-label" style="color:#8FC1F5">What follows from it</div>
+        <div class="field notation-box">
+          ${row(state.mode === "pair" ? "Open-circuit voltage, extrapolated" : "Open-circuit voltage", val(r.voc, "V"), "voc")}
+          ${row("Short-circuit current, in theory", val(isc, "A"), "isc")}
+          ${row("Most power out, into R", val(pmax, "W"), "pmax")}
+        </div>`;
+    }
+    const I = state.si.iload, V = r.voc - I * r.R;
+    const cut = state.si.cut;
+    const iCut = cut > 0 && cut < r.voc && r.R > 0 ? (r.voc - cut) / r.R : null;
+    return `
+      <div class="result-field">
+        <div class="result-head"><span class="label">Voltage at the terminals</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+        <div class="result-value"><span class="num" data-res="v">${V > 0 ? val(V, "V") : "0 V"}</span></div>
+        <div class="result-sub" data-res="sub">${V > 0 ? `${val(I * r.R, "V")} lost inside · ${Number((V / r.voc * 100).toFixed(1))} % of the open-circuit voltage` : "more current than the cell can drive: it would be past a short circuit"}</div>
+      </div>
+      <div class="section-label" style="color:#8FC1F5">Power, and the limits</div>
+      <div class="field notation-box">
+        ${row("Lost in the cell, I²R", val(I * I * r.R, "W"), "loss")}
+        ${row("Delivered to the load", val(Math.max(V, 0) * I, "W"), "out")}
+        ${iCut !== null ? row(`Current down to ${val(cut, "V")}`, val(iCut, "A"), "icut") : ""}
+        ${r.R > 0 ? row("Short-circuit current, in theory", val(isc, "A"), "isc") : ""}
+      </div>`;
+  }
+
+  function refresh() {
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (mode, si, units) => () => { Object.assign(state, { mode }, units || {}); Object.assign(state.si, si); paint(); };
+  useExamples([
+    { title: "Energizer's dual pulse", note: "5 mA then 505 mA take an alkaline cell from 1.485 V to 1.378 V: 214 mΩ.",
+      apply: example("pair", { v1: 1.485, i1: 0.005, v2: 1.378, i2: 0.505 }, { iUnit: "mA", rUnit: "mΩ" }) },
+    { title: "Energizer's voltage drop", note: "1 A through 0.1 Ω loses 0.1 V: a 1.6 V cell delivers 1.5 V.",
+      apply: example("drop", { voc: 1.6, r: 0.1, iload: 1, cut: 0 }, { iUnit: "A", rUnit: "Ω" }) },
+    { title: "A 9 V battery and a 100 Ω resistor", note: "Reading 9.2 V open and 8.6 V loaded: 86 mA, and 6.98 Ω inside.",
+      apply: example("resistor", { voc: 9.2, vl: 8.6, rl: 100 }, { rUnit: "Ω" }) },
+    { title: "A lithium-ion cell at two loads", note: "3.95 V at 0.5 A and 3.85 V at 2.5 A: 50 mΩ.",
+      apply: example("pair", { v1: 3.95, i1: 0.5, v2: 3.85, i2: 2.5 }, { iUnit: "A", rUnit: "mΩ" }) },
+    { title: "That cell at 10 A", note: "50 mΩ from 4.0 V: 3.5 V left and 5 W heating the cell; 20 A takes it to 3.0 V.",
+      apply: example("drop", { voc: 4.0, r: 0.05, iload: 10, cut: 3.0 }, { iUnit: "A", rUnit: "mΩ" }) },
+  ]);
+
+  function paint() {
+    const m = state.mode;
+    const field = (key, label, unitHTML) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(state.si[key] / scale(key))}" />${unitHTML}</div>
+        </div>`;
+    const fixedV = `<span class="unit-fixed">V</span>`;
+    const iSel = (id) => `<select data-iunit="${id}">${Object.keys(AMP_UNITS).map((u) => `<option ${u === state.iUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const rSel = `<select data-runit="r">${Object.keys(BIR_R_UNITS).map((u) => `<option ${u === state.rUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    let fields;
+    if (m === "pair") {
+      fields = `<div class="field-pair">${field("v1", "Light load, V1", fixedV)}${field("i1", "at I1", iSel("i1"))}</div>
+        <div class="field-pair">${field("v2", "Heavy load, V2", fixedV)}${field("i2", "at I2", iSel("i2"))}</div>`;
+    } else if (m === "resistor") {
+      fields = `<div class="field-pair">${field("voc", "Open circuit", fixedV)}${field("vl", "With the resistor", fixedV)}${field("rl", "Resistor", `<span class="unit-fixed">Ω</span>`)}</div>`;
+    } else {
+      fields = `<div class="field-pair">${field("voc", "Open circuit", fixedV)}${field("r", "Resistance", rSel)}</div>
+        <div class="field-pair">${field("iload", "Load current", iSel("iload"))}${field("cut", "Cutoff (0 = none)", fixedV)}</div>`;
+    }
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A battery's resistance, and the voltage it costs")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.entries(BIR_MODES), m, domain.bg)}
+
+      ${fields}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Two loads: R = (V1 − V2) / (I2 − I1)", "Resistor: I = V / RL,  R = (Voc − V) / I", "Under load: V = Voc − I × R", "Short circuit: Isc = Voc / R"],
+        "A battery acts like a perfect voltage source, its open-circuit voltage Voc, behind a small resistance R inside it. Draw a current and the voltage at the terminals falls by I × R, and I²R heats the cell. Measure it with two loads, a light one then a heavy pulse as Energizer does, and divide the change in voltage by the change in current; or read the voltage open, then across a known resistor. R is not fixed: it rises as the cell discharges, ages and gets cold, and a 1 kHz impedance meter reads lower than this DC figure. The short-circuit current is a limit, not a test: shorting a cell, a lithium one above all, can burn it."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => { const k = el.dataset.key; state.si[k] = parseFloat(el.value) * scale(k); refresh(); };
+    });
+    // A unit change re-expresses the same values.
+    app.querySelectorAll("select[data-iunit]").forEach((el) => {
+      el.onchange = () => { state.iUnit = el.value; setPref(C, "iUnit", el.value); paint(); };
+    });
+    app.querySelectorAll("select[data-runit]").forEach((el) => {
+      el.onchange = () => { state.rUnit = el.value; setPref(C, "rUnit", el.value); paint(); };
+    });
   }
 
   paint();
