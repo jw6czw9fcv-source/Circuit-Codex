@@ -322,7 +322,7 @@ Priority first — the tools most asked for in apps like this (Pierre,
 - [x] PCB trace width / resistance — built as Trace width (IPC-2152 via
       Brooks & Adam's fits, Pierre: the new standard only), 2026-10-26
 - [x] AC Ohm's law (impedance form) — built as AC Ohm's law (Pierre, after first naming it Impedance), 2026-10-26
-- [ ] Inductor series/parallel
+- [x] Inductor series/parallel — built as Series/parallel (L), 2026-10-28
 - [ ] Internal resistance (battery)
 
 Then:

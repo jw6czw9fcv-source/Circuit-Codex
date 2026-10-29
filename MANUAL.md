@@ -38,6 +38,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [Capacitor energy](#capacitor-energy)
 - Inductors → [Inductor color code](#inductor-color-code)
 - Inductors → [Inductor SMD code](#inductor-smd-code)
+- Inductors → [Series/parallel (L)](#ind-series-parallel)
 - Passive filters → [RC filter](#rc-filter)
 - Passive filters → [RL filter](#rl-filter)
 - Reference → [SMD package sizes](#smd-package-sizes)
@@ -9398,5 +9399,83 @@ leading.
 - a unit change keeps the value;
 - nothing fitted is refused;
 - the remembered choices.
+
+[↑ Index](#index)
+
+---
+
+<a id="ind-series-parallel"></a>
+## Series/parallel (L)
+
+`calc: ind-series-parallel` · Passive components › Inductors
+
+### What it computes
+
+The total inductance of two to six inductors, in series or in parallel, by
+pill.
+
+- **Inputs:** each inductor's value, in nH, µH, mH or H, by typing or with
+  its slider, which steps through the standard values. Rows are added and
+  removed.
+- **Tolerance:** ±5, 10 or 20 %, which sets the E-series offered: E24, E12
+  or E6. Each row names the nearest standard value.
+- **Output:** the total, large, with its worst-case spread from the
+  tolerance and the nearest single standard part.
+- **Drawing:** the coils end to end, or side by side between two rails.
+- **Remembered:** the connection and the tolerance.
+
+Examples: two 10 µH in series, two 22 µH in parallel, 15 µH made from 10
+and 4.7 µH, and 100 µH beside 47 µH.
+
+### Source
+
+**Tony R. Kuphaldt, Lessons in Electric Circuits, Volume I, DC, 5th
+edition (2021), chapter 15**, read in review:
+- **§15.4:**
+  - in series "the total inductance is the sum of the individual
+    inductors' inductances", Ltotal = L1 + L2 + … Ln;
+  - in parallel it is "less than any one of the parallel inductors'
+    inductances", with the formula "the same form as for calculating
+    parallel resistances".
+- **§15.5, practical considerations:**
+  - a rated current;
+  - the series resistance of the coil's wire;
+  - mutual inductance when the magnetic fields of two inductors "link"
+    with each other's turns.
+
+### Why the formulas are these
+
+    series:   L = L1 + L2 + … + Ln
+    parallel: 1/L = 1/L1 + 1/L2 + … + 1/Ln
+    two in parallel: L = L1 × L2 / (L1 + L2)
+
+Inductance is the voltage across a coil for a given rate of change of its
+current. In series one current changes through every coil, so their
+voltages add and so do the inductances. In parallel the current divides
+between them, so the same change in the total makes less voltage: the
+total is below the smallest. Inductors combine like resistors and unlike
+capacitors.
+
+### Assumptions and limits
+
+- **No coupling:** the sums hold only if the coils' fields do not link. Two
+  inductors close together, or wound on one core, add a mutual inductance
+  M: in series the total can be more or less than the sum, depending on
+  how they are wound. That case is not computed here.
+- **Ideal coils:** each real one also has a resistance and a rated
+  current. In series the lowest rating limits the chain.
+- **The spread** takes every part at the same tolerance, worst case.
+
+### How it was checked
+
+8 cases:
+- 10 µH + 10 µH in series is 20 µH, ±20 % spanning 16 to 24 µH;
+- two 22 µH in parallel are 11 µH;
+- 10 µH + 4.7 µH make 14.7 µH;
+- 100 µH beside 47 µH is 31.97 µH;
+- a third 10 µH makes 30 µH;
+- 10 µH + 10 mH is 10.01 mH;
+- a negative value is refused;
+- the remembered connection and tolerance.
 
 [↑ Index](#index)
