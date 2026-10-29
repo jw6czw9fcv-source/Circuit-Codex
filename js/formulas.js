@@ -384,8 +384,8 @@ const FORMULAS = [
   {
     tool: "Linear regulator",
     domain: "power",
-    formulas: ["Vout = Vref (1 + R2/R1) + Iadj·R2", "P = (Vin − Vout) × I", "Tj = Ta + P × RθJA"],
-    note: "LM317: Vref 1.25 V, Iadj ≈ 50 µA, R1 from OUT to ADJ (TI datasheet, eq. 2). Every volt dropped becomes heat.",
+    formulas: ["Vout = Vref (1 + R2/R1) + Iadj·R2", "P = (Vin − Vout) × I + Vin × Iq", "Tj = Ta + P × RθJA"],
+    note: "LM317: Vref 1.25 V, Iadj ≈ 50 µA, R1 from OUT to ADJ (TI datasheet, eq. 2). Every volt dropped becomes heat; Iq is a fixed part's own current to ground.",
   },
   {
     tool: "DC/DC buck converter",

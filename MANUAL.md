@@ -9585,8 +9585,12 @@ R, and half of it then heats the cell.
 
 ### What it computes
 
-An adjustable linear regulator, the LM317 or the low-dropout LM1117-ADJ,
-or a custom part, three ways, by pill:
+A linear regulator, picked from the common ones:
+- **Adjustable:** LM317, LM1117-ADJ, AMS1117-ADJ, LM1086-ADJ, the negative
+  LM337, or a custom part with your own Vref and dropout.
+- **Fixed:** 7805, 7812, 7815, AMS1117-3.3, AP2112-3.3, MCP1700-3.3.
+
+Three ways, by pill:
 
 | Pill | Inputs | Output |
 |---|---|---|
@@ -9601,23 +9605,31 @@ or a custom part, three ways, by pill:
 - **Heat** also gives:
   - the efficiency;
   - whether there is enough voltage across the regulator (the LM317's
-    3 V, the LM1117's dropout);
+    3 V, the LM337's 2.5 V, the 78xx's input for regulation, the others'
+    dropout);
   - the most current before the junction reaches 125 °C, or the part's
     rating if that is lower;
-  - a warning past the rated current or input voltage.
-- **Custom:** your own Vref (adjust current not counted) and dropout.
+  - a warning past the rated current, the input voltage or the voltage it
+    takes across it.
+- **A fixed part** has no divider to set, so Vout and R2 are greyed out and
+  Heat takes its output from the part. It also shows the output's
+  tolerance and its own current to ground, Iq, which adds Vin × Iq to the
+  heat: 8 mA in a 7805, 1.6 µA in an MCP1700, which matters on a battery.
+- **The LM337** works with negative voltages; they are shown with their
+  minus, and can be typed with or without it.
 - **Drawing:** the regulator with its IN, OUT and ADJ pins and the two
-  resistors; R2 green when it is the answer.
+  resistors, R2 green when it is the answer; a fixed part with its GND pin
+  to ground and its output voltage.
 - **Remembered:** the regulator, the pill and the units.
 
 Examples: an LM317 at 5 V, R2 for 12 V, an LM1117 from 5 V to 3.3 V at
-500 mA, an LM317 from 12 V to 5 V at 1 A, and an LM1117 from a 3.7 V
-cell.
+500 mA, an LM317 from 12 V to 5 V at 1 A, an LM1117 then an MCP1700 from a
+3.7 V cell, a 7805 from 12 V at 500 mA, and an LM337 at −5 V.
 
 ### Source
 
-Read in review:
-- **TI LM317 datasheet (SLVS044Z, April 2025):**
+Read in review, each from the maker's datasheet:
+- **TI LM317 (SLVS044Z, April 2025):**
   - VO = VREF (1 + R2 / R1) + (IADJ × R2), equation 2, "IADJ is
     typically 50 µA and negligible in most applications"; the typical
     application uses R1 = 240 Ω;
@@ -9627,7 +9639,7 @@ Read in review:
   - recommended: VO 1.25 to 37 V, VI − VO 3 to 40 V, IO 0.01 to 1.5 A,
     TJ 0 to 125 °C;
   - RθJA 66.8 °C/W (SOT-223), 23.5 (TO-220, KCS), 38.0 (TO-263).
-- **TI LM1117 datasheet (SNOS412Q, January 2023):**
+- **TI LM1117 (SNOS412Q, January 2023):**
   - VREF 1.25 V, from 1.238 to 1.262 V at 25 °C;
   - dropout 1.1 V at 100 mA, 1.15 V at 500 mA, 1.2 V at 800 mA (typical,
     25 °C);
@@ -9636,33 +9648,84 @@ Read in review:
   - 800 mA, input to 15 V, TJ 0 to 125 °C;
   - RθJA 61.6 °C/W (SOT-223), 45.1 (TO-252), 23.8 (TO-220), 41.3 (TO-263);
   - "PD = (TJ(max) – TA) / RθJA".
+- **Advanced Monolithic Systems AMS1117 (ds1117):**
+  - reference 1.250 V, 1.232 to 1.268 V at 25 °C; the -3.3 gives 3.251 to
+    3.349 V;
+  - adjust pin current 55 µA, 120 µA max; minimum load 5 mA, 10 mA max;
+  - dropout 1.1 V typical, 1.3 V max, at 0.8 A, "decreasing at lower load
+    currents";
+  - quiescent current of the fixed versions 5 mA, 11 mA max;
+  - up to 1 A, input to 15 V, junction to 125 °C;
+  - θJA 90 °C/W (SOT-223, from 46 to over 90 with the copper area), 80
+    (TO-252), 160 (SO-8).
+- **TI LM1086 (SNVS039J, April 2015):**
+  - VREF 1.25 V, 1.238 to 1.262 V at 25 °C;
+  - adjust pin current 55 µA, 120 µA max; minimum load 5 mA, 10 mA max;
+  - dropout 1.3 V typical, 1.5 V max, at 1.5 A;
+  - 1.5 A, 29 V maximum between input and output (ADJ);
+  - RθJA 23.0 °C/W (TO-220), 40.8 (TO-263), 35.9 (WSON-8).
+- **TI LM337 (SLVS047L, January 2015):**
+  - reference −1.25 V, from −1.2 to −1.3 V over load and temperature;
+  - adjustment current 65 µA, 100 µA max;
+  - minimum output current 2.5 mA, 10 mA max (up to 40 V across it);
+  - recommended VI − VO −2.5 to −37 V, 1.5 A, TJ 0 to 125 °C;
+  - RθJA 24.8 °C/W (TO-220, KCS), 25.3 (TO-263), 30.3 (TO-252).
+- **TI LM340 / LM7805 family (SNOSBT0L, September 2016):**
+  - output 4.8 to 5.2 V, 11.5 to 12.5 V, 14.4 to 15.6 V at 25 °C;
+  - "input voltage required to maintain line regulation" 7.5 V, 14.6 V,
+    17.7 V; dropout 2 V at 1 A;
+  - quiescent current 8 mA (the only figure, a maximum);
+  - 1.5 A, DC input to 35 V;
+  - RθJA 23.9 °C/W (TO-220), 44.8 (TO-263), 62.1 (SOT-223), from its
+    thermal information table. A footnote in the same datasheet gives
+    older figures (54 °C/W TO-220, 174 SOT-223); the table is used.
+- **Diodes AP2112 (DS39724 Rev. 2-2, June 2017):**
+  - the -3.3 gives 3.251 to 3.350 V (± 1.5 %);
+  - dropout 5 mV at 10 mA, 125 mV at 300 mA, 250 mV at 600 mA (typical);
+  - quiescent current 55 µA, 80 µA max;
+  - 600 mA, input 2.5 to 6.0 V;
+  - θJA 184 °C/W (SOT-23-5, the AP2112K), 120 (SOT-89-5), 114 (SO-8).
+- **Microchip MCP1700 (DS20001826E):**
+  - output within ± 2 % at 25 °C (± 3 % over temperature);
+  - dropout 178 mV typical, 350 mV max, at 250 mA;
+  - quiescent current 1.6 µA, 4 µA max;
+  - 250 mA, input 2.3 to 6.0 V, junction to 125 °C;
+  - θJA 212 °C/W (SOT-23), 104 (SOT-89), 92 (TO-92), 91 (2×2 DFN).
 
 ### Why the formulas are these
 
     Vout = Vref (1 + R2/R1) + Iadj × R2
     R2 = (Vout − Vref) / (Vref / R1 + Iadj)
-    P = (Vin − Vout) × I,   Tj = Ta + P × RθJA
-    Imax = (125 °C − Ta) / (RθJA × (Vin − Vout))
+    P = (Vin − Vout) × I + Vin × Iq,   Tj = Ta + P × RθJA
+    Imax = ((125 °C − Ta) / RθJA − Vin × Iq) / (Vin − Vout)
 
 The regulator holds Vref across R1, so R1 sets a current of Vref / R1.
 That current and the adjust current flow on through R2, whose voltage adds
-to Vref to make the output. The regulator drops the rest of the input as
-heat, and the junction runs RθJA degrees per watt above the air.
+to Vref to make the output. A fixed regulator has the same divider inside,
+and its own working current flows from the input to ground. The regulator
+drops the rest of the input as heat, and the junction runs RθJA degrees per
+watt above the air.
 
 ### Assumptions and limits
 
-- **RθJA** is the datasheet's, measured on its JEDEC test board. A real
+- **RθJA** is the datasheet's, measured on the board it names. A real
   board, smaller copper or still air can make it worse; a heatsink makes
   it better. Type your own figure if you have one.
-- **The dropout** between the LM1117's listed currents is interpolated,
-  and taken at 25 °C. It is a little higher over temperature.
-- **The regulator's own quiescent current** is left out of the heat.
-- **Fixed-output parts** (LM1117-3.3, 7805) need no resistors; their heat
-  is the same formula, so the Heat pill serves with the Custom part.
+- **The dropout** is the typical figure at 25 °C. Between the LM1117's and
+  the AP2112's listed currents it is interpolated. For the AMS1117, LM1086
+  and MCP1700 only the full-load figure is given, so it is used at every
+  current: their real dropout is lower at light loads. It is a little
+  higher over temperature.
+- **An adjustable part's own current** goes to the output through R1 and
+  R2, so it is not added to the heat; the minimum-load line covers it.
+- **125 °C** is the junction limit used for every part: the recommended
+  maximum of most of them. Some allow 150 °C.
+- **Other fixed voltages** (1.8 V, 2.5 V, 5 V versions…) work with the
+  Custom part in Heat, without the Iq term.
 
 ### How it was checked
 
-10 cases:
+17 cases:
 - the LM317 with 240 and 720 Ω gives 5.036 V, 36 mV from the adjust
   current, and 4.836 to 5.236 V over Vref's tolerance;
 - 240 Ω carries 5.208 mA, above the typical minimum load only;
@@ -9671,6 +9734,15 @@ heat, and the junction runs RθJA degrees per watt above the air.
 - the LM317 from 12 to 5 V at 1 A: 190 °C, over the limit;
 - the LM1117 with 0.4 V across it is under its dropout, and its current is
   capped at its 800 mA rating;
+- the MCP1700 with the same 0.4 V is above its 178 mV dropout: 40 mW,
+  33 °C, 1.6 µA to ground (5.92 µW);
+- a 7805 from 12 V at 500 mA: 3.5 W plus 96 mW from its 8 mA, 111 °C in a
+  TO-220, 584 mA before 125 °C;
+- the LM337 with 240 and 720 Ω gives −5.047 V, and its −12 V input shows
+  with its minus;
+- the AP2112 at 300 mA needs 125 mV, so 100 mV will not regulate;
+- the LM1086 with 30 V across it is over its 29 V;
+- a fixed part keeps only Heat;
 - a custom 0.8 V reference gives 3.2 V;
 - an input below the output is refused;
 - picking a package fills in its RθJA;

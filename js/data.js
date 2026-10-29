@@ -320,7 +320,7 @@ const TOOL_KEYWORDS = {
   "ppm-converter": "ppm parts per million tolerance error deviation tempco temperature coefficient ppm/k drift crystal clock seconds per day percent",
   "formula-search": "formulas equations",
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
-  "linear-regulator": "linear regulator ldo low dropout lm317 lm1117 ams1117 adjustable vref adj r1 r2 output voltage dropout heat dissipation junction thermal",
+  "linear-regulator": "linear regulator ldo low dropout lm317 lm1117 ams1117 lm1086 lm337 negative 7805 7812 7815 78xx lm7805 ap2112 mcp1700 fixed adjustable vref adj r1 r2 output voltage dropout quiescent current heat dissipation junction thermal",
   "internal-resistance": "battery internal resistance ir esr cell voltage drop sag load pulse short circuit current max power open circuit voc",
   "ind-series-parallel": "inductor inductors inductance series parallel combine total coil choke henry uh mh",
   "impedance": "impedance ac ohm's law ohms law reactance rlc rl rc lc series parallel phase angle power factor resonance inductor capacitor xl xc var va apparent true reactive power",

@@ -10083,26 +10083,84 @@ function renderCRate(domain, tool, favId) {
 // ---------- Linear regulator ----------
 // An adjustable linear regulator holds Vref between OUT and ADJ: R1 across
 // that sets a current, R2 carries it (and the adjust-pin current) to ground,
-// so VO = VREF (1 + R2/R1) + IADJ × R2 (TI LM317 datasheet, eq. 2). Every
-// volt between input and output is burnt as heat: P = (VIN − VOUT) × I, and
-// the junction runs at TA + P × RθJA. The figures are the datasheets':
+// so VO = VREF (1 + R2/R1) + IADJ × R2 (TI LM317 datasheet, eq. 2). A fixed
+// one has the divider inside. Every volt between input and output is burnt
+// as heat, P = (VIN − VOUT) × I, plus VIN × IQ for the current a fixed part
+// sends to ground; the junction runs at TA + P × RθJA. The figures are the
+// datasheets', RθJA on the test board each one names (a real board can be
+// worse):
 // TI LM317 (SLVS044Z, April 2025): VREF 1.25 V (1.2 to 1.3), IADJ 50 µA
 // (100 max), 3 to 40 V across it, 10 mA to 1.5 A, minimum load 3.5 mA
 // (10 max), TJ 0 to 125 °C, RθJA 66.8 (SOT-223), 23.5 (TO-220 KCS), 38.0
-// (TO-263); TI LM1117 (SNOS412Q, January 2023): VREF 1.25 V (1.238 to 1.262), IADJ 60 µA (120 max),
-// dropout 1.1 V at 100 mA, 1.15 at 500 mA, 1.2 at 800 mA, 800 mA, input to
-// 15 V, minimum load 1.7 mA (5 max), TJ 0 to 125 °C, RθJA 61.6 (SOT-223),
-// 45.1 (TO-252), 23.8 (TO-220), 41.3 (TO-263). RθJA is for the JEDEC test
-// board the datasheet names; a real board can be worse.
+// (TO-263). TI LM1117 (SNOS412Q, January 2023): VREF 1.25 V (1.238 to
+// 1.262), IADJ 60 µA (120 max), dropout 1.1 V at 100 mA, 1.15 at 500 mA, 1.2
+// at 800 mA, 800 mA, input to 15 V, minimum load 1.7 mA (5 max), RθJA 61.6
+// (SOT-223), 45.1 (TO-252), 23.8 (TO-220), 41.3 (TO-263).
+// AMS AMS1117 (Advanced Monolithic Systems ds1117): VREF 1.25 V (1.232 to
+// 1.268 at 25 °C), IADJ 55 µA (120 max), minimum load 5 mA (10 max), dropout
+// 1.1 V typ (1.3 max) at 0.8 A, 1 A, input to 15 V; the fixed -3.3 is 3.251
+// to 3.349 V with a 5 mA quiescent current (11 max); θJA 90 (SOT-223, 46 to
+// over 90 with copper), 80 (TO-252), 160 (SO-8).
+// TI LM1086 (SNVS039J, April 2015): VREF 1.25 V (1.238 to 1.262), IADJ
+// 55 µA (120 max), minimum load 5 mA (10 max), dropout 1.3 V typ (1.5 max) at
+// 1.5 A, 1.5 A, 29 V across it (ADJ), RθJA 23.0 (TO-220), 40.8 (TO-263),
+// 35.9 (WSON-8).
+// TI LM337 (SLVS047L, January 2015): VREF −1.25 V (−1.2 to −1.3), IADJ
+// 65 µA (100 max), minimum load 2.5 mA (10 max), 2.5 to 37 V across it,
+// 1.5 A, RθJA 24.8 (TO-220 KCS), 25.3 (TO-263), 30.3 (TO-252).
+// TI LM340/LM7805 family (SNOSBT0L, September 2016): 4.8 to 5.2 V, 11.5 to
+// 12.5, 14.4 to 15.6 at 25 °C; input needed for line regulation 7.5, 14.6 and
+// 17.7 V; quiescent current 8 mA (the only figure given, a maximum); 1.5 A,
+// input to 35 V; RθJA 23.9 (TO-220), 44.8 (TO-263), 62.1 (SOT-223).
+// Diodes AP2112 (DS39724 Rev. 2-2): -3.3 is 3.251 to 3.350 V, dropout 5 mV
+// at 10 mA, 125 at 300, 250 at 600 (typ), IQ 55 µA (80 max), 600 mA, input
+// 2.5 to 6.0 V, θJA 184 (SOT-23-5), 120 (SOT-89-5), 114 (SO-8).
+// Microchip MCP1700 (DS20001826E): ±2 % at 25 °C, dropout 178 mV typ (350
+// max) at 250 mA, IQ 1.6 µA (4 max), 250 mA, input 2.3 to 6.0 V, θJA 212
+// (SOT-23), 104 (SOT-89), 92 (TO-92), 91 (2×2 DFN).
+const ldoTable = (pts) => (i) => {
+  if (i <= pts[0][0]) return pts[0][1];
+  for (let k = 1; k < pts.length; k++) {
+    const [i0, v0] = pts[k - 1], [i1, v1] = pts[k];
+    if (i <= i1) return v0 + (i - i0) / (i1 - i0) * (v1 - v0);
+  }
+  return pts[pts.length - 1][1];
+};
 const LDO_PARTS = {
-  lm317: { label: "LM317", vref: 1.25, vrefMin: 1.2, vrefMax: 1.3, iadj: 50e-6, iadjMax: 100e-6, imin: 3.5e-3, iminMax: 10e-3,
-    headroom: () => 3, headroomWord: "the 3 V it is specified from", imax: 1.5, vinMax: null,
+  lm317: { label: "LM317", vref: 1.25, vrefMin: 1.2, vrefMax: 1.3, iadj: 50e-6, imin: 3.5e-3, iminMax: 10e-3,
+    need: () => 3, needText: "the 3 V it is specified from", imax: 1.5, diffMax: 40,
     pkgs: [["SOT-223", 66.8], ["TO-220", 23.5], ["TO-263", 38.0]] },
-  lm1117: { label: "LM1117-ADJ", vref: 1.25, vrefMin: 1.238, vrefMax: 1.262, iadj: 60e-6, iadjMax: 120e-6, imin: 1.7e-3, iminMax: 5e-3,
-    headroom: (i) => (i <= 0.1 ? 1.1 : i <= 0.5 ? 1.1 + (i - 0.1) / 0.4 * 0.05 : 1.15 + (Math.min(i, 0.8) - 0.5) / 0.3 * 0.05),
-    headroomWord: "its dropout", imax: 0.8, vinMax: 15,
+  lm1117: { label: "LM1117-ADJ", vref: 1.25, vrefMin: 1.238, vrefMax: 1.262, iadj: 60e-6, imin: 1.7e-3, iminMax: 5e-3,
+    need: ldoTable([[0.1, 1.1], [0.5, 1.15], [0.8, 1.2]]), imax: 0.8, vinMax: 15,
     pkgs: [["SOT-223", 61.6], ["TO-252", 45.1], ["TO-220", 23.8], ["TO-263", 41.3]] },
-  custom: { label: "Custom", custom: true, imax: null, vinMax: null, pkgs: [] },
+  ams1117: { label: "AMS1117-ADJ", vref: 1.25, vrefMin: 1.232, vrefMax: 1.268, iadj: 55e-6, imin: 5e-3, iminMax: 10e-3,
+    need: () => 1.1, imax: 1, vinMax: 15,
+    pkgs: [["SOT-223", 90], ["TO-252", 80], ["SO-8", 160]] },
+  lm1086: { label: "LM1086-ADJ", vref: 1.25, vrefMin: 1.238, vrefMax: 1.262, iadj: 55e-6, imin: 5e-3, iminMax: 10e-3,
+    need: () => 1.3, imax: 1.5, diffMax: 29,
+    pkgs: [["TO-220", 23.0], ["TO-263", 40.8], ["WSON-8", 35.9]] },
+  lm337: { label: "LM337", negative: true, vref: 1.25, vrefMin: 1.2, vrefMax: 1.3, iadj: 65e-6, imin: 2.5e-3, iminMax: 10e-3,
+    need: () => 2.5, needText: "the 2.5 V it is specified from", imax: 1.5, diffMax: 37,
+    pkgs: [["TO-220", 24.8], ["TO-263", 25.3], ["TO-252", 30.3]] },
+  custom: { label: "Custom", custom: true, pkgs: [] },
+  lm7805: { label: "7805", fixed: 5, voutMin: 4.8, voutMax: 5.2, iq: 8e-3, iqIsMax: true,
+    need: () => 2.5, needText: "the 2.5 V it needs (7.5 V in)", imax: 1.5, vinMax: 35,
+    pkgs: [["TO-220", 23.9], ["TO-263", 44.8], ["SOT-223", 62.1]] },
+  lm7812: { label: "7812", fixed: 12, voutMin: 11.5, voutMax: 12.5, iq: 8e-3, iqIsMax: true,
+    need: () => 2.6, needText: "the 2.6 V it needs (14.6 V in)", imax: 1.5, vinMax: 35,
+    pkgs: [["TO-220", 23.9], ["TO-263", 44.8]] },
+  lm7815: { label: "7815", fixed: 15, voutMin: 14.4, voutMax: 15.6, iq: 8e-3, iqIsMax: true,
+    need: () => 2.7, needText: "the 2.7 V it needs (17.7 V in)", imax: 1.5, vinMax: 35,
+    pkgs: [["TO-220", 23.9]] },
+  ams1117_33: { label: "AMS1117-3.3", fixed: 3.3, voutMin: 3.251, voutMax: 3.349, iq: 5e-3,
+    need: () => 1.1, imax: 1, vinMax: 15,
+    pkgs: [["SOT-223", 90], ["TO-252", 80], ["SO-8", 160]] },
+  ap2112_33: { label: "AP2112-3.3", fixed: 3.3, voutMin: 3.251, voutMax: 3.35, iq: 55e-6,
+    need: ldoTable([[0, 0], [0.01, 0.005], [0.3, 0.125], [0.6, 0.25]]), imax: 0.6, vinMax: 6,
+    pkgs: [["SOT-23-5", 184], ["SOT-89-5", 120], ["SO-8", 114]] },
+  mcp1700_33: { label: "MCP1700-3.3", fixed: 3.3, voutMin: 3.234, voutMax: 3.366, iq: 1.6e-6,
+    need: () => 0.178, imax: 0.25, vinMax: 6,
+    pkgs: [["SOT-23", 212], ["SOT-89", 104], ["TO-92", 92], ["2×2 DFN", 91]] },
 };
 const LDO_MODES = { vout: "Vout", r2: "R2", heat: "Heat" };
 const LDO_TJ_MAX = 125;
@@ -10119,9 +10177,18 @@ function renderLinearRegulator(domain, tool, favId) {
     pkg: 1,
   };
   const P = () => LDO_PARTS[state.part];
+  // A fixed part has no divider to set, so only Heat applies; the chosen
+  // pill is kept for when an adjustable part comes back.
+  const mode = () => (P().fixed ? "heat" : state.mode);
+  // The LM337's voltages are negative: they are held as magnitudes and shown
+  // with their sign.
+  const sign = () => (P().negative ? -1 : 1);
+  const SIGNED = ["vin", "vout", "target"];
   const vref = () => (P().custom ? state.si.cvref : P().vref);
   const iadj = () => (P().custom ? 0 : P().iadj);
+  const vOut = () => (P().fixed ? P().fixed : state.si.vout);
   const val = (v, u, d = 4) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const volts = (v, d) => val(sign() * v, "V", d);
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(6)) : "");
   const scale = (k) => (k === "r1" ? DIVIDER_R_UNITS[state.r1Unit] : k === "r2" ? DIVIDER_R_UNITS[state.r2Unit] : k === "iload" ? AMP_UNITS[state.iUnit] : 1);
   const voutOf = (r1, r2) => vref() * (1 + r2 / r1) + iadj() * r2;
@@ -10132,41 +10199,50 @@ function renderLinearRegulator(domain, tool, favId) {
     if (pk) state.si.theta = pk[1];
   }
 
-  // The regulator with its three pins, R1 from OUT to ADJ and R2 to ground.
+  // The regulator with its three pins: R1 from OUT to ADJ and R2 to ground,
+  // or, for a fixed part, its GND pin straight to ground.
   function diagram() {
     const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
-    const r2Tone = state.mode === "r2" ? calc : part;
+    const p = P();
+    const r2Tone = mode() === "r2" ? calc : part;
     const zigV = (x, y1, y2) => { let d = `M${x} ${y1}`; const n = 6, h = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + h * (i + 0.5)}`; return `${d} L${x} ${y2}`; };
     const lbl = (x, y, t, c = part, a = "start") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
-    return `<svg width="320" height="129" viewBox="0 0 290 117" fill="none">
-      <rect x="85" y="12" width="100" height="40" rx="3" stroke="${part}" stroke-width="1.6"/>
-      ${lbl(135, 30, P().custom ? "regulator" : P().label, part, "middle")}
-      ${lbl(90, 45, "IN", grey)}${lbl(180, 45, "OUT", grey, "end")}${lbl(135, 48, "ADJ", grey, "middle")}
-      <path d="M30 32 H85 M185 32 H250 M205 32 V48 M205 78 V100 M135 52 V64 H205 M30 100 H250" stroke="${wire}" stroke-width="1.6"/>
+    const head = `<rect x="85" y="12" width="100" height="40" rx="3" stroke="${part}" stroke-width="1.6"/>
+      ${lbl(135, 30, p.custom ? "regulator" : p.label, part, "middle")}
+      ${lbl(90, 45, "IN", grey)}${lbl(180, 45, "OUT", grey, "end")}${lbl(135, 48, p.fixed ? "GND" : "ADJ", grey, "middle")}
       <circle cx="30" cy="32" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="250" cy="32" r="3" stroke="${wire}" stroke-width="1.4"/>
+      ${lbl(30, 24, "Vin", grey, "middle")}${lbl(250, 24, p.fixed ? val(p.fixed, "V", 3) : "Vout", grey, "middle")}`;
+    if (p.fixed) {
+      return `<svg width="320" height="129" viewBox="0 0 290 117" fill="none">${head}
+      <path d="M30 32 H85 M185 32 H250 M135 52 V100 M30 100 H250" stroke="${wire}" stroke-width="1.6"/>
+      <circle cx="135" cy="100" r="2.5" fill="${wire}"/>
+      <path d="M135 100 V104 M128 104 H142 M131 107 H139 M134 110 H136" stroke="${wire}" stroke-width="1.4"/>
+    </svg>`;
+    }
+    return `<svg width="320" height="129" viewBox="0 0 290 117" fill="none">${head}
+      <path d="M30 32 H85 M185 32 H250 M205 32 V48 M205 78 V100 M135 52 V64 H205 M30 100 H250" stroke="${wire}" stroke-width="1.6"/>
       <circle cx="205" cy="32" r="2.5" fill="${wire}"/><circle cx="205" cy="64" r="2.5" fill="${wire}"/>
-      ${lbl(30, 24, "Vin", grey, "middle")}${lbl(250, 24, "Vout", grey, "middle")}
       <path d="${zigV(205, 36, 60)}" stroke="${part}" stroke-width="1.6" fill="none"/>
       <path d="M205 32 V36 M205 60 V64" stroke="${wire}" stroke-width="1.6"/>
       ${lbl(215, 52, `R1 ${val(state.si.r1, "Ω", 3)}`)}
       <path d="${zigV(205, 68, 96)}" stroke="${r2Tone}" stroke-width="1.6" fill="none"/>
       <path d="M205 64 V68 M205 96 V100" stroke="${wire}" stroke-width="1.6"/>
-      ${lbl(215, 86, `R2 ${state.mode === "r2" ? "?" : val(state.si.r2, "Ω", 3)}`, r2Tone)}
+      ${lbl(215, 86, `R2 ${mode() === "r2" ? "?" : val(state.si.r2, "Ω", 3)}`, r2Tone)}
       <path d="M140 100 V104 M133 104 H147 M136 107 H144 M139 110 H141" stroke="${wire}" stroke-width="1.4"/>
     </svg>`;
   }
 
   function problem() {
-    const s = state.si;
+    const s = state.si, m = mode(), neg = P().negative;
     if (P().custom && !(s.cvref > 0)) return "Enter the regulator's reference voltage.";
-    if (state.mode === "vout" && (!(s.r1 > 0) || !(s.r2 >= 0))) return "R1 must be above zero and R2 zero or more.";
-    if (state.mode === "r2") {
+    if (m === "vout" && (!(s.r1 > 0) || !(s.r2 >= 0))) return "R1 must be above zero and R2 zero or more.";
+    if (m === "r2") {
       if (!(s.r1 > 0)) return "R1 must be above zero.";
-      if (!(s.target > vref())) return `The output cannot be set below the reference, ${val(vref(), "V")}.`;
+      if (!(s.target > vref())) return neg ? `The output cannot be set closer to zero than the reference, ${volts(vref())}.` : `The output cannot be set below the reference, ${val(vref(), "V")}.`;
     }
-    if (state.mode === "heat") {
-      if (!(s.vin > 0) || !(s.vout > 0) || !(s.iload >= 0)) return "Enter the input, the output and the load current.";
-      if (!(s.vin > s.vout)) return "A linear regulator can only bring the voltage down: the input must be above the output.";
+    if (m === "heat") {
+      if (!(s.vin > 0) || !(vOut() > 0) || !(s.iload >= 0)) return P().fixed ? "Enter the input and the load current." : "Enter the input, the output and the load current.";
+      if (!(s.vin > vOut())) return neg ? "A linear regulator can only bring the voltage toward zero: the input must be more negative than the output." : "A linear regulator can only bring the voltage down: the input must be above the output.";
       if (!(s.theta > 0)) return "Enter the package's thermal resistance, RθJA.";
     }
     return "";
@@ -10175,7 +10251,7 @@ function renderLinearRegulator(domain, tool, favId) {
   function resultHTML() {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-    const s = state.si, p = P();
+    const s = state.si, p = P(), m = mode();
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const r1Current = (r1) => {
       const i = vref() / r1;
@@ -10183,51 +10259,55 @@ function renderLinearRegulator(domain, tool, favId) {
       const ok = i >= p.iminMax ? "above the max minimum load" : i >= p.imin ? `above the typical minimum load, not the ${val(p.iminMax, "A")} max` : `below the ${val(p.imin, "A")} minimum load`;
       return row("Current through R1", `${val(i, "A")}, ${ok}`, "ir1");
     };
-    if (state.mode === "vout") {
+    if (m === "vout") {
       const v = voutOf(s.r1, s.r2);
       const fromAdj = iadj() * s.r2;
-      const spread = p.custom ? "" : `${val(p.vrefMin * (1 + s.r2 / s.r1) + iadj() * s.r2, "V")} to ${val(p.vrefMax * (1 + s.r2 / s.r1) + iadj() * s.r2, "V")}`;
+      const spread = p.custom ? "" : `${volts(p.vrefMin * (1 + s.r2 / s.r1) + iadj() * s.r2)} to ${volts(p.vrefMax * (1 + s.r2 / s.r1) + iadj() * s.r2)}`;
       return `
         <div class="result-field">
           <div class="result-head"><span class="label">Output voltage</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
-          <div class="result-value"><span class="num" data-res="vout">${val(v, "V")}</span></div>
-          <div class="result-sub" data-res="sub">${fromAdj > 0 ? `${val(fromAdj, "V")} of it from IADJ × R2` : "IADJ not counted"}</div>
+          <div class="result-value"><span class="num" data-res="vout">${volts(v)}</span></div>
+          <div class="result-sub" data-res="sub">${fromAdj > 0 ? `${volts(fromAdj)} of it from IADJ × R2` : "IADJ not counted"}</div>
         </div>
         <div class="field notation-box">
           ${spread ? row("Over Vref's tolerance", spread, "spread") : ""}
           ${r1Current(s.r1)}
         </div>`;
     }
-    if (state.mode === "r2") {
+    if (m === "r2") {
       const r2 = (s.target - vref()) / (vref() / s.r1 + iadj());
       const near = nearestESeries(r2, "E96");
       return `
         <div class="result-field">
-          <div class="result-head"><span class="label">R2 for ${val(s.target, "V")}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">R2 for ${volts(s.target)}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
           <div class="result-value"><span class="num" data-res="r2">${formatOhms(r2)}</span></div>
-          <div class="result-sub" data-res="sub">nearest 1 % (E96) ${formatOhms(near.value)} gives ${val(voutOf(s.r1, near.value), "V")}</div>
+          <div class="result-sub" data-res="sub">nearest 1 % (E96) ${formatOhms(near.value)} gives ${volts(voutOf(s.r1, near.value))}</div>
         </div>
         <div class="field notation-box">${r1Current(s.r1)}</div>`;
     }
-    const drop = s.vin - s.vout, pw = drop * s.iload, tj = s.amb + pw * s.theta;
-    const need = p.custom ? s.cdrop : p.headroom(s.iload);
+    // Heat. A fixed part also sends its quiescent current from the input to
+    // ground, which adds VIN × IQ.
+    const vo = vOut(), iq = p.iq || 0;
+    const drop = s.vin - vo, pIq = s.vin * iq, pw = drop * s.iload + pIq, tj = s.amb + pw * s.theta;
+    const need = p.custom ? s.cdrop : p.need(s.iload);
     const hot = tj > LDO_TJ_MAX;
-    const iMaxHeat = (LDO_TJ_MAX - s.amb) / (s.theta * drop);
+    const iMaxHeat = Math.max(0, ((LDO_TJ_MAX - s.amb) / s.theta - pIq) / drop);
+    const eff = (vo * s.iload) / (s.vin * (s.iload + iq)) * 100;
     const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
-    // The LM317's word already names its 3 V; a dropout gets its value.
-    const what = p.custom ? `its dropout (${val(need, "V", 3)})` : state.part === "lm317" ? p.headroomWord : `${p.headroomWord} (${val(need, "V", 3)})`;
+    const what = p.needText || `its dropout (${val(need, "V", 3)})`;
     const headroomText = drop >= need ? `${val(drop, "V")} across it, above ${what}` : warn(`${val(drop, "V")} across it, under ${what}: it will not regulate`);
     // The lower of the heat limit and the part's rating.
     const capText = p.imax && iMaxHeat > p.imax ? `${val(p.imax, "A", 3)}, its rating (heat alone: ${val(iMaxHeat, "A", 3)})` : val(iMaxHeat, "A", 3);
     const limits = [];
     if (p.imax && s.iload > p.imax) limits.push(warn(`over its ${val(p.imax, "A")} rating`));
     if (p.vinMax && s.vin > p.vinMax) limits.push(warn(`input over its ${p.vinMax} V maximum`));
+    if (p.diffMax && drop > p.diffMax) limits.push(warn(`over the ${p.diffMax} V it takes across it`));
     return `
       <div class="result-pair">
         <div class="result-field">
           <div class="result-head"><span class="label">Heat in it</span></div>
           <div class="result-value"><span class="num" data-res="p">${val(pw, "W", 3)}</span></div>
-          <div class="result-sub" data-res="eff">${Number((s.vout / s.vin * 100).toFixed(1))} % efficient</div>
+          <div class="result-sub" data-res="eff">${Number(eff.toFixed(1))} % efficient</div>
         </div>
         <div class="result-field">
           <div class="result-head"><span class="label">Junction</span></div>
@@ -10236,7 +10316,9 @@ function renderLinearRegulator(domain, tool, favId) {
         </div>
       </div>
       <div class="field notation-box">
+        ${p.fixed ? row("Output", `${val(p.voutMin, "V")} to ${val(p.voutMax, "V")}`, "range") : ""}
         ${row("Headroom", headroomText, "headroom")}
+        ${p.fixed ? row("Its own current", `${p.iqIsMax ? "up to " : ""}${val(iq, "A", 2)} to ground: ${val(pIq, "W", 3)}`, "iq") : ""}
         ${row(`Most current under ${LDO_TJ_MAX} °C`, capText, "imax")}
         ${limits.length ? row("Ratings", limits.join(" · "), "limits") : ""}
       </div>`;
@@ -10264,32 +10346,44 @@ function renderLinearRegulator(domain, tool, favId) {
       apply: example("lm317", "heat", { vin: 12, vout: 5, iload: 1, amb: 25 }, { pkg: 1, iUnit: "A" }) },
     { title: "LM1117 from a 3.7 V cell", note: "3.7 V to 3.3 V leaves 0.4 V across it, under its 1.1 V dropout: no regulation.",
       apply: example("lm1117", "heat", { vin: 3.7, vout: 3.3, iload: 0.1, amb: 25 }, { pkg: 0, iUnit: "mA" }) },
+    { title: "MCP1700 from a 3.7 V cell", note: "The same 0.4 V is above its 178 mV dropout, and it draws only 1.6 µA itself.",
+      apply: example("mcp1700_33", "heat", { vin: 3.7, iload: 0.1, amb: 25 }, { pkg: 0, iUnit: "mA" }) },
+    { title: "7805: 12 V to 5 V, 500 mA", note: "3.5 W from the drop, 96 mW from its 8 mA: 111 °C in a bare TO-220.",
+      apply: example("lm7805", "heat", { vin: 12, iload: 0.5, amb: 25 }, { pkg: 0, iUnit: "mA" }) },
+    { title: "LM337 set to −5 V", note: "R1 240 Ω, R2 720 Ω: −5 V from the ratio, −47 mV more from its 65 µA adjust current.",
+      apply: example("lm337", "vout", { r1: 240, r2: 720 }, { r1Unit: "Ω", r2Unit: "Ω" }) },
   ]);
 
   function paint() {
-    const m = state.mode, p = P();
+    const m = mode(), p = P();
+    const shown = (key) => (SIGNED.includes(key) ? sign() : 1) * state.si[key] / scale(key);
     const field = (key, label, unitHTML) => `
         <div class="field">
           <label>${label}</label>
-          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(state.si[key] / scale(key))}" />${unitHTML}</div>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(shown(key))}" />${unitHTML}</div>
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const rSel = (k) => `<select data-runit="${k}">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${u === state[k + "Unit"] ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const iSel = `<select data-iunit="1">${Object.keys(AMP_UNITS).map((u) => `<option ${u === state.iUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
-    const partSel = `<select id="ldo-part">${Object.entries(LDO_PARTS).map(([k, v]) => `<option value="${k}" ${k === state.part ? "selected" : ""}>${v.label}</option>`).join("")}</select>`;
+    const opt = ([k, v]) => `<option value="${k}" ${k === state.part ? "selected" : ""}>${v.label}</option>`;
+    const parts = Object.entries(LDO_PARTS);
+    const partSel = `<select id="ldo-part"><optgroup label="Adjustable">${parts.filter(([, v]) => !v.fixed).map(opt).join("")}</optgroup><optgroup label="Fixed">${parts.filter(([, v]) => v.fixed).map(opt).join("")}</optgroup></select>`;
     const pkgSel = p.pkgs.length ? `<select id="ldo-pkg">${p.pkgs.map(([n, t], i) => `<option value="${i}" ${i === state.pkg ? "selected" : ""}>${n}, ${t} °C/W</option>`).join("")}</select>` : "";
     let fields = `<div class="field-pair"><div class="field"><label>Regulator</label>${partSel}</div>${m === "heat" && pkgSel ? `<div class="field"><label>Package</label>${pkgSel}</div>` : ""}</div>`;
     if (p.custom) fields += `<div class="field-pair">${field("cvref", "Vref", fixed("V"))}${m === "heat" ? field("cdrop", "Dropout", fixed("V")) : ""}</div>`;
     if (m === "vout") fields += `<div class="field-pair">${field("r1", "R1, OUT to ADJ", rSel("r1"))}${field("r2", "R2, ADJ to ground", rSel("r2"))}</div>`;
     if (m === "r2") fields += `<div class="field-pair">${field("target", "Wanted Vout", fixed("V"))}${field("r1", "R1, OUT to ADJ", rSel("r1"))}</div>`;
-    if (m === "heat") fields += `<div class="field-pair">${field("vin", "Vin", fixed("V"))}${field("vout", "Vout", fixed("V"))}${field("iload", "Load", iSel)}</div>
+    if (m === "heat") fields += `<div class="field-pair">${field("vin", "Vin", fixed("V"))}${p.fixed ? "" : field("vout", "Vout", fixed("V"))}${field("iload", "Load", iSel)}</div>
       <div class="field-pair">${field("theta", "RθJA", fixed("°C/W"))}${field("amb", "Ambient", fixed("°C"))}</div>`;
+    // A fixed part greys out the pills it has no use for.
+    const pills = pillRow(Object.entries(LDO_MODES), m, domain.bg).replace(/<button class="pill ([^"]*)" data-pill="(vout|r2)"/g,
+      (all, cls, k) => (p.fixed ? `<button class="pill ${cls}" data-pill="${k}" disabled style="opacity:.35"` : all));
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Set the output of an adjustable regulator, and its heat")}
+      ${calcHeader(tool, favId, "Set a regulator's output, and work out its heat")}
 
       <div class="diagram-box">${diagram()}</div>
 
-      ${pillRow(Object.entries(LDO_MODES), m, domain.bg)}
+      ${pills}
 
       ${fields}
 
@@ -10297,16 +10391,23 @@ function renderLinearRegulator(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["Vout = Vref × (1 + R2 / R1) + Iadj × R2", "R2 = (Vout − Vref) / (Vref / R1 + Iadj)", "P = (Vin − Vout) × I", "Tj = Ta + P × RθJA"],
-        "The regulator keeps its reference voltage, Vref, between OUT and ADJ. R1 across that sets a current, which flows on through R2 to ground with the small adjust-pin current, Iadj; the divider sets the output. A linear regulator only lowers a voltage, and every volt it drops times the current becomes heat. The junction then runs RθJA (degrees per watt, from the datasheet) above the ambient, and must stay under 125 °C. Below the dropout, the least voltage it needs across it, the output sags. Too little current through R1 and some parts lose regulation: the datasheet gives a minimum load."
+        ["Vout = Vref × (1 + R2 / R1) + Iadj × R2", "R2 = (Vout − Vref) / (Vref / R1 + Iadj)", "P = (Vin − Vout) × I + Vin × Iq", "Tj = Ta + P × RθJA"],
+        "An adjustable regulator keeps its reference voltage, Vref, between OUT and ADJ. R1 across that sets a current, which flows on through R2 to ground with the small adjust-pin current, Iadj; the divider sets the output. A fixed regulator has the divider inside, and sends its own quiescent current, Iq, to ground. A linear regulator only lowers a voltage, and every volt it drops times the current becomes heat. The junction then runs RθJA (degrees per watt, from the datasheet) above the ambient, and must stay under 125 °C. Below the dropout, the least voltage it needs across it, the output sags. The LM337 does the same with negative voltages."
       )}
       ${calcFooter("")}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+    wireCalc(favId, paint, (v) => { if (P().fixed) return; state.mode = v; setPref(C, "mode", v); paint(); });
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
-      el.oninput = () => { const k = el.dataset.key; state.si[k] = parseFloat(el.value) * scale(k); refresh(); };
+      el.oninput = () => {
+        const k = el.dataset.key;
+        let v = parseFloat(el.value) * scale(k);
+        // A negative regulator's voltages are typed with or without the minus.
+        if (P().negative && SIGNED.includes(k)) v = Math.abs(v);
+        state.si[k] = v;
+        refresh();
+      };
     });
     document.getElementById("ldo-part").onchange = (e) => {
       state.part = e.target.value; setPref(C, "part", state.part);
