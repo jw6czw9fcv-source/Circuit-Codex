@@ -95,6 +95,7 @@ will key on, since that is the id the app already holds for each tool.
 
 ### Power electronics
 
+- Regulators → [Linear regulator](#linear-regulator)
 - Battery → [Battery runtime](#battery-runtime)
 - Battery → [Battery C-rate](#battery-c-rate)
 - Battery → [Internal resistance](#internal-resistance)
@@ -9571,5 +9572,108 @@ R, and half of it then heats the cell.
   the open one are refused;
 - a unit change keeps the value;
 - the remembered choices.
+
+[↑ Index](#index)
+
+---
+
+<a id="linear-regulator"></a>
+## Linear regulator
+
+`calc: linear-regulator` · Power electronics › Regulators
+(formerly Linear regulator (LDO))
+
+### What it computes
+
+An adjustable linear regulator, the LM317 or the low-dropout LM1117-ADJ,
+or a custom part, three ways, by pill:
+
+| Pill | Inputs | Output |
+|---|---|---|
+| Vout | R1 (OUT to ADJ) and R2 (ADJ to ground) | the output voltage |
+| R2 | the wanted output and R1 | R2, and the nearest 1 % value with the output it gives |
+| Heat | Vin, Vout, the load current, the package or RθJA, the ambient | the heat in it, the junction temperature |
+
+- **Vout** also gives the spread over Vref's tolerance and the share of
+  the adjust-pin current.
+- **Vout and R2** say whether the current through R1 is above the
+  datasheet's minimum load.
+- **Heat** also gives:
+  - the efficiency;
+  - whether there is enough voltage across the regulator (the LM317's
+    3 V, the LM1117's dropout);
+  - the most current before the junction reaches 125 °C, or the part's
+    rating if that is lower;
+  - a warning past the rated current or input voltage.
+- **Custom:** your own Vref (adjust current not counted) and dropout.
+- **Drawing:** the regulator with its IN, OUT and ADJ pins and the two
+  resistors; R2 green when it is the answer.
+- **Remembered:** the regulator, the pill and the units.
+
+Examples: an LM317 at 5 V, R2 for 12 V, an LM1117 from 5 V to 3.3 V at
+500 mA, an LM317 from 12 V to 5 V at 1 A, and an LM1117 from a 3.7 V
+cell.
+
+### Source
+
+Read in review:
+- **TI LM317 datasheet (SLVS044Z, April 2025):**
+  - VO = VREF (1 + R2 / R1) + (IADJ × R2), equation 2, "IADJ is
+    typically 50 µA and negligible in most applications"; the typical
+    application uses R1 = 240 Ω;
+  - VREF 1.25 V, from 1.2 to 1.3 V;
+  - adjustment pin current 50 µA, 100 µA max;
+  - minimum load current 3.5 mA, 10 mA max;
+  - recommended: VO 1.25 to 37 V, VI − VO 3 to 40 V, IO 0.01 to 1.5 A,
+    TJ 0 to 125 °C;
+  - RθJA 66.8 °C/W (SOT-223), 23.5 (TO-220, KCS), 38.0 (TO-263).
+- **TI LM1117 datasheet (SNOS412Q, January 2023):**
+  - VREF 1.25 V, from 1.238 to 1.262 V at 25 °C;
+  - dropout 1.1 V at 100 mA, 1.15 V at 500 mA, 1.2 V at 800 mA (typical,
+    25 °C);
+  - adjust pin current 60 µA, 120 µA max;
+  - minimum load current 1.7 mA, 5 mA max;
+  - 800 mA, input to 15 V, TJ 0 to 125 °C;
+  - RθJA 61.6 °C/W (SOT-223), 45.1 (TO-252), 23.8 (TO-220), 41.3 (TO-263);
+  - "PD = (TJ(max) – TA) / RθJA".
+
+### Why the formulas are these
+
+    Vout = Vref (1 + R2/R1) + Iadj × R2
+    R2 = (Vout − Vref) / (Vref / R1 + Iadj)
+    P = (Vin − Vout) × I,   Tj = Ta + P × RθJA
+    Imax = (125 °C − Ta) / (RθJA × (Vin − Vout))
+
+The regulator holds Vref across R1, so R1 sets a current of Vref / R1.
+That current and the adjust current flow on through R2, whose voltage adds
+to Vref to make the output. The regulator drops the rest of the input as
+heat, and the junction runs RθJA degrees per watt above the air.
+
+### Assumptions and limits
+
+- **RθJA** is the datasheet's, measured on its JEDEC test board. A real
+  board, smaller copper or still air can make it worse; a heatsink makes
+  it better. Type your own figure if you have one.
+- **The dropout** between the LM1117's listed currents is interpolated,
+  and taken at 25 °C. It is a little higher over temperature.
+- **The regulator's own quiescent current** is left out of the heat.
+- **Fixed-output parts** (LM1117-3.3, 7805) need no resistors; their heat
+  is the same formula, so the Heat pill serves with the Custom part.
+
+### How it was checked
+
+10 cases:
+- the LM317 with 240 and 720 Ω gives 5.036 V, 36 mV from the adjust
+  current, and 4.836 to 5.236 V over Vref's tolerance;
+- 240 Ω carries 5.208 mA, above the typical minimum load only;
+- R2 for 12 V is 2.044 kΩ, and 2.05 kΩ gives 12.03 V;
+- the LM1117 from 5 to 3.3 V at 500 mA: 850 mW, 77 °C;
+- the LM317 from 12 to 5 V at 1 A: 190 °C, over the limit;
+- the LM1117 with 0.4 V across it is under its dropout, and its current is
+  capped at its 800 mA rating;
+- a custom 0.8 V reference gives 3.2 V;
+- an input below the output is refused;
+- picking a package fills in its RθJA;
+- the remembered regulator and pill.
 
 [↑ Index](#index)

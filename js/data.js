@@ -137,7 +137,7 @@ const DOMAINS = [
       {
         title: "Supply & regulation",
         tools: [
-          { name: "Linear regulator (LDO)" }, { name: "DC/DC buck converter" }, { name: "DC/DC boost converter" },
+          { name: "Linear regulator", was: "Linear regulator (LDO)", calc: "linear-regulator" }, { name: "DC/DC buck converter" }, { name: "DC/DC boost converter" },
           { name: "Zener + transistor stabilization" }, { name: "SMPS flyback basics" },
           { name: "Inrush current limiter (NTC)" }, { name: "Constant current source/driver" }, { name: "Power factor" }, { name: "POE classes" },
         ],
@@ -320,6 +320,7 @@ const TOOL_KEYWORDS = {
   "ppm-converter": "ppm parts per million tolerance error deviation tempco temperature coefficient ppm/k drift crystal clock seconds per day percent",
   "formula-search": "formulas equations",
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
+  "linear-regulator": "linear regulator ldo low dropout lm317 lm1117 ams1117 adjustable vref adj r1 r2 output voltage dropout heat dissipation junction thermal",
   "internal-resistance": "battery internal resistance ir esr cell voltage drop sag load pulse short circuit current max power open circuit voc",
   "ind-series-parallel": "inductor inductors inductance series parallel combine total coil choke henry uh mh",
   "impedance": "impedance ac ohm's law ohms law reactance rlc rl rc lc series parallel phase angle power factor resonance inductor capacitor xl xc var va apparent true reactive power",
@@ -384,6 +385,7 @@ const RELATED = {
   "impedance": ["ohms-law", "rc-filter", "rl-filter"],
   "ind-series-parallel": ["series-parallel", "cap-series-parallel", "inductor-color-code"],
   "internal-resistance": ["battery-runtime", "c-rate", "battery-sizes"],
+  "linear-regulator": ["voltage-divider", "e-series", "trace-width"],
   "percent-tolerance": ["ppm-converter"],
   "db-ratio": ["db-absolute"],
   "formula-search": ["physical-constants", "si-units"],

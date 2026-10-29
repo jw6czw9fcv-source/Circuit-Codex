@@ -382,10 +382,10 @@ const FORMULAS = [
     note: "Energizer's dual pulse: a light drain, then a heavier pulse. The resistance rises as the cell discharges and in the cold.",
   },
   {
-    tool: "Linear regulator (LDO)",
+    tool: "Linear regulator",
     domain: "power",
-    formulas: ["Vout = Vref (1 + R2/R1) + Iadj·R2", "LM317: Vref = 1.25 V, Iadj ≈ 50 µA"],
-    note: "R1 from OUT to ADJ, R2 from ADJ to ground (TI LM317 datasheet, eq. 2). Other adjustable regulators name their own pins and Vref.",
+    formulas: ["Vout = Vref (1 + R2/R1) + Iadj·R2", "P = (Vin − Vout) × I", "Tj = Ta + P × RθJA"],
+    note: "LM317: Vref 1.25 V, Iadj ≈ 50 µA, R1 from OUT to ADJ (TI datasheet, eq. 2). Every volt dropped becomes heat.",
   },
   {
     tool: "DC/DC buck converter",

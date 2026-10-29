@@ -345,7 +345,7 @@ Then:
 - [ ] RF diode types
 - [ ] Microwave bands & frequencies
 - [ ] Amateur radio bands
-- [ ] Linear regulator (LDO)
+- [x] Linear regulator (LDO)
 - [ ] Zener voltage stabilization
 - [ ] Zener + transistor stabilization
 - [ ] Inrush current limiter (NTC)
