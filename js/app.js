@@ -10619,7 +10619,8 @@ function renderThermalVias(domain, tool, favId) {
         refresh();
       };
       // Leaving the θ box shows what the vias really give.
-      if (k === "theta") el.onblur = () => syncBoxes();
+      // (after the blur, once the box no longer has the focus).
+      if (k === "theta") el.onblur = () => setTimeout(syncBoxes);
     });
     document.getElementById("tv-fill").onchange = (e) => {
       state.fill = e.target.value; setPref(C, "fill", state.fill);
