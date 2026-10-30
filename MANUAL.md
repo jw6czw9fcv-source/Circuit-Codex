@@ -10015,31 +10015,40 @@ by side share the heat, so N of them in parallel divide θ by N.
 
 ### What it computes
 
-How many vias a trace's current needs, on one screen:
+How many vias a current needs, on one screen:
 
 - **Inputs:** the drill, the plating in the hole, the board thickness,
-  the trace feeding the via (width and copper weight), the current, and
-  the number of vias you use.
-- **The big result:** the vias IPC-2152's area rule asks for: together
-  at least the copper cross-section of the trace.
+  the trace feeding the via (width and copper weight), the current, the
+  temperature rise you allow (a picker, 5 to 60 °C), and the number of
+  vias you use.
+- **The current sets the copper:** IPC-2152, through the same Brooks &
+  Adam fit as Trace width (outer layer), gives the trace width the current
+  needs for that rise. The vias match the larger of that and your trace.
+  The first version used your trace alone, so the current changed
+  nothing: Pierre put in 100 A and still got 2 vias.
+- **The big result:** that many vias, IPC-2152's area rule: together at
+  least the copper cross-section of the trace.
 - **The vias you use** follow that count until you type your own.
 - **Below it:**
+  - how hot your trace runs at that current, flagged when over the rise
+    allowed ("it would burn" past 1000 °C);
   - each via's current, resistance, voltage drop and heat;
   - the trace's area over your vias' area;
   - Brooks & Adam's nearest simulated case to that ratio, quoted as they
-    give it: the trace, the copper, the vias, the current, and the via
-    and trace temperatures;
+    give it, or "none close" outside their 0.64× to 8×;
   - the finished hole, the drill less twice the plating.
 - **Units:** metric (mm, plating in µm, areas in mm²) or mil for
   everything (areas in mil², the simulated cases' widths too); every
-  length has a picker, and changing any one changes them all. Copper in oz, 1 oz = 34.8 µm as in Trace width.
+  length has a picker, and changing any one changes them all. Copper in
+  oz, 1 oz = 34.8 µm as in Trace width.
 - **Drawing:** a trace on each side of the board joined by the via, the
   current going through it.
-- **Remembered:** the units and the copper weight.
+- **Remembered:** the units, the copper weight and the rise.
 
-Examples: Brooks & Adam's via beside a 1.2 mm trace, the same via with a
-0.66 mm trace, 10 A on a 2.5 mm 2 oz trace with two vias, and a 0.3 mm
-drill with 25 µm plating.
+Examples: Brooks & Adam's via beside a 1.2 mm trace at 4 A (30 °C rise),
+the same via with a 0.66 mm trace, 10 A on a 2.5 mm 2 oz trace with two
+vias, 20 A through a 30 mm 2 oz pour, and a 0.3 mm drill with 25 µm
+plating.
 
 ### Source
 
@@ -10075,18 +10084,22 @@ July 2015** (read; UltraCAD paper, from a copy shared on the KiCad forum):
 ### Why the formulas are these
 
     A via = π (r² − (r − b)²)
-    A trace = w × t
-    vias = ⌈A trace / A via⌉
+    A trace = w × t,   w needed: IPC-2152 for I and the rise
+    vias = ⌈max(A trace, A needed) / A via⌉
     R via = ρ × l / A via,   per via: I / N, drop I R / N, heat (I/N)² R
 
 Current flows in the via's plated wall, a copper ring; the rule asks for
 as much copper in the vias as in the trace, so they heat no more than it.
-Brooks and Adam show the trace and the board cool the via, so it runs near
-the trace's temperature well past that point; the nearest case is there
-to show how far.
+The current decides how much copper the trace needs to stay within the
+rise, so it decides the vias too. Brooks and Adam show the trace and the
+board cool the via, so it runs near the trace's temperature well past
+that point; the nearest case is there to show how far.
 
 ### Assumptions and limits
 
+- **The width the current needs** is for an outer-layer trace, as in
+  their via model (traces on both faces); an inner trace runs a little
+  cooler (see Trace width).
 - **The nearest case is a pointer, not a prediction.** Their cases are for
   a 1.6 mm board and 60 mm traces at one current each; nothing is
   interpolated or scaled from them.
@@ -10100,18 +10113,24 @@ to show how far.
 
 ### How it was checked
 
-9 cases:
-- their via is 0.0217 mm²; a 1.2 mm 1 oz trace (0.0418 mm²) asks for 2;
-  each of 2 carries 2 A, 1.27 mΩ, 2.55 mV, 5.09 mW;
-- with two vias the nearest case is their 0.66 mm trace, 6 °C cooler;
+14 cases:
+- 4 A at a 10 °C rise needs a 3.11 mm, 1 oz trace: 5 of their 0.0217 mm²
+  vias, 0.8 A each; the 1.2 mm trace rises 30 °C, over the 10 allowed;
+- five vias against the 1.2 mm trace (0.385×) are outside their cases;
+- 100 A needs an 838 mm trace for 10 °C, 1346 vias, and the 1.2 mm trace
+  would burn;
+- a 30 °C rise lets 4 A use the 1.2 mm trace, so its own area sets 2;
 - one via at 4 A is their 1.2 mm case, 1.7 °C hotter than the trace;
-- 10 A on a 2.5 mm 2 oz trace: the rule asks 9; with two, their case is
-  7.7 °C over the trace;
+- the 0.66 mm trace at 3 A rises 33 °C, one via is their case, 6 °C
+  cooler;
+- 10 A on a 2.5 mm 2 oz trace rises 40.1 °C (not flagged over 40); 9 vias;
+  with two, their case is 7.7 °C over the trace;
+- 20 A through a 30 mm 2 oz pour rises 9 °C; 97 vias match its copper;
 - a 0.3 mm drill with 25 µm plating: 0.0216 mm², 1.28 mΩ;
 - a typed via count stays when the trace changes;
 - plating as thick as the hole's radius is refused;
-- mil turns every length and area to mil: 33.6 mil² per via, their
-  0.66 mm trace as 26 mil;
-- the remembered copper weight.
+- mil turns every length and area to mil (122 mil, 168 mil²);
+- every length's picker switches them all;
+- the remembered copper weight and rise.
 
 [↑ Index](#index)

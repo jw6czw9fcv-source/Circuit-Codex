@@ -10458,6 +10458,8 @@ const VC_CASES = [
   [2.5, 2, 2, 10, 89.6, 97.3],
 ];
 const VC_SIM_VIA_MM2 = Math.PI * (0.13 ** 2 - 0.1 ** 2);   // their via, 0.0217 mm²
+// The temperature rises offered, °C above the ambient.
+const VC_RISES = [5, 10, 20, 30, 40, 50, 60];
 
 function renderViaCurrent(domain, tool, favId) {
   const C = "via-current";
@@ -10465,24 +10467,28 @@ function renderViaCurrent(domain, tool, favId) {
     lUnit: pref(C, "lUnit", "mm", Object.keys(VC_LEN_UNITS)),
     bUnit: pref(C, "bUnit", "µm", Object.keys(VC_PLATE_UNITS)),
     oz: pref(C, "oz", 1, TRACE_OZ),
-    si: { drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 1.2e-3, i: 4, n: 1 },
+    si: { drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 1.2e-3, i: 4, rise: pref(C, "rise", 10, VC_RISES), n: 1 },
     // The vias box follows the rule until a count is typed.
     nTyped: false,
   };
   const len = (v) => `${Number((v / VC_LEN_UNITS[state.lUnit]).toPrecision(3))} ${state.lUnit}`;
   // Four figures: a converted 0.26 mm reads 10.24 mil, not 10.2362.
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
-  const scale = (k) => (k === "b" ? VC_PLATE_UNITS[state.bUnit] : k === "i" || k === "n" ? 1 : VC_LEN_UNITS[state.lUnit]);
+  const scale = (k) => (k === "b" ? VC_PLATE_UNITS[state.bUnit] : k === "i" || k === "n" || k === "rise" ? 1 : VC_LEN_UNITS[state.lUnit]);
   // Areas and the cases' widths follow the length unit: mm² or mil².
   const mm2 = (a) => (state.lUnit === "mil" ? `${Number((a / 0.0254 ** 2).toPrecision(3))} mil²` : `${Number(a.toPrecision(3))} mm²`);
   const caseW = (w) => (state.lUnit === "mil" ? `${Number((w / 0.0254).toPrecision(3))} mil` : `${w} mm`);
 
-  // Copper areas in mm²: one via's wall and the trace's cross-section.
+  // Copper areas in mm²: one via's wall, the trace's cross-section, and the
+  // cross-section the current needs for the allowed rise (IPC-2152 through
+  // Brooks & Adam's fit, an outer-layer trace, as in Trace width).
   function areas() {
-    const s = state.si, r = s.drill / 2 * 1e3, th = s.b * 1e3;
-    return { via: Math.PI * (r * r - (r - th) ** 2), trace: s.w * 1e3 * state.oz * TRACE_OZ_MIL * 0.0254 };
+    const s = state.si, r = s.drill / 2 * 1e3, th = s.b * 1e3, tMm = state.oz * TRACE_OZ_MIL * 0.0254;
+    const wNeed = s.i > 0 && s.rise > 0 ? traceSolve("width", "external", state.oz, { amps: s.i, rise: s.rise }).wMil * 0.0254 : 0;
+    return { via: Math.PI * (r * r - (r - th) ** 2), trace: s.w * 1e3 * tMm, need: wNeed * tMm, wNeed: wNeed / 1e3 };
   }
-  const ruleCount = () => { const a = areas(); return Math.max(1, Math.ceil(a.trace / a.via - 1e-9)); };
+  // The vias match the larger of the trace and what the current needs.
+  const ruleCount = () => { const a = areas(); return Math.max(1, Math.ceil(Math.max(a.trace, a.need) / a.via - 1e-9)); };
 
   function problem() {
     const s = state.si;
@@ -10529,16 +10535,28 @@ function renderViaCurrent(domain, tool, favId) {
       .sort((x, y) => x.d - y.d || x.di - y.di)[0].c;
     const [cw, coz, cn, ci, ctc, cvia] = near;
     const hotter = cvia - ctc;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    const amps = `${Number(s.i.toPrecision(3))} A`, riseTxt = `${Number(s.rise.toPrecision(3))} °C`;
+    // Which copper the vias match: the current's need, or a wider trace.
+    const sub = a.need > a.trace
+      ? `${amps} needs a ${len(a.wNeed)} trace for ${riseTxt}: ${mm2(a.need)}, one via ${mm2(a.via)}`
+      : `the trace's ${mm2(a.trace)} (${amps} needs only ${len(a.wNeed)}), one via ${mm2(a.via)}`;
+    // How hot the trace itself runs at this current.
+    const tr = s.i > 0 ? traceSolve("rise", "external", state.oz, { wMil: s.w / 25.4e-6, amps: s.i }).rise : 0;
+    const trTxt = tr > 1000 ? "rises over 1000 °C: it would burn" : `rises ${Math.round(tr)} °C`;
     return `
         <div class="result-field">
-          <div class="result-head"><span class="label">Vias, IPC-2152 area rule</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Vias for ${amps}, IPC-2152</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
           <div class="result-value"><span class="num" data-res="rule">${m} ${m === 1 ? "via" : "vias"}</span></div>
-          <div class="result-sub" data-res="sub">one via ${mm2(a.via)}, the trace ${mm2(a.trace)}</div>
+          <div class="result-sub" data-res="sub">${sub}</div>
         </div>
         <div class="field notation-box">
+          ${row(`Your ${len(s.w)} trace at ${amps}`, tr > 1000 ? warn(trTxt) : Math.round(tr) > s.rise ? warn(`${trTxt}, over the ${riseTxt} allowed`) : trTxt, "trace")}
           ${row(`Each of your ${n === 1 ? "via" : `${n} vias`}`, `${Number(iv.toPrecision(3))} A, ${Number((r * 1e3).toPrecision(3))} mΩ: ${Number((iv * r * 1e3).toPrecision(3))} mV, ${Number((iv * iv * r * 1e3).toPrecision(3))} mW`, "per")}
           ${row("Trace area over vias' area", `${Number(ratio.toPrecision(3))}×`, "ratio")}
-          ${row("Nearest simulated case", `${caseW(cw)}, ${coz} oz, ${cn} ${cn === 1 ? "via" : "vias"}, ${ci} A: via ${cvia} °C, trace ${ctc} °C (${hotter >= 0 ? `${Number(hotter.toFixed(1))} °C hotter` : `${Number((-hotter).toFixed(1))} °C cooler`})`, "near")}
+          ${row("Nearest simulated case", ratio < 0.5 || ratio > 10
+            ? "none close: their trace-to-via ratios run from 0.64× to 8×"
+            : `${caseW(cw)}, ${coz} oz, ${cn} ${cn === 1 ? "via" : "vias"}, ${ci} A: via ${cvia} °C, trace ${ctc} °C (${hotter >= 0 ? `${Number(hotter.toFixed(1))} °C hotter` : `${Number((-hotter).toFixed(1))} °C cooler`})`, "near")}
           ${row("Finished hole", len(s.drill - 2 * s.b), "hole")}
         </div>`;
   }
@@ -10566,14 +10584,16 @@ function renderViaCurrent(domain, tool, favId) {
     paint();
   };
   useExamples([
-    { title: "Brooks & Adam's via, 1.2 mm trace", note: "IPC's rule asks for two; their one via at 4 A ran 75.8 °C beside the trace's 74.1 °C.",
-      apply: example({ drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 1.2e-3, i: 4, n: 1 }, { oz: 1, lUnit: "mm", bUnit: "µm" }, true) },
+    { title: "Brooks & Adam's via, 1.2 mm trace", note: "4 A heats the trace 30 °C; the rule asks for 2 vias, their one ran 75.8 °C beside 74.1 °C.",
+      apply: example({ drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 1.2e-3, i: 4, rise: 30, n: 1 }, { oz: 1, lUnit: "mm", bUnit: "µm" }, true) },
     { title: "Same via, a 0.66 mm trace", note: "About the via's area, so the rule rounds up to 2; their one via at 3 A ran 6 °C cooler.",
-      apply: example({ drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 0.66e-3, i: 3, n: 1 }, { oz: 1, lUnit: "mm", bUnit: "µm" }, true) },
+      apply: example({ drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 0.66e-3, i: 3, rise: 40, n: 1 }, { oz: 1, lUnit: "mm", bUnit: "µm" }, true) },
     { title: "10 A on a 2.5 mm, 2 oz trace", note: "The rule asks for 9 vias; with 2, their simulation had the vias 7.7 °C over the trace.",
-      apply: example({ drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 2.5e-3, i: 10, n: 2 }, { oz: 2, lUnit: "mm", bUnit: "µm" }, true) },
+      apply: example({ drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 2.5e-3, i: 10, rise: 40, n: 2 }, { oz: 2, lUnit: "mm", bUnit: "µm" }, true) },
+    { title: "20 A through a 30 mm, 2 oz pour", note: "It rises 9 °C; to match its copper the rule asks for 97 vias of 0.26 mm.",
+      apply: example({ drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 30e-3, i: 20, rise: 10 }, { oz: 2, lUnit: "mm", bUnit: "µm" }) },
     { title: "A 0.3 mm drill, 25 µm plating", note: "0.0216 mm² per via, about the same as Brooks & Adam's: 1.28 mΩ each in 1.6 mm.",
-      apply: example({ drill: 0.3e-3, b: 25e-6, l: 1.6e-3, w: 1e-3, i: 2 }, { oz: 1, lUnit: "mm", bUnit: "µm" }) },
+      apply: example({ drill: 0.3e-3, b: 25e-6, l: 1.6e-3, w: 1e-3, i: 2, rise: 10 }, { oz: 1, lUnit: "mm", bUnit: "µm" }) },
   ]);
 
   function paint() {
@@ -10587,10 +10607,11 @@ function renderViaCurrent(domain, tool, favId) {
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const ozSel = `<select id="vc-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
+    const riseSel = `<select id="vc-rise">${VC_RISES.map((r) => `<option value="${r}" ${r === s.rise ? "selected" : ""}>${r} °C</option>`).join("")}</select>`;
     const fields = `
       <div class="field-pair">${field("drill", "Drill", sel('data-lunit="1"', VC_LEN_UNITS, state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', VC_PLATE_UNITS, state.bUnit))}${field("l", "Board", sel('data-lunit="2"', VC_LEN_UNITS, state.lUnit))}</div>
       <div class="field-pair">${field("w", "Trace width", sel('data-lunit="3"', VC_LEN_UNITS, state.lUnit))}<div class="field"><label>Trace copper</label>${ozSel}</div>${field("i", "Current", fixed("A"))}</div>
-      <div class="field-pair">${field("n", "Vias you use", fixed(""))}</div>`;
+      <div class="field-pair"><div class="field"><label>Temperature rise</label>${riseSel}</div>${field("n", "Vias you use", fixed(""))}</div>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "How many vias a trace's current needs")}
 
@@ -10603,7 +10624,7 @@ function renderViaCurrent(domain, tool, favId) {
 
       ${formulaSection(
         ["A via = π × (r² − (r − b)²)", "A trace = w × t,   vias ≥ A trace / A via", "R via = ρ × l / A via"],
-        "A via carries current in its plated wall: r is the drill's radius, b the plating, so the copper is a ring. IPC-2152's rule gives the via, or the vias together, at least the copper area of the trace that feeds them (width w times copper thickness t; 1 oz is 34.8 µm). Brooks and Adam's simulations found that rule very cautious: the trace and the board cool the via, which ran about as hot as a trace of twice its area. The tool shows their nearest case to yours. Each via's resistance (ρ copper, l the board thickness) gives its voltage drop and heat."
+        "A via carries current in its plated wall: r is the drill's radius, b the plating, so the copper is a ring. IPC-2152's rule gives the via, or the vias together, at least the copper area of the trace that feeds them (width w times copper thickness t; 1 oz is 34.8 µm). The current sets that trace: IPC-2152 gives the width it needs for the temperature rise you allow, as in Trace width, and the vias match the larger of that and your trace. Brooks and Adam's simulations found that rule very cautious: the trace and the board cool the via, which ran about as hot as a trace of twice its area. The tool shows their nearest case to yours. Each via's resistance (ρ copper, l the board thickness) gives its voltage drop and heat."
       )}
       ${calcFooter("")}
     `;
@@ -10619,6 +10640,7 @@ function renderViaCurrent(domain, tool, favId) {
       };
     });
     document.getElementById("vc-oz").onchange = (e) => { state.oz = parseFloat(e.target.value); setPref(C, "oz", state.oz); refresh(); };
+    document.getElementById("vc-rise").onchange = (e) => { state.si.rise = parseFloat(e.target.value); setPref(C, "rise", state.si.rise); refresh(); };
     // A unit change re-expresses the same value.
     // The two pickers move together: mm with µm plating, or mil for all.
     const units = (imperial) => {
