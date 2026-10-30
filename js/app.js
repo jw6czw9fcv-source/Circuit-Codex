@@ -574,6 +574,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "c-rate") return renderCRate(domain, tool, favId);
   if (calcId === "internal-resistance") return renderInternalResistance(domain, tool, favId);
   if (calcId === "linear-regulator") return renderLinearRegulator(domain, tool, favId);
+  if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "battery-sizes") return renderBatterySizes(domain, tool, favId);
   if (calcId === "button-cells") return renderButtonCells(domain, tool, favId);
   if (calcId === "rc-charge") return renderRcCharge(domain, tool, favId);
@@ -10426,6 +10427,223 @@ function renderLinearRegulator(domain, tool, favId) {
   }
 
   if (P().pkgs.length) setPackage(Math.min(state.pkg, P().pkgs.length - 1));
+  paint();
+}
+
+// ---------- Heat sink sizing ----------
+// Heat leaves the die through a chain of thermal resistances in series:
+// junction to case (θJC, the datasheet's, through the tab), case to sink (the
+// interface, θCS) and sink to air (θSA, the heatsink's rating). So
+// TJ = TA + P × (θJC + θCS + θSA), and the sink a part needs is what is left
+// of the allowed (TJ − TA) / P once θJC and θCS are taken out (Fairchild
+// AN-4166 figure 1: Rja is "the sum of" the resistances in the chain).
+// Interface figures for a TO-220 on a 6-32 screw at 8 in-lb: Motorola AN-778
+// table 1, metal to metal 1.2 °C/W dry, 1.0 with grease; with a 2 mil mica
+// insulator 3.4 dry, 1.6 with grease; the picker offers these, other packages
+// and pads go in the field. Heatsinks: Fischer SK 104 38,1 STC is
+// 11 K/W (Fischer's product page); Aavid 577202B00000G is listed at
+// 24.4 °C/W by RS and Future Electronics (Aavid's own sheet not read).
+const HS_INTERFACES = [
+  ["Grease", 1.0],
+  ["Dry", 1.2],
+  ["Mica + grease", 1.6],
+  ["Mica, dry", 3.4],
+];
+const HS_SINKS = [
+  ["Aavid 577202", 24.4],
+  ["SK 104 38.1 mm", 11],
+];
+const HS_MODES = { sink: "Sink needed", tj: "Junction", pmax: "Max power" };
+const HS_P_UNITS = { mW: 1e-3, W: 1 };
+
+function renderHeatSink(domain, tool, favId) {
+  const C = "heat-sink";
+  const state = {
+    mode: pref(C, "mode", "sink", Object.keys(HS_MODES)),
+    pUnit: pref(C, "pUnit", "W", Object.keys(HS_P_UNITS)),
+    si: { p: 3.6, tj: 125, ta: 25, jc: 1.7, cs: 1.0, sa: 11 },
+  };
+  const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const deg = (t) => `${Math.round(t)} °C`;
+  const ohm = (r) => `${Number(r.toPrecision(3))} °C/W`;
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(6)) : "");
+  const scale = (k) => (k === "p" ? HS_P_UNITS[state.pUnit] : 1);
+
+  // What the chain gives, whichever of P, TJ or θSA is the unknown.
+  function solve() {
+    const s = state.si;
+    if (state.mode === "sink") {
+      const allowed = (s.tj - s.ta) / s.p;
+      return { p: s.p, tj: s.tj, sa: allowed - s.jc - s.cs, allowed };
+    }
+    if (state.mode === "tj") return { p: s.p, tj: s.ta + s.p * (s.jc + s.cs + s.sa), sa: s.sa };
+    return { p: (s.tj - s.ta) / (s.jc + s.cs + s.sa), tj: s.tj, sa: s.sa };
+  }
+
+  // The thermal chain drawn as a circuit: the power as a source driving
+  // current into the junction, three resistances in series, and the ambient
+  // as the return.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const err = problem(), r = err ? null : solve(), s = state.si, m = state.mode;
+    const zigH = (x1, x2, y) => { let d = `M${x1} ${y}`; const n = 6, w = (x2 - x1) / n; for (let i = 0; i < n; i++) d += ` L${x1 + w * (i + 0.5)} ${y + (i % 2 ? 5 : -5)}`; return `${d} L${x2} ${y}`; };
+    const lbl = (x, y, t, c = part, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const saTone = m === "sink" ? calc : part;
+    const tc = r ? s.ta + r.p * (s.cs + r.sa) : NaN, ts = r ? s.ta + r.p * r.sa : NaN;
+    const t = (v) => (isFinite(v) ? deg(v) : "?");
+    return `<svg width="320" height="118" viewBox="0 0 290 107" fill="none">
+      <path d="M24 34 V47 M24 69 V82 H262 V34 M24 34 H75 M115 34 H145 M185 34 H210 M250 34 H262" stroke="${wire}" stroke-width="1.6"/>
+      <circle cx="24" cy="58" r="11" stroke="${m === "pmax" ? calc : part}" stroke-width="1.6"/>
+      <path d="M24 64 V52 M20 56 L24 52 L28 56" stroke="${m === "pmax" ? calc : part}" stroke-width="1.6"/>
+      <path d="${zigH(75, 115, 34)}" stroke="${part}" stroke-width="1.6"/>
+      <path d="${zigH(145, 185, 34)}" stroke="${part}" stroke-width="1.6"/>
+      <path d="${zigH(210, 250, 34)}" stroke="${saTone}" stroke-width="1.6"/>
+      <circle cx="60" cy="34" r="2.5" fill="${wire}"/><circle cx="130" cy="34" r="2.5" fill="${wire}"/><circle cx="198" cy="34" r="2.5" fill="${wire}"/>
+      ${lbl(95, 20, `θJC ${Number(s.jc.toPrecision(3))}`)}${lbl(165, 20, `θCS ${Number(s.cs.toPrecision(3))}`)}
+      ${lbl(230, 20, `θSA ${m === "sink" ? (r && r.sa > 0 ? Number(r.sa.toPrecision(3)) : "?") : Number(s.sa.toPrecision(3))}`, saTone)}
+      ${lbl(60, 54, `Tj ${m === "tj" ? t(r && r.tj) : t(s.tj)}`, m === "tj" ? calc : grey)}
+      ${lbl(130, 54, `Tc ${t(tc)}`, grey)}${lbl(198, 54, `Ts ${t(ts)}`, grey)}
+      ${lbl(24, 100, `P ${r && r.p > 0 ? val(r.p, "W") : "?"}`, m === "pmax" ? calc : part, "start")}
+      ${lbl(262, 100, `Ta ${deg(s.ta)}`, grey, "end")}
+    </svg>`;
+  }
+
+  function problem() {
+    const s = state.si, m = state.mode;
+    if (!(s.jc >= 0) || !(s.cs >= 0)) return "Enter θJC and the interface, zero or more.";
+    if (m !== "sink" && !(s.sa >= 0)) return "Enter the heatsink's θSA, zero or more.";
+    if (!isFinite(s.ta) || !isFinite(s.tj)) return "Enter the ambient and the junction temperature.";
+    if (m !== "tj" && !(s.tj > s.ta)) return "The junction limit must be above the ambient.";
+    if (m !== "pmax" && !(s.p > 0)) return "Enter the power the part dissipates.";
+    if (m === "pmax" && !(s.jc + s.cs + s.sa > 0)) return "The thermal resistances add up to zero.";
+    return "";
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, r = solve(), m = state.mode;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    const head = (label, value, sub, key = "main") => `
+        <div class="result-field">
+          <div class="result-head"><span class="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="${key}">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const tjWith = (sa) => s.ta + s.p * (s.jc + s.cs + sa);
+    if (m === "sink") {
+      if (r.sa <= 0) {
+        return `${head("Heatsink needed", "none is enough", warn(`θJC and the interface alone take ${ohm(s.jc + s.cs)}, over the ${ohm(r.allowed)} allowed`))}
+          <div class="field notation-box">${row("Most power, ideal sink", val((s.tj - s.ta) / (s.jc + s.cs), "W"), "pideal")}</div>`;
+      }
+      const sinks = HS_SINKS.map(([n, sa]) => {
+        const tj = tjWith(sa);
+        return row(`${n}, ${ohm(sa)}`, sa <= r.sa ? `enough: Tj ${deg(tj)}` : warn(`too weak: Tj ${deg(tj)}`), `sink-${sa}`);
+      }).join("");
+      return `${head("Heatsink needed", `${ohm(r.sa)} or less`, `of ${ohm(r.allowed)} in all, θJC and θCS take ${ohm(s.jc + s.cs)}`, "sa")}
+        <div class="field notation-box">${sinks}</div>`;
+    }
+    if (m === "tj") {
+      const tc = s.ta + s.p * (s.cs + s.sa), ts = s.ta + s.p * s.sa;
+      return `${head("Junction", deg(r.tj), r.tj > 125 ? warn("over 125 °C, the usual limit") : "under 125 °C, the usual limit", "tj")}
+        <div class="field notation-box">
+          ${row("Case (tab)", deg(tc), "tc")}
+          ${row("Heatsink", deg(ts), "ts")}
+          ${row("Total, junction to air", ohm(s.jc + s.cs + s.sa), "total")}
+        </div>`;
+    }
+    return `${head(`Most power under ${deg(s.tj)}`, val(r.p, "W"), `through ${ohm(s.jc + s.cs + s.sa)} in all, from ${deg(s.ta)}`, "pmax")}
+      <div class="field notation-box">
+        ${row("Heatsink at that power", deg(s.ta + r.p * s.sa), "ts")}
+      </div>`;
+  }
+
+  function refresh() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (mode, si, extra) => () => {
+    Object.assign(state, { mode }, extra || {});
+    Object.assign(state.si, si);
+    paint();
+  };
+  useExamples([
+    { title: "7805: 3.6 W in a TO-220", note: "θJC 1.7 °C/W (tab), grease: a 25.1 °C/W sink or better; the 24.4 °C/W Aavid just does it.",
+      apply: example("sink", { p: 3.6, tj: 125, ta: 25, jc: 1.7, cs: 1.0 }, { pUnit: "W" }) },
+    { title: "Same, insulated, 50 °C box", note: "Mica and grease and a 50 °C enclosure leave 17.5 °C/W: the Aavid is too weak.",
+      apply: example("sink", { p: 3.6, tj: 125, ta: 50, jc: 1.7, cs: 1.6 }, { pUnit: "W" }) },
+    { title: "7 W on an SK 104 38.1 mm", note: "1.7 + 1.0 + 11 °C/W from 25 °C: the junction at 121 °C.",
+      apply: example("tj", { p: 7, ta: 25, jc: 1.7, cs: 1.0, sa: 11 }, { pUnit: "W" }) },
+    { title: "Most power, SK 104, mica", note: "125 °C from 50 °C through 1.7 + 3.4 + 11 °C/W: 4.66 W at most.",
+      apply: example("pmax", { tj: 125, ta: 50, jc: 1.7, cs: 3.4, sa: 11 }, { pUnit: "W" }) },
+    { title: "50 W in a TO-220", note: "100 °C over 50 W allows 2 °C/W; θJC and the grease take 2.7: no heatsink is enough.",
+      apply: example("sink", { p: 50, tj: 125, ta: 25, jc: 1.7, cs: 1.0 }, { pUnit: "W" }) },
+  ]);
+
+  function paint() {
+    const m = state.mode, s = state.si;
+    const field = (key, label, unitHTML) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / scale(key))}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const pSel = `<select data-punit="1">${Object.keys(HS_P_UNITS).map((u) => `<option ${u === state.pUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    // A preset picker shows the entry whose value is in the field, or Custom.
+    const preset = (id, list, v) => `<select id="${id}"><option value="">Custom</option>${list.map(([n, t], i) => `<option value="${i}" ${t === v ? "selected" : ""}>${n} (${t})</option>`).join("")}</select>`;
+    let fields = "";
+    fields += m === "pmax"
+      ? `<div class="field-pair">${field("tj", "Tj limit", fixed("°C"))}${field("ta", "Ambient", fixed("°C"))}</div>`
+      : m === "tj"
+        ? `<div class="field-pair">${field("p", "Power", pSel)}${field("ta", "Ambient", fixed("°C"))}</div>`
+        : `<div class="field-pair">${field("p", "Power", pSel)}${field("tj", "Tj limit", fixed("°C"))}${field("ta", "Ambient", fixed("°C"))}</div>`;
+    fields += `<div class="field-pair">${field("jc", "θJC", fixed("°C/W"))}${field("cs", "θCS", fixed("°C/W"))}<div class="field"><label>Interface</label>${preset("hs-if", HS_INTERFACES, s.cs)}</div></div>`;
+    if (m !== "sink") fields += `<div class="field-pair">${field("sa", "θSA", fixed("°C/W"))}<div class="field"><label>Heatsink</label>${preset("hs-sink", HS_SINKS, s.sa)}</div></div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The heatsink a part needs, or its junction temperature")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.entries(HS_MODES), m, domain.bg)}
+
+      ${fields}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Tj = Ta + P × (θJC + θCS + θSA)", "θSA = (Tj − Ta) / P − θJC − θCS", "Pmax = (Tj − Ta) / (θJC + θCS + θSA)"],
+        "Heat flows from the die (junction) to the air through three thermal resistances in series, each in °C per watt: θJC from the junction to the case (the datasheet's, through the tab), θCS across the interface between case and heatsink (grease, an insulating pad or mica), and θSA from the heatsink to the air (the heatsink's rating, usually in still air). Every watt raises each step by its θ, like a current through resistors. The sink needed is what is left of the allowed total once θJC and θCS are taken out; a smaller θSA is a bigger heatsink."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key;
+        state.si[k] = parseFloat(el.value) * scale(k);
+        // The preset pickers follow a typed value.
+        const pick = (id, list, v) => { const sel = document.getElementById(id); if (sel) { const i = list.findIndex(([, t]) => t === v); sel.value = i < 0 ? "" : String(i); } };
+        if (k === "cs") pick("hs-if", HS_INTERFACES, state.si.cs);
+        if (k === "sa") pick("hs-sink", HS_SINKS, state.si.sa);
+        refresh();
+      };
+    });
+    const onPreset = (id, list, key) => {
+      const sel = document.getElementById(id);
+      if (sel) sel.onchange = () => { if (sel.value !== "") { state.si[key] = list[+sel.value][1]; paint(); } };
+    };
+    onPreset("hs-if", HS_INTERFACES, "cs");
+    onPreset("hs-sink", HS_SINKS, "sa");
+    app.querySelectorAll("select[data-punit]").forEach((el) => {
+      el.onchange = () => { state.pUnit = el.value; setPref(C, "pUnit", el.value); paint(); };
+    });
+  }
+
   paint();
 }
 

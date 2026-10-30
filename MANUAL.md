@@ -101,6 +101,7 @@ will key on, since that is the id the app already holds for each tool.
 - Battery → [Internal resistance](#internal-resistance)
 - Battery → [Battery types & sizes](#battery-types--sizes)
 - Battery → [Button cell sizes](#button-cell-sizes)
+- Thermal management → [Heat sink sizing](#heat-sink)
 
 ### PCB & interconnect
 
@@ -9747,5 +9748,122 @@ watt above the air.
 - an input below the output is refused;
 - picking a package fills in its RθJA;
 - the remembered regulator and pill.
+
+[↑ Index](#index)
+
+---
+
+<a id="heat-sink"></a>
+## Heat sink sizing
+
+`calc: heat-sink` · Power electronics › Thermal management
+(also takes in the planned Thermal resistance (θJA / θJC))
+
+### What it computes
+
+The thermal chain from a part's junction to the air, three ways, by pill:
+
+| Pill | Inputs | Output |
+|---|---|---|
+| Sink needed | power, junction limit, ambient, θJC, θCS | the heatsink θSA to buy, at most |
+| Junction | power, ambient, θJC, θCS, θSA | the junction temperature |
+| Max power | junction limit, ambient, θJC, θCS, θSA | the most power the part can dissipate |
+
+- **The terms**, each a thermal resistance in °C per watt:
+  - **θJC**, junction to case: the part's datasheet, the figure through
+    the tab or the bottom of the package (often written RθJC(bot));
+  - **θCS**, case to sink: the interface, grease, a pad or mica;
+  - **θSA**, sink to air: the heatsink's rating, usually in still air.
+- **Sink needed** also checks two real heatsinks against the answer and
+  gives the junction temperature each one would reach. When θJC and the
+  interface alone use up the whole budget, it says no heatsink is enough
+  and gives the most power an ideal one (0 °C/W) would allow.
+- **Junction** also gives the case (tab) and heatsink temperatures, which
+  is what a finger or a thermocouple meets.
+- **Max power** also gives the heatsink temperature at that power.
+- **Pickers:** the interface fills θCS with a TO-220 figure (grease, dry,
+  mica with grease, dry mica); the heatsink fills θSA. Any value can be
+  typed instead, and the picker then reads Custom.
+- **Drawing:** the chain as a circuit, the power as a source driving into
+  the junction, θJC, θCS and θSA in series to the ambient, with the
+  temperature of each node; the unknown in green.
+- **Units:** power in mW or W. **Remembered:** the pill and the unit.
+
+Examples: a 7805 dissipating 3.6 W (from the Linear regulator tool's
+12 V to 5 V at 500 mA) in a TO-220 with grease, the same insulated with
+mica in a 50 °C box, 7 W on an SK 104, the most power on an SK 104 with dry
+mica, and 50 W in a TO-220.
+
+### Source
+
+- **Fairchild (onsemi) AN-4166, "Heat Sink Mounting Guide", rev. 1.0.0,
+  2014** (read): the junction-to-ambient resistance "is the sum of"
+  junction-case, case-heat sink, heat sink and heat sink-ambient
+  resistances (figure 1); the contact resistance between case and sink
+  depends on surface roughness and contact pressure, and grease or a pad
+  fills the air gap. Its table 1 gives interface materials per area
+  (°C·in²/W), not per package, so it is not used for the figures.
+- **Motorola AN-778, "Mounting Considerations for Power Semiconductors"**
+  (read, a scanned copy; its successor is onsemi AN1040, which onsemi's
+  site refused to serve), table 1, TO-220AB on a 6-32 screw at 8 in-lb:
+  metal to metal 1.2 °C/W dry, 1.0 lubed (grease); with a 2 mil mica
+  insulator 3.4 dry, 1.6 lubed. "Dry interface values are subject to wide
+  variation." Its text: grease typically reduces the interface resistance
+  2 to 1 to 3 to 1 with an insulator.
+- **θJC in the examples:** TI LM340/LM7805 family (SNOSBT0L, September
+  2016), thermal information table, TO-220 RθJC(bot) 1.7 °C/W.
+- **Heatsinks:**
+  - Fischer Elektronik SK 104 38,1 STC (34.9 × 12.7 mm, 38.1 mm long,
+    TO-220 clip-on): Rth 11 K/W, from Fischer's product page (a copy
+    downloaded from Arrow);
+  - Aavid (Boyd) 577202B00000G (TO-220 clip-on, 19 × 13 × 12.7 mm):
+    24.4 °C/W as listed by RS Components and Future Electronics; Aavid's
+    own datasheet was not read.
+
+### Why the formulas are these
+
+    Tj = Ta + P × (θJC + θCS + θSA)
+    θSA = (Tj − Ta) / P − θJC − θCS
+    Pmax = (Tj − Ta) / (θJC + θCS + θSA)
+    Tc = Ta + P × (θCS + θSA),   Ts = Ta + P × θSA
+
+Heat flowing through a thermal resistance raises the temperature across
+it by θ × P, as a current through a resistor raises a voltage. The three
+steps are in series, so their resistances add, and each node sits above
+the ambient by the power times everything between it and the air. The
+heatsink you need is what is left of the allowed total, (Tj − Ta) / P,
+once the part and the interface have taken theirs; a smaller θSA is a
+bigger heatsink.
+
+### Assumptions and limits
+
+- **All the heat goes through the heatsink.** A part also loses a little
+  through its leads and the board, so the real junction runs slightly
+  cooler.
+- **θSA is not constant.** Makers rate a heatsink at one temperature rise,
+  in still air, mounted a given way; it improves as the sink gets hotter
+  and with any airflow, and gets worse in a closed box or mounted flat.
+- **The interface figures are for a TO-220 on a screw.** Other packages,
+  clips, thermal pads and torques differ; type the pad maker's figure.
+- **The ambient** is the air around the heatsink, which inside a box is
+  above room temperature.
+- **125 °C** is the default junction limit, the recommended maximum of
+  most regulators; type the part's own.
+
+### How it was checked
+
+10 cases:
+- 3.6 W, 125 °C from 25 °C, θJC 1.7 and grease 1.0: 25.1 °C/W or better,
+  out of 27.8 in all; the Aavid gives 123 °C, the SK 104 74 °C;
+- mica and grease in a 50 °C box: 17.5 °C/W, the Aavid too weak at
+  150 °C, the SK 104 at 101 °C;
+- 7 W through 1.7 + 1.0 + 11 °C/W: junction 121 °C, tab 109 °C, sink
+  102 °C;
+- from 50 °C through 16.1 °C/W in all: 4.66 W at most, the sink at 101 °C;
+- 50 W in a TO-220: no heatsink is enough, 37 W with an ideal one;
+- the interface picker fills 3.4 °C/W, and a typed value reads Custom;
+- a unit change keeps the power (3.6 W reads 3600 mW);
+- a junction limit under the ambient is refused;
+- the remembered pill.
 
 [↑ Index](#index)

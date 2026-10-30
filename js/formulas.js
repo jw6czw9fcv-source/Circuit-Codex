@@ -400,10 +400,10 @@ const FORMULAS = [
     note: "Ideal, continuous conduction; D is the duty cycle as a fraction, 0 to 1.",
   },
   {
-    tool: "Thermal resistance (θJA / θJC)",
+    tool: "Heat sink sizing",
     domain: "power",
-    formulas: ["TJ = TA + P × θJA", "TJ = TC + P × θJC"],
-    note: "θ in °C/W from the datasheet: junction to ambient (JA) or to case (JC). P is the power the part dissipates.",
+    formulas: ["Tj = Ta + P × (θJC + θCS + θSA)", "θSA = (Tj − Ta) / P − θJC − θCS", "Tj = Ta + P × θJA  (no heatsink)"],
+    note: "θ in °C/W: junction to case (datasheet), case to sink (interface), sink to air (heatsink rating). P is the power the part dissipates.",
   },
 
   // ---- PCB ----

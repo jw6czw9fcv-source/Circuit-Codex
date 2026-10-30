@@ -353,8 +353,8 @@ Then:
 - [ ] Power factor
 - [ ] POE classes
 - [ ] Accumulators
-- [ ] Thermal resistance (θJA / θJC)
-- [ ] Heat sink sizing
+- [x] Thermal resistance (θJA / θJC) — merged into Heat sink sizing
+- [x] Heat sink sizing — Sink needed / Junction / Max power, 2026-10-29
 - [ ] Power derating
 - [ ] Power density
 - [ ] Torque & power conversion
