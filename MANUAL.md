@@ -106,6 +106,7 @@ will key on, since that is the id the app already holds for each tool.
 ### PCB & interconnect
 
 - Trace current & resistance → [Trace width](#trace-width)
+- Trace current & resistance → [Via current capacity](#via-current)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Cabling → [Wire sizing](#wire-gauge)
 - Cabling → [Wire & cable colors](#cable-colors)
@@ -9999,5 +10000,112 @@ by side share the heat, so N of them in parallel divide θ by N.
 - a unit change keeps the board (1.6 mm reads 63 mil);
 - a fraction of a via is refused;
 - the remembered fill.
+
+[↑ Index](#index)
+
+---
+
+<a id="via-current"></a>
+## Via current capacity
+
+`calc: via-current` · PCB & interconnect › Trace current & resistance
+
+### What it computes
+
+How many vias a trace's current needs, on one screen:
+
+- **Inputs:** the drill, the plating in the hole, the board thickness,
+  the trace feeding the via (width and copper weight), the current, and
+  the number of vias you use.
+- **The big result:** the vias IPC-2152's area rule asks for: together
+  at least the copper cross-section of the trace.
+- **The vias you use** follow that count until you type your own.
+- **Below it:**
+  - each via's current, resistance, voltage drop and heat;
+  - the trace's area over your vias' area;
+  - Brooks & Adam's nearest simulated case to that ratio, quoted as they
+    give it: the trace, the copper, the vias, the current, and the via
+    and trace temperatures;
+  - the finished hole, the drill less twice the plating.
+- **Units:** lengths in mm or mil, plating in µm or mil; copper in oz,
+  1 oz = 34.8 µm as in Trace width.
+- **Drawing:** a trace on each side of the board joined by the via, the
+  current going through it.
+- **Remembered:** the units and the copper weight.
+
+Examples: Brooks & Adam's via beside a 1.2 mm trace, the same via with a
+0.66 mm trace, 10 A on a 2.5 mm 2 oz trace with two vias, and a 0.3 mm
+drill with 25 µm plating.
+
+### Source
+
+**Douglas G. Brooks and Johannes Adam, "Via Currents and Temperatures",
+July 2015** (read; UltraCAD paper, from a copy shared on the KiCad forum):
+- **IPC-2152's rule,** as they quote it from page 26 of the standard: "The
+  cross-sectional area of a via should have at least the same
+  cross-sectional area as the conductor or be larger than the conductor
+  coming into it. If the via has less cross-sectional area than the
+  conductor, then multiple vias can be used". IPC-2152 itself was not
+  read.
+- **The via's area,** π(r² − (r − th)²), r the via's radius, th the
+  plating; their via, 0.26 mm drill and 0.030 mm plating, is 0.0217 mm²,
+  "approximately equivalent to a 1 Oz. 26 mil (.66 mm) wide trace".
+- **Their model:** two 60 mm traces on either side of 1.6 mm FR-4, joined
+  by that via, simulated with TRM (Thermal Risk Management).
+- **Their tables** (trace at the thermocouple, via at its midpoint):
+  - 0.4 mm, 1 oz, 2 A: trace 91.4, via 82.4 °C;
+  - 0.66 mm, 3 A: 86.9, 80.9 °C;
+  - 1.2 mm, 4 A: 74.1, 75.8 °C;
+  - 1.8 mm, 5 A: 70.8, 76.8 °C;
+  - 2.5 mm, 6 A: 68.1, 77.6 °C;
+  - 2.5 mm, 2 oz, 10 A: 93.5, 117.9 °C;
+  - two vias, 2.5 mm 1 oz, 7 A: 88.6, 92.4 °C; 2 oz, 10 A: 89.6,
+    97.3 °C.
+- **Their conclusion:** the rule is "extremely conservative"; "It is not
+  the current that determines the via temperature. The trace itself has
+  much more influence over the via temperature." A filled hole changes
+  little with solder, more with copper.
+- **Resistance:** IACS copper, 1/58 Ω·mm²/m at 20 °C (NBS Handbook 100),
+  as in Wire sizing.
+
+### Why the formulas are these
+
+    A via = π (r² − (r − b)²)
+    A trace = w × t
+    vias = ⌈A trace / A via⌉
+    R via = ρ × l / A via,   per via: I / N, drop I R / N, heat (I/N)² R
+
+Current flows in the via's plated wall, a copper ring; the rule asks for
+as much copper in the vias as in the trace, so they heat no more than it.
+Brooks and Adam show the trace and the board cool the via, so it runs near
+the trace's temperature well past that point; the nearest case is there
+to show how far.
+
+### Assumptions and limits
+
+- **The nearest case is a pointer, not a prediction.** Their cases are for
+  a 1.6 mm board and 60 mm traces at one current each; nothing is
+  interpolated or scaled from them.
+- **The ratio** uses 34.8 µm per oz for the trace and their via's own area
+  for their cases, so their 0.66 mm trace comes to 1.06×, not exactly 1.
+- **Plating is assumed even;** they note it often is not.
+- **The resistance is at 20 °C;** a hot via is a little higher (0.393 % per
+  °C).
+- **Heat from the part itself** is not included: for vias carrying heat
+  rather than current, see Thermal vias.
+
+### How it was checked
+
+8 cases:
+- their via is 0.0217 mm²; a 1.2 mm 1 oz trace (0.0418 mm²) asks for 2;
+  each of 2 carries 2 A, 1.27 mΩ, 2.55 mV, 5.09 mW;
+- with two vias the nearest case is their 0.66 mm trace, 6 °C cooler;
+- one via at 4 A is their 1.2 mm case, 1.7 °C hotter than the trace;
+- 10 A on a 2.5 mm 2 oz trace: the rule asks 9; with two, their case is
+  7.7 °C over the trace;
+- a 0.3 mm drill with 25 µm plating: 0.0216 mm², 1.28 mΩ;
+- a typed via count stays when the trace changes;
+- plating as thick as the hole's radius is refused;
+- the remembered copper weight.
 
 [↑ Index](#index)

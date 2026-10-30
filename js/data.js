@@ -160,7 +160,7 @@ const DOMAINS = [
         title: "Trace current & resistance",
         tools: [
           { name: "Trace width", was: "PCB trace width / resistance", calc: "trace-width", mergedNames: ["Trace current capacity (ampacity)", "Trace current — IPC-2152 method"] },
-          { name: "Via current capacity" }, { name: "Trace inductance" },
+          { name: "Via current capacity", calc: "via-current" }, { name: "Trace inductance" },
         ],
       },
       {
@@ -321,6 +321,7 @@ const TOOL_KEYWORDS = {
   "formula-search": "formulas equations",
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
   "linear-regulator": "linear regulator ldo low dropout lm317 lm1117 ams1117 lm1086 lm337 negative 7805 7812 7815 78xx lm7805 ap2112 mcp1700 fixed adjustable vref adj r1 r2 output voltage dropout quiescent current heat dissipation junction thermal",
+  "via-current": "via current capacity ampacity amps vias how many plating drill barrel wall cross section ipc-2152 ipc 2152 brooks adam trace resistance voltage drop",
   "thermal-vias": "thermal via vias array pcb heat conduction plating barrel sleeve hole filled unfilled solder copper fill thermal resistance pad qfn exposed pad °c/w k/w",
   "heat-sink": "heat sink heatsink thermal resistance theta θja θjc θcs θsa junction case ambient temperature tj tc power dissipation to-220 mica grease thermal pad interface cooling °c/w k/w",
   "internal-resistance": "battery internal resistance ir esr cell voltage drop sag load pulse short circuit current max power open circuit voc",
@@ -389,7 +390,8 @@ const RELATED = {
   "internal-resistance": ["battery-runtime", "c-rate", "battery-sizes"],
   "linear-regulator": ["heat-sink", "voltage-divider", "e-series"],
   "heat-sink": ["linear-regulator", "thermal-vias", "mosfet-switch"],
-  "thermal-vias": ["heat-sink", "trace-width"],
+  "thermal-vias": ["heat-sink", "via-current", "trace-width"],
+  "via-current": ["trace-width", "thermal-vias"],
   "percent-tolerance": ["ppm-converter"],
   "db-ratio": ["db-absolute"],
   "formula-search": ["physical-constants", "si-units"],

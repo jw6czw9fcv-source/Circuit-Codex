@@ -365,7 +365,7 @@ Then:
 - [ ] Relay driver
 - [x] Trace current capacity (ampacity) — merged into Trace width
 - [x] Thermal vias — empty / solder / copper fill, Vias needed, 2026-10-29 (Pierre)
-- [ ] Via current capacity
+- [x] Via current capacity — IPC-2152 area rule + Brooks & Adam 2015 cases, 2026-10-29
 - [ ] Signal propagation delay
 - [ ] Planar (PCB) inductor
 - [ ] Decoupling capacitor

@@ -408,6 +408,12 @@ const FORMULAS = [
 
   // ---- PCB ----
   {
+    tool: "Via current capacity",
+    domain: "pcb",
+    formulas: ["A via = π × (r² − (r − b)²)", "vias ≥ A trace / A via", "R via = ρ × l / A via"],
+    note: "IPC-2152's area rule; Brooks & Adam (2015) found it very cautious: the trace sets the via's temperature.",
+  },
+  {
     tool: "Thermal vias",
     domain: "pcb",
     formulas: ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N"],
