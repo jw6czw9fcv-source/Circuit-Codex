@@ -9922,7 +9922,8 @@ the finished hole, the plating and the fill:
 - **Also:** one via's sleeve and hole resistances, the drill size, and the
   temperature difference across the board at a power you give.
 - **Units:** metric (board and hole in mm, plating in µm) or mil for all
-  three; the two pickers move together.
+  three; every length has a picker, and changing any one changes them
+  all.
 - **Drawing:** the board in cross-section, the plated sleeve and its pads,
   the hole shaded when filled, the heat going through.
 - **Remembered:** the fill and the units.
@@ -10030,8 +10031,8 @@ How many vias a trace's current needs, on one screen:
     and trace temperatures;
   - the finished hole, the drill less twice the plating.
 - **Units:** metric (mm, plating in µm, areas in mm²) or mil for
-  everything (areas in mil², the simulated cases' widths too); the two
-  pickers move together. Copper in oz, 1 oz = 34.8 µm as in Trace width.
+  everything (areas in mil², the simulated cases' widths too); every
+  length has a picker, and changing any one changes them all. Copper in oz, 1 oz = 34.8 µm as in Trace width.
 - **Drawing:** a trace on each side of the board joined by the via, the
   current going through it.
 - **Remembered:** the units and the copper weight.

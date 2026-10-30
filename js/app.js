@@ -10588,8 +10588,8 @@ function renderViaCurrent(domain, tool, favId) {
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const ozSel = `<select id="vc-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
     const fields = `
-      <div class="field-pair">${field("drill", "Drill", sel('data-lunit="1"', VC_LEN_UNITS, state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', VC_PLATE_UNITS, state.bUnit))}${field("l", "Board", fixed(state.lUnit))}</div>
-      <div class="field-pair">${field("w", "Trace width", fixed(state.lUnit))}<div class="field"><label>Trace copper</label>${ozSel}</div>${field("i", "Current", fixed("A"))}</div>
+      <div class="field-pair">${field("drill", "Drill", sel('data-lunit="1"', VC_LEN_UNITS, state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', VC_PLATE_UNITS, state.bUnit))}${field("l", "Board", sel('data-lunit="2"', VC_LEN_UNITS, state.lUnit))}</div>
+      <div class="field-pair">${field("w", "Trace width", sel('data-lunit="3"', VC_LEN_UNITS, state.lUnit))}<div class="field"><label>Trace copper</label>${ozSel}</div>${field("i", "Current", fixed("A"))}</div>
       <div class="field-pair">${field("n", "Vias you use", fixed(""))}</div>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "How many vias a trace's current needs")}
@@ -10625,8 +10625,7 @@ function renderViaCurrent(domain, tool, favId) {
       state.lUnit = imperial ? "mil" : "mm"; state.bUnit = imperial ? "mil" : "µm";
       setPref(C, "lUnit", state.lUnit); setPref(C, "bUnit", state.bUnit); paint();
     };
-    app.querySelector("select[data-lunit]").onchange = (e) => units(e.target.value === "mil");
-    app.querySelector("select[data-bunit]").onchange = (e) => units(e.target.value === "mil");
+    app.querySelectorAll("select[data-lunit], select[data-bunit]").forEach((el) => { el.onchange = (e) => units(e.target.value === "mil"); });
   }
 
   paint();
@@ -10781,7 +10780,7 @@ function renderThermalVias(domain, tool, favId) {
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const fillSel = `<select id="tv-fill">${Object.entries(TV_FILLS).map(([k, [n]]) => `<option value="${k}" ${k === state.fill ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     const fields = `
-      <div class="field-pair">${field("l", "Board", sel('data-lunit="1"', TV_LEN_UNITS, state.lUnit))}${field("d", "Hole, finished", fixed(state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', TV_PLATE_UNITS, state.bUnit))}</div>
+      <div class="field-pair">${field("l", "Board", sel('data-lunit="1"', TV_LEN_UNITS, state.lUnit))}${field("d", "Hole, finished", sel('data-lunit="2"', TV_LEN_UNITS, state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', TV_PLATE_UNITS, state.bUnit))}</div>
       <div class="field-pair"><div class="field"><label>Hole filled with</label>${fillSel}</div>${field("p", "Power", fixed("W"))}</div>
       <div class="field-pair">${field("n", "Vias", fixed(""))}${field("theta", "θ, all vias", fixed("°C/W"), "")}</div>`;
     app.innerHTML = `
@@ -10835,8 +10834,7 @@ function renderThermalVias(domain, tool, favId) {
       state.lUnit = imperial ? "mil" : "mm"; state.bUnit = imperial ? "mil" : "µm";
       setPref(C, "lUnit", state.lUnit); setPref(C, "bUnit", state.bUnit); paint();
     };
-    app.querySelector("select[data-lunit]").onchange = (e) => units(e.target.value === "mil");
-    app.querySelector("select[data-bunit]").onchange = (e) => units(e.target.value === "mil");
+    app.querySelectorAll("select[data-lunit], select[data-bunit]").forEach((el) => { el.onchange = (e) => units(e.target.value === "mil"); });
     syncBoxes();
   }
 
