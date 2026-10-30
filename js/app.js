@@ -10440,21 +10440,22 @@ function renderLinearRegulator(domain, tool, favId) {
 // fills the hole is a second path in parallel, λ × π (d/2)²; TTM ANN-8804
 // rev B gives SAC solder 57 W/m·K. N vias in parallel divide θ by N
 // (Fineline); the FR-4 between them is left out (Fineline: "2-3 K/W per via"
-// lower if counted).
+// lower if counted). The number of vias and their θ are two live boxes, as
+// Pierre asked: either one sets the other.
 const TV_K_CU = 384;
 const TV_FILLS = { air: ["Empty", 0.026], solder: ["Solder", 57], copper: ["Copper", TV_K_CU] };
-const TV_MODES = { theta: "Resistance", count: "Vias needed" };
 const TV_LEN_UNITS = { mm: 1e-3, mil: 25.4e-6 };
 const TV_PLATE_UNITS = { "µm": 1e-6, mil: 25.4e-6 };
 
 function renderThermalVias(domain, tool, favId) {
   const C = "thermal-vias";
   const state = {
-    mode: pref(C, "mode", "theta", Object.keys(TV_MODES)),
     fill: pref(C, "fill", "air", Object.keys(TV_FILLS)),
     lUnit: pref(C, "lUnit", "mm", Object.keys(TV_LEN_UNITS)),
     bUnit: pref(C, "bUnit", "µm", Object.keys(TV_PLATE_UNITS)),
-    si: { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, target: 10, p: 2 },
+    si: { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2 },
+    // A θ typed in the box: the vias are set to reach it.
+    target: null,
   };
   const ohm = (r) => `${Number(r.toPrecision(3))} °C/W`;
   const len = (v) => `${Number((v / TV_LEN_UNITS[state.lUnit]).toPrecision(3))} ${state.lUnit}`;
@@ -10468,12 +10469,14 @@ function renderThermalVias(domain, tool, favId) {
     const hole = l / (TV_FILLS[fill][1] * Math.PI * (d / 2) ** 2);
     return { sleeve, hole, both: 1 / (1 / sleeve + 1 / hole) };
   }
+  // The fewest vias that reach a θ.
+  const viasFor = (theta) => Math.max(1, Math.ceil(oneVia().both / theta - 1e-9));
 
   function problem() {
     const s = state.si;
     if (!(s.l > 0) || !(s.d > 0) || !(s.b > 0)) return "Enter the board thickness, the finished hole and the plating, all above zero.";
-    if (state.mode === "theta" && !(s.n >= 1 && Number.isInteger(s.n))) return "Enter a whole number of vias, one or more.";
-    if (state.mode === "count" && !(s.target > 0)) return "Enter the thermal resistance to reach.";
+    if (state.target !== null && !(state.target > 0)) return "Enter the θ to reach, above zero.";
+    if (!(s.n >= 1 && Number.isInteger(s.n))) return "Enter a whole number of vias, one or more.";
     return "";
   }
 
@@ -10486,7 +10489,6 @@ function renderThermalVias(domain, tool, favId) {
     const fillTone = state.fill === "copper" ? part : state.fill === "solder" ? grey : null;
     const plate = `${Number((s.b / TV_PLATE_UNITS[state.bUnit]).toPrecision(3))} ${state.bUnit}`;
     const err = problem();
-    const theta = err ? "" : state.mode === "theta" ? oneVia().both / s.n : oneVia().both;
     return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
       <rect x="70" y="34" width="180" height="50" stroke="${wire}" stroke-width="1.4"/>
       ${fillTone ? `<rect x="148" y="34" width="24" height="50" fill="${fillTone}" fill-opacity="0.35"/>` : ""}
@@ -10499,81 +10501,91 @@ function renderThermalVias(domain, tool, favId) {
       ${lbl(200, 22, `d ${len(s.d)}`, part, "start")}
       <path d="M148 30 H172" stroke="${wire}" stroke-width="1.2"/>
       ${lbl(180, 63, `b ${plate}`, part, "start")}
-      ${lbl(248, 104, state.mode === "theta" ? `${Number(s.n)} × ${err ? "?" : ohm(oneVia().both)}` : `θ1 ${err ? "?" : ohm(theta)}`, calc, "end")}
+      ${lbl(248, 104, err ? "" : `${s.n} × ${ohm(oneVia().both)}`, calc, "end")}
     </svg>`;
   }
 
   function resultHTML() {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-    const s = state.si, v = oneVia();
+    const s = state.si, v = oneVia(), n = s.n, total = v.both / n;
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
-    const head = (label, value, sub, key) => `
-        <div class="result-field">
-          <div class="result-head"><span class="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
-          <div class="result-value"><span class="num" data-res="${key}">${value}</span></div>
-          <div class="result-sub" data-res="sub">${sub}</div>
-        </div>`;
-    const n = state.mode === "theta" ? s.n : Math.ceil(v.both / s.target - 1e-9);
-    const total = v.both / n;
-    const dT = s.p > 0 ? row(`Across the board at ${Number(s.p.toPrecision(3))} W`, `${Number((s.p * total).toPrecision(3))} °C`, "dt") : "";
     // The same vias empty and filled, side by side.
     const fills = Object.entries(TV_FILLS).map(([k, [name]]) => `${name.toLowerCase()} ${ohm(oneVia(k).both / n)}`).join(" · ");
-    const rows = `
+    // A θ typed in the box: say the vias are the fewest that reach it.
+    const hit = state.target !== null && total <= state.target;
+    const sub = hit ? `${n} vias are the fewest under ${ohm(state.target)}` : `one via ${ohm(v.both)}${n > 1 ? `, ${n} in parallel` : ""}`;
+    const main = s.p > 0
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Across the board at ${Number(s.p.toPrecision(3))} W</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="dt">${Number((s.p * total).toPrecision(3))} °C</span></div>
+          <div class="result-sub" data-res="sub">${ohm(total)} through ${n === 1 ? "one via" : `${n} vias`}${hit ? `, the fewest under ${ohm(state.target)}` : `; one via ${ohm(v.both)}`}</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">${n === 1 ? "One via" : `${n} vias in parallel`}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="theta">${ohm(total)}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    return `${main}
         <div class="field notation-box">
           ${row(n === 1 ? "Empty or filled" : `The ${n}, empty or filled`, fills, "fills")}
           ${row("One via: sleeve, hole", `${ohm(v.sleeve)}, ${state.fill === "air" ? "air (negligible)" : ohm(v.hole)}`, "parts")}
           ${row("Drill, before plating", len(s.d + 2 * s.b), "drill")}
-          ${dT}
         </div>`;
-    if (state.mode === "theta") {
-      return `${head(n === 1 ? "One via" : `${n} vias in parallel`, ohm(total), `one via ${ohm(v.both)}${n > 1 ? `, divided by ${n}` : ""}`, "theta")}${rows}`;
-    }
-    return `${head(`Vias for ${ohm(s.target)}`, `${n} vias`, `giving ${ohm(total)}; one via is ${ohm(v.both)}`, "n")}${rows}`;
+  }
+
+  // Puts each live box's value back, skipping the one being typed in.
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("n", fmt(state.si.n));
+    set("theta", err ? "" : fmt(Number((oneVia().both / state.si.n).toPrecision(3))));
   }
 
   function refresh() {
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
   }
 
-  const example = (mode, si, extra) => () => {
-    Object.assign(state, { mode }, extra || {});
+  const example = (si, extra, target) => () => {
+    Object.assign(state, extra || {});
     Object.assign(state.si, si);
+    state.target = target || null;
+    if (target) state.si.n = viasFor(target);
     paint();
   };
   useExamples([
     { title: "Fineline's via", note: "250 µm hole, 25 µm copper, 1.6 mm board: 193 °C/W, the air inside negligible.",
-      apply: example("theta", { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 1, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+      apply: example({ l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 1, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
     { title: "Nine under a 2 W pad", note: "Nine of them in parallel: 21.4 °C/W, so 2 W makes 42.9 °C across the board.",
-      apply: example("theta", { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+      apply: example({ l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
     { title: "Filled with solder", note: "Solder (57 W/m·K) in the holes as a second path: the nine drop to 16 °C/W.",
-      apply: example("theta", { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2 }, { fill: "solder", lUnit: "mm", bUnit: "µm" }) },
+      apply: example({ l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2 }, { fill: "solder", lUnit: "mm", bUnit: "µm" }) },
     { title: "Vias for 10 °C/W", note: "0.3 mm holes in a 1.6 mm board are 163 °C/W each: 17 of them reach 9.6 °C/W.",
-      apply: example("count", { l: 1.6e-3, d: 0.3e-3, b: 25e-6, target: 10, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+      apply: example({ l: 1.6e-3, d: 0.3e-3, b: 25e-6, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }, 10) },
     { title: "A 0.8 mm board", note: "Half the thickness, half the resistance: one via 96.4 °C/W.",
-      apply: example("theta", { l: 0.8e-3, d: 0.25e-3, b: 25e-6, n: 1, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+      apply: example({ l: 0.8e-3, d: 0.25e-3, b: 25e-6, n: 1, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
   ]);
 
   function paint() {
-    const m = state.mode, s = state.si;
-    const field = (key, label, unitHTML) => `
+    const s = state.si;
+    const field = (key, label, unitHTML, value) => `
         <div class="field">
           <label>${label}</label>
-          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / scale(key))}" />${unitHTML}</div>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value !== undefined ? value : fmt(s[key] / scale(key))}" />${unitHTML}</div>
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const fillSel = `<select id="tv-fill">${Object.entries(TV_FILLS).map(([k, [n]]) => `<option value="${k}" ${k === state.fill ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     const fields = `
       <div class="field-pair">${field("l", "Board", sel('data-lunit="1"', TV_LEN_UNITS, state.lUnit))}${field("d", "Hole, finished", fixed(state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', TV_PLATE_UNITS, state.bUnit))}</div>
-      <div class="field-pair"><div class="field"><label>Hole filled with</label>${fillSel}</div>${m === "theta" ? field("n", "Vias", fixed("")) : field("target", "Target θ", fixed("°C/W"))}${field("p", "Power", fixed("W"))}</div>`;
+      <div class="field-pair"><div class="field"><label>Hole filled with</label>${fillSel}</div>${field("p", "Power", fixed("W"))}</div>
+      <div class="field-pair">${field("n", "Vias", fixed(""))}${field("theta", "θ, all vias", fixed("°C/W"), "")}</div>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "How much heat vias carry through the board")}
 
       <div class="diagram-box">${diagram()}</div>
-
-      ${pillRow(Object.entries(TV_MODES), m, domain.bg)}
 
       ${fields}
 
@@ -10582,20 +10594,42 @@ function renderThermalVias(domain, tool, favId) {
 
       ${formulaSection(
         ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N,   ΔT = P × θN"],
-        "A thermal via is an ordinary plated hole used to carry heat from a hot part's pad through the board to copper on the other side. The heat flows along the copper sleeve: l is the board thickness, d the finished hole, b the plating, λ the thermal conductivity (copper 384 W/m·K). A filled hole is a second path beside the sleeve. Vias side by side are in parallel, so N of them divide θ by N. The result is in °C per watt, like the θ of a heatsink, and adds into the same chain."
+        "A thermal via is an ordinary plated hole used to carry heat from a hot part's pad through the board to copper on the other side. The heat flows along the copper sleeve: l is the board thickness, d the finished hole, b the plating, λ the thermal conductivity (copper 384 W/m·K). A filled hole is a second path beside the sleeve. Vias side by side are in parallel, so N of them divide θ by N: type the number of vias, or the θ you need and the vias follow. The result is in °C per watt, like the θ of a heatsink, and adds into the same chain."
       )}
       ${calcFooter("")}
     `;
 
-    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+    wireCalc(favId, paint);
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
-      el.oninput = () => { const k = el.dataset.key; state.si[k] = parseFloat(el.value) * scale(k); refresh(); };
+      const k = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (k === "theta") {
+          state.target = v;
+          if (v > 0 && !problem()) state.si.n = viasFor(v);
+        } else if (k === "n") {
+          state.target = null;
+          state.si.n = v;
+        } else {
+          state.si[k] = v * scale(k);
+          // A θ asked for still holds when the via itself changes.
+          if (state.target > 0 && !problem()) state.si.n = viasFor(state.target);
+        }
+        refresh();
+      };
+      // Leaving the θ box shows what the vias really give.
+      if (k === "theta") el.onblur = () => syncBoxes();
     });
-    document.getElementById("tv-fill").onchange = (e) => { state.fill = e.target.value; setPref(C, "fill", state.fill); paint(); };
+    document.getElementById("tv-fill").onchange = (e) => {
+      state.fill = e.target.value; setPref(C, "fill", state.fill);
+      if (state.target > 0) state.si.n = viasFor(state.target);
+      paint();
+    };
     // A unit change re-expresses the same value.
     app.querySelector("select[data-lunit]").onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); };
     app.querySelector("select[data-bunit]").onchange = (e) => { state.bUnit = e.target.value; setPref(C, "bUnit", state.bUnit); paint(); };
+    syncBoxes();
   }
 
   paint();

@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=2c984ff804" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=30132f01a1" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -7538,33 +7538,21 @@ The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
 <section class="tool" id="thermal-vias" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Vias &amp; layout</div>
   <h2>Thermal vias</h2>
-  <figure class="shot"><img src="manual/img/thermal-vias.jpg?h=dcbd3a0a4b" loading="lazy" alt="Thermal vias as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/thermal-vias.jpg?h=a06cded56c" loading="lazy" alt="Thermal vias as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The thermal resistance of plated vias carrying heat from a hot part's pad
 (an exposed-pad QFN, a regulator's tab, a MOSFET's drain) through the board
-to the copper on the other side, two ways, by pill:</p>
-<table>
-<thead>
-<tr>
-<th>Pill</th>
-<th>Inputs</th>
-<th>Output</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Resistance</td>
-<td>board thickness, finished hole, plating, fill, number of vias</td>
-<td>θ of the vias in parallel</td>
-</tr>
-<tr>
-<td>Vias needed</td>
-<td>the same, and a target θ</td>
-<td>how many vias reach it</td>
-</tr>
-</tbody>
-</table>
+to the copper on the other side. One screen, from the board thickness,
+the finished hole, the plating and the fill:</p>
 <ul>
+<li><strong>Vias and θ are two live boxes:</strong> type the number of vias and the θ box
+  shows their resistance; type the θ you need and the vias box shows the
+  fewest that reach it (rounded up, so the real θ is a little lower, shown
+  when you leave the box). The first version had them on two pills, and
+  the vias box of one had nothing to do with the target of the other;
+  Pierre asked why 9 vias became 20, and the boxes are now linked.</li>
+<li><strong>The big result</strong> is the temperature difference across the board at
+  the power you give, or the vias' θ when the power is 0.</li>
 <li><strong>The terms:</strong> l is the board thickness, d the finished hole (after
   plating), b the copper plating in the hole; the drill is d + 2b.</li>
 <li><strong>With and without filling:</strong> the hole can be empty (air), filled with
@@ -7575,7 +7563,7 @@ to the copper on the other side, two ways, by pill:</p>
 <li><strong>Units:</strong> board and hole in mm or mil, plating in µm or mil.</li>
 <li><strong>Drawing:</strong> the board in cross-section, the plated sleeve and its pads,
   the hole shaded when filled, the heat going through.</li>
-<li><strong>Remembered:</strong> the pill, the fill and the units.</li>
+<li><strong>Remembered:</strong> the fill and the units.</li>
 </ul>
 <p>The result is a θ in °C/W like any other in the thermal chain: it sits
 between the part's pad and the copper below, as θCS does in Heat sink
@@ -7631,17 +7619,21 @@ by side share the heat, so N of them in parallel divide θ by N.</p>
   advised here yet; they need a source that has been read.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>9 cases:
+<p>11 cases:
 - Fineline's via: 193 °C/W, air negligible, drill 0.3 mm;
-- nine in parallel: 21.4 °C/W, 42.9 °C across the board at 2 W;
+- nine in parallel: 21.4 °C/W in the θ box, 42.9 °C across the board at
+  2 W;
 - the nine empty, solder-filled and copper-filled: 21.4, 16 and
   6.55 °C/W;
-- solder in the hole: 572 °C/W beside the 193 °C/W sleeve;
+- solder in the hole: 572 °C/W beside the 193 °C/W sleeve, 32.1 °C at
+  2 W;
 - 0.3 mm holes are 163 °C/W each, so 17 reach 10 °C/W (9.6);
+- typing 10 °C/W in the θ box sets the vias to 20 (9.64 °C/W, 19.3 °C);
+- typing 4 vias sets the θ box to 48.2 °C/W;
 - a 0.8 mm board halves it, 96.4 °C/W;
 - a unit change keeps the board (1.6 mm reads 63 mil);
 - a fraction of a via is refused;
-- the remembered fill and pill.</p>
+- the remembered fill.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/pcb%3A2%3A0/thermal-vias">Open the tool</a></p>
 </section>
 <section class="tool" id="wire-gauge" style="--accent:#5BC4E0">

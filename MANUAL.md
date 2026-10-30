@@ -9902,13 +9902,17 @@ bigger heatsink.
 
 The thermal resistance of plated vias carrying heat from a hot part's pad
 (an exposed-pad QFN, a regulator's tab, a MOSFET's drain) through the board
-to the copper on the other side, two ways, by pill:
+to the copper on the other side. One screen, from the board thickness,
+the finished hole, the plating and the fill:
 
-| Pill | Inputs | Output |
-|---|---|---|
-| Resistance | board thickness, finished hole, plating, fill, number of vias | θ of the vias in parallel |
-| Vias needed | the same, and a target θ | how many vias reach it |
-
+- **Vias and θ are two live boxes:** type the number of vias and the θ box
+  shows their resistance; type the θ you need and the vias box shows the
+  fewest that reach it (rounded up, so the real θ is a little lower, shown
+  when you leave the box). The first version had them on two pills, and
+  the vias box of one had nothing to do with the target of the other;
+  Pierre asked why 9 vias became 20, and the boxes are now linked.
+- **The big result** is the temperature difference across the board at
+  the power you give, or the vias' θ when the power is 0.
 - **The terms:** l is the board thickness, d the finished hole (after
   plating), b the copper plating in the hole; the drill is d + 2b.
 - **With and without filling:** the hole can be empty (air), filled with
@@ -9919,7 +9923,7 @@ to the copper on the other side, two ways, by pill:
 - **Units:** board and hole in mm or mil, plating in µm or mil.
 - **Drawing:** the board in cross-section, the plated sleeve and its pads,
   the hole shaded when filled, the heat going through.
-- **Remembered:** the pill, the fill and the units.
+- **Remembered:** the fill and the units.
 
 The result is a θ in °C/W like any other in the thermal chain: it sits
 between the part's pad and the copper below, as θCS does in Heat sink
@@ -9980,16 +9984,20 @@ by side share the heat, so N of them in parallel divide θ by N.
 
 ### How it was checked
 
-9 cases:
+11 cases:
 - Fineline's via: 193 °C/W, air negligible, drill 0.3 mm;
-- nine in parallel: 21.4 °C/W, 42.9 °C across the board at 2 W;
+- nine in parallel: 21.4 °C/W in the θ box, 42.9 °C across the board at
+  2 W;
 - the nine empty, solder-filled and copper-filled: 21.4, 16 and
   6.55 °C/W;
-- solder in the hole: 572 °C/W beside the 193 °C/W sleeve;
+- solder in the hole: 572 °C/W beside the 193 °C/W sleeve, 32.1 °C at
+  2 W;
 - 0.3 mm holes are 163 °C/W each, so 17 reach 10 °C/W (9.6);
+- typing 10 °C/W in the θ box sets the vias to 20 (9.64 °C/W, 19.3 °C);
+- typing 4 vias sets the θ box to 48.2 °C/W;
 - a 0.8 mm board halves it, 96.4 °C/W;
 - a unit change keeps the board (1.6 mm reads 63 mil);
 - a fraction of a via is refused;
-- the remembered fill and pill.
+- the remembered fill.
 
 [↑ Index](#index)
