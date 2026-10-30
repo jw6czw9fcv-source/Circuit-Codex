@@ -563,6 +563,19 @@ div.tool-row { cursor: default; }
   color: var(--text);
   background: var(--card);
 }
+/* Heat sink sizing: how to find a heatsink, above the listed ones, and what
+   each listed one fits, under its order code. */
+.sink-hint {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  padding-bottom: 6px;
+}
+.sink-fits {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 /* A group heading in the list (Variable / Fixed regulators) needs the same,
    or it is painted white on the platform's white. */
 .field select optgroup {

@@ -10440,18 +10440,26 @@ function renderLinearRegulator(domain, tool, favId) {
 // Interface figures for a TO-220 on a 6-32 screw at 8 in-lb: Motorola AN-778
 // table 1, metal to metal 1.2 °C/W dry, 1.0 with grease; with a 2 mil mica
 // insulator 3.4 dry, 1.6 with grease; the picker offers these, other packages
-// and pads go in the field. Heatsinks: Fischer SK 104 38,1 STC is
-// 11 K/W (Fischer's product page); Aavid 577202B00000G is listed at
-// 24.4 °C/W by RS and Future Electronics (Aavid's own sheet not read).
+// and pads go in the field. Heatsinks, each from its maker's sheet, still
+// air: Wakefield-Vette 268-85CTE 19.73 °C/W (channel, built-in clip, 21.55 ×
+// 13.21 × 13.08 mm); Aavid 530614B00000G 16.70 at a 75 °C rise (channel,
+// 29.97 × 11.68 × 12.70 mm); Fischer SK 104 38,1 STC 11 K/W (clip, solder
+// pins, 34.9 × 12.7 × 38.1 mm); Aavid 563202B00000G 9.40 at a 75 °C rise
+// (staggered fins, board-mounted); Ohmite WA-DT2-101E 7 at 10 W (TO-220 or
+// TO-247, spring clip, solder pins).
 const HS_INTERFACES = [
   ["Grease", 1.0],
   ["Dry", 1.2],
-  ["Mica + grease", 1.6],
+  ["Mica+grease", 1.6],
   ["Mica, dry", 3.4],
 ];
+// [order code, θSA, what it fits and how it mounts]
 const HS_SINKS = [
-  ["Aavid 577202", 24.4],
-  ["SK 104 38.1 mm", 11],
+  ["Wakefield 268-85CTE", 19.73, "TO-220, clip built in, 22 × 13 × 13 mm"],
+  ["Aavid 530614B00000G", 16.7, "TO-220, channel, 30 × 12 × 13 mm"],
+  ["Fischer SK 104 38,1 STC", 11, "TO-220, clip, solder pins, 35 × 13 × 38 mm"],
+  ["Aavid 563202B00000G", 9.4, "TO-220, staggered fins, on the board"],
+  ["Ohmite WA-DT2-101E", 7, "TO-220 or TO-247, clip, solder pins"],
 ];
 const HS_MODES = { sink: "Sink needed", tj: "Junction", pmax: "Max power" };
 const HS_P_UNITS = { mW: 1e-3, W: 1 };
@@ -10537,17 +10545,25 @@ function renderHeatSink(domain, tool, favId) {
         return `${head("Heatsink needed", "none is enough", warn(`θJC and the interface alone take ${ohm(s.jc + s.cs)}, over the ${ohm(r.allowed)} allowed`))}
           <div class="field notation-box">${row("Most power, ideal sink", val((s.tj - s.ta) / (s.jc + s.cs), "W"), "pideal")}</div>`;
       }
-      const sinks = HS_SINKS.map(([n, sa]) => {
+      // Each sink with what it fits, so it can be looked up by its code.
+      const sinks = HS_SINKS.map(([n, sa, fits]) => {
         const tj = tjWith(sa);
-        return row(`${n}, ${ohm(sa)}`, sa <= r.sa ? `enough: Tj ${deg(tj)}` : warn(`too weak: Tj ${deg(tj)}`), `sink-${sa}`);
+        return row(`${n}, ${ohm(sa)}<span class="sink-fits">${fits}</span>`, sa <= r.sa ? `enough: Tj ${deg(tj)}` : warn(`too weak: Tj ${deg(tj)}`), `sink-${sa}`);
       }).join("");
       return `${head("Heatsink needed", `${ohm(r.sa)} or less`, `of ${ohm(r.allowed)} in all, θJC and θCS take ${ohm(s.jc + s.cs)}`, "sa")}
-        <div class="field notation-box">${sinks}</div>`;
+        <div class="field notation-box">
+          <div class="sink-hint" data-res="find">To find one, search a distributor's heatsinks for your part's package, rated ${ohm(r.sa)} or less in still air, or take one of these:</div>
+          ${sinks}
+        </div>`;
     }
+    // The picked heatsink, named with what it fits.
+    const chosen = HS_SINKS.find(([, sa]) => sa === s.sa);
+    const chosenRow = chosen ? row(chosen[0], chosen[2], "fits") : "";
     if (m === "tj") {
       const tc = s.ta + s.p * (s.cs + s.sa), ts = s.ta + s.p * s.sa;
       return `${head("Junction", deg(r.tj), r.tj > 125 ? warn("over 125 °C, the usual limit") : "under 125 °C, the usual limit", "tj")}
         <div class="field notation-box">
+          ${chosenRow}
           ${row("Case (tab)", deg(tc), "tc")}
           ${row("Heatsink", deg(ts), "ts")}
           ${row("Total, junction to air", ohm(s.jc + s.cs + s.sa), "total")}
@@ -10555,6 +10571,7 @@ function renderHeatSink(domain, tool, favId) {
     }
     return `${head(`Most power under ${deg(s.tj)}`, val(r.p, "W"), `through ${ohm(s.jc + s.cs + s.sa)} in all, from ${deg(s.ta)}`, "pmax")}
       <div class="field notation-box">
+        ${chosenRow}
         ${row("Heatsink at that power", deg(s.ta + r.p * s.sa), "ts")}
       </div>`;
   }
@@ -10570,9 +10587,9 @@ function renderHeatSink(domain, tool, favId) {
     paint();
   };
   useExamples([
-    { title: "7805: 3.6 W in a TO-220", note: "θJC 1.7 °C/W (tab), grease: a 25.1 °C/W sink or better; the 24.4 °C/W Aavid just does it.",
+    { title: "7805: 3.6 W in a TO-220", note: "θJC 1.7 °C/W (tab), grease: a 25.1 °C/W sink or better; even the smallest listed will do.",
       apply: example("sink", { p: 3.6, tj: 125, ta: 25, jc: 1.7, cs: 1.0 }, { pUnit: "W" }) },
-    { title: "Same, insulated, 50 °C box", note: "Mica and grease and a 50 °C enclosure leave 17.5 °C/W: the Aavid is too weak.",
+    { title: "Same, insulated, 50 °C box", note: "Mica and grease and a 50 °C box leave 17.5 °C/W: the small 19.7 °C/W clip-on is too weak.",
       apply: example("sink", { p: 3.6, tj: 125, ta: 50, jc: 1.7, cs: 1.6 }, { pUnit: "W" }) },
     { title: "7 W on an SK 104 38.1 mm", note: "1.7 + 1.0 + 11 °C/W from 25 °C: the junction at 121 °C.",
       apply: example("tj", { p: 7, ta: 25, jc: 1.7, cs: 1.0, sa: 11 }, { pUnit: "W" }) },
@@ -10591,9 +10608,9 @@ function renderHeatSink(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const pSel = `<select data-punit="1">${Object.keys(HS_P_UNITS).map((u) => `<option ${u === state.pUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
-    // A preset picker shows the entry whose value is in the field, or Custom.
-    const preset = (id, list, v) => `<select id="${id}"><option value="">Custom</option>${list.map(([n, t], i) => `<option value="${i}" ${t === v ? "selected" : ""}>${n} (${t})</option>`).join("")}</select>`;
-    let fields = "";
+    // A preset picker shows the entry whose value is in the field, or Custom;
+    // the value itself is in the field beside it.
+    const preset = (id, list, v) => `<select id="${id}"><option value="">Custom</option>${list.map(([n, t], i) => `<option value="${i}" ${t === v ? "selected" : ""}>${n}</option>`).join("")}</select>`;    let fields = "";
     fields += m === "pmax"
       ? `<div class="field-pair">${field("tj", "Tj limit", fixed("°C"))}${field("ta", "Ambient", fixed("°C"))}</div>`
       : m === "tj"

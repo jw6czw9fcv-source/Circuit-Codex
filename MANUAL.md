@@ -9774,13 +9774,19 @@ The thermal chain from a part's junction to the air, three ways, by pill:
     the tab or the bottom of the package (often written RθJC(bot));
   - **θCS**, case to sink: the interface, grease, a pad or mica;
   - **θSA**, sink to air: the heatsink's rating, usually in still air.
-- **Sink needed** also checks two real heatsinks against the answer and
-  gives the junction temperature each one would reach. When θJC and the
+- **Sink needed** says how to find a heatsink: search a distributor's
+  heatsinks for the part's package, rated at the answer or less in still
+  air. It then checks five real heatsinks, small to large (19.7 to
+  7 °C/W), each with its maker and order code and what it fits (package,
+  clip or channel, solder pins, size), and gives the junction temperature
+  each one would reach. When θJC and the
   interface alone use up the whole budget, it says no heatsink is enough
   and gives the most power an ideal one (0 °C/W) would allow.
 - **Junction** also gives the case (tab) and heatsink temperatures, which
   is what a finger or a thermocouple meets.
 - **Max power** also gives the heatsink temperature at that power.
+- **A picked heatsink** is named, with what it fits, in Junction and Max
+  power.
 - **Pickers:** the interface fills θCS with a TO-220 figure (grease, dry,
   mica with grease, dry mica); the heatsink fills θSA. Any value can be
   typed instead, and the picker then reads Custom.
@@ -9812,13 +9818,27 @@ mica, and 50 W in a TO-220.
   2 to 1 to 3 to 1 with an insulator.
 - **θJC in the examples:** TI LM340/LM7805 family (SNOSBT0L, September
   2016), thermal information table, TO-220 RθJC(bot) 1.7 °C/W.
-- **Heatsinks:**
-  - Fischer Elektronik SK 104 38,1 STC (34.9 × 12.7 mm, 38.1 mm long,
-    TO-220 clip-on): Rth 11 K/W, from Fischer's product page (a copy
-    downloaded from Arrow);
-  - Aavid (Boyd) 577202B00000G (TO-220 clip-on, 19 × 13 × 12.7 mm):
-    24.4 °C/W as listed by RS Components and Future Electronics; Aavid's
-    own datasheet was not read.
+- **Heatsinks,** each from its maker's own sheet (copies hosted by
+  distributors), in still air; the makers rate them at different points,
+  as noted:
+  - Wakefield-Vette 268-85CTE: "channel style TO-220 heat sink featuring
+    integrated mounting clip", 21.55 × 13.21 × 13.08 mm, 19.73 (the sheet
+    prints no unit or condition; taken as °C/W in still air, like the
+    others);
+  - Aavid (Boyd) 530614B00000G: TO-220, "channel style heat sink with wide
+    mounting surface", 29.97 × 11.68 × 12.70 mm, 16.70 °C/W "based on a
+    75 °C rise in natural convection";
+  - Fischer Elektronik SK 104 38,1 STC: TO-220 drilling, "transistor clip
+    mounting", solder pins, 34.9 × 12.7 mm, 38.1 mm long, Rth 11 K/W
+    (Fischer's product page, a copy downloaded from Arrow);
+  - Aavid (Boyd) 563202B00000G: TO-220, "space saving staggered fin heat
+    sink", board-mounted, 9.40 °C/W at a 75 °C rise;
+  - Ohmite WA-DT2-101E: "heat sink for TO-247 & TO-220", integral spring
+    clip, solderable feet, vertical through-hole, Rs-a 7 °C/W in natural
+    convection at 10 W.
+
+  An Aavid 577202B00000G (24.4 °C/W) was in the first version; it was
+  dropped because only distributor listings of it were read.
 
 ### Why the formulas are these
 
@@ -9852,11 +9872,13 @@ bigger heatsink.
 
 ### How it was checked
 
-10 cases:
+11 cases:
 - 3.6 W, 125 °C from 25 °C, θJC 1.7 and grease 1.0: 25.1 °C/W or better,
-  out of 27.8 in all; the Aavid gives 123 °C, the SK 104 74 °C;
-- mica and grease in a 50 °C box: 17.5 °C/W, the Aavid too weak at
-  150 °C, the SK 104 at 101 °C;
+  out of 27.8 in all; the Wakefield gives 106 °C, the SK 104 74 °C, and
+  the hint names 25.1 °C/W;
+- mica and grease in a 50 °C box: 17.5 °C/W, the Wakefield too weak at
+  133 °C, the Aavid 530614 at 122 °C, the SK 104 at 101 °C;
+- a picked heatsink is named with what it fits;
 - 7 W through 1.7 + 1.0 + 11 °C/W: junction 121 °C, tab 109 °C, sink
   102 °C;
 - from 50 °C through 16.1 °C/W in all: 4.66 W at most, the sink at 101 °C;
