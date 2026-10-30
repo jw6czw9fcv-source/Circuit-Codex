@@ -346,7 +346,7 @@ Then:
 - [ ] Microwave bands & frequencies
 - [ ] Amateur radio bands
 - [x] Linear regulator (LDO)
-- [ ] Zener voltage stabilization
+- [x] Zener voltage stabilization — built as Zener regulation (Active › Diodes), 2026-10-29
 - [ ] Zener + transistor stabilization
 - [ ] Inrush current limiter (NTC)
 - [ ] Constant current source/driver

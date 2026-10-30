@@ -382,6 +382,12 @@ const FORMULAS = [
     note: "Energizer's dual pulse: a light drain, then a heavier pulse. The resistance rises as the cell discharges and in the cold.",
   },
   {
+    tool: "Zener regulation",
+    domain: "active",
+    formulas: ["Rs ≤ (Vin min − Vz max) / (IL max + Iz min)", "Rs ≥ (Vin max − Vz min) / (Iz max + IL min)", "Pz = Vz × Iz"],
+    note: "Iz min: the knee current (IZT2 on Vishay sheets); Iz max: IZM or P / Vz. Kuphaldt, Lessons vol. III ch. 3.",
+  },
+  {
     tool: "Linear regulator",
     domain: "power",
     formulas: ["Vout = Vref (1 + R2/R1) + Iadj·R2", "P = (Vin − Vout) × I + Vin × Iq", "Tj = Ta + P × RθJA"],

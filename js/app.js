@@ -574,6 +574,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "c-rate") return renderCRate(domain, tool, favId);
   if (calcId === "internal-resistance") return renderInternalResistance(domain, tool, favId);
   if (calcId === "linear-regulator") return renderLinearRegulator(domain, tool, favId);
+  if (calcId === "zener-regulation") return renderZenerRegulation(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "via-current") return renderViaCurrent(domain, tool, favId);
@@ -10080,6 +10081,243 @@ function renderCRate(domain, tool, favId) {
     updateResults();
   }
 
+  paint();
+}
+
+// ---------- Zener regulation ----------
+// A zener in reverse breakdown across the load, fed through a series
+// resistor: the resistor drops the rest of the supply, and the zener takes
+// whatever current the load does not (Kuphaldt, Lessons in Electric Circuits
+// vol. III, ch. 3 "Zener diodes": 12.6 V from 45 V through 1 kΩ is 32.4 mA,
+// 408 mW in the zener, 1.05 W in the resistor; with a 500 Ω load, 7.2 mA is
+// left for the zener; with 100 kΩ the load cannot go below 38.889 kΩ). The
+// resistor must be small enough to keep the least zener current flowing at
+// the lowest supply and the heaviest load, and large enough to keep the
+// zener under its rating at the highest supply and the lightest load.
+// Parts: Vishay 1N4728A to 1N4761A (doc. 85816 rev. 2.7, Nov 2024): Vz
+// ± 5 %, IZT1, IZT2 (knee), ZZT, ZZK, IZM, Ptot 1300 mW with the leads at
+// ambient 4 mm from the body. Vishay BZX55 (doc. 85604 rev. 2.0, Nov 2024):
+// Vz min / nom / max, IZT1 5 mA (2.5 mA from 39 V), IZT2 1 mA (0.5),
+// ZZ, ZZK, Ptot 500 mW.
+// 1N47xxA rows: part number suffix, Vz, IZT1, IZT2, ZZT, ZZK, IZM.
+const ZR_1N47 = `28 3.3 76 1 10 400 276|29 3.6 69 1 10 400 252|30 3.9 64 1 9 400 234|31 4.3 58 1 9 400 217|32 4.7 53 1 8 500 193|33 5.1 49 1 7 550 178|34 5.6 45 1 5 600 162|35 6.2 41 1 2 700 146|36 6.8 37 1 3.5 700 133|37 7.5 34 0.5 4 700 121|38 8.2 31 0.5 4.5 700 110|39 9.1 28 0.5 5 700 100|40 10 25 0.25 7 700 91|41 11 23 0.25 8 700 83|42 12 21 0.25 9 700 76|43 13 19 0.25 10 700 69|44 15 17 0.25 14 700 61|45 16 15.5 0.25 16 700 57|46 18 14 0.25 20 750 50|47 20 12.5 0.25 22 750 45|48 22 11.5 0.25 23 750 41|49 24 10.5 0.25 25 750 38|50 27 9.5 0.25 35 750 34|51 30 8.5 0.25 40 1000 30|52 33 7.5 0.25 45 1000 27|53 36 7 0.25 50 1000 25|54 39 6.5 0.25 60 1000 23|55 43 6 0.25 70 1500 22|56 47 5.5 0.25 80 1500 19|57 51 5 0.25 95 1500 18|58 56 4.5 0.25 110 2000 16|59 62 4 0.25 125 2000 14|60 68 3.7 0.25 150 2000 13|61 75 3.3 0.25 175 2000 12`;
+// BZX55 rows: name suffix, Vz min, nom, max, ZZ, ZZK (IZT1 and IZT2 follow
+// the voltage: 5 and 1 mA, 2.5 and 0.5 mA from 39 V).
+const ZR_BZX55 = `2V4 2.28 2.4 2.56 85 600|2V7 2.5 2.7 2.9 85 600|3V0 2.8 3.0 3.2 85 600|3V3 3.1 3.3 3.5 85 600|3V6 3.4 3.6 3.8 85 600|3V9 3.7 3.9 4.1 85 600|4V3 4 4.3 4.6 75 600|4V7 4.4 4.7 5 60 600|5V1 4.8 5.1 5.4 35 550|5V6 5.2 5.6 6 25 450|6V2 5.8 6.2 6.6 10 200|6V8 6.4 6.8 7.2 8 150|7V5 7 7.5 7.9 7 50|8V2 7.7 8.2 8.7 7 50|9V1 8.5 9.1 9.6 10 50|10 9.4 10 10.6 15 70|11 10.4 11 11.6 20 70|12 11.4 12 12.7 20 90|13 12.4 13 14.1 26 110|15 13.8 15 15.6 30 110|16 15.3 16 17.1 40 170|18 16.8 18 19.1 50 170|20 18.8 20 21.2 55 220|22 20.8 22 23.3 55 220|24 22.8 24 25.6 80 220|27 25.1 27 28.9 80 220|30 28 30 32 80 220|33 31 33 35 80 220|36 34 36 38 80 220|39 37 39 41 90 500|43 40 43 46 90 600|47 44 47 50 110 700|51 48 51 54 125 700|56 52 56 60 135 1000|62 58 62 66 150 1000|68 64 68 72 200 1000|75 70 75 79 250 1500`;
+const ZR_PARTS = (() => {
+  const parts = {};
+  for (const r of ZR_1N47.split("|")) {
+    const [n, vz, izt, izk, zzt, zzk, izm] = r.split(" ").map(Number);
+    parts[`1n47${n}a`] = { label: `1N47${n}A`, group: "1N4728A–1N4761A, 1.3 W", vz, vzMin: vz * 0.95, vzMax: vz * 1.05, izt: izt / 1e3, izk: izk / 1e3, zzt, zzk, izMax: izm / 1e3, pz: 1.3 };
+  }
+  for (const r of ZR_BZX55.split("|")) {
+    const [n, ...v] = r.split(" ");
+    const [vzMin, vz, vzMax, zzt, zzk] = v.map(Number);
+    const hi = vz >= 39;
+    parts[`bzx55c${n.toLowerCase()}`] = { label: `BZX55C${n}`, group: "BZX55, 500 mW", vz, vzMin, vzMax, izt: hi ? 2.5e-3 : 5e-3, izk: hi ? 0.5e-3 : 1e-3, zzt, zzk, izMax: 0.5 / vz, pz: 0.5 };
+  }
+  parts.custom = { label: "Custom", group: "", custom: true };
+  return parts;
+})();
+
+function renderZenerRegulation(domain, tool, favId) {
+  const C = "zener-regulation";
+  const state = {
+    part: pref(C, "part", "1n4733a", Object.keys(ZR_PARTS)),
+    iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
+    rUnit: pref(C, "rUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
+    si: { vinMin: 9, vinMax: 12, ilMin: 0, ilMax: 20e-3, izMin: 1e-3, rs: 100, cvz: 5.1, cpz: 0.5 },
+    // The resistor box follows the suggestion until a value is typed.
+    rsTyped: false,
+  };
+  const P = () => ZR_PARTS[state.part];
+  // The zener in use: a listed part, or the custom one (taken as exact).
+  const Z = () => (P().custom
+    ? { vz: state.si.cvz, vzMin: state.si.cvz, vzMax: state.si.cvz, izMax: state.si.cpz / state.si.cvz, pz: state.si.cpz, zzt: 0 }
+    : P());
+  const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const scale = (k) => (k === "ilMin" || k === "ilMax" || k === "izMin" ? AMP_UNITS[state.iUnit] : k === "rs" ? DIVIDER_R_UNITS[state.rUnit] : 1);
+
+  // The resistor's window: the largest that still feeds the zener at the
+  // lowest supply and the heaviest load (with the highest Vz), and the
+  // smallest that keeps the zener under its current at the highest supply
+  // and the lightest load (with the lowest Vz).
+  function windowOf() {
+    const s = state.si, z = Z();
+    const rMax = (s.vinMin - z.vzMax) / (s.ilMax + s.izMin);
+    const rMin = (s.vinMax - z.vzMin) / (z.izMax + s.ilMin);
+    const pick = rMax >= rMin ? eSeriesBetween(rMin, rMax, "E24").pop() : undefined;
+    return { rMin, rMax, pick };
+  }
+
+  function problem() {
+    const s = state.si, z = Z();
+    if (P().custom && (!(s.cvz > 0) || !(s.cpz > 0))) return "Enter the zener voltage and its power rating.";
+    if (!(s.vinMin > 0) || !(s.vinMax >= s.vinMin)) return "Enter the supply's lowest and highest voltage, the highest at least the lowest.";
+    if (!(s.ilMin >= 0) || !(s.ilMax >= s.ilMin)) return "Enter the load's least and most current, the most at least the least.";
+    if (!(s.izMin > 0)) return "Enter the least zener current, above zero.";
+    if (!(s.vinMin > z.vzMax)) return `The lowest supply must be above the zener's ${val(z.vzMax, "V")}: a zener only takes away voltage.`;
+    if (!(s.rs > 0)) return "Enter the series resistor.";
+    return "";
+  }
+
+  function syncRs() {
+    if (state.rsTyped || problem() && !/series resistor/.test(problem())) return;
+    const w = windowOf();
+    if (w.pick) state.si.rs = w.pick;
+    const el = app.querySelector('input[data-key="rs"]');
+    if (el && el !== document.activeElement) el.value = fmt(state.si.rs / scale("rs"));
+  }
+
+  // The supply, the series resistor, the zener and the load to ground.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, t, c = part, a = "start") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const zig = (x1, x2, y) => { let d = `M${x1} ${y}`; const n = 6, w = (x2 - x1) / n; for (let i = 0; i < n; i++) d += ` L${x1 + w * (i + 0.5)} ${y + (i % 2 ? 5 : -5)}`; return `${d} L${x2} ${y}`; };
+    const zigV = (x, y1, y2) => { let d = `M${x} ${y1}`; const n = 6, h = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + h * (i + 0.5)}`; return `${d} L${x} ${y2}`; };
+    const s = state.si, z = Z();
+    const vin = s.vinMin === s.vinMax ? val(s.vinMin, "V") : `${Number(s.vinMin.toPrecision(3))}–${val(s.vinMax, "V")}`;
+    return `<svg width="320" height="118" viewBox="0 0 290 107" fill="none">
+      <path d="M30 26 H80 M120 26 H240 M160 26 V44 M160 74 V94 M220 26 V44 M220 74 V94 M30 94 H240" stroke="${wire}" stroke-width="1.6"/>
+      <circle cx="30" cy="26" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="30" cy="94" r="3" stroke="${wire}" stroke-width="1.4"/>
+      <circle cx="160" cy="26" r="2.5" fill="${wire}"/><circle cx="220" cy="26" r="2.5" fill="${wire}"/>
+      <circle cx="160" cy="94" r="2.5" fill="${wire}"/><circle cx="220" cy="94" r="2.5" fill="${wire}"/>
+      <path d="${zig(80, 120, 26)}" stroke="${calc}" stroke-width="1.6"/>
+      ${lbl(100, 46, `Rs ${s.rs > 0 ? formatOhms(s.rs) : "?"}`, calc, "middle")}
+      <path d="M150 66 H170 L160 52 Z" stroke="${part}" stroke-width="1.6" fill="none"/>
+      <path d="M146 55 L150 52 H170 L174 49" stroke="${part}" stroke-width="1.6"/>
+      <path d="M160 44 V52 M160 66 V74" stroke="${wire}" stroke-width="1.6"/>
+      ${lbl(140, 62, `${P().custom ? "" : P().label + " "}${val(z.vz, "V")}`, part, "end")}
+      <path d="${zigV(220, 44, 74)}" stroke="${part}" stroke-width="1.6"/>
+      ${lbl(230, 62, "load")}
+      ${lbl(30, 14, `Vin ${vin}`, grey, "start")}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, z = Z(), w = windowOf();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    const rangeTxt = `${formatOhms(Math.max(w.rMin, 0))} to ${formatOhms(w.rMax)}`;
+    const head = w.pick
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Series resistor, E24</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="pick">${formatOhms(w.pick)}</span></div>
+          <div class="result-sub" data-res="sub">any from ${rangeTxt}; the largest wastes least</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Series resistor</span></div>
+          <div class="result-value"><span class="num" data-res="pick">${w.rMax >= w.rMin ? "no E24 value" : "none works"}</span></div>
+          <div class="result-sub" data-res="sub">${w.rMax >= w.rMin ? `only ${rangeTxt}` : warn(`it must be under ${formatOhms(w.rMax)} to feed the load and over ${formatOhms(w.rMin)} to spare the zener: a bigger zener, or a narrower supply or load range`)}</div>
+        </div>`;
+    // The resistor in use, at the two extremes.
+    const r = s.rs;
+    const izLow = (s.vinMin - z.vzMax) / r - s.ilMax;          // lowest supply, heaviest load
+    const izHigh = (s.vinMax - z.vzMin) / r - s.ilMin;         // highest supply, lightest load
+    const pz = z.vzMax * Math.max(izHigh, 0), pr = (s.vinMax - z.vzMin) ** 2 / r;
+    const izTxt = Math.abs(izHigh - izLow) < 1e-12 ? val(izHigh, "A") : `${val(Math.max(izLow, 0), "A")} to ${val(izHigh, "A")}`;
+    // The most load this resistor feeds at the lowest supply, keeping the
+    // least zener current (Kuphaldt's minimum load resistance).
+    const ilFeed = (s.vinMin - z.vzMax) / r - s.izMin;
+    const lowOk = izLow >= s.izMin * (1 - 1e-9), highOk = izHigh <= z.izMax * (1 + 1e-9);
+    // ZZT is the slope at the test current; near the knee it is ZZK, steeper.
+    const shift = z.zzt ? `, plus about ${val(z.zzt * Math.max(izHigh - Math.max(izLow, 0), 0), "V")} over that current range (ZZT ${z.zzt} Ω; more near the knee, ZZK ${z.zzk} Ω)` : "";
+    return `${head}
+        <div class="field notation-box">
+          ${row(`Zener current with ${formatOhms(r)}`, !lowOk ? warn(`${izTxt}: under ${val(s.izMin, "A")} at the lowest supply and heaviest load, it drops out`) : !highOk ? warn(`${izTxt}: over its ${val(z.izMax, "A")} at the highest supply and lightest load`) : izTxt, "iz")}
+          ${row("Most load it feeds", ilFeed > 0 ? `${val(ilFeed, "A")}, a load of ${formatOhms(z.vzMax / ilFeed)} or more` : warn(`none: even with no load the zener gets under ${val(s.izMin, "A")}`), "feed")}
+          ${row("Zener heat, worst", pz > z.pz ? warn(`${val(pz, "W")}, over its ${val(z.pz, "W")}`) : `${val(pz, "W")} of its ${val(z.pz, "W")}`, "pz")}
+          ${row("Resistor heat, worst", val(pr, "W"), "pr")}
+          ${row("Output", z.vzMin === z.vzMax ? `${val(z.vz, "V")}${shift}` : `${val(z.vzMin, "V")} to ${val(z.vzMax, "V")} (Vz tolerance)${shift}`, "vout")}
+        </div>`;
+  }
+
+  function refresh() {
+    syncRs();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (part, si, extra, typed) => () => {
+    Object.assign(state, { part }, extra || {});
+    Object.assign(state.si, si);
+    state.rsTyped = !!typed;
+    paint();
+  };
+  useExamples([
+    { title: "Kuphaldt: 12.6 V from 45 V", note: "Through 1 kΩ, no load: 32.4 mA, 408 mW in the zener, 1.05 W in the resistor.",
+      apply: example("custom", { cvz: 12.6, cpz: 1, vinMin: 45, vinMax: 45, ilMin: 0, ilMax: 0, izMin: 1e-3, rs: 1000 }, { iUnit: "mA", rUnit: "kΩ" }, true) },
+    { title: "Same, with a 500 Ω load", note: "The load takes 25.2 mA of the 32.4 mA: 7.2 mA is left for the zener.",
+      apply: example("custom", { cvz: 12.6, cpz: 1, vinMin: 45, vinMax: 45, ilMin: 25.2e-3, ilMax: 25.2e-3, izMin: 1e-3, rs: 1000 }, { iUnit: "mA", rUnit: "kΩ" }, true) },
+    { title: "5.1 V, 20 mA from 9–12 V", note: "1N4733A: 160 Ω (E24) still leaves 2.8 mA for the zener at 9 V; at 12 V it heats 239 mW.",
+      apply: example("1n4733a", { vinMin: 9, vinMax: 12, ilMin: 0, ilMax: 20e-3, izMin: 1e-3 }, { iUnit: "mA", rUnit: "Ω" }) },
+    { title: "A BZX55 for 5 mA", note: "BZX55C5V1 from 11–13 V through 910 Ω: the 500 mW zener heats under 50 mW.",
+      apply: example("bzx55c5v1", { vinMin: 11, vinMax: 13, ilMin: 0, ilMax: 5e-3, izMin: 1e-3 }, { iUnit: "mA", rUnit: "Ω" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    syncRs();
+    const field = (key, label, unitHTML) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / scale(key))}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const iSel = (n) => `<select data-iunit="${n}">${Object.keys(AMP_UNITS).map((u) => `<option ${u === state.iUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const rSel = `<select data-runit="1">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${u === state.rUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const groups = {};
+    for (const [k, p] of Object.entries(ZR_PARTS)) (groups[p.group] = groups[p.group] || []).push(`<option value="${k}" ${k === state.part ? "selected" : ""}>${p.custom ? p.label : `${p.label}, ${p.vz} V`}</option>`);
+    const partSel = `<select id="zr-part">${Object.entries(groups).map(([g, o]) => (g ? `<optgroup label="${g}">${o.join("")}</optgroup>` : o.join(""))).join("")}</select>`;
+    const z = Z();
+    let fields = `<div class="field-pair"><div class="field"><label>Zener</label>${partSel}</div>${field("izMin", "Least zener current", iSel(1))}</div>`;
+    if (P().custom) fields += `<div class="field-pair">${field("cvz", "Vz", fixed("V"))}${field("cpz", "Power rating", fixed("W"))}</div>`;
+    fields += `
+      <div class="field-pair">${field("vinMin", "Supply, lowest", fixed("V"))}${field("vinMax", "Supply, highest", fixed("V"))}</div>
+      <div class="field-pair">${field("ilMin", "Load, least", iSel(2))}${field("ilMax", "Load, most", iSel(3))}${field("rs", "Rs you use", rSel)}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The series resistor for a zener and its load")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Rs ≤ (Vin min − Vz max) / (IL max + Iz min)", "Rs ≥ (Vin max − Vz min) / (Iz max + IL min)", "Pz = Vz × Iz,   PR = (Vin − Vz)² / Rs"],
+        "A zener diode, reverse-biased, holds its zener voltage Vz across the load by taking whatever current the load leaves. The series resistor Rs drops the rest of the supply. Too large, and at the lowest supply and the heaviest load nothing is left for the zener: below its least current (the knee, Iz min) it stops regulating. Too small, and at the highest supply and the lightest load the zener takes too much current and overheats (Iz max, from its power rating). Any standard value between the two works; the largest wastes the least. ZZT, the zener's dynamic resistance, moves the output a little with the current."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key;
+        state.si[k] = parseFloat(el.value) * scale(k);
+        if (k === "rs") state.rsTyped = true;
+        refresh();
+      };
+    });
+    document.getElementById("zr-part").onchange = (e) => {
+      state.part = e.target.value; setPref(C, "part", state.part);
+      // A listed part brings its knee current as the least zener current.
+      if (!P().custom) state.si.izMin = P().izk;
+      paint();
+    };
+    // A unit change re-expresses the same values; the three current boxes
+    // share one unit.
+    app.querySelectorAll("select[data-iunit]").forEach((el) => { el.onchange = () => { state.iUnit = el.value; setPref(C, "iUnit", el.value); paint(); }; });
+    app.querySelector("select[data-runit]").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
+  }
+
+  if (!P().custom) state.si.izMin = P().izk;
   paint();
 }
 

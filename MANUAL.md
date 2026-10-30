@@ -46,6 +46,7 @@ will key on, since that is the id the app already holds for each tool.
 ### Active & semiconductor devices
 
 - Diodes → [Diode forward voltage](#diode-forward-voltage)
+- Diodes → [Zener regulation](#zener-regulation)
 - Diodes → [LED series resistor](#led-series-resistor)
 - Transistors (BJT) → [BJT biasing](#bjt-biasing)
 - Transistors (BJT) → [BJT as a switch](#bjt-as-a-switch)
@@ -10132,5 +10133,119 @@ that point; the nearest case is there to show how far.
 - mil turns every length and area to mil (122 mil, 168 mil²);
 - every length's picker switches them all;
 - the remembered copper weight and rise.
+
+[↑ Index](#index)
+
+---
+
+<a id="zener-regulation"></a>
+## Zener regulation
+
+`calc: zener-regulation` · Active & semiconductor devices › Diodes
+(also found as Zener voltage stabilization)
+
+### What it computes
+
+The series resistor for a zener shunt regulator, on one screen:
+
+- **Inputs:** the zener (a 1N4728A–1N4761A, 1.3 W, or a BZX55, 500 mW,
+  each with its datasheet figures, or a custom Vz and power rating), the
+  least zener current, the supply's lowest and highest voltage, the
+  load's least and most current, and the resistor you use.
+- **The big result:** the largest E24 value inside the window that works,
+  with the window itself: under (Vin min − Vz max) / (IL max + Iz min) so
+  the zener still gets its least current at the lowest supply and the
+  heaviest load, and over (Vin max − Vz min) / (Iz max + IL min) so it
+  stays within its current at the highest supply and the lightest load.
+  The largest wastes the least. When the window is empty it says so, and
+  why.
+- **The resistor you use** follows that value until you type your own.
+  For it, the tool gives:
+  - the zener current at the two extremes, flagged under the least
+    current (the zener drops out) or over Iz max;
+  - the most load it can feed while keeping the least zener current, as a
+    current and as the smallest load resistance;
+  - the zener's and the resistor's heat at the worst case;
+  - the output: the zener's tolerance band, plus ZZT times the current
+    range.
+- **The least zener current** starts at the part's knee test current,
+  IZT2 (1, 0.5 or 0.25 mA on the 1N47xxA, 1 or 0.5 mA on the BZX55); it
+  can be raised for better regulation.
+- **Units:** currents in µA, mA or A (one unit for all three), the
+  resistor in Ω, kΩ or MΩ.
+- **Drawing:** the supply, Rs, the reverse-biased zener and the load.
+- **Remembered:** the part and the units.
+
+Examples: Kuphaldt's 12.6 V from 45 V through 1 kΩ, the same with a 500 Ω
+load, 5.1 V at 20 mA from 9–12 V with a 1N4733A, and a BZX55C5V1 for
+5 mA.
+
+### Source
+
+- **Tony R. Kuphaldt, Lessons in Electric Circuits, vol. III
+  (Semiconductors), ch. 3, "Zener diodes"** (read, ibiblio HTML): the
+  zener is reverse-biased; "zener diodes regulate voltage by acting as
+  complementary loads"; worked example 12.6 V, 45 V, 1 kΩ: 32.4 mA, the
+  zener 408 mW, the resistor 1.05 W; with a 500 Ω load "this leaves
+  7.2 mA of current through the zener diode"; with 100 kΩ the regulator
+  only works down to a 38.889 kΩ load; Vz "may be anywhere from 5 percent
+  to 10 percent in error".
+- **Vishay 1N4728A to 1N4761A, document 85816 rev. 2.7, 7 Nov 2024**
+  (read): Vz 3.3 to 75 V, ± 5 %; Ptot 1300 mW "provided that leads at a
+  distance of 4 mm from case are kept at ambient temperature"; per part
+  IZT1, IZT2, ZZT at IZT1, ZZK at IZT2 and the regulator current IZM
+  (e.g. 1N4733A: 5.1 V, 49 mA, 1 mA, 7 Ω, 550 Ω, 178 mA). IZM × Vz comes
+  to about 0.9 W, under the 1.3 W Ptot: the tool checks the current
+  against IZM and the heat against Ptot, so a design can pass one and not
+  the other, as the sheet's own figures do.
+- **Vishay BZX55, document 85604 rev. 2.0, 7 Nov 2024** (read): Vz 2.4 to
+  75 V with min / nom / max per part, IZT1 5 mA (2.5 mA from 39 V), IZT2
+  1 mA (0.5 mA), ZZ, ZZK, Ptot 500 mW (4 mm leads at 25 °C); Iz max is
+  taken as Ptot / Vz.
+
+### Why the formulas are these
+
+    Rs ≤ (Vin min − Vz max) / (IL max + Iz min)
+    Rs ≥ (Vin max − Vz min) / (Iz max + IL min)
+    Iz = (Vin − Vz) / Rs − IL,   Pz = Vz × Iz,   PR = (Vin − Vz)² / Rs
+
+The resistor carries the load's current and the zener's together, and
+drops what the supply has over Vz. At the lowest supply and the heaviest
+load the least current reaches the zener: the resistor must be small
+enough that it is still above the knee. At the highest supply and the
+lightest load the most reaches it: the resistor must be large enough to
+keep it within its rating. Taking Vz at the edge of its tolerance that
+makes each case worst keeps the window honest.
+
+### Assumptions and limits
+
+- **ZZT** is the zener's dynamic resistance at its test current; near
+  the knee it is ZZK, much higher, so the output moves more there than
+  the tool's figure.
+- **The power ratings** assume the leads held at ambient 4 mm from the
+  body; on a board, a zener runs hotter and must be derated (Vishay's
+  figure 1).
+- **The supply's ripple** is part of its range: enter the lowest valley
+  and the highest peak.
+- **For more current,** a zener feeding a transistor (Zener + transistor
+  stabilization, planned) or a linear regulator is the better circuit.
+
+### How it was checked
+
+15 cases:
+- 1N4733A, 9–12 V, 0–20 mA: 40.2 to 173.6 Ω, E24 160 Ω; 2.78 to
+  44.7 mA, 239 mW in the zener, 320 mW in the resistor;
+- its output: 4.84 to 5.35 V, plus about 294 mV over that range;
+- Kuphaldt's 1 kΩ: 32.4 mA, 408 mW, 1.05 W, 12.6 V;
+- Kuphaldt's 500 Ω load: 7.2 mA left for the zener;
+- 1 kΩ from 45 V feeds 31.4 mA keeping 1 mA: a load of 401.3 Ω or more;
+- Kuphaldt's 100 kΩ: 324 µA, too little for a 1 mA knee;
+- BZX55C5V1 from 11–13 V at 0–5 mA: 910 Ω, 48.7 mW;
+- too large a resistor starves the zener; too small passes IZM (while
+  under Ptot); a BZX55 at 22 Ω goes over 500 mW;
+- a supply range too wide leaves no resistor;
+- a supply under the zener voltage is refused;
+- picking a part brings its knee current (1N4740A: 0.25 mA);
+- the remembered part.
 
 [↑ Index](#index)
