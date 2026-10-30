@@ -575,6 +575,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "internal-resistance") return renderInternalResistance(domain, tool, favId);
   if (calcId === "linear-regulator") return renderLinearRegulator(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
+  if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "battery-sizes") return renderBatterySizes(domain, tool, favId);
   if (calcId === "button-cells") return renderButtonCells(domain, tool, favId);
   if (calcId === "rc-charge") return renderRcCharge(domain, tool, favId);
@@ -10427,6 +10428,176 @@ function renderLinearRegulator(domain, tool, favId) {
   }
 
   if (P().pkgs.length) setPackage(Math.min(state.pkg, P().pkgs.length - 1));
+  paint();
+}
+
+// ---------- Thermal vias ----------
+// A plated via conducts heat through its copper sleeve: θ = l / (λ × A), with
+// A = π (d + b) b for a finished hole d and plating b, l the board thickness
+// and λCu = 384 W/m·K (Fineline, "Temperature Management for Printed Circuit
+// Boards", A. Schweitzer, November 2021: 250 µm, 25 µm, 1.6 mm gives
+// 193 K/W; the air in the hole, λ 0.026, in parallel, 192.98). Whatever
+// fills the hole is a second path in parallel, λ × π (d/2)²; TTM ANN-8804
+// rev B gives SAC solder 57 W/m·K. N vias in parallel divide θ by N
+// (Fineline); the FR-4 between them is left out (Fineline: "2-3 K/W per via"
+// lower if counted).
+const TV_K_CU = 384;
+const TV_FILLS = { air: ["Empty", 0.026], solder: ["Solder", 57], copper: ["Copper", TV_K_CU] };
+const TV_MODES = { theta: "Resistance", count: "Vias needed" };
+const TV_LEN_UNITS = { mm: 1e-3, mil: 25.4e-6 };
+const TV_PLATE_UNITS = { "µm": 1e-6, mil: 25.4e-6 };
+
+function renderThermalVias(domain, tool, favId) {
+  const C = "thermal-vias";
+  const state = {
+    mode: pref(C, "mode", "theta", Object.keys(TV_MODES)),
+    fill: pref(C, "fill", "air", Object.keys(TV_FILLS)),
+    lUnit: pref(C, "lUnit", "mm", Object.keys(TV_LEN_UNITS)),
+    bUnit: pref(C, "bUnit", "µm", Object.keys(TV_PLATE_UNITS)),
+    si: { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, target: 10, p: 2 },
+  };
+  const ohm = (r) => `${Number(r.toPrecision(3))} °C/W`;
+  const len = (v) => `${Number((v / TV_LEN_UNITS[state.lUnit]).toPrecision(3))} ${state.lUnit}`;
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(6)) : "");
+  const scale = (k) => (k === "l" || k === "d" ? TV_LEN_UNITS[state.lUnit] : k === "b" ? TV_PLATE_UNITS[state.bUnit] : 1);
+
+  // One via: the copper sleeve and the filled hole as two parallel paths.
+  function oneVia(fill = state.fill) {
+    const { l, d, b } = state.si;
+    const sleeve = l / (TV_K_CU * Math.PI * (d + b) * b);
+    const hole = l / (TV_FILLS[fill][1] * Math.PI * (d / 2) ** 2);
+    return { sleeve, hole, both: 1 / (1 / sleeve + 1 / hole) };
+  }
+
+  function problem() {
+    const s = state.si;
+    if (!(s.l > 0) || !(s.d > 0) || !(s.b > 0)) return "Enter the board thickness, the finished hole and the plating, all above zero.";
+    if (state.mode === "theta" && !(s.n >= 1 && Number.isInteger(s.n))) return "Enter a whole number of vias, one or more.";
+    if (state.mode === "count" && !(s.target > 0)) return "Enter the thermal resistance to reach.";
+    return "";
+  }
+
+  // A plated via in cross-section: the board, the pads, the sleeve and what
+  // fills the hole, with the heat going through it.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const s = state.si;
+    const lbl = (x, y, t, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const fillTone = state.fill === "copper" ? part : state.fill === "solder" ? grey : null;
+    const plate = `${Number((s.b / TV_PLATE_UNITS[state.bUnit]).toPrecision(3))} ${state.bUnit}`;
+    const err = problem();
+    const theta = err ? "" : state.mode === "theta" ? oneVia().both / s.n : oneVia().both;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="70" y="34" width="180" height="50" stroke="${wire}" stroke-width="1.4"/>
+      ${fillTone ? `<rect x="148" y="34" width="24" height="50" fill="${fillTone}" fill-opacity="0.35"/>` : ""}
+      <path d="M146 34 V84 M174 34 V84" stroke="${part}" stroke-width="4"/>
+      <path d="M126 34 H146 M174 34 H194 M126 84 H146 M174 84 H194" stroke="${part}" stroke-width="3"/>
+      <path d="M160 6 V26 M155 21 L160 27 L165 21 M160 90 V108 M155 103 L160 109 L165 103" stroke="${calc}" stroke-width="1.6"/>
+      ${lbl(152, 16, "heat", calc, "end")}
+      <path d="M58 34 V84 M54 34 H62 M54 84 H62" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(52, 63, len(s.l), grey, "end")}
+      ${lbl(200, 22, `d ${len(s.d)}`, part, "start")}
+      <path d="M148 30 H172" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(180, 63, `b ${plate}`, part, "start")}
+      ${lbl(248, 104, state.mode === "theta" ? `${Number(s.n)} × ${err ? "?" : ohm(oneVia().both)}` : `θ1 ${err ? "?" : ohm(theta)}`, calc, "end")}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, v = oneVia();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const head = (label, value, sub, key) => `
+        <div class="result-field">
+          <div class="result-head"><span class="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="${key}">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const n = state.mode === "theta" ? s.n : Math.ceil(v.both / s.target - 1e-9);
+    const total = v.both / n;
+    const dT = s.p > 0 ? row(`Across the board at ${Number(s.p.toPrecision(3))} W`, `${Number((s.p * total).toPrecision(3))} °C`, "dt") : "";
+    // The same vias empty and filled, side by side.
+    const fills = Object.entries(TV_FILLS).map(([k, [name]]) => `${name.toLowerCase()} ${ohm(oneVia(k).both / n)}`).join(" · ");
+    const rows = `
+        <div class="field notation-box">
+          ${row(n === 1 ? "Empty or filled" : `The ${n}, empty or filled`, fills, "fills")}
+          ${row("One via: sleeve, hole", `${ohm(v.sleeve)}, ${state.fill === "air" ? "air (negligible)" : ohm(v.hole)}`, "parts")}
+          ${row("Drill, before plating", len(s.d + 2 * s.b), "drill")}
+          ${dT}
+        </div>`;
+    if (state.mode === "theta") {
+      return `${head(n === 1 ? "One via" : `${n} vias in parallel`, ohm(total), `one via ${ohm(v.both)}${n > 1 ? `, divided by ${n}` : ""}`, "theta")}${rows}`;
+    }
+    return `${head(`Vias for ${ohm(s.target)}`, `${n} vias`, `giving ${ohm(total)}; one via is ${ohm(v.both)}`, "n")}${rows}`;
+  }
+
+  function refresh() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (mode, si, extra) => () => {
+    Object.assign(state, { mode }, extra || {});
+    Object.assign(state.si, si);
+    paint();
+  };
+  useExamples([
+    { title: "Fineline's via", note: "250 µm hole, 25 µm copper, 1.6 mm board: 193 °C/W, the air inside negligible.",
+      apply: example("theta", { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 1, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+    { title: "Nine under a 2 W pad", note: "Nine of them in parallel: 21.4 °C/W, so 2 W makes 42.9 °C across the board.",
+      apply: example("theta", { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+    { title: "Filled with solder", note: "Solder (57 W/m·K) in the holes as a second path: the nine drop to 16 °C/W.",
+      apply: example("theta", { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2 }, { fill: "solder", lUnit: "mm", bUnit: "µm" }) },
+    { title: "Vias for 10 °C/W", note: "0.3 mm holes in a 1.6 mm board are 163 °C/W each: 17 of them reach 9.6 °C/W.",
+      apply: example("count", { l: 1.6e-3, d: 0.3e-3, b: 25e-6, target: 10, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+    { title: "A 0.8 mm board", note: "Half the thickness, half the resistance: one via 96.4 °C/W.",
+      apply: example("theta", { l: 0.8e-3, d: 0.25e-3, b: 25e-6, n: 1, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+  ]);
+
+  function paint() {
+    const m = state.mode, s = state.si;
+    const field = (key, label, unitHTML) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / scale(key))}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const fillSel = `<select id="tv-fill">${Object.entries(TV_FILLS).map(([k, [n]]) => `<option value="${k}" ${k === state.fill ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const fields = `
+      <div class="field-pair">${field("l", "Board", sel('data-lunit="1"', TV_LEN_UNITS, state.lUnit))}${field("d", "Hole, finished", fixed(state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', TV_PLATE_UNITS, state.bUnit))}</div>
+      <div class="field-pair"><div class="field"><label>Hole filled with</label>${fillSel}</div>${m === "theta" ? field("n", "Vias", fixed("")) : field("target", "Target θ", fixed("°C/W"))}${field("p", "Power", fixed("W"))}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "How much heat vias carry through the board")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.entries(TV_MODES), m, domain.bg)}
+
+      ${fields}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N,   ΔT = P × θN"],
+        "A thermal via is an ordinary plated hole used to carry heat from a hot part's pad through the board to copper on the other side. The heat flows along the copper sleeve: l is the board thickness, d the finished hole, b the plating, λ the thermal conductivity (copper 384 W/m·K). A filled hole is a second path beside the sleeve. Vias side by side are in parallel, so N of them divide θ by N. The result is in °C per watt, like the θ of a heatsink, and adds into the same chain."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => { const k = el.dataset.key; state.si[k] = parseFloat(el.value) * scale(k); refresh(); };
+    });
+    document.getElementById("tv-fill").onchange = (e) => { state.fill = e.target.value; setPref(C, "fill", state.fill); paint(); };
+    // A unit change re-expresses the same value.
+    app.querySelector("select[data-lunit]").onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); };
+    app.querySelector("select[data-bunit]").onchange = (e) => { state.bUnit = e.target.value; setPref(C, "bUnit", state.bUnit); paint(); };
+  }
+
   paint();
 }
 

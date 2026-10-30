@@ -408,6 +408,12 @@ const FORMULAS = [
 
   // ---- PCB ----
   {
+    tool: "Thermal vias",
+    domain: "pcb",
+    formulas: ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N"],
+    note: "l board thickness, d finished hole, b plating, λCu 384 W/m·K, SAC solder 57 (Fineline 2021, TTM ANN-8804).",
+  },
+  {
     tool: "Wire sizing",
     domain: "pcb",
     formulas: ["AWG: d(mm) = 0.127 × 92^((36 − n) / 39)", "R = 2L × (1/58 Ω·mm²/m) / A", "Vdrop = I × R"],

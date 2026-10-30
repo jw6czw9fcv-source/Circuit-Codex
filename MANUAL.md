@@ -106,6 +106,7 @@ will key on, since that is the id the app already holds for each tool.
 ### PCB & interconnect
 
 - Trace current & resistance → [Trace width](#trace-width)
+- Vias & layout → [Thermal vias](#thermal-vias)
 - Cabling → [Wire sizing](#wire-gauge)
 - Cabling → [Wire & cable colors](#cable-colors)
 - Electrical safety → [IP ratings](#ip-ratings)
@@ -9887,5 +9888,108 @@ bigger heatsink.
 - a unit change keeps the power (3.6 W reads 3600 mW);
 - a junction limit under the ambient is refused;
 - the remembered pill.
+
+[↑ Index](#index)
+
+---
+
+<a id="thermal-vias"></a>
+## Thermal vias
+
+`calc: thermal-vias` · PCB & interconnect › Vias & layout
+
+### What it computes
+
+The thermal resistance of plated vias carrying heat from a hot part's pad
+(an exposed-pad QFN, a regulator's tab, a MOSFET's drain) through the board
+to the copper on the other side, two ways, by pill:
+
+| Pill | Inputs | Output |
+|---|---|---|
+| Resistance | board thickness, finished hole, plating, fill, number of vias | θ of the vias in parallel |
+| Vias needed | the same, and a target θ | how many vias reach it |
+
+- **The terms:** l is the board thickness, d the finished hole (after
+  plating), b the copper plating in the hole; the drill is d + 2b.
+- **With and without filling:** the hole can be empty (air), filled with
+  solder, or filled with copper; whichever is picked, a row gives the same
+  vias empty, solder-filled and copper-filled side by side.
+- **Also:** one via's sleeve and hole resistances, the drill size, and the
+  temperature difference across the board at a power you give.
+- **Units:** board and hole in mm or mil, plating in µm or mil.
+- **Drawing:** the board in cross-section, the plated sleeve and its pads,
+  the hole shaded when filled, the heat going through.
+- **Remembered:** the pill, the fill and the units.
+
+The result is a θ in °C/W like any other in the thermal chain: it sits
+between the part's pad and the copper below, as θCS does in Heat sink
+sizing.
+
+Examples: Fineline's single via, nine of them under a 2 W pad, the same
+filled with solder, the vias needed for 10 °C/W, and a 0.8 mm board.
+
+### Source
+
+- **Fineline, "Temperature Management for Printed Circuit Boards", Albert
+  Schweitzer, November 2021** (read): θ = l / (λ × A) with
+  A = π (d + b) b; with b = 25 µm, d = 250 µm, l = 1.6 mm and
+  λCu = 384 W/m·K, "a single thermal via has a thermal resistance of
+  193 K/W"; the air in the hole (λ 0.026 W/m·K) in parallel gives
+  192.98 K/W, "negligible"; a via array is the single via's value divided
+  by the number of vias; counting the FR-4 between vias lowers it by "2-3
+  K/W per via". Its table of conductivities gives copper ≈ 400, solder
+  (SnCuNi) ≈ 64, FR-4 ≈ 0.2 to 0.9 W/m·K.
+- **TTM Technologies ANN-8804 rev B, "Power Handling Considerations for SMD
+  Terminations, Attenuators and Resistors"** (read): the board's thermal
+  resistance is the reciprocal sum of the dielectric, the via plating and
+  the via fill, each θ = L / (kA); "typical SAC solder has a thermal
+  conductivity of 57 W/m-K"; copper fill lowers it "by a large factor",
+  most via-fill pastes barely help. Its table 3 (one 0.035" via, 1 mil
+  plating, in 0.1" × 0.1" of board: 27.8 °C/W empty, 13.8 solder, 3.5
+  copper) does not print the board thickness or the conductivities, so it
+  is not a check case; with a 0.032" board the same model lands within a
+  few percent of it.
+- **Not read:** a Micron study of thermal via size and spacing (mentioned
+  by Pierre, not yet found); TI SPRADB7, whose via formula did not survive
+  text extraction.
+
+### Why the formulas are these
+
+    θsleeve = l / (λCu × π (d + b) b)
+    θhole = l / (λfill × π (d/2)²)
+    θvia = θsleeve ∥ θhole,   θN = θvia / N,   ΔT = P × θN
+
+Heat conducts straight down the copper sleeve, a tube of wall b around
+the hole; its cross-section is the ring π (d + b) b. A filled hole is a
+second column of material beside it, so the two are in parallel. Vias side
+by side share the heat, so N of them in parallel divide θ by N.
+
+### Assumptions and limits
+
+- **Straight conduction only:** the heat is assumed to reach every via
+  evenly and to leave the far side freely. Spreading in the pads and
+  planes, and the solder joint above, add resistance not counted here.
+- **The FR-4 between vias is left out,** which slightly overstates θ
+  (Fineline: 2-3 K/W per via).
+- **Solder fill** assumes the hole is completely filled; voids and wicking
+  during reflow are why many datasheets ask for filled or tented vias.
+- **Copper at 384 W/m·K,** Fineline's figure; plated copper can be a little
+  lower.
+- **Size and spacing** (how small a hole, how close a pitch) are not
+  advised here yet; they need a source that has been read.
+
+### How it was checked
+
+9 cases:
+- Fineline's via: 193 °C/W, air negligible, drill 0.3 mm;
+- nine in parallel: 21.4 °C/W, 42.9 °C across the board at 2 W;
+- the nine empty, solder-filled and copper-filled: 21.4, 16 and
+  6.55 °C/W;
+- solder in the hole: 572 °C/W beside the 193 °C/W sleeve;
+- 0.3 mm holes are 163 °C/W each, so 17 reach 10 °C/W (9.6);
+- a 0.8 mm board halves it, 96.4 °C/W;
+- a unit change keeps the board (1.6 mm reads 63 mil);
+- a fraction of a via is refused;
+- the remembered fill and pill.
 
 [↑ Index](#index)

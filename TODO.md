@@ -364,6 +364,7 @@ Then:
 - [ ] Starting current estimation
 - [ ] Relay driver
 - [x] Trace current capacity (ampacity) — merged into Trace width
+- [x] Thermal vias — empty / solder / copper fill, Vias needed, 2026-10-29 (Pierre)
 - [ ] Via current capacity
 - [ ] Signal propagation delay
 - [ ] Planar (PCB) inductor
