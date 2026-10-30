@@ -9921,7 +9921,8 @@ the finished hole, the plating and the fill:
   vias empty, solder-filled and copper-filled side by side.
 - **Also:** one via's sleeve and hole resistances, the drill size, and the
   temperature difference across the board at a power you give.
-- **Units:** board and hole in mm or mil, plating in µm or mil.
+- **Units:** metric (board and hole in mm, plating in µm) or mil for all
+  three; the two pickers move together.
 - **Drawing:** the board in cross-section, the plated sleeve and its pads,
   the hole shaded when filled, the heat going through.
 - **Remembered:** the fill and the units.
@@ -9985,7 +9986,7 @@ by side share the heat, so N of them in parallel divide θ by N.
 
 ### How it was checked
 
-11 cases:
+12 cases:
 - Fineline's via: 193 °C/W, air negligible, drill 0.3 mm;
 - nine in parallel: 21.4 °C/W in the θ box, 42.9 °C across the board at
   2 W;
@@ -9997,7 +9998,8 @@ by side share the heat, so N of them in parallel divide θ by N.
 - typing 10 °C/W in the θ box sets the vias to 20 (9.64 °C/W, 19.3 °C);
 - typing 4 vias sets the θ box to 48.2 °C/W;
 - a 0.8 mm board halves it, 96.4 °C/W;
-- a unit change keeps the board (1.6 mm reads 63 mil);
+- mil turns every length to mil (1.6 mm reads 62.99 mil, 25 µm 0.9843 mil),
+  and µm plating brings them back to mm;
 - a fraction of a via is refused;
 - the remembered fill.
 
@@ -10027,8 +10029,9 @@ How many vias a trace's current needs, on one screen:
     give it: the trace, the copper, the vias, the current, and the via
     and trace temperatures;
   - the finished hole, the drill less twice the plating.
-- **Units:** lengths in mm or mil, plating in µm or mil; copper in oz,
-  1 oz = 34.8 µm as in Trace width.
+- **Units:** metric (mm, plating in µm, areas in mm²) or mil for
+  everything (areas in mil², the simulated cases' widths too); the two
+  pickers move together. Copper in oz, 1 oz = 34.8 µm as in Trace width.
 - **Drawing:** a trace on each side of the board joined by the via, the
   current going through it.
 - **Remembered:** the units and the copper weight.
@@ -10096,7 +10099,7 @@ to show how far.
 
 ### How it was checked
 
-8 cases:
+9 cases:
 - their via is 0.0217 mm²; a 1.2 mm 1 oz trace (0.0418 mm²) asks for 2;
   each of 2 carries 2 A, 1.27 mΩ, 2.55 mV, 5.09 mW;
 - with two vias the nearest case is their 0.66 mm trace, 6 °C cooler;
@@ -10106,6 +10109,8 @@ to show how far.
 - a 0.3 mm drill with 25 µm plating: 0.0216 mm², 1.28 mΩ;
 - a typed via count stays when the trace changes;
 - plating as thick as the hole's radius is refused;
+- mil turns every length and area to mil: 33.6 mil² per via, their
+  0.66 mm trace as 26 mil;
 - the remembered copper weight.
 
 [↑ Index](#index)

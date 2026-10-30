@@ -10470,9 +10470,12 @@ function renderViaCurrent(domain, tool, favId) {
     nTyped: false,
   };
   const len = (v) => `${Number((v / VC_LEN_UNITS[state.lUnit]).toPrecision(3))} ${state.lUnit}`;
-  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(6)) : "");
+  // Four figures: a converted 0.26 mm reads 10.24 mil, not 10.2362.
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const scale = (k) => (k === "b" ? VC_PLATE_UNITS[state.bUnit] : k === "i" || k === "n" ? 1 : VC_LEN_UNITS[state.lUnit]);
-  const mm2 = (a) => `${Number(a.toPrecision(3))} mm²`;
+  // Areas and the cases' widths follow the length unit: mm² or mil².
+  const mm2 = (a) => (state.lUnit === "mil" ? `${Number((a / 0.0254 ** 2).toPrecision(3))} mil²` : `${Number(a.toPrecision(3))} mm²`);
+  const caseW = (w) => (state.lUnit === "mil" ? `${Number((w / 0.0254).toPrecision(3))} mil` : `${w} mm`);
 
   // Copper areas in mm²: one via's wall and the trace's cross-section.
   function areas() {
@@ -10535,7 +10538,7 @@ function renderViaCurrent(domain, tool, favId) {
         <div class="field notation-box">
           ${row(`Each of your ${n === 1 ? "via" : `${n} vias`}`, `${Number(iv.toPrecision(3))} A, ${Number((r * 1e3).toPrecision(3))} mΩ: ${Number((iv * r * 1e3).toPrecision(3))} mV, ${Number((iv * iv * r * 1e3).toPrecision(3))} mW`, "per")}
           ${row("Trace area over vias' area", `${Number(ratio.toPrecision(3))}×`, "ratio")}
-          ${row("Nearest simulated case", `${cw} mm, ${coz} oz, ${cn} ${cn === 1 ? "via" : "vias"}, ${ci} A: via ${cvia} °C, trace ${ctc} °C (${hotter >= 0 ? `${Number(hotter.toFixed(1))} °C hotter` : `${Number((-hotter).toFixed(1))} °C cooler`})`, "near")}
+          ${row("Nearest simulated case", `${caseW(cw)}, ${coz} oz, ${cn} ${cn === 1 ? "via" : "vias"}, ${ci} A: via ${cvia} °C, trace ${ctc} °C (${hotter >= 0 ? `${Number(hotter.toFixed(1))} °C hotter` : `${Number((-hotter).toFixed(1))} °C cooler`})`, "near")}
           ${row("Finished hole", len(s.drill - 2 * s.b), "hole")}
         </div>`;
   }
@@ -10617,8 +10620,13 @@ function renderViaCurrent(domain, tool, favId) {
     });
     document.getElementById("vc-oz").onchange = (e) => { state.oz = parseFloat(e.target.value); setPref(C, "oz", state.oz); refresh(); };
     // A unit change re-expresses the same value.
-    app.querySelector("select[data-lunit]").onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); };
-    app.querySelector("select[data-bunit]").onchange = (e) => { state.bUnit = e.target.value; setPref(C, "bUnit", state.bUnit); paint(); };
+    // The two pickers move together: mm with µm plating, or mil for all.
+    const units = (imperial) => {
+      state.lUnit = imperial ? "mil" : "mm"; state.bUnit = imperial ? "mil" : "µm";
+      setPref(C, "lUnit", state.lUnit); setPref(C, "bUnit", state.bUnit); paint();
+    };
+    app.querySelector("select[data-lunit]").onchange = (e) => units(e.target.value === "mil");
+    app.querySelector("select[data-bunit]").onchange = (e) => units(e.target.value === "mil");
   }
 
   paint();
@@ -10652,7 +10660,8 @@ function renderThermalVias(domain, tool, favId) {
   };
   const ohm = (r) => `${Number(r.toPrecision(3))} °C/W`;
   const len = (v) => `${Number((v / TV_LEN_UNITS[state.lUnit]).toPrecision(3))} ${state.lUnit}`;
-  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(6)) : "");
+  // Four figures: a converted 1.6 mm reads 62.99 mil, not 62.9921.
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const scale = (k) => (k === "l" || k === "d" ? TV_LEN_UNITS[state.lUnit] : k === "b" ? TV_PLATE_UNITS[state.bUnit] : 1);
 
   // One via: the copper sleeve and the filled hole as two parallel paths.
@@ -10821,8 +10830,13 @@ function renderThermalVias(domain, tool, favId) {
       paint();
     };
     // A unit change re-expresses the same value.
-    app.querySelector("select[data-lunit]").onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); };
-    app.querySelector("select[data-bunit]").onchange = (e) => { state.bUnit = e.target.value; setPref(C, "bUnit", state.bUnit); paint(); };
+    // The two pickers move together: mm with µm plating, or mil for all.
+    const units = (imperial) => {
+      state.lUnit = imperial ? "mil" : "mm"; state.bUnit = imperial ? "mil" : "µm";
+      setPref(C, "lUnit", state.lUnit); setPref(C, "bUnit", state.bUnit); paint();
+    };
+    app.querySelector("select[data-lunit]").onchange = (e) => units(e.target.value === "mil");
+    app.querySelector("select[data-bunit]").onchange = (e) => units(e.target.value === "mil");
     syncBoxes();
   }
 
