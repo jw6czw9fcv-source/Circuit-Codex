@@ -400,6 +400,12 @@ const FORMULAS = [
     note: "LM317: Vref 1.25 V, Iadj ≈ 50 µA, R1 from OUT to ADJ (TI datasheet, eq. 2). Every volt dropped becomes heat; Iq is a fixed part's own current to ground.",
   },
   {
+    tool: "Inrush limiter (NTC)",
+    domain: "power",
+    formulas: ["R cold ≥ Vpeak / I inrush", "E = ½ × C × Vpeak²"],
+    note: "Vpeak = √2 × highest line voltage (Eaton ELX1247). The NTC's energy rating must exceed E.",
+  },
+  {
     tool: "Constant current",
     domain: "power",
     formulas: ["I = Vref / R + Iadj", "Vload max = Vin min − Vref − headroom"],

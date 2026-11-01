@@ -577,6 +577,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "zener-regulation") return renderZenerRegulation(domain, tool, favId);
   if (calcId === "zener-transistor") return renderZenerTransistor(domain, tool, favId);
   if (calcId === "constant-current") return renderConstantCurrent(domain, tool, favId);
+  if (calcId === "inrush-limiter") return renderInrushLimiter(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "via-current") return renderViaCurrent(domain, tool, favId);
@@ -12046,6 +12047,177 @@ function renderConstantCurrent(domain, tool, favId) {
     document.getElementById("cc-part").onchange = (e) => { state.part = e.target.value; setPref(C, "part", state.part); paint(); };
     app.querySelector("select[data-iunit]").onchange = (e) => { state.iUnit = e.target.value; setPref(C, "iUnit", state.iUnit); paint(); };
     app.querySelector("select[data-runit]").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- Inrush limiter (NTC) ----------
+// An NTC thermistor in series with the supply: cold, its resistance limits
+// the surge charging the input capacitor; warmed by the running current, it
+// falls to a fraction of an ohm. Eaton ELX1247 (July 2022): the minimum
+// zero-power resistance is the peak voltage over the peak surge current
+// allowed (eq. 2), the peak voltage √2 times the highest line voltage
+// (eq. 3: 110 V + 10 % = 121 V, 171 V peak). TDK (application notes, July
+// 2019) and Eaton: the thermistor must take the energy of charging the load
+// capacitance, and its running current must stay under its Imax. The
+// energy is ½ C Vpeak², which Vishay Ametherm's SL10 table itself follows
+// (2000 µF at 120 Vac: 28.8 J against its 30 J). Parts: Vishay Ametherm
+// SL10 (doc. 24503, revision 13-Aug-2026): R25 and its tolerance, Imax up
+// to 65 °C, the recommended energy, the resistance at 100 % and 50 % of
+// Imax; 265 Vac at most.
+// [part, R25 Ω, tolerance %, Imax A, energy J, R at Imax Ω, R at Imax/2 Ω]
+const ICL_SL10 = [
+  ["SL102R005", 2, 20, 5, 30, 0.1, 0.2], ["SL102R505", 2.5, 30, 5, 30, 0.12, 0.22],
+  ["SL104R004", 4, 20, 4, 20, 0.14, 0.29], ["SL105R002", 5, 20, 2, 20, 0.5, 0.7],
+  ["SL105R003", 5, 20, 3, 20, 0.5, 0.7], ["SL105R004", 5, 20, 4, 20, 0.2, 0.4],
+  ["SL1010002", 10, 25, 2, 10, 0.34, 0.6], ["SL1010003", 10, 20, 3, 17, 0.28, 0.71],
+  ["SL1010004", 10, 20, 4, 17, 0.22, 0.4], ["SL1015002", 15, 20, 2, 17, 0.47, 0.89],
+  ["SL1015003", 15, 20, 3, 17, 0.38, 0.809], ["SL1025002", 25, 25, 2, 20, 0.48, 1.06],
+  ["SL1030002", 30, 15, 2, 15, 0.495, 1.1], ["SL1040002", 40, 20, 2, 15, 0.65, 1.55],
+  ["SL1050002", 50, 25, 2, 18, 0.44, 1.2], ["SL1012101", 120, 20, 1, 14, 2, 6.6],
+];
+const ICL_MODES = { ac: "AC mains", dc: "DC" };
+
+function renderInrushLimiter(domain, tool, favId) {
+  const C = "inrush-limiter";
+  const state = {
+    mode: pref(C, "mode", "ac", Object.keys(ICL_MODES)),
+    si: { v: 230, tol: 10, ipk: 20, c: 220e-6, i: 1 },
+  };
+  const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const SCALE = { v: 1, tol: 1, ipk: 1, c: 1e-6, i: 1 };
+  // The highest voltage the capacitor charges to.
+  const vpk = () => state.si.v * (1 + state.si.tol / 100) * (state.mode === "ac" ? Math.SQRT2 : 1);
+  // A part's running resistance at a current, between its two listed
+  // points; above the light-load one when under half its Imax.
+  const rRun = (p, i) => {
+    const [, , , imax, , r100, r50] = p;
+    if (i >= imax / 2) return r50 + (r100 - r50) * (i - imax / 2) / (imax / 2);
+    return null;
+  };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.v > 0)) return state.mode === "ac" ? "Enter the line voltage." : "Enter the supply voltage.";
+    if (!(s.tol >= 0)) return "Enter the high-line tolerance, zero or more.";
+    if (!(s.ipk > 0)) return "Enter the highest inrush current allowed.";
+    if (!(s.c > 0)) return "Enter the load capacitance.";
+    if (!(s.i > 0)) return "Enter the running current.";
+    return "";
+  }
+
+  // The supply, the NTC in series, the bridge or the DC rail, the capacitor.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, t, c = part, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const ac = state.mode === "ac";
+    const err = problem();
+    return `<svg width="320" height="118" viewBox="0 0 290 107" fill="none">
+      <path d="M26 28 H72 M120 28 H${ac ? 150 : 214} M26 88 H${ac ? 150 : 214} ${ac ? "M196 28 H214 M196 88 H214" : ""} M214 28 V48 M214 68 V88" stroke="${wire}" stroke-width="1.6"/>
+      <circle cx="26" cy="28" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="26" cy="88" r="3" stroke="${wire}" stroke-width="1.4"/>
+      <rect x="72" y="20" width="48" height="16" rx="2" stroke="${calc}" stroke-width="1.6"/>
+      <path d="M68 44 L124 12 M118 12 H124 V18" stroke="${calc}" stroke-width="1.2"/>
+      ${lbl(96, 52, "NTC", calc)}
+      ${ac ? `<rect x="150" y="16" width="46" height="84" rx="3" stroke="${part}" stroke-width="1.6"/>${lbl(173, 62, "bridge")}` : ""}
+      <path d="M202 48 H226 M202 54 H226" stroke="${part}" stroke-width="1.8"/>
+      <path d="M214 54 V68" stroke="${wire}" stroke-width="1.6"/>
+      ${lbl(231, 56, `C ${val(state.si.c, "F")}`, part, "start")}
+      ${lbl(26, 16, ac ? `${val(state.si.v, "V")} ac` : `${val(state.si.v, "V")} dc`, grey, "start")}
+      ${lbl(231, 72, err ? "" : `peak ${val(vpk(), "V")}`, grey, "start")}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, vp = vpk();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    const rMin = vp / s.ipk;
+    const energy = 0.5 * s.c * vp * vp;
+    // The SL10 parts that pass all three: still over the minimum at the low
+    // end of their tolerance, energy over the need, Imax over the current;
+    // and, AC only, the 265 Vac maximum.
+    const vOk = state.mode !== "ac" || s.v * (1 + s.tol / 100) <= 265;
+    // Coolest first: the least heat at the running current (at least the
+    // light-load resistance when under half its Imax).
+    const heat = (p) => s.i * s.i * (rRun(p, s.i) ?? p[6]);
+    const fits = ICL_SL10.filter(([, r25, tol, imax, ej]) => r25 * (1 - tol / 100) >= rMin && ej >= energy && imax >= s.i && vOk).sort((a, b) => heat(a) - heat(b));
+    const rows = fits.slice(0, 4).map((p) => {
+      const rr = rRun(p, s.i);
+      return row(p[0], `${val(p[1], "Ω")}, ${p[4]} J, ${val(p[3], "A")}: ${rr !== null ? `${val(rr, "Ω")} running, ${val(s.i * s.i * rr, "W")}` : `over ${val(p[6], "Ω")} running (under half its current)`}`, `part-${p[0]}`);
+    }).join("");
+    let why = "";
+    if (!fits.length) {
+      const byR = ICL_SL10.filter(([, r25, tol]) => r25 * (1 - tol / 100) >= rMin);
+      why = !vOk ? "over the SL10's 265 Vac"
+        : !byR.length ? `no SL10 has ${val(rMin, "Ω")} even at its low tolerance`
+        : !byR.some((p) => p[4] >= energy) ? `those with enough resistance hold at most ${Math.max(...byR.map((p) => p[4]))} J, under the ${val(energy, "J")} needed`
+        : `none with enough resistance and energy carries ${val(s.i, "A")}`;
+    }
+    return `
+        <div class="result-field">
+          <div class="result-head"><span class="label">Least cold resistance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="rmin">${val(rMin, "Ω")}</span></div>
+          <div class="result-sub" data-res="sub">${val(vp, "V")} peak over the ${val(s.ipk, "A")} allowed</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Energy to absorb", `${val(energy, "J")} (½ C Vpeak²)`, "energy")}
+          ${fits.length ? row("Vishay Ametherm SL10", `${fits.length === 1 ? "one fits" : `${fits.length} fit`}${fits.length > 4 ? ", the 4 coolest:" : ", coolest first:"}`, "fits") + rows : row("Vishay Ametherm SL10", warn(`none fits: ${why}; a larger series is needed`), "fits")}
+        </div>`;
+  }
+
+  function refresh() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (mode, si) => () => { state.mode = mode; Object.assign(state.si, si); paint(); };
+  useExamples([
+    { title: "Eaton: 110 Vac + 10 %", note: "121 V at high line, 171 V peak; to hold the surge to 20 A takes 8.56 Ω cold.",
+      apply: example("ac", { v: 110, tol: 10, ipk: 20, c: 470e-6, i: 2 }) },
+    { title: "Ametherm: 265 Vac, 100 A", note: "375 V peak over 100 A is 3.75 Ω; 1800 µF stores 126 J, more than any SL10.",
+      apply: example("ac", { v: 265, tol: 0, ipk: 100, c: 1800e-6, i: 13 }) },
+    { title: "230 V supply, 220 µF, 1 A", note: "358 V peak, 30 A allowed: 11.9 Ω and 14.1 J; six SL10 parts fit.",
+      apply: example("ac", { v: 230, tol: 10, ipk: 30, c: 220e-6, i: 1 }) },
+    { title: "48 V DC rail, 1000 µF", note: "50.4 V at +5 %: 10 A allowed needs 5.04 Ω, only 1.27 J.",
+      apply: example("dc", { v: 48, tol: 5, ipk: 10, c: 1000e-6, i: 3 }) },
+  ]);
+
+  function paint() {
+    const s = state.si, m = state.mode;
+    const field = (key, label, u) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / SCALE[key])}" /><span class="unit-fixed">${u}</span></div>
+        </div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The NTC that tames a power supply's turn-on surge")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.entries(ICL_MODES), m, domain.bg)}
+
+      <div class="field-pair">${field("v", m === "ac" ? "Line" : "Supply", m === "ac" ? "Vac" : "V")}${field("tol", "High by", "%")}${field("ipk", "Inrush allowed", "A")}</div>
+      <div class="field-pair">${field("c", "Capacitance", "µF")}${field("i", m === "ac" ? "Running current" : "Running current", m === "ac" ? "A rms" : "A")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Vpeak = √2 × V line × (1 + high-line %)", "R cold ≥ Vpeak / I inrush", "E = ½ × C × Vpeak²", "P running = I² × R hot"],
+        "At turn-on the input capacitor is empty and looks like a short: only the wiring and whatever is in series limit the current. An NTC thermistor in series is a few ohms cold, enough to hold that surge down, then the running current heats it and its resistance falls to a fraction of an ohm, so it wastes little. Its cold resistance must be at least the peak voltage over the surge you allow (the low end of its tolerance, to be sure); it must absorb the energy that charging the capacitor costs, ½ C Vpeak²; and the running current must stay under its rating. It needs a minute to cool before it limits again."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => { const k = el.dataset.key; state.si[k] = parseFloat(el.value) * SCALE[k]; refresh(); };
+    });
   }
 
   paint();

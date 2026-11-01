@@ -348,7 +348,7 @@ Then:
 - [x] Linear regulator (LDO)
 - [x] Zener voltage stabilization — built as Zener regulation (Active › Diodes), 2026-10-29
 - [x] Zener + transistor stabilization — built as Zener + transistor, 2026-10-31
-- [ ] Inrush current limiter (NTC)
+- [x] Inrush current limiter (NTC) — built as Inrush limiter (NTC), Vishay Ametherm SL10, 2026-11-01
 - [x] Constant current source/driver — built as Constant current (adjustable regulator + R), 2026-10-31
 - [ ] Power factor
 - [ ] POE classes

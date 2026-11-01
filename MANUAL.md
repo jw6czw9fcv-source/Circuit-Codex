@@ -99,6 +99,7 @@ will key on, since that is the id the app already holds for each tool.
 - Regulators → [Zener regulation](#zener-regulation)
 - Regulators → [Zener + transistor](#zener-transistor)
 - Regulators → [Constant current](#constant-current)
+- Regulators → [Inrush limiter (NTC)](#inrush-limiter)
 - Battery → [Battery runtime](#battery-runtime)
 - Battery → [Battery C-rate](#battery-c-rate)
 - Battery → [Internal resistance](#internal-resistance)
@@ -10592,5 +10593,112 @@ the anti-resonance peak.
 - "+ add" puts 10 µF beside 1 µF: the band widens, its peak stays under;
 - × removes a kind;
 - a zero current step is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="inrush-limiter"></a>
+## Inrush limiter (NTC)
+
+`calc: inrush-limiter` · Power electronics › Supply & regulation
+(formerly Inrush current limiter (NTC))
+
+### What it computes
+
+An NTC thermistor in series with a supply, to hold down the surge that
+charging its capacitor draws at turn-on, on one screen:
+
+- **AC mains or DC** (pills): the line voltage (or the DC supply), how
+  far it can run high (%), the highest inrush current allowed, the load
+  capacitance, and the running current.
+- **The big result:** the least cold resistance, the peak voltage over
+  the inrush allowed; the peak is √2 × the highest line voltage on AC.
+- **Below it:**
+  - the energy the thermistor must absorb, ½ C Vpeak²;
+  - the Vishay Ametherm SL10 parts that fit on all counts (the low end of
+    their R25 tolerance still over the least resistance, their energy
+    rating over the need, their current rating over the running current,
+    265 Vac at most), the coolest first, each with its resistance, energy
+    and current ratings, its running resistance and the heat it loses;
+  - when none fits, why, and that a larger series is needed.
+- **Drawing:** the supply, the NTC (the calculated part, green), the
+  bridge on AC, the capacitor, and the peak voltage.
+- **Remembered:** AC or DC.
+
+Examples: Eaton's 110 Vac + 10 %, Ametherm's 265 Vac and 100 A, a 230 V
+supply with 220 µF, and a 48 V DC rail.
+
+### Source
+
+- **Eaton, "Understanding the current limiting capabilities of power NTC
+  thermistors", technical note ELX1247, July 2022** (read): the minimum
+  zero-power resistance is the application's voltage divided by "the
+  maximum desired peak surge current" (equation 2); the peak voltage from
+  the maximum line voltage (equation 3): "a 110 VAC power supply with
+  line voltage fluctuations that can inflate that value by 10% would
+  yield a Vmax voltage of 121 V. Then, maximum peak voltage (Vpeak) would
+  be 171 V"; the energy of the load capacitance must be known to select
+  the part; the running current must not exceed its rating. Its
+  equations are images in the PDF; the text gives them in words.
+- **TDK Electronics, "NTC Inrush Current Limiters, application notes",
+  July 2019, and EPCOS application note 2013** (read): the thermistor is
+  connected in series, never in parallel; it drops by a factor of 10 to
+  50 when hot; its maximum permissible capacitance is tested per
+  IEC 60539-1; it needs one to two minutes to cool before limiting fully
+  again; the running resistance can be fitted as R = k·Iⁿ between 30 and
+  100 % of Imax.
+- **Vishay Ametherm SL10, document 24503, revision 13 Aug 2026** (read):
+  per part R25 and tolerance, the maximum steady current up to 65 °C,
+  the maximum recommended energy (J), 265 Vac maximum, the maximum
+  capacitance at 120 Vac, the resistance at 100 % and 50 % of the
+  maximum current. Its own figures follow ½ C Vpeak²: 2000 µF at
+  120 Vac (170 V peak) is 28.8 J against the part's 30 J; 1300 µF is
+  18.7 J against 20 J. SL1050001 is left out: its table gives a lower
+  resistance at 50 % than at 100 % current.
+- **Ametherm's inrush page** (read): its example, 265 Vac (375 V peak)
+  and 100 A, "select a thermistor that can handle 13 A of current and has
+  a capacity of at least 126 Joules"; 1800 µF reproduces 126 J, though the
+  page does not print the capacitance.
+
+### Why the formulas are these
+
+    Vpeak = √2 × V line × (1 + high-line %)     (DC: V × (1 + %))
+    R cold ≥ Vpeak / I inrush
+    E = ½ × C × Vpeak²
+    P running = I² × R hot
+
+At turn-on the capacitor is empty: the surge is the peak voltage over
+whatever resistance is in the way, so that resistance sets the surge.
+Charging a capacitor through a resistance costs as much energy in the
+resistance as ends up in the capacitor, ½ C V², and the cold NTC must
+take it without cracking. Once running, the current heats it until its
+resistance is small.
+
+### Assumptions and limits
+
+- **Running resistance:** the datasheet's points at 100 % and 50 % of
+  the part's current, interpolated between; under half its current it is
+  higher than the 50 % figure, and the tool says only that.
+- **Ambient:** the SL10's currents hold up to 65 °C; above that, derate
+  (the datasheet's curve).
+- **Restarting:** a hot thermistor barely limits; it needs one to two
+  minutes off to cool (TDK).
+- **The wiring and the capacitor's ESR** also limit the surge; the tool
+  leaves them out, which is on the safe side.
+- **One series:** the SL10 (10 mm discs, up to 5 A and 30 J); bigger
+  supplies need a larger series.
+
+### How it was checked
+
+9 cases:
+- Eaton's 110 Vac + 10 %: 171 V peak, 8.56 Ω for 20 A, 6.88 J;
+- six SL10 parts fit, coolest first (SL1050002, 440 mΩ, 1.76 W);
+- Ametherm's 265 Vac, 100 A: 3.75 Ω, 126 J, no SL10 fits;
+- 230 V + 10 %, 220 µF, 30 A: 11.9 Ω, 14.1 J, six fit;
+- a part under half its current is over its light-load resistance;
+- a 48 V DC rail: 5.04 Ω, 1.27 J, three parts carry 3 A;
+- over 265 Vac and over 5 A are flagged;
+- the remembered AC or DC.
 
 [↑ Index](#index)
