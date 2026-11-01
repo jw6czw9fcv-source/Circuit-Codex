@@ -11408,6 +11408,13 @@ function renderViaCurrent(domain, tool, favId) {
 // (Fineline); the FR-4 between them is left out (Fineline: "2-3 K/W per via"
 // lower if counted). The number of vias and their θ are two live boxes, as
 // Pierre asked: either one sets the other.
+// Under an exposed pad, TI AN-1520 (SNVA183B, April 2013) sets the most vias
+// by the pad's size and "1.2 mm distance between vias" (its figure 13: a
+// 7 × 7 mm pad holds 6 × 6 = 36, the vias whole on the pad), puts fewer
+// "near the periphery", and recommends 0.33 mm: 0.2 mm raises θJA "about
+// 15∼25%" on a pad holding 4 or fewer, under 10 % with 9 or more. Pierre's
+// rule: a 13 mil drill, down to 10 mil for a smaller IC.
+const TV_PITCH = 1.2e-3;
 const TV_K_CU = 384;
 const TV_FILLS = { air: ["Empty", 0.026], solder: ["Solder", 57], copper: ["Copper", TV_K_CU] };
 const TV_LEN_UNITS = { mm: 1e-3, mil: 25.4e-6 };
@@ -11419,7 +11426,7 @@ function renderThermalVias(domain, tool, favId) {
     fill: pref(C, "fill", "air", Object.keys(TV_FILLS)),
     lUnit: pref(C, "lUnit", "mm", Object.keys(TV_LEN_UNITS)),
     bUnit: pref(C, "bUnit", "µm", Object.keys(TV_PLATE_UNITS)),
-    si: { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2 },
+    si: { l: 1.6e-3, d: 0.25e-3, b: 25e-6, n: 9, p: 2, pw: 3e-3, ph: 3e-3 },
     // A θ typed in the box: the vias are set to reach it.
     target: null,
   };
@@ -11427,7 +11434,17 @@ function renderThermalVias(domain, tool, favId) {
   const len = (v) => `${Number((v / TV_LEN_UNITS[state.lUnit]).toPrecision(3))} ${state.lUnit}`;
   // Four figures: a converted 1.6 mm reads 62.99 mil, not 62.9921.
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
-  const scale = (k) => (k === "l" || k === "d" ? TV_LEN_UNITS[state.lUnit] : k === "b" ? TV_PLATE_UNITS[state.bUnit] : 1);
+  const scale = (k) => (["l", "d", "pw", "ph"].includes(k) ? TV_LEN_UNITS[state.lUnit] : k === "b" ? TV_PLATE_UNITS[state.bUnit] : 1);
+  const drill = () => state.si.d + 2 * state.si.b;
+  // The vias whole on the pad, 1.2 mm apart, along one side and in all;
+  // null when no pad is given.
+  const along = (side) => (side >= drill() ? Math.floor((side - drill()) / TV_PITCH + 1e-9) + 1 : 0);
+  const padFit = () => {
+    const { pw, ph } = state.si;
+    if (!(pw > 0 && ph > 0)) return null;
+    const nx = along(pw), ny = along(ph);
+    return { nx, ny, all: nx * ny };
+  };
 
   // One via: the copper sleeve and the filled hole as two parallel paths.
   function oneVia(fill = state.fill) {
@@ -11444,11 +11461,14 @@ function renderThermalVias(domain, tool, favId) {
     if (!(s.l > 0) || !(s.d > 0) || !(s.b > 0)) return "Enter the board thickness, the finished hole and the plating, all above zero.";
     if (state.target !== null && !(state.target > 0)) return "Enter the θ to reach, above zero.";
     if (!(s.n >= 1 && Number.isInteger(s.n))) return "Enter a whole number of vias, one or more.";
+    if (s.pw < 0 || s.ph < 0) return "Enter the pad's width and height, or leave them empty.";
     return "";
   }
 
-  // A plated via in cross-section: the board, the pads, the sleeve and what
-  // fills the hole, with the heat going through it.
+  // A plated via in cross-section (the board, the pads, the sleeve and what
+  // fills the hole, with the heat going through it) and, beside it, the pad
+  // from above: every place a via fits, the vias in use filled, the outer
+  // ones first, as AN-1520 asks for fewer than fit.
   function diagram() {
     const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
     const s = state.si;
@@ -11456,19 +11476,37 @@ function renderThermalVias(domain, tool, favId) {
     const fillTone = state.fill === "copper" ? part : state.fill === "solder" ? grey : null;
     const plate = `${Number((s.b / TV_PLATE_UNITS[state.bUnit]).toPrecision(3))} ${state.bUnit}`;
     const err = problem();
+    const fit = err ? null : padFit();
+    let top = "";
+    if (fit) {
+      const k = 66 / Math.max(s.pw, s.ph), cx = 248, cy = 52;
+      const w = s.pw * k, h = s.ph * k;
+      const spots = [];
+      for (let i = 0; i < fit.nx; i++) {
+        for (let j = 0; j < fit.ny; j++) spots.push([(i - (fit.nx - 1) / 2) * TV_PITCH * k, (j - (fit.ny - 1) / 2) * TV_PITCH * k]);
+      }
+      // Outer first: by the larger of the two offsets, scaled to the pad.
+      const out = ([x, y]) => Math.max(Math.abs(x) / w, Math.abs(y) / h);
+      spots.sort((a, b) => out(b) - out(a));
+      const r = Math.max(1.2, drill() / 2 * k);
+      top = `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="1" stroke="${part}" stroke-width="1.4"/>
+        ${spots.map(([x, y], i) => `<circle cx="${cx + x}" cy="${cy + y}" r="${r}" ${i < s.n ? `fill="${calc}"` : `stroke="${grey}" stroke-width="0.8"`}/>`).join("")}
+        ${lbl(cx, 104, "top view")}`;
+    }
     return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
-      <rect x="70" y="34" width="180" height="50" stroke="${wire}" stroke-width="1.4"/>
-      ${fillTone ? `<rect x="148" y="34" width="24" height="50" fill="${fillTone}" fill-opacity="0.35"/>` : ""}
-      <path d="M146 34 V84 M174 34 V84" stroke="${part}" stroke-width="4"/>
-      <path d="M126 34 H146 M174 34 H194 M126 84 H146 M174 84 H194" stroke="${part}" stroke-width="3"/>
-      <path d="M160 6 V26 M155 21 L160 27 L165 21 M160 90 V108 M155 103 L160 109 L165 103" stroke="${calc}" stroke-width="1.6"/>
-      ${lbl(152, 16, "heat", calc, "end")}
-      <path d="M58 34 V84 M54 34 H62 M54 84 H62" stroke="${wire}" stroke-width="1.2"/>
-      ${lbl(52, 63, len(s.l), grey, "end")}
-      ${lbl(200, 22, `d ${len(s.d)}`, part, "start")}
-      <path d="M148 30 H172" stroke="${wire}" stroke-width="1.2"/>
-      ${lbl(180, 63, `b ${plate}`, part, "start")}
-      ${lbl(248, 104, err ? "" : `${s.n} × ${ohm(oneVia().both)}`, calc, "end")}
+      <rect x="58" y="34" width="134" height="50" stroke="${wire}" stroke-width="1.4"/>
+      ${fillTone ? `<rect x="106" y="34" width="24" height="50" fill="${fillTone}" fill-opacity="0.35"/>` : ""}
+      <path d="M104 34 V84 M132 34 V84" stroke="${part}" stroke-width="4"/>
+      <path d="M84 34 H104 M132 34 H152 M84 84 H104 M132 84 H152" stroke="${part}" stroke-width="3"/>
+      <path d="M118 6 V26 M113 21 L118 27 L123 21 M118 90 V108 M113 103 L118 109 L123 103" stroke="${calc}" stroke-width="1.6"/>
+      ${lbl(110, 16, "heat", calc, "end")}
+      <path d="M46 34 V84 M42 34 H50 M42 84 H50" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(40, 63, len(s.l), grey, "end")}
+      ${lbl(130, 22, `d ${len(s.d)}`, part, "start")}
+      <path d="M106 30 H130" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(138, 63, `b ${plate}`, part, "start")}
+      ${lbl(126, 104, err ? "" : `${s.n} × ${ohm(oneVia().both)}`, calc, "start")}
+      ${top}
     </svg>`;
   }
 
@@ -11493,11 +11531,29 @@ function renderThermalVias(domain, tool, favId) {
           <div class="result-value"><span class="num" data-res="theta">${ohm(total)}</span></div>
           <div class="result-sub" data-res="sub">${sub}</div>
         </div>`;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    // The drill against Pierre's 13 mil, 10 mil for a smaller IC, and
+    // AN-1520's 0.33 mm.
+    const mil = drill() / 25.4e-6;
+    const size = mil >= 12.99 ? "the size AN-1520 recommends"
+      : mil >= 9.99 ? "fine for a smaller IC; 13 mil where it fits"
+      : warn("under 10 mil: AN-1520 found 0.2 mm vias raise θJA 15 to 25 % on a small pad");
+    const fit = padFit();
+    const pitch = state.lUnit === "mil" ? "47 mil (1.2 mm)" : "1.2 mm";
+    let fitRows = "";
+    if (fit) {
+      const what = `${Number((s.pw / TV_LEN_UNITS[state.lUnit]).toPrecision(3))} × ${len(s.ph)}: ${fit.nx} × ${fit.ny} = ${fit.all} at ${pitch}`;
+      fitRows = row("Fit on the pad", !fit.all ? warn("the via is wider than the pad")
+        : n > fit.all ? warn(`${what}; ${n} are too many`)
+        : n < fit.all ? `${what}; put the ${n} near its edge` : what, "fit");
+      if (n > 16 && n <= fit.all) fitRows += row("More vias", "past about 16, AN-1520 saw θJA fall little: the board limits", "more");
+    }
     return `${main}
         <div class="field notation-box">
           ${row(n === 1 ? "Empty or filled" : `The ${n}, empty or filled`, fills, "fills")}
           ${row("One via: sleeve, hole", `${ohm(v.sleeve)}, ${state.fill === "air" ? "air (negligible)" : ohm(v.hole)}`, "parts")}
-          ${row("Drill, before plating", len(s.d + 2 * s.b), "drill")}
+          ${row("Drill, before plating", `${len(drill())}${state.lUnit === "mil" ? "" : ` (${Number(mil.toPrecision(3))} mil)`}, ${size}`, "drill")}
+          ${fitRows}
         </div>`;
   }
 
@@ -11517,7 +11573,7 @@ function renderThermalVias(domain, tool, favId) {
 
   const example = (si, extra, target) => () => {
     Object.assign(state, extra || {});
-    Object.assign(state.si, si);
+    Object.assign(state.si, { pw: 3e-3, ph: 3e-3 }, si);
     state.target = target || null;
     if (target) state.si.n = viasFor(target);
     paint();
@@ -11533,6 +11589,8 @@ function renderThermalVias(domain, tool, favId) {
       apply: example({ l: 1.6e-3, d: 0.3e-3, b: 25e-6, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }, 10) },
     { title: "A 0.8 mm board", note: "Half the thickness, half the resistance: one via 96.4 °C/W.",
       apply: example({ l: 0.8e-3, d: 0.25e-3, b: 25e-6, n: 1, p: 0 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
+    { title: "AN-1520: 7 × 7 mm pad", note: "0.33 mm drills 1.2 mm apart: 6 × 6 = 36 fit, 4.83 °C/W through the board.",
+      apply: example({ l: 1.6e-3, d: 0.28e-3, b: 25e-6, n: 36, p: 0, pw: 7e-3, ph: 7e-3 }, { fill: "air", lUnit: "mm", bUnit: "µm" }) },
   ]);
 
   function paint() {
@@ -11547,8 +11605,8 @@ function renderThermalVias(domain, tool, favId) {
     const fillSel = `<select id="tv-fill">${Object.entries(TV_FILLS).map(([k, [n]]) => `<option value="${k}" ${k === state.fill ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     const fields = `
       <div class="field-pair">${field("l", "Board", sel('data-lunit="1"', TV_LEN_UNITS, state.lUnit))}${field("d", "Hole, finished", sel('data-lunit="2"', TV_LEN_UNITS, state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', TV_PLATE_UNITS, state.bUnit))}</div>
-      <div class="field-pair"><div class="field"><label>Hole filled with</label>${fillSel}</div>${field("p", "Power", fixed("W"))}</div>
-      <div class="field-pair">${field("n", "Vias", fixed(""))}${field("theta", "θ, all vias", fixed("°C/W"), "")}</div>`;
+      <div class="field-pair"><div class="field"><label>Hole filled with</label>${fillSel}</div>${field("pw", "Pad width", sel('data-lunit="3"', TV_LEN_UNITS, state.lUnit))}${field("ph", "Pad height", sel('data-lunit="4"', TV_LEN_UNITS, state.lUnit))}</div>
+      <div class="field-pair">${field("p", "Power", fixed("W"))}${field("n", "Vias", fixed(""))}${field("theta", "θ, all vias", fixed("°C/W"), "")}</div>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "How much heat vias carry through the board")}
 
@@ -11560,8 +11618,8 @@ function renderThermalVias(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N,   ΔT = P × θN"],
-        "A thermal via is an ordinary plated hole used to carry heat from a hot part's pad through the board to copper on the other side. The heat flows along the copper sleeve: l is the board thickness, d the finished hole, b the plating, λ the thermal conductivity (copper 384 W/m·K). A filled hole is a second path beside the sleeve. Vias side by side are in parallel, so N of them divide θ by N: type the number of vias, or the θ you need and the vias follow. The result is in °C per watt, like the θ of a heatsink, and adds into the same chain."
+        ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N,   ΔT = P × θN", "Vias per side = ⌊(side − drill) / 1.2 mm⌋ + 1"],
+        "A thermal via is an ordinary plated hole used to carry heat from a hot part's pad through the board to copper on the other side. The heat flows along the copper sleeve: l is the board thickness, d the finished hole, b the plating, λ the thermal conductivity (copper 384 W/m·K). A filled hole is a second path beside the sleeve. Vias side by side are in parallel, so N of them divide θ by N: type the number of vias, or the θ you need and the vias follow. The result is in °C per watt, like the θ of a heatsink, and adds into the same chain. Under an exposed pad, TI's AN-1520 spaces the vias 1.2 mm apart, whole on the pad, and recommends 0.33 mm (a 13 mil drill; 10 mil for a smaller IC); fewer than fit go near the pad's edge."
       )}
       ${calcFooter("")}
     `;

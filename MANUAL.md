@@ -9925,13 +9925,23 @@ the finished hole, the plating and the fill:
 - **With and without filling:** the hole can be empty (air), filled with
   solder, or filled with copper; whichever is picked, a row gives the same
   vias empty, solder-filled and copper-filled side by side.
-- **Also:** one via's sleeve and hole resistances, the drill size, and the
-  temperature difference across the board at a power you give.
-- **Units:** metric (board and hole in mm, plating in µm) or mil for all
-  three; every length has a picker, and changing any one changes them
-  all.
+- **Also:** one via's sleeve and hole resistances, and the temperature
+  difference across the board at a power you give.
+- **The drill** (d + 2b), in mil too, against Pierre's rule: a 13 mil
+  drill (0.33 mm, the size AN-1520 recommends), down to 10 mil for a
+  smaller IC; under 10 mil it is flagged with AN-1520's finding below.
+- **The pad** (optional): the exposed pad's width and height. A row gives
+  how many vias fit whole on it at AN-1520's 1.2 mm (47 mil) pitch, as
+  columns × rows; it is flagged when you ask for more, and asks for the
+  vias near the pad's edge when you use fewer. Past 16 vias a row says
+  AN-1520 saw little more gain.
+- **Units:** metric (board, hole and pad in mm, plating in µm) or mil for
+  all of them; every length has a picker, the pad's two included, and
+  changing any one changes them all.
 - **Drawing:** the board in cross-section, the plated sleeve and its pads,
-  the hole shaded when filled, the heat going through.
+  the hole shaded when filled, the heat going through; beside it the pad
+  from above, every place a via fits, the vias in use filled green, the
+  outer ones first.
 - **Remembered:** the fill and the units.
 
 The result is a θ in °C/W like any other in the thermal chain: it sits
@@ -9939,7 +9949,8 @@ between the part's pad and the copper below, as θCS does in Heat sink
 sizing.
 
 Examples: Fineline's single via, nine of them under a 2 W pad, the same
-filled with solder, the vias needed for 10 °C/W, and a 0.8 mm board.
+filled with solder, the vias needed for 10 °C/W, a 0.8 mm board, and
+AN-1520's 7 × 7 mm pad with 0.33 mm vias.
 
 ### Source
 
@@ -9962,9 +9973,28 @@ filled with solder, the vias needed for 10 °C/W, and a 0.8 mm board.
   copper) does not print the board thickness or the conductivities, so it
   is not a check case; with a 0.032" board the same model lands within a
   few percent of it.
-- **Not read:** a Micron study of thermal via size and spacing (mentioned
-  by Pierre, not yet found); TI SPRADB7, whose via formula did not survive
-  text extraction.
+- **TI AN-1520, "A Guide to Board Layout for Best Thermal Resistance for
+  Exposed Packages", SNVA183B, September 2006, revised April 2013** (read,
+  with its figures): for the via-diameter study "the maximum number of
+  vias is determined based on the pad size and 1.2 mm distance between
+  vias"; its figure 13 (36-lead LLP, 7 × 7 mm pad, 0.2 mm vias, 4-layer
+  JEDEC board) draws that maximum as a 6 × 6 grid, 36 vias, which is the
+  count of vias whole on the pad at a 1.2 mm pitch; "make the thermal
+  vias near the periphery of the exposed DAP if the maximum number of vias
+  is not applicable"; "use 0.33 mm diameter of vias if possible": 0.2 mm
+  "may increase the θJA by about 15∼25%" on a pad holding 4 vias or
+  fewer, "generally less than 10%" with 9 or more. Read off figure 13
+  (6.4 mm die): θJA about 26.7 °C/W with no vias, 22.5 with 4, 20.6 with
+  8, 19.0 with 16, 17.8 with 36; the 2.1 mm die runs about 33.6, 29.8,
+  28.0, 26.2, 24.7. In this revision figure 12's panels (b) and (c), the
+  via diameter and distribution, are a copy of figure 11(b); only the
+  text gives the diameter figures. Its "diameter" is not said to be the
+  drill or the finished hole; the tool compares it with the drill.
+- **Pierre's rule:** a 13 mil drill for thermal vias, down to 10 mil for a
+  smaller IC.
+- **Not read:** the Micron study of thermal via size and spacing Pierre
+  mentioned (AN-1520 covers the same question); TI SPRADB7, whose via
+  formula did not survive text extraction.
 
 ### Why the formulas are these
 
@@ -9988,13 +10018,19 @@ by side share the heat, so N of them in parallel divide θ by N.
   during reflow are why many datasheets ask for filled or tented vias.
 - **Copper at 384 W/m·K,** Fineline's figure; plated copper can be a little
   lower.
-- **Size and spacing** (how small a hole, how close a pitch) are not
-  advised here yet; they need a source that has been read.
+- **Size and spacing** follow AN-1520 (1.2 mm pitch, 0.33 mm) and
+  Pierre's 13/10 mil rule; a fab's own minimum drill and annular ring
+  come first.
+- **The pad's vias and θJA:** the vias' θ here keeps falling as 1/N, but
+  AN-1520's whole-package θJA does not: from 16 to 36 vias it fell only
+  about 1.2 °C/W, because the spreading in the board and the air beyond
+  then dominate. The vias' θ is one link in that chain.
 
 ### How it was checked
 
-12 cases:
-- Fineline's via: 193 °C/W, air negligible, drill 0.3 mm;
+20 cases:
+- Fineline's via: 193 °C/W, air negligible, drill 0.3 mm (11.8 mil, fine
+  for a smaller IC);
 - nine in parallel: 21.4 °C/W in the θ box, 42.9 °C across the board at
   2 W;
 - the nine empty, solder-filled and copper-filled: 21.4, 16 and
@@ -10008,7 +10044,15 @@ by side share the heat, so N of them in parallel divide θ by N.
 - mil turns every length to mil (1.6 mm reads 62.99 mil, 25 µm 0.9843 mil),
   and µm plating brings them back to mm;
 - a fraction of a via is refused;
-- the remembered fill.
+- the remembered fill;
+- AN-1520's fit: a 3 × 3 mm pad holds 3 × 3 = 9 vias, a 5 × 2.5 mm pad
+  4 × 2 = 8, in mil 118 × 118 mil at 47 mil;
+- AN-1520's 7 × 7 mm pad: 6 × 6 = 36 vias of 0.33 mm (13 mil, the size
+  it recommends), 4.83 °C/W, with the past-16 note;
+- 4 vias on the 3 × 3 mm pad go near its edge, 12 are too many;
+- a 0.2 mm drill (7.87 mil) is flagged under 10 mil;
+- the pad's own picker turns every length to mil;
+- with the pad emptied the vias still compute.
 
 [↑ Index](#index)
 

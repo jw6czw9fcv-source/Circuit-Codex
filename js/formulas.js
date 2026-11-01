@@ -446,8 +446,8 @@ const FORMULAS = [
   {
     tool: "Thermal vias",
     domain: "pcb",
-    formulas: ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N"],
-    note: "l board thickness, d finished hole, b plating, λCu 384 W/m·K, SAC solder 57 (Fineline 2021, TTM ANN-8804).",
+    formulas: ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N", "Vias per side = ⌊(side − drill) / 1.2 mm⌋ + 1"],
+    note: "l board thickness, d finished hole, b plating, λCu 384 W/m·K, SAC solder 57 (Fineline 2021, TTM ANN-8804). Under an exposed pad: 1.2 mm pitch, 0.33 mm (13 mil) vias (TI AN-1520).",
   },
   {
     tool: "Wire sizing",
