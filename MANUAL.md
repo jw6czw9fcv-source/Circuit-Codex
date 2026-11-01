@@ -46,7 +46,6 @@ will key on, since that is the id the app already holds for each tool.
 ### Active & semiconductor devices
 
 - Diodes → [Diode forward voltage](#diode-forward-voltage)
-- Diodes → [Zener regulation](#zener-regulation)
 - Diodes → [LED series resistor](#led-series-resistor)
 - Transistors (BJT) → [BJT biasing](#bjt-biasing)
 - Transistors (BJT) → [BJT as a switch](#bjt-as-a-switch)
@@ -97,6 +96,7 @@ will key on, since that is the id the app already holds for each tool.
 ### Power electronics
 
 - Regulators → [Linear regulator](#linear-regulator)
+- Regulators → [Zener regulation](#zener-regulation)
 - Regulators → [Zener + transistor](#zener-transistor)
 - Battery → [Battery runtime](#battery-runtime)
 - Battery → [Battery C-rate](#battery-c-rate)
@@ -10142,7 +10142,7 @@ that point; the nearest case is there to show how far.
 <a id="zener-regulation"></a>
 ## Zener regulation
 
-`calc: zener-regulation` · Active & semiconductor devices › Diodes
+`calc: zener-regulation` · Power electronics › Supply & regulation
 (also found as Zener voltage stabilization)
 
 ### What it computes

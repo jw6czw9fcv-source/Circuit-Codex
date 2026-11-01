@@ -383,7 +383,7 @@ const FORMULAS = [
   },
   {
     tool: "Zener regulation",
-    domain: "active",
+    domain: "power",
     formulas: ["Rs ≤ (Vin min − Vz max) / (IL max + Iz min)", "Rs ≥ (Vin max − Vz min) / (Iz max + IL min)", "Pz = Vz × Iz"],
     note: "Iz min: the knee current (IZT2 on Vishay sheets); Iz max: IZM or P / Vz. Kuphaldt, Lessons vol. III ch. 3.",
   },

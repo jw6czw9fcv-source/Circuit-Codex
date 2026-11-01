@@ -73,7 +73,7 @@ const DOMAINS = [
     bg: "#2A1B32",
     icon: "transistor",
     sections: [
-      { title: "Diodes", tools: [{ name: "Diode forward voltage", was: "Forward voltage / biasing", calc: "diode-biasing" }, { name: "Zener regulation", calc: "zener-regulation", mergedNames: ["Zener voltage stabilization"] }, { name: "LED series resistor", calc: "led-series-resistor" }] },
+      { title: "Diodes", tools: [{ name: "Diode forward voltage", was: "Forward voltage / biasing", calc: "diode-biasing" }, { name: "LED series resistor", calc: "led-series-resistor" }] },
       { title: "Transistors (BJT)", tools: [{ name: "BJT biasing", was: "BJT biasing (voltage divider)", calc: "transistor-bias" }, { name: "BJT as a switch", was: "NPN/PNP as a switch", calc: "transistor-switch" }, { name: "BJT currents", was: "BJT currents (hFE, IC)", calc: "transistor-example" }] },
       { title: "MOSFET / IGBT", tools: [{ name: "MOSFET biasing", was: "Biasing", calc: "mosfet-bias" }, { name: "MOSFET switching", was: "Switching calculation", calc: "mosfet-switch" }] },
       { title: "Rectifiers", tools: [{ name: "Half-wave rectifier", was: "Half-wave", calc: "rectifier-halfwave" }, { name: "Bridge rectifier", was: "Full-wave (bridge)", calc: "rectifier-bridge" }, { name: "Center-tap rectifier", was: "Full-wave with center tap", calc: "rectifier-centertap" }, { name: "Rectifier ripple", was: "Half-wave with capacitor (ripple)", calc: "rectifier-halfwave-cap" }] },
@@ -137,7 +137,7 @@ const DOMAINS = [
       {
         title: "Supply & regulation",
         tools: [
-          { name: "Linear regulator", was: "Linear regulator (LDO)", calc: "linear-regulator" }, { name: "DC/DC buck converter" }, { name: "DC/DC boost converter" },
+          { name: "Linear regulator", was: "Linear regulator (LDO)", calc: "linear-regulator" }, { name: "Zener regulation", calc: "zener-regulation", mergedNames: ["Zener voltage stabilization"] }, { name: "DC/DC buck converter" }, { name: "DC/DC boost converter" },
           { name: "Zener + transistor", was: "Zener + transistor stabilization", calc: "zener-transistor" }, { name: "SMPS flyback basics" },
           { name: "Inrush current limiter (NTC)" }, { name: "Constant current source/driver" }, { name: "Power factor" }, { name: "POE classes" },
         ],
