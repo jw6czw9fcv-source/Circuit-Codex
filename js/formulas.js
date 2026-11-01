@@ -400,6 +400,12 @@ const FORMULAS = [
     note: "LM317: Vref 1.25 V, Iadj ≈ 50 µA, R1 from OUT to ADJ (TI datasheet, eq. 2). Every volt dropped becomes heat; Iq is a fixed part's own current to ground.",
   },
   {
+    tool: "Constant current",
+    domain: "power",
+    formulas: ["I = Vref / R + Iadj", "Vload max = Vin min − Vref − headroom"],
+    note: "R from OUT to ADJ, the load after it (TI LM317 SLVS044Z §8.3.7: 1.25 V ÷ 24 Ω, VI > VBAT + 4.25 V).",
+  },
+  {
     tool: "DC/DC buck converter",
     domain: "power",
     formulas: ["Vout = D × Vin"],

@@ -98,6 +98,7 @@ will key on, since that is the id the app already holds for each tool.
 - Regulators → [Linear regulator](#linear-regulator)
 - Regulators → [Zener regulation](#zener-regulation)
 - Regulators → [Zener + transistor](#zener-transistor)
+- Regulators → [Constant current](#constant-current)
 - Battery → [Battery runtime](#battery-runtime)
 - Battery → [Battery C-rate](#battery-c-rate)
 - Battery → [Internal resistance](#internal-resistance)
@@ -10361,5 +10362,101 @@ supply and the output, at the full load current.
 - 2 A is flagged over the BD139's 1.5 A;
 - a custom hFE of 100 needs 4.95 mA;
 - the remembered transistor and zener.
+
+[↑ Index](#index)
+
+---
+
+<a id="constant-current"></a>
+## Constant current
+
+`calc: constant-current` · Power electronics › Supply & regulation
+(formerly Constant current source/driver)
+
+### What it computes
+
+An adjustable regulator made into a current source with one resistor, on
+one screen:
+
+- **Inputs:** the regulator (LM317, LM1117-ADJ, AMS1117-ADJ, LM1086-ADJ,
+  with the figures read for Linear regulator, or a custom Vref and
+  dropout), the current wanted, the supply's lowest and highest voltage,
+  the load's least and most voltage (an LED string, a battery), and the
+  resistor you use.
+- **The big result:** the resistor, Vref / (I − Iadj), and the nearest
+  E24 value with the current it gives.
+- **The resistor you use** follows that E24 value until you type your
+  own; a new current wanted brings it back. For it:
+  - the current, with its spread over the reference's tolerance;
+  - the resistor's heat, Vref × I;
+  - the most load voltage it can drive at the lowest supply (supply less
+    Vref and the part's headroom or dropout at that current), flagged
+    when the load needs more;
+  - the regulator's heat at the highest supply and the lowest load
+    voltage;
+  - warnings under the part's minimum load current (typical, then
+    guaranteed) and over its current rating.
+- **Units:** the current in µA, mA or A, the resistor in Ω, kΩ or MΩ.
+- **Drawing:** the regulator with IN, OUT and ADJ, R from OUT, ADJ tied
+  to the load side of R, the load to ground.
+- **Remembered:** the regulator and the units.
+
+Examples: TI's 50 mA charger (24 Ω), 350 mA for a power LED, 20 mA for
+an LED string, and 5 mA, too little for an LM317.
+
+### Source
+
+- **TI LM317, SLVS044Z, April 2025** (read): "By connecting a fixed
+  resistor between the adjustment pin and output, the LM317 is also able
+  to be used as a precision current regulator"; §8.3.3, a precision
+  current limiter, Ilimit = 1.2 V / R1; §8.3.7, a 50 mA constant-current
+  battery charger, "ICHG = 1.25V ÷ 24 Ω. Make sure VI is greater than
+  VBAT + 4.25V. (1.25V [VREF] + 3V [headroom])". The tool takes the
+  reference at its worst, 1.3 V, so it asks for 4.3 V over the battery.
+- **The parts' figures:** as in Linear regulator (TI LM317 and LM1117,
+  AMS AMS1117, TI LM1086): Vref and its spread, the adjust-pin current,
+  the minimum load current, the headroom or dropout, the current rating.
+
+### Why the formulas are these
+
+    I = Vref / R + Iadj
+    R = Vref / (I − Iadj)
+    Vload max = Vin min − Vref − headroom
+    P resistor = Vref × (I − Iadj),   P regulator = (Vin max − Vload min − Vref) × I
+
+The regulator holds Vref between OUT and ADJ. With only R between them,
+the current through R is Vref / R whatever the load; it flows on into the
+load, joined by the adjust-pin current. The regulator keeps this up as
+long as it has its headroom: the supply must cover the load's voltage,
+Vref and that headroom. Whatever the load does not use, the regulator
+drops as heat.
+
+### Assumptions and limits
+
+- **The minimum load current** is the least the regulator needs to
+  regulate at all (LM317: 3.5 mA typical, 10 mA guaranteed); a current
+  source below it is not assured.
+- **The LM1117's dropout** is interpolated between its listed currents;
+  the others' is their full-load figure, as in Linear regulator.
+- **Vref's tolerance** moves the current by the same proportion (the
+  LM317's 1.2 to 1.3 V is ± 4 %); a 1 % resistor adds its own 1 %.
+- **The regulator's heat** needs a heatsink past a watt or two; see Heat
+  sink sizing.
+
+### How it was checked
+
+11 cases:
+- TI's 24 Ω: 52.1 mA (50 to 54.2 mA over Vref), 65.1 mW in R;
+- that charger from 12 V: 7.7 V left for the battery, 248 mW in the
+  regulator;
+- 350 mA: 3.572 Ω, 3.6 Ω (E24) gives 347 mA, 434 mW;
+- 20 mA: 62 Ω gives 20.2 mA, three LEDs at 9.6 V fit under 9.7 V;
+- 5 mA is under the LM317's guaranteed 10 mA, 2 mA under even its
+  typical 3.5 mA;
+- a load needing more than the supply leaves is flagged;
+- the LM1117 needs only its 1.13 V dropout at 347 mA: 9.61 V left;
+- a typed resistor holds (4.7 Ω gives 266 mA);
+- over 1.5 A is over the LM317's rating;
+- the remembered regulator.
 
 [↑ Index](#index)

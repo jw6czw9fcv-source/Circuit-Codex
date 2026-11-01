@@ -576,6 +576,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "linear-regulator") return renderLinearRegulator(domain, tool, favId);
   if (calcId === "zener-regulation") return renderZenerRegulation(domain, tool, favId);
   if (calcId === "zener-transistor") return renderZenerTransistor(domain, tool, favId);
+  if (calcId === "constant-current") return renderConstantCurrent(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "via-current") return renderViaCurrent(domain, tool, favId);
@@ -11567,6 +11568,201 @@ function renderHeatSink(domain, tool, favId) {
     app.querySelectorAll("select[data-punit]").forEach((el) => {
       el.onchange = () => { state.pUnit = el.value; setPref(C, "pUnit", el.value); paint(); };
     });
+  }
+
+  paint();
+}
+
+// ---------- Constant current source ----------
+// An adjustable regulator with one resistor from OUT to ADJ holds its
+// reference across that resistor, so the current through it, and on into
+// the load, is Vref / R, plus the small adjust-pin current. TI LM317
+// (SLVS044Z, April 2025): "By connecting a fixed resistor between the
+// adjustment pin and output, the LM317 is also able to be used as a
+// precision current regulator"; section 8.3.7, a 50 mA charger, "ICHG =
+// 1.25V ÷ 24 Ω. Make sure VI is greater than VBAT + 4.25V (1.25V [VREF] +
+// 3V [headroom])". The parts' figures are Linear regulator's (LDO_PARTS):
+// Vref and its spread, IADJ, the minimum load current, the headroom or
+// dropout, the current rating.
+const CC_PARTS = ["lm317", "lm1117", "ams1117", "lm1086", "custom"];
+
+function renderConstantCurrent(domain, tool, favId) {
+  const C = "constant-current";
+  const state = {
+    part: pref(C, "part", "lm317", CC_PARTS),
+    iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
+    rUnit: pref(C, "rUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
+    si: { i: 0.35, vinMin: 12, vinMax: 12, vlMin: 6, vlMax: 7, r: 3.6, cvref: 1.25, cdrop: 1 },
+    // The resistor box follows the wanted current until a value is typed.
+    rTyped: false,
+  };
+  const P = () => LDO_PARTS[state.part];
+  const vref = () => (P().custom ? state.si.cvref : P().vref);
+  const iadj = () => (P().custom ? 0 : P().iadj);
+  const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const scale = (k) => (k === "i" ? AMP_UNITS[state.iUnit] : k === "r" ? DIVIDER_R_UNITS[state.rUnit] : 1);
+  // The resistor for the wanted current, exact and nearest in E24.
+  const rFor = () => vref() / (state.si.i - iadj());
+  const currentOf = (r, vr = vref()) => vr / r + iadj();
+
+  function problem() {
+    const s = state.si;
+    if (P().custom && !(s.cvref > 0)) return "Enter the regulator's reference voltage.";
+    if (!(s.i > 0)) return "Enter the current wanted.";
+    if (!(s.i > iadj())) return `The current must be above the adjust-pin current, ${val(iadj(), "A")}.`;
+    if (!(s.vinMin > 0) || !(s.vinMax >= s.vinMin)) return "Enter the supply's lowest and highest voltage, the highest at least the lowest.";
+    if (!(s.vlMin >= 0) || !(s.vlMax >= s.vlMin)) return "Enter the load's least and most voltage, the most at least the least.";
+    if (!(s.r > 0)) return "Enter the resistor.";
+    return "";
+  }
+
+  function syncR() {
+    if (state.rTyped) return;
+    const err = problem();
+    if (err && !/resistor/.test(err)) return;
+    state.si.r = nearestESeries(rFor(), "E24").value;
+    const el = app.querySelector('input[data-key="r"]');
+    if (el && el !== document.activeElement) el.value = fmt(state.si.r / scale("r"));
+  }
+
+  // The regulator with R from OUT to ADJ: ADJ ties to the load side of R,
+  // and the load goes to ground.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, t, c = part, a = "start") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const zig = (x1, x2, y) => { let d = `M${x1} ${y}`; const n = 6, w = (x2 - x1) / n; for (let i = 0; i < n; i++) d += ` L${x1 + w * (i + 0.5)} ${y + (i % 2 ? 5 : -5)}`; return `${d} L${x2} ${y}`; };
+    const zigV = (x, y1, y2) => { let d = `M${x} ${y1}`; const n = 6, h = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + h * (i + 0.5)}`; return `${d} L${x} ${y2}`; };
+    const s = state.si;
+    const vin = s.vinMin === s.vinMax ? val(s.vinMin, "V") : `${Number(s.vinMin.toPrecision(3))}–${val(s.vinMax, "V")}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="80" y="16" width="90" height="38" rx="3" stroke="${part}" stroke-width="1.6"/>
+      ${lbl(125, 33, P().custom ? "regulator" : P().label, part, "middle")}
+      ${lbl(85, 48, "IN", grey)}${lbl(165, 48, "OUT", grey, "end")}${lbl(125, 51, "ADJ", grey, "middle")}
+      <path d="M24 32 H80 M170 32 H186 M226 32 H246 V70 M125 54 V70 H246 M246 96 V104 M24 104 H246" stroke="${wire}" stroke-width="1.6"/>
+      <circle cx="24" cy="32" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="24" cy="104" r="3" stroke="${wire}" stroke-width="1.4"/>
+      <circle cx="246" cy="70" r="2.5" fill="${wire}"/>
+      <path d="${zig(186, 226, 32)}" stroke="${calc}" stroke-width="1.6"/>
+      ${lbl(206, 20, `R ${s.r > 0 ? formatOhms(s.r) : "?"}`, calc, "middle")}
+      <path d="M246 70 V76 M246 94 V96" stroke="${wire}" stroke-width="1.6"/>
+      <path d="${zigV(246, 76, 94)}" stroke="${part}" stroke-width="1.6"/>
+      ${lbl(256, 90, "load")}
+      <path d="M232 38 V58 M228 53 L232 59 L236 53" stroke="${calc}" stroke-width="1.6"/>
+      ${lbl(226, 52, `I ${s.i > 0 ? val(s.i, "A") : "?"}`, calc, "end")}
+      ${lbl(24, 12, `Vin ${vin}`, grey)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, p = P();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    const exact = rFor();
+    const near = nearestESeries(exact, "E24").value;
+    const i = currentOf(s.r);
+    // The current over the reference's spread.
+    const spread = p.custom ? "" : `${val(currentOf(s.r, p.vrefMin), "A")} to ${val(currentOf(s.r, p.vrefMax), "A")} over Vref's tolerance`;
+    // The most load voltage it can drive at the lowest supply.
+    const need = p.custom ? s.cdrop : p.need(i);
+    const vrefHi = p.custom ? vref() : p.vrefMax;
+    const vlFree = s.vinMin - vrefHi - need;
+    const needTxt = p.needText ? p.needText.replace("it is specified from", "it needs") : `its ${val(need, "V", 3)} dropout`;
+    const comp = vlFree >= s.vlMax
+      ? `${val(vlFree, "V")}: the load's ${val(s.vlMax, "V")} fits`
+      : warn(`${val(Math.max(vlFree, 0), "V")}: under the load's ${val(s.vlMax, "V")}, the current will fall short`);
+    // The regulator's heat at the highest supply and the lowest load voltage.
+    const preg = Math.max(s.vinMax - s.vlMin - vref(), 0) * i;
+    const lims = [];
+    if (!p.custom && i < p.iminMax) lims.push(warn(i < p.imin ? `under its ${val(p.imin, "A")} minimum load: it may not regulate` : `under its ${val(p.iminMax, "A")} guaranteed minimum load`));
+    if (p.imax && i > p.imax) lims.push(warn(`over its ${val(p.imax, "A")} rating`));
+    return `
+        <div class="result-field">
+          <div class="result-head"><span class="label">Resistor for ${val(s.i, "A")}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="r">${formatOhms(exact)}</span></div>
+          <div class="result-sub" data-res="sub">nearest E24 ${formatOhms(near)} gives ${val(currentOf(near), "A")}${iadj() > 0 ? `, ${val(iadj(), "A")} of it from IADJ` : ""}</div>
+        </div>
+        <div class="field notation-box">
+          ${row(`Current with ${formatOhms(s.r)}`, `${val(i, "A")}${spread ? `, ${spread}` : ""}`, "i")}
+          ${row("Resistor heat", `${val(vref() * (i - iadj()), "W")} (Vref × I)`, "pr")}
+          ${row("Most load voltage", `${comp} (supply less Vref and ${needTxt})`, "comp")}
+          ${row("Regulator heat, worst", val(preg, "W"), "preg")}
+          ${lims.length ? row("Ratings", lims.join(" · "), "lims") : ""}
+        </div>`;
+  }
+
+  function refresh() {
+    syncR();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (part, si, extra, typed) => () => {
+    Object.assign(state, { part }, extra || {});
+    Object.assign(state.si, si);
+    state.rTyped = !!typed;
+    paint();
+  };
+  useExamples([
+    { title: "TI's 50 mA charger", note: "LM317 with 24 Ω: 1.25 V ÷ 24 Ω = 52.1 mA, and VI must exceed VBAT + 4.25 V.",
+      apply: example("lm317", { i: 0.05, r: 24, vinMin: 12, vinMax: 12, vlMin: 6, vlMax: 7.5 }, { iUnit: "mA", rUnit: "Ω" }, true) },
+    { title: "350 mA for a power LED", note: "1.25 V / 0.35 A = 3.57 Ω; 3.6 Ω (E24) gives 347 mA and heats 0.43 W.",
+      apply: example("lm317", { i: 0.35, vinMin: 12, vinMax: 12, vlMin: 3, vlMax: 3.6 }, { iUnit: "mA", rUnit: "Ω" }) },
+    { title: "20 mA for an LED string", note: "62 Ω for three LEDs from 14–16 V; 20 mA is above the LM317's 10 mA minimum load.",
+      apply: example("lm317", { i: 0.02, vinMin: 14, vinMax: 16, vlMin: 6, vlMax: 9.6 }, { iUnit: "mA", rUnit: "Ω" }) },
+    { title: "5 mA is too little", note: "Under the LM317's 10 mA guaranteed minimum load: the current is not assured.",
+      apply: example("lm317", { i: 0.005, vinMin: 12, vinMax: 12, vlMin: 2, vlMax: 3 }, { iUnit: "mA", rUnit: "Ω" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    syncR();
+    const field = (key, label, unitHTML) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / scale(key))}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const iSel = `<select data-iunit="1">${Object.keys(AMP_UNITS).map((u) => `<option ${u === state.iUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const rSel = `<select data-runit="1">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${u === state.rUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const partSel = `<select id="cc-part">${CC_PARTS.map((k) => `<option value="${k}" ${k === state.part ? "selected" : ""}>${LDO_PARTS[k].label}</option>`).join("")}</select>`;
+    let fields = `<div class="field-pair"><div class="field"><label>Regulator</label>${partSel}</div>${field("i", "Current wanted", iSel)}</div>`;
+    if (P().custom) fields += `<div class="field-pair">${field("cvref", "Vref", fixed("V"))}${field("cdrop", "Dropout", fixed("V"))}</div>`;
+    fields += `
+      <div class="field-pair">${field("vinMin", "Supply, lowest", fixed("V"))}${field("vinMax", "Supply, highest", fixed("V"))}</div>
+      <div class="field-pair">${field("vlMin", "Load, least", fixed("V"))}${field("vlMax", "Load, most", fixed("V"))}${field("r", "R you use", rSel)}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A regulator and one resistor set a current")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["I = Vref / R + Iadj", "R = Vref / (I − Iadj)", "Vload max = Vin min − Vref − headroom", "P reg = (Vin − Vload − Vref) × I"],
+        "An adjustable regulator keeps its reference voltage, Vref (1.25 V for the LM317), between OUT and ADJ. With one resistor R between them and the load after it, the regulator holds Vref across R whatever the load, so the current is Vref / R, plus the small adjust-pin current Iadj that also flows into the load. The load can be anything that takes current at a voltage: an LED string, a battery being charged. It works as long as the supply covers the load's voltage, Vref and the regulator's own headroom; below that the current falls. The regulator drops the rest of the supply and takes the heat."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key;
+        state.si[k] = parseFloat(el.value) * scale(k);
+        if (k === "r") state.rTyped = true;
+        if (k === "i") state.rTyped = false;
+        refresh();
+      };
+    });
+    document.getElementById("cc-part").onchange = (e) => { state.part = e.target.value; setPref(C, "part", state.part); paint(); };
+    app.querySelector("select[data-iunit]").onchange = (e) => { state.iUnit = e.target.value; setPref(C, "iUnit", state.iUnit); paint(); };
+    app.querySelector("select[data-runit]").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
   }
 
   paint();

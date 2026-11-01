@@ -349,7 +349,7 @@ Then:
 - [x] Zener voltage stabilization — built as Zener regulation (Active › Diodes), 2026-10-29
 - [x] Zener + transistor stabilization — built as Zener + transistor, 2026-10-31
 - [ ] Inrush current limiter (NTC)
-- [ ] Constant current source/driver
+- [x] Constant current source/driver — built as Constant current (adjustable regulator + R), 2026-10-31
 - [ ] Power factor
 - [ ] POE classes
 - [ ] Accumulators
