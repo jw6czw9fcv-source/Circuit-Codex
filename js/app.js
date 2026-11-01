@@ -578,6 +578,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "zener-transistor") return renderZenerTransistor(domain, tool, favId);
   if (calcId === "constant-current") return renderConstantCurrent(domain, tool, favId);
   if (calcId === "inrush-limiter") return renderInrushLimiter(domain, tool, favId);
+  if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "via-current") return renderViaCurrent(domain, tool, favId);
@@ -12227,6 +12228,184 @@ function renderInrushLimiter(domain, tool, favId) {
     app.querySelectorAll("input[data-key]").forEach((el) => {
       el.oninput = () => { const k = el.dataset.key; state.si[k] = parseFloat(el.value) * SCALE[k]; refresh(); };
     });
+  }
+
+  paint();
+}
+
+// ---------- Antenna length ----------
+// FM 24-18, Tactical Single-Channel Radio Communications Techniques (30 Sep
+// 1987), 3-8 Antenna Length: an antenna's physical and electrical lengths
+// "are never the same"; the end effect makes it seem longer electrically,
+// so "use a correction of 0.95 for frequencies between 3.0 and 50.0 MHz":
+// a half wave is 150 × 0.95 / f MHz = 142.5 / f metres (468 / f feet); a
+// long wire of N half waves is 150 (N − 0.05) / f metres. NEETS module 10
+// (NAVEDTRA 14182, Sep 1998), ch. 4: a quarter-wave (Marconi) antenna is a
+// half-wave antenna cut in half with one end grounded; the ground supplies
+// the missing quarter. The manual rounds c / 2 to 150 m·MHz; this uses
+// c = 299 792 458 m/s exactly.
+const ANT_C = 299792458;
+const ANT_MODES = { dipole: "Half-wave dipole", quarter: "Quarter-wave", long: "Long wire" };
+const ANT_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const ANT_L_UNITS = { m: 1, cm: 0.01, ft: 0.3048 };
+
+function renderAntennaLength(domain, tool, favId) {
+  const C = "antenna-length";
+  const state = {
+    mode: pref(C, "mode", "dipole", Object.keys(ANT_MODES)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(ANT_F_UNITS)),
+    lUnit: pref(C, "lUnit", "m", Object.keys(ANT_L_UNITS)),
+    si: { f: 7.1e6, k: 0.95, n: 3 },
+  };
+  const val = (v, u, d = 4) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(5)) : "");
+  // Metres per hertz: the length is this over the frequency.
+  const perHz = () => {
+    const s = state.si;
+    if (state.mode === "long") return ANT_C * (s.n - 0.05) / 2;
+    return s.k * ANT_C / (state.mode === "quarter" ? 4 : 2);
+  };
+  const length = () => perHz() / state.si.f;
+  // Feet and inches, to the nearest quarter inch.
+  const ftIn = (m) => {
+    const q = Math.round(m / 0.0254 * 4) / 4;
+    const ft = Math.floor(q / 12), inch = q - ft * 12;
+    return `${ft} ft ${Number(inch.toFixed(2))} in`;
+  };
+  const inL = (m) => `${Number((m / ANT_L_UNITS[state.lUnit]).toPrecision(4))} ${state.lUnit}`;
+
+  function problem() {
+    const s = state.si;
+    if (!(s.f > 0)) return "Enter the frequency.";
+    if (state.mode !== "long" && !(s.k > 0 && s.k <= 1)) return "Enter the correction factor, above 0 and at most 1.";
+    if (state.mode === "long" && !(s.n >= 1 && Number.isInteger(s.n))) return "Enter a whole number of half waves, one or more.";
+    return "";
+  }
+
+  // Each kind drawn plainly: a centre-fed dipole between insulators, a
+  // vertical over a ground plane, a wire fed at one end.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, t, c = calc, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const err = problem();
+    const L = err ? "?" : inL(length());
+    const dim = (x1, x2, y) => `<path d="M${x1} ${y} H${x2} M${x1} ${y - 4} V${y + 4} M${x2} ${y - 4} V${y + 4}" stroke="${calc}" stroke-width="1.2"/>`;
+    if (state.mode === "quarter") {
+      return `<svg width="320" height="118" viewBox="0 0 290 107" fill="none">
+        <path d="M145 14 V80" stroke="${calc}" stroke-width="2.4"/>
+        <path d="M80 84 H139 M151 84 H210 M95 84 L70 98 M195 84 L220 98" stroke="${part}" stroke-width="1.8"/>
+        <path d="M145 80 V102" stroke="${wire}" stroke-width="1.6"/>
+        <path d="M165 14 V80 M161 14 H169 M161 80 H169" stroke="${calc}" stroke-width="1.2"/>
+        ${lbl(174, 51, L, calc, "start")}
+        ${lbl(10, 78, "ground plane", grey, "start")}
+        ${lbl(152, 102, "feed", grey, "start")}
+      </svg>`;
+    }
+    if (state.mode === "long") {
+      return `<svg width="320" height="118" viewBox="0 0 290 107" fill="none">
+        <path d="M30 40 H262" stroke="${calc}" stroke-width="2.2"/>
+        <circle cx="266" cy="40" r="4" stroke="${part}" stroke-width="1.6"/>
+        <path d="M30 40 V90 M24 90 H36 M27 94 H33" stroke="${wire}" stroke-width="1.6"/>
+        ${dim(30, 262, 62)}${lbl(146, 78, `${state.si.n} half waves: ${L}`)}
+        ${lbl(40, 86, "feed", grey, "start")}
+      </svg>`;
+    }
+    return `<svg width="320" height="118" viewBox="0 0 290 107" fill="none">
+      ${lbl(145, 16, L)}${dim(30, 260, 26)}
+      <path d="M30 46 H139 M151 46 H260" stroke="${calc}" stroke-width="2.2"/>
+      <circle cx="26" cy="46" r="4" stroke="${part}" stroke-width="1.6"/><circle cx="264" cy="46" r="4" stroke="${part}" stroke-width="1.6"/>
+      <path d="M139 46 V98 M151 46 V98" stroke="${wire}" stroke-width="1.6"/>
+      ${lbl(158, 96, "feed", grey, "start")}
+      ${lbl(84, 66, err ? "" : inL(length() / 2))}${lbl(206, 66, err ? "" : inL(length() / 2))}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, L = length(), lam = ANT_C / s.f;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    const inBand = s.f >= 3e6 && s.f <= 50e6;
+    const label = { dipole: "Dipole, end to end", quarter: "Quarter-wave element", long: `Long wire, ${s.n} half waves` }[state.mode];
+    return `
+        <div class="result-field">
+          <div class="result-head"><span class="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="len">${inL(L)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "ft" ? `${val(L, "m")}` : ftIn(L)}${state.mode === "dipole" ? `; each leg ${inL(L / 2)}` : ""}</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Wavelength in free space", `${inL(lam)} (${state.mode === "quarter" ? `λ/4 ${inL(lam / 4)}` : `λ/2 ${inL(lam / 2)}`})`, "lam")}
+          ${state.mode === "long" ? row("Correction", "N − 0.05 half waves (FM 24-18)", "corr") : row("Correction", inBand ? `${s.k} of the free-space length` : warn(`${s.k}; FM 24-18 gives 0.95 for 3 to 50 MHz only`), "corr")}
+        </div>`;
+  }
+
+  // The two live boxes: one sets the other.
+  function syncBoxes(skip) {
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== skip) el.value = v; };
+    set("f", fmt(state.si.f / ANT_F_UNITS[state.fUnit]));
+    set("len", problem() ? "" : fmt(length() / ANT_L_UNITS[state.lUnit]));
+  }
+
+  function refresh(skip) {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes(skip);
+  }
+
+  const example = (mode, si) => () => { state.mode = mode; Object.assign(state.si, si); paint(); };
+  useExamples([
+    { title: "40 m dipole, 7.1 MHz", note: "0.95 of a half wave: 20.06 m end to end, two legs of 10.03 m.",
+      apply: example("dipole", { f: 7.1e6, k: 0.95 }) },
+    { title: "CB whip, 27 MHz", note: "A quarter wave over a ground plane: 2.637 m, or 8 ft 7.75 in.",
+      apply: example("quarter", { f: 27e6, k: 0.95 }) },
+    { title: "FM 24-18's rule: 468 / f", note: "At 10 MHz, 468 / 10 = 46.8 ft; exact c gives 46.72 ft.",
+      apply: example("dipole", { f: 10e6, k: 0.95 }) },
+    { title: "FM 24-18: long wire at 7 MHz", note: "3 half waves: its 150 × 2.95 / 7 = 63.2 m; exact c gives 63.17 m.",
+      apply: example("long", { f: 7e6, n: 3 }) },
+  ]);
+
+  function paint() {
+    const s = state.si, m = state.mode;
+    const unitSel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const box = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const third = m === "long" ? box("n", "Half waves", `<span class="unit-fixed">N</span>`, fmt(s.n)) : box("k", "Correction", `<span class="unit-fixed">×</span>`, fmt(s.k));
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "How long to cut a wire antenna")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.entries(ANT_MODES), m, domain.bg)}
+
+      <div class="field-pair">${box("f", "Frequency", unitSel('data-funit="1"', ANT_F_UNITS, state.fUnit), fmt(s.f / ANT_F_UNITS[state.fUnit]))}${box("len", "Length", unitSel('data-lunit="1"', ANT_L_UNITS, state.lUnit), problem() ? "" : fmt(length() / ANT_L_UNITS[state.lUnit]))}${third}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["λ = c / f", "Half wave: L = k × c / (2f)", "  f in MHz: 142.5 / f m, 468 / f ft", "Quarter wave: L = k × c / (4f)", "Long wire: L = c × (N − 0.05) / (2f)"],
+        "A wire antenna resonates when it is half a wavelength long (a dipole, fed in the middle) or a quarter wavelength over a ground plane (a vertical, the ground standing in for the missing half). The wave on a real wire travels a little slower than in free space and the ends add capacitance (the end effect), so the wire is cut shorter than the free-space length: about 0.95 of it between 3 and 50 MHz, the correction factor k. A long wire several half waves long is cut to N − 0.05 half waves. Type the frequency to get the length, or the length you have to get its frequency; trim on the air with an SWR meter."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key, v = parseFloat(el.value);
+        if (k === "f") state.si.f = v * ANT_F_UNITS[state.fUnit];
+        else if (k === "len") { const L = v * ANT_L_UNITS[state.lUnit]; if (L > 0) state.si.f = perHz() / L; }
+        else state.si[k] = v;
+        refresh(el);
+      };
+    });
+    app.querySelector("select[data-funit]").onchange = (e) => { state.fUnit = e.target.value; setPref(C, "fUnit", state.fUnit); paint(); };
+    app.querySelector("select[data-lunit]").onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); };
   }
 
   paint();

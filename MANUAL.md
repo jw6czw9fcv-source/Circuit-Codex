@@ -92,6 +92,7 @@ will key on, since that is the id the app already holds for each tool.
 ### RF & microwave
 
 - Antennas & propagation → [Radio wavelength](#radio-wavelength)
+- Antennas & propagation → [Antenna length](#antenna-length)
 
 ### Power electronics
 
@@ -7331,7 +7332,7 @@ exactly 30 MHz is HF, band 7, and anything above it is VHF.
 
 - **Antenna lengths.** A quarter-wave or half-wave antenna is a fraction of
   this wavelength, shortened further by end effects: that is the Antenna
-  length tool's job when it is built.
+  length tool's job.
 - **Velocity factor.** Its own future tool.
 - **Band plans.** Amateur, cellular and microwave allocations are reference
   tools of their own.
@@ -10719,5 +10720,160 @@ resistance is small.
 - a 48 V DC rail: 5.04 Ω, 1.27 J, three parts carry 3 A;
 - over 265 Vac and over 5 A are flagged;
 - the remembered AC or DC.
+
+[↑ Index](#index)
+
+---
+
+<a id="antenna-length"></a>
+## Antenna length
+
+`calc: antenna-length` · RF & microwave › Antennas & propagation
+(formerly Antenna length (dipole/monopole))
+
+### What it computes
+
+How long to cut a wire antenna for a frequency, or the frequency a wire of
+a given length is cut for:
+
+- **Three kinds** (pills):
+  - a **half-wave dipole**, fed in the middle;
+  - a **quarter-wave** vertical over a ground plane;
+  - a **long wire** of N half waves, fed at one end.
+- **Two live boxes:** the frequency and the length. Type either and the
+  other follows.
+- **The correction factor** k: 0.95 by default. Outside 3 to 50 MHz it is
+  flagged, because that is the only range FM 24-18 gives it for. The long
+  wire uses N − 0.05 half waves instead, and its box takes a whole number.
+- **The big result:** the length, in metres, centimetres or feet. Below
+  it:
+  - the same length in feet and inches (to the quarter inch), or in metres
+    when feet are shown;
+  - each leg of a dipole;
+  - the free-space wavelength, with its half or quarter.
+- **Drawing:** the antenna (the calculated part, green) with its length;
+  insulators and the ground plane are blue, the feed is grey.
+- **Remembered:** the kind of antenna and both units.
+
+Examples:
+
+- a 40 m band dipole at 7.1 MHz;
+- a CB quarter-wave whip at 27 MHz;
+- FM 24-18's 468 / f rule at 10 MHz;
+- FM 24-18's worked long wire, 3 half waves at 7 MHz.
+
+### Terms
+
+- **Wavelength (λ):** the distance a radio wave travels during one cycle,
+  c / f. At 7 MHz it is 42.8 m.
+- **Half-wave dipole (Hertz antenna):** a wire half a wavelength long, cut
+  in the middle where the feed line connects. It resonates there: it looks
+  like a plain resistance, about 73 Ω in free space, to the transmitter.
+- **Quarter-wave (Marconi) antenna:** half a dipole, standing over ground
+  or a ground plane (a metal sheet, or radials). The ground acts as a
+  mirror and supplies the missing quarter wave, so it resonates at the
+  same frequency as the full dipole.
+- **End effect:** a real wire seems electrically longer than it is,
+  because of its thickness and the capacitance at its ends and supports.
+  So a wire resonates shorter than the free-space half wave.
+- **Correction factor (k):** how much shorter to cut it, as a share of the
+  free-space length; 0.95 means 5 % shorter.
+- **Long wire:** a wire several half waves long, used on harmonics; the
+  end effect matters only at its ends, so FM 24-18 takes 0.05 of a half
+  wave off the total rather than 5 %.
+
+### Source
+
+- **FM 24-18, Tactical Single-Channel Radio Communications Techniques,
+  Headquarters, Department of the Army, 30 September 1987, §3-8 "Antenna
+  Length"** (read, the EverySpec copy):
+  - an antenna's physical and electrical lengths are "never the same": the
+    reduced velocity of the wave on the wire and the end effect make it
+    seem longer electrically. The diameter-to-length ratio and the
+    insulators and clamps contribute;
+  - use a correction of 0.95 between 3.0 and 50.0 MHz;
+  - a half-wave antenna is 150 × 0.95 / f = 142.5 / f metres, or
+    492 × 0.95 / f = 468 / f feet, f in MHz;
+  - a long wire (one wavelength or longer, for harmonic operation) is
+    150 (N − 0.05) / f metres, or 492 (N − 0.05) / f feet, N being the
+    number of half waves. Its example is 3 half waves at 7 MHz:
+    150 × 2.95 / 7 = 63.2 m;
+  - §3-8 later gives 468 / f feet again for the half-wave doublet.
+- **NEETS Module 10, Introduction to Wave Propagation, Transmission Lines,
+  and Antennas, NAVEDTRA 14182, September 1998, chapter 4** (read):
+  - Hertz antennas are half a wavelength long and insulated from ground;
+  - Marconi antennas are a quarter wavelength, grounded at one end or
+    worked against a counterpoise, which "provides the equivalent of an
+    additional 1/4 wavelength";
+  - a grounded quarter-wave antenna resonates at the same frequency as the
+    ungrounded half-wave, because ground acts as an electrical mirror
+    image;
+  - a half-wave antenna in free space has a radiation resistance of
+    73 Ω; over a ground plane, anything from 0 to about 100 Ω.
+- **c = 299 792 458 m/s**, exact. FM 24-18 rounds c / 2 to 150 m·MHz and
+  492 ft·MHz; the tool uses c itself. That is why it gives 46.72 ft where
+  468 / 10 gives 46.8 ft, and 63.17 m where the manual's example gives
+  63.2 m.
+
+The quarter-wave applies FM 24-18's 0.95 to half the dipole. FM 24-18
+states the factor for half-wave and long-wire antennas only, and NEETS
+gives the quarter-wave as half the dipole; the factor is not separately
+sourced for it.
+
+### Why the formulas are these
+
+    λ = c / f
+    Half wave:     L = k × c / (2f)       (k = 0.95: 142.5 / f m, 468 / f ft)
+    Quarter wave:  L = k × c / (4f)
+    Long wire:     L = c × (N − 0.05) / (2f)
+
+A wire resonates when a wave goes to its end and back in step with the
+source: half a wavelength, end to end. The end effect makes the wire seem
+longer, so it is cut short by k. A quarter wave over ground resonates like
+the full dipole, because its mirror image in the ground supplies the other
+half. A long wire is N half waves end to end, but the end effect acts only
+at its two ends: it loses a fixed 0.05 of a half wave, not 5 % of the
+whole.
+
+The length box works the formula backwards: f = (the factor in front) / L.
+
+### Assumptions and limits
+
+- **Thin wire in the clear.** The real factor depends on the ratio of the
+  wire's diameter to its length and on the insulators and clamps (FM
+  24-18), and also on its height above ground and what is near it. 0.95
+  is FM 24-18's figure for HF wire antennas.
+- **3 to 50 MHz for k = 0.95.** Outside it the tool flags the factor and
+  still computes. Type another k if you have a better figure for your
+  antenna, from its maker or from measuring it.
+- **Cut long, then trim.** Cut the wire a little long, then trim it on the
+  air with an SWR meter or an antenna analyser.
+- **The feed point.** The tool gives the resonant length only. It does not
+  match the feed-line impedance: a dipole in free space is 73 Ω (NEETS),
+  less or more near the ground; a quarter-wave is fed at its low-impedance
+  grounded end; an end-fed long wire is high and needs a tuner.
+- **Ground plane.** A quarter-wave needs a good ground or radials (each
+  about a quarter wave long). Their length is not computed here.
+
+### What it deliberately does not do
+
+- **The wavelength alone:** Radio wavelength has the bands and the period.
+- **Loaded or shortened antennas** (coils, capacitance hats), Yagis and
+  loops: each would be its own tool.
+- **Coax stubs and velocity factor:** a cable's length per wavelength is
+  a different correction, for a future Velocity factor tool.
+
+### How it was checked
+
+8 cases:
+
+- 7.1 MHz half wave: 20.06 m, 65 ft 9.75 in, legs of 10.03 m, λ 42.22 m.
+- 27 MHz quarter wave: 2.637 m, 8 ft 7.75 in; λ/4 2.776 m.
+- FM 24-18's long wire, 3 half waves at 7 MHz: 63.17 m (the manual's
+  rounded 150 gives 63.2 m).
+- 20 m typed in the length box: 7.1201 MHz.
+- 144 MHz flags the 0.95.
+- A correction of 0 and 2.5 half waves are refused.
+- 468 / f at 10 MHz: 46.72 ft, 14.24 m, legs of 23.36 ft.
 
 [↑ Index](#index)

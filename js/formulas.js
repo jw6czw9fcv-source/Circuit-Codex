@@ -356,10 +356,10 @@ const FORMULAS = [
     note: "Γ is the reflection coefficient, 0 (perfect match) to 1 (total reflection).",
   },
   {
-    tool: "Antenna length (dipole/monopole)",
+    tool: "Antenna length",
     domain: "rf",
-    formulas: ["Half-wave dipole = 468 / f", "Quarter-wave monopole = 234 / f"],
-    note: "Length in feet, f in MHz. 468 is 95 % of a free-space half wave (491.8 / f): the usual allowance for end effect on thin wire. Trim it on the air.",
+    formulas: ["Half wave: L = k × c / (2f)", "f in MHz: 142.5 / f m, 468 / f ft", "Quarter wave: L = k × c / (4f)", "Long wire: L = c × (N − 0.05) / (2f)"],
+    note: "f in MHz for the short forms. k ≈ 0.95 between 3 and 50 MHz (FM 24-18): the end effect makes the wire seem longer than it is. Trim it on the air.",
   },
 
   // ---- Power ----

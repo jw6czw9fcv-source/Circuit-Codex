@@ -327,7 +327,7 @@ Priority first — the tools most asked for in apps like this (Pierre,
 
 Then:
 
-- [ ] Antenna length (dipole/monopole)
+- [x] Antenna length (dipole/monopole) — built as Antenna length, FM 24-18 §3-8 + NEETS 10, 2026-11-01
 - [ ] Beamwidth & gain
 - [ ] Fresnel zone
 - [ ] Path loss
