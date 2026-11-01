@@ -1460,6 +1460,13 @@ const CHECK_CASES = {
       expect: [['[data-res="res"]', "10 µF at 1.42 MHz, 100 nF at 14.2 MHz"]] },
     { name: "a zero current step is refused", do: [["set", 'input[data-key="di"]', "0"]],
       expect: [['[data-res="err"]', "Enter the supply voltage, the ripple allowed and the current step."]] },
+    { name: "Suggest for the MCU: 1 µF bulk (606 nF needed) and one 100 nF; under the target 89.1 kHz to 414 MHz", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]'], ["click", "#dc-suggest"]],
+      expect: [['[data-res="res"]', "1 µF at 4.5 MHz, 100 nF at 14.2 MHz"], ['[data-res="band"]', "89.1 kHz to 414 MHz"], ['[data-res="bulk"]', "1.1 µF of the 606 nF needed for 1 µs"]] },
+    { name: "Suggest for AVX's 20 A: 34 × 100 µF, 3 × 100 nF, 106 low-ESL parts to reach 4.5 pH", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]'], ["click", "#dc-suggest"]],
+      expect: [['.r-item:nth-child(1) input[data-key="n"]', "34"], ['.r-item:nth-child(2) input[data-key="n"]', "3"], ['.r-item:nth-child(3) input[data-key="n"]', "106"],
+        ['[data-res="ind"]', "4.5 pH, under the 4.5 pH a 1 ns edge allows"]] },
+    { name: "Suggest for the FPGA core leaves a peak between 47 µF and 100 nF, flagged", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="3"]'], ["click", "#dc-suggest"]],
+      expect: [['[data-res="peak"]', "/^93.9 mΩ at 4.14 MHz, over the target$/"]] },
   ],
   "via-current": [
     { name: "4 A at a 10 °C rise needs a 3.11 mm, 1 oz trace (IPC-2152): 5 of Brooks & Adam's 0.0217 mm² vias", do: [],

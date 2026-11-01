@@ -10506,6 +10506,16 @@ needed with enough in parallel that their ESRs reach the target, and low
 ESL for the fast edges (the inductance row); then the curve must stay
 under the line with no peak above it.
 
+**Suggest** (Pierre asked how to pick them) fills the rows by those
+rules: the smallest of 1, 2.2, 4.7, 10, 22, 47, 100 µF that covers the
+bulk (several 100 µF past that); 100 nF parts, as many as ESR / Ztarget;
+and, only when the total ESL is still over the edge's limit, enough
+0612 LICC parts (0.1 µF, 550 pH, AVX's figure 7) to bring it under. ESR
+is the illustrative 10 mΩ and ESL a 1206's 1.25 nH until replaced. The
+rules do not promise a flat curve: a peak can remain between the bulk
+part and the 100 nF, and the tool flags it; an in-between value fills
+it.
+
 Examples: AVX's 20 A step at 1.8 V, a small MCU at 3.3 V, 10 µF + 100 nF
 + 1 nF, and an FPGA core at 1 V.
 
@@ -10563,8 +10573,11 @@ the anti-resonance peak.
 
 ### How it was checked
 
-8 cases:
+11 cases:
 - AVX's example: 4.5 mΩ, 3333 µF, 4.5 pH; three 100 nF (417 pH) far over;
+- Suggest: for the MCU, 1 µF and one 100 nF (89.1 kHz to 414 MHz); for
+  AVX's 20 A, 34 × 100 µF, 3 × 100 nF and 106 low-ESL parts (4.5 pH);
+  for the FPGA core, a 93.9 mΩ peak left at 4.14 MHz, flagged;
 - those three get under 4.5 mΩ only around 14.2 MHz (14.1 to 14.7 MHz);
 - a small MCU: 1.65 Ω from 962 kHz to 207 MHz, 606 nF of bulk needed;
 - 10 µF + 2 × 100 nF + 2 × 1 nF: 48.2 kHz to 85.8 MHz, a 4.36 Ω

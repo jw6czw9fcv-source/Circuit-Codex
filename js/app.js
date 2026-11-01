@@ -11053,6 +11053,26 @@ function renderDecoupling(domain, tool, favId) {
       apply: example({ v: 1, pct: 5, di: 1, tSlow: 2e-6, tFast: 1e-9 }, [{ c: 1e-6, esr: 0.01, esl: 0.175e-9, n: 1 }]) },
   ]);
 
+  // A starting set from AVX's three rules: a bulk part covering C = ΔI t / ΔV
+  // (a standard value up to 100 µF, then several), 100 nF parts enough
+  // that their ESRs reach the target (n = ESR / Ztarget), and, only if the
+  // total ESL is still over the edge's limit, low-inductance 0612 LICC parts
+  // (0.1 µF, 550 pH: AVX's figure 7) enough to bring it under. ESR is the
+  // tool's illustrative 10 mΩ, ESL a 1206's 1.25 nH, both to be replaced.
+  function suggest() {
+    const s = state.si, dv = s.v * s.pct / 100, zt = z();
+    const esr = 0.01, esl1206 = 1.25e-9;
+    const bulk = s.di * s.tSlow / dv;
+    const sizes = [1, 2.2, 4.7, 10, 22, 47, 100].map((u) => u * 1e-6);
+    const cb = sizes.find((c) => c >= bulk * (1 - 1e-9)) || 100e-6;
+    const kinds = [{ c: cb, esr, esl: esl1206, n: Math.max(1, Math.ceil(bulk / cb - 1e-9)) }];
+    kinds.push({ c: 0.1e-6, esr, esl: esl1206, n: Math.max(1, Math.ceil(esr / zt - 1e-9)) });
+    const lMax = dv * s.tFast / s.di;
+    const inv = kinds.reduce((a, k) => a + k.n / k.esl, 0);
+    if (1 / inv > lMax) kinds.push({ c: 0.1e-6, esr, esl: 0.55e-9, n: Math.ceil((1 / lMax - inv) * 0.55e-9 - 1e-9) });
+    return kinds;
+  }
+
   function kindsHTML() {
     const n = state.kinds.length;
     const box = (i, key, value, label) => `<input type="number" inputmode="decimal" step="any" data-kind="${i}" data-key="${key}" value="${fmt(value / SCALE[key])}" aria-label="${label} ${i + 1}" />`;
@@ -11085,7 +11105,7 @@ function renderDecoupling(domain, tool, favId) {
 
       <div class="section-label split" style="color:#8FC1F5">
         <span>Capacitors</span>
-        <button class="label-btn" id="dc-add" ${state.kinds.length >= DC_MAX_KINDS ? "disabled" : ""}>+ add</button>
+        <span><button class="label-btn" id="dc-suggest">Suggest</button> <button class="label-btn" id="dc-add" ${state.kinds.length >= DC_MAX_KINDS ? "disabled" : ""}>+ add</button></span>
       </div>
       <div class="r-list">${kindsHTML()}</div>
 
@@ -11112,6 +11132,11 @@ function renderDecoupling(domain, tool, favId) {
     app.querySelectorAll("[data-drop]").forEach((btn) => {
       btn.onclick = () => { if (state.kinds.length > 1) { state.kinds.splice(+btn.dataset.drop, 1); paint(); } };
     });
+    document.getElementById("dc-suggest").onclick = () => {
+      if (problem() && !/capacitor/.test(problem())) return;
+      state.kinds = suggest();
+      paint();
+    };
     document.getElementById("dc-add").onclick = () => {
       if (state.kinds.length >= DC_MAX_KINDS) return;
       // A new kind starts a decade above the largest, the usual step.
