@@ -12145,10 +12145,17 @@ function renderInrushLimiter(domain, tool, favId) {
     // light-load resistance when under half its Imax).
     const heat = (p) => s.i * s.i * (rRun(p, s.i) ?? p[6]);
     const fits = ICL_SL10.filter(([, r25, tol, imax, ej]) => r25 * (1 - tol / 100) >= rMin && ej >= energy && imax >= s.i && vOk).sort((a, b) => heat(a) - heat(b));
-    const rows = fits.slice(0, 4).map((p) => {
+    // The voltage each part loses while running, as a share of the supply;
+    // over 2 % (Pierre's threshold) it is flagged.
+    const shown = fits.slice(0, 4);
+    let lossy = false;
+    const rows = shown.map((p) => {
       const rr = rRun(p, s.i);
-      return row(p[0], `${val(p[1], "Ω")}, ${p[4]} J, ${val(p[3], "A")}: ${rr !== null ? `${val(rr, "Ω")} running, ${val(s.i * s.i * rr, "W")}` : `over ${val(p[6], "Ω")} running (under half its current)`}`, `part-${p[0]}`);
-    }).join("");
+      const r = rr ?? p[6], drop = s.i * r, pct = drop / s.v * 100;
+      if (pct > 2) lossy = true;
+      const lost = `${rr === null ? "over " : ""}${val(drop, "V")} lost (${Number(pct.toPrecision(2))} %)`;
+      return row(p[0], `${val(p[1], "Ω")}, ${p[4]} J, ${val(p[3], "A")}: ${rr !== null ? `${val(rr, "Ω")} running` : `over ${val(p[6], "Ω")} running (under half its current)`}, ${pct > 2 ? warn(lost) : lost}, ${rr === null ? "over " : ""}${val(s.i * drop, "W")}`, `part-${p[0]}`);
+    }).join("") + (lossy ? row("Voltage lost", warn("over 2 % of the supply: a bypass relay after start-up, or an active (MOSFET) soft-start, loses less"), "lossy") : "");
     let why = "";
     if (!fits.length) {
       const byR = ICL_SL10.filter(([, r25, tol]) => r25 * (1 - tol / 100) >= rMin);
@@ -12184,6 +12191,8 @@ function renderInrushLimiter(domain, tool, favId) {
       apply: example("ac", { v: 230, tol: 10, ipk: 30, c: 220e-6, i: 1 }) },
     { title: "48 V DC rail, 1000 µF", note: "50.4 V at +5 %: 10 A allowed needs 5.04 Ω, only 1.27 J.",
       apply: example("dc", { v: 48, tol: 5, ipk: 10, c: 1000e-6, i: 3 }) },
+    { title: "12 V rail, 3 A", note: "Even hot, the NTC drops over 2 % of 12 V: at low voltage a soft-start loses less.",
+      apply: example("dc", { v: 12, tol: 5, ipk: 10, c: 1000e-6, i: 3 }) },
   ]);
 
   function paint() {

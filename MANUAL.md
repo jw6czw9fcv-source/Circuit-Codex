@@ -10620,14 +10620,29 @@ charging its capacitor draws at turn-on, on one screen:
     their R25 tolerance still over the least resistance, their energy
     rating over the need, their current rating over the running current,
     265 Vac at most), the coolest first, each with its resistance, energy
-    and current ratings, its running resistance and the heat it loses;
+    and current ratings, its running resistance, the voltage it loses
+    (and that share of the supply) and the heat;
+  - over 2 % of the supply lost (Pierre's threshold), a flag: a bypass
+    relay after start-up, or an active (MOSFET) soft-start, loses less;
   - when none fits, why, and that a larger series is needed.
+
+Why an NTC rather than a resistor (Pierre asked): cold, it holds the
+surge down; warmed by its own current, it falls 10 to 50 times (TDK), so
+it loses little while running. At 230 V and 1 A an SL1025002 is about
+1 Ω hot, 1 V lost (0.4 %) and 1 W; a fixed 18 Ω limiting the same surge
+would lose 18 V and 18 W for good. It is not free: some volts remain,
+and a hot NTC barely limits a quick restart. It need not be big: the
+energy (½ C V²) and the running current set its size, and it should run
+at 30 to 100 % of its rating (TDK) to heat up. It suits mains supplies
+(about 100 to 265 Vac) and higher DC rails, where its drop is under 1 %;
+on a 12 V rail at 3 A the same parts lose 4.5 to 7 %, and an active
+soft-start is the better choice.
 - **Drawing:** the supply, the NTC (the calculated part, green), the
   bridge on AC, the capacitor, and the peak voltage.
 - **Remembered:** AC or DC.
 
 Examples: Eaton's 110 Vac + 10 %, Ametherm's 265 Vac and 100 A, a 230 V
-supply with 220 µF, and a 48 V DC rail.
+supply with 220 µF, a 48 V DC rail, and a 12 V rail at 3 A.
 
 ### Source
 
@@ -10691,9 +10706,13 @@ resistance is small.
 
 ### How it was checked
 
-9 cases:
+11 cases:
 - Eaton's 110 Vac + 10 %: 171 V peak, 8.56 Ω for 20 A, 6.88 J;
-- six SL10 parts fit, coolest first (SL1050002, 440 mΩ, 1.76 W);
+- six SL10 parts fit, coolest first (SL1050002, 440 mΩ, 880 mV lost,
+  0.8 %, 1.76 W);
+- at 230 V and 1 A the hot NTC loses under 1 % (SL1025002: 0.46 %);
+- a 12 V rail at 3 A: every part loses over 2 % (SL102R005: 4.5 %),
+  flagged;
 - Ametherm's 265 Vac, 100 A: 3.75 Ω, 126 J, no SL10 fits;
 - 230 V + 10 %, 220 µF, 30 A: 11.9 Ω, 14.1 J, six fit;
 - a part under half its current is over its light-load resistance;
