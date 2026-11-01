@@ -10506,8 +10506,11 @@ needed with enough in parallel that their ESRs reach the target, and low
 ESL for the fast edges (the inductance row); then the curve must stay
 under the line with no peak above it.
 
-**Suggest** (Pierre asked how to pick them) fills the rows by those
-rules: the smallest of 1, 2.2, 4.7, 10, 22, 47, 100 µF that covers the
+**The rows start as a suggestion and follow the supply's figures** (Pierre
+changed the ripple from 5 % to 1 % and expected the capacitors to
+change): the heading says "suggested". Editing a row, adding or removing a
+kind makes them "yours", and they stay; **Suggest** gives them back. The
+suggestion follows those rules: the smallest of 1, 2.2, 4.7, 10, 22, 47, 100 µF that covers the
 bulk (several 100 µF past that); 100 nF parts, as many as ESR / Ztarget;
 and, only when the total ESL is still over the edge's limit, enough
 0612 LICC parts (0.1 µF, 550 pH, AVX's figure 7) to bring it under. ESR
@@ -10573,7 +10576,10 @@ the anti-resonance peak.
 
 ### How it was checked
 
-11 cases:
+14 cases:
+- the rows start as the suggestion; 1 % ripple instead of 5 % moves the
+  bulk part from 1 µF to 4.7 µF; an edited row stays when the ripple
+  changes;
 - AVX's example: 4.5 mΩ, 3333 µF, 4.5 pH; three 100 nF (417 pH) far over;
 - Suggest: for the MCU, 1 µF and one 100 nF (89.1 kHz to 414 MHz); for
   AVX's 20 A, 34 × 100 µF, 3 × 100 nF and 106 low-ESL parts (4.5 pH);

@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=0e88f013da" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=279a3a1d18" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -8061,7 +8061,7 @@ by side share the heat, so N of them in parallel divide θ by N.</p>
 <section class="tool" id="decoupling" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Vias &amp; layout</div>
   <h2>Decoupling capacitor</h2>
-  <figure class="shot"><img src="manual/img/decoupling.jpg?h=92e409c61b" loading="lazy" alt="Decoupling capacitor as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/decoupling.jpg?h=a9afade00a" loading="lazy" alt="Decoupling capacitor as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The target-impedance method for a supply's decoupling, with mixed values,
 on one screen:</p>
@@ -8092,8 +8092,11 @@ frequencies (the bulk row), a value that resonates where coverage is
 needed with enough in parallel that their ESRs reach the target, and low
 ESL for the fast edges (the inductance row); then the curve must stay
 under the line with no peak above it.</p>
-<p><strong>Suggest</strong> (Pierre asked how to pick them) fills the rows by those
-rules: the smallest of 1, 2.2, 4.7, 10, 22, 47, 100 µF that covers the
+<p><strong>The rows start as a suggestion and follow the supply's figures</strong> (Pierre
+changed the ripple from 5 % to 1 % and expected the capacitors to
+change): the heading says "suggested". Editing a row, adding or removing a
+kind makes them "yours", and they stay; <strong>Suggest</strong> gives them back. The
+suggestion follows those rules: the smallest of 1, 2.2, 4.7, 10, 22, 47, 100 µF that covers the
 bulk (several 100 µF past that); 100 nF parts, as many as ESR / Ztarget;
 and, only when the total ESL is still over the edge's limit, enough
 0612 LICC parts (0.1 µF, 550 pH, AVX's figure 7) to bring it under. ESR
@@ -8154,7 +8157,10 @@ the anti-resonance peak.</p>
   capacitance at your voltage.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>11 cases:
+<p>14 cases:
+- the rows start as the suggestion; 1 % ripple instead of 5 % moves the
+  bulk part from 1 µF to 4.7 µF; an edited row stays when the ripple
+  changes;
 - AVX's example: 4.5 mΩ, 3333 µF, 4.5 pH; three 100 nF (417 pH) far over;
 - Suggest: for the MCU, 1 µF and one 100 nF (89.1 kHz to 414 MHz); for
   AVX's 20 A, 34 × 100 µF, 3 × 100 nF and 106 low-ESL parts (4.5 pH);

@@ -10931,7 +10931,9 @@ function renderDecoupling(domain, tool, favId) {
   const state = {
     si: { v: 3.3, pct: 5, di: 0.1, tSlow: 1e-6, tFast: 2e-9 },
     // Each kind: C (F), ESR (Ω), ESL (H), how many.
-    kinds: [{ c: 0.1e-6, esr: 0.01, esl: 1.25e-9, n: 1 }],
+    kinds: [],
+    // The rows follow the suggestion until one is edited, added or removed.
+    kindsTyped: false,
   };
   const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
@@ -11040,6 +11042,7 @@ function renderDecoupling(domain, tool, favId) {
   const example = (si, kinds) => () => {
     Object.assign(state.si, si);
     state.kinds = kinds.map((k) => ({ ...k }));
+    state.kindsTyped = true;
     paint();
   };
   useExamples([
@@ -11104,7 +11107,7 @@ function renderDecoupling(domain, tool, favId) {
       <div class="field-pair">${field("tSlow", "Regulator", "µs")}${field("tFast", "Fastest edge", "ns")}</div>
 
       <div class="section-label split" style="color:#8FC1F5">
-        <span>Capacitors</span>
+        <span>Capacitors <span class="r-hint" data-res="kinds-mode">${state.kindsTyped ? "yours" : "suggested"}</span></span>
         <span><button class="label-btn" id="dc-suggest">Suggest</button> <button class="label-btn" id="dc-add" ${state.kinds.length >= DC_MAX_KINDS ? "disabled" : ""}>+ add</button></span>
       </div>
       <div class="r-list">${kindsHTML()}</div>
@@ -11121,20 +11124,20 @@ function renderDecoupling(domain, tool, favId) {
 
     wireCalc(favId, paint);
 
-    app.querySelectorAll("input[data-key]").forEach((el) => {
+    // The requirement boxes: while the rows are the suggestion, they follow.
+    app.querySelectorAll("input[data-key]:not([data-kind])").forEach((el) => {
       el.oninput = () => {
-        const key = el.dataset.key, v = parseFloat(el.value) * SCALE[key];
-        if (el.dataset.kind !== undefined) state.kinds[+el.dataset.kind][key] = v;
-        else state.si[key] = v;
+        const key = el.dataset.key;
+        state.si[key] = parseFloat(el.value) * SCALE[key];
+        if (!state.kindsTyped && siOk()) { state.kinds = suggest(); app.querySelector(".r-list").innerHTML = kindsHTML(); bindRows(); }
         refresh();
       };
     });
-    app.querySelectorAll("[data-drop]").forEach((btn) => {
-      btn.onclick = () => { if (state.kinds.length > 1) { state.kinds.splice(+btn.dataset.drop, 1); paint(); } };
-    });
+    bindRows();
     document.getElementById("dc-suggest").onclick = () => {
-      if (problem() && !/capacitor/.test(problem())) return;
+      if (!siOk()) return;
       state.kinds = suggest();
+      state.kindsTyped = false;
       paint();
     };
     document.getElementById("dc-add").onclick = () => {
@@ -11142,10 +11145,32 @@ function renderDecoupling(domain, tool, favId) {
       // A new kind starts a decade above the largest, the usual step.
       const big = state.kinds.reduce((m, k) => (k.c > m.c ? k : m));
       state.kinds.push({ c: big.c * 10, esr: big.esr, esl: big.esl, n: 1 });
+      state.kindsTyped = true;
       paint();
     };
   }
 
+  // The capacitor rows: editing one, or removing a kind, makes them yours.
+  function bindRows() {
+    app.querySelectorAll("input[data-kind]").forEach((el) => {
+      el.oninput = () => {
+        state.kinds[+el.dataset.kind][el.dataset.key] = parseFloat(el.value) * SCALE[el.dataset.key];
+        state.kindsTyped = true;
+        const mode = app.querySelector('[data-res="kinds-mode"]');
+        if (mode) mode.textContent = "yours";
+        refresh();
+      };
+    });
+    app.querySelectorAll("[data-drop]").forEach((btn) => {
+      btn.onclick = () => { if (state.kinds.length > 1) { state.kinds.splice(+btn.dataset.drop, 1); state.kindsTyped = true; paint(); } };
+    });
+  }
+
+  // The supply's figures are all usable, so a suggestion can be made.
+  const siOk = () => { const s = state.si; return s.v > 0 && s.pct > 0 && s.di > 0 && s.tSlow > 0 && s.tFast > 0; };
+
+  // The rows start as the suggestion.
+  state.kinds = suggest();
   paint();
 }
 
