@@ -11617,11 +11617,24 @@ function renderConstantCurrent(domain, tool, favId) {
     return "";
   }
 
+  // The E24 values either side of the exact resistor, and the one to use:
+  // the nearest, unless its current would pass the part's rating, then the
+  // larger one (less current).
+  function e24Pick(exact) {
+    const vals = eSeriesBetween(exact / 1.2, exact * 1.2, "E24");
+    const lo = vals.filter((v) => v <= exact * (1 + 1e-9)).pop();
+    const hi = vals.find((v) => v >= exact * (1 - 1e-9));
+    const nearest = nearestESeries(exact, "E24").value;
+    const imax = P().imax;
+    const pick = imax && currentOf(nearest) > imax && hi ? hi : nearest;
+    return { lo, hi, pick };
+  }
+
   function syncR() {
     if (state.rTyped) return;
     const err = problem();
     if (err && !/resistor/.test(err)) return;
-    state.si.r = nearestESeries(rFor(), "E24").value;
+    state.si.r = e24Pick(rFor()).pick;
     const el = app.querySelector('input[data-key="r"]');
     if (el && el !== document.activeElement) el.value = fmt(state.si.r / scale("r"));
   }
@@ -11660,7 +11673,11 @@ function renderConstantCurrent(domain, tool, favId) {
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
     const exact = rFor();
-    const near = nearestESeries(exact, "E24").value;
+    const e24 = e24Pick(exact);
+    // Both neighbours when the exact value falls between two.
+    const e24Txt = !e24.lo || !e24.hi || e24.lo === e24.hi
+      ? `E24 ${formatOhms(e24.pick)} gives ${val(currentOf(e24.pick), "A")}`
+      : `E24 ${formatOhms(e24.lo)} gives ${val(currentOf(e24.lo), "A")}, ${formatOhms(e24.hi)} gives ${val(currentOf(e24.hi), "A")}`;
     const i = currentOf(s.r);
     // The current over the reference's spread.
     const spread = p.custom ? "" : `${val(currentOf(s.r, p.vrefMin), "A")} to ${val(currentOf(s.r, p.vrefMax), "A")} over Vref's tolerance`;
@@ -11676,12 +11693,12 @@ function renderConstantCurrent(domain, tool, favId) {
     const preg = Math.max(s.vinMax - s.vlMin - vref(), 0) * i;
     const lims = [];
     if (!p.custom && i < p.iminMax) lims.push(warn(i < p.imin ? `under its ${val(p.imin, "A")} minimum load: it may not regulate` : `under its ${val(p.iminMax, "A")} guaranteed minimum load`));
-    if (p.imax && i > p.imax) lims.push(warn(`over its ${val(p.imax, "A")} rating`));
+    if (p.imax && i > p.imax) lims.push(warn(`${val(i, "A")} with ${formatOhms(s.r)}: over its ${val(p.imax, "A")} rating`));
     return `
         <div class="result-field">
           <div class="result-head"><span class="label">Resistor for ${val(s.i, "A")}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
           <div class="result-value"><span class="num" data-res="r">${formatOhms(exact)}</span></div>
-          <div class="result-sub" data-res="sub">nearest E24 ${formatOhms(near)} gives ${val(currentOf(near), "A")}${iadj() > 0 ? `, ${val(iadj(), "A")} of it from IADJ` : ""}</div>
+          <div class="result-sub" data-res="sub">${e24Txt}</div>
         </div>
         <div class="field notation-box">
           ${row(`Current with ${formatOhms(s.r)}`, `${val(i, "A")}${spread ? `, ${spread}` : ""}`, "i")}
