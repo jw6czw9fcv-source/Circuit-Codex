@@ -10917,50 +10917,53 @@ function renderLinearRegulator(domain, tool, favId) {
 // capacitance that holds it until the regulator responds is C = I dt / dV
 // (eq. 14, 20 A, 15 µs, 5 % of 1.8 V: 3333 µF); the inductance the fastest
 // edge allows is L = V dt / dI (eq. 16, 1 ns: 4.5 pH). A capacitor is
-// |Z| = √(ESR² + (ωESL − 1/ωC)²) (eq. 4), lowest, at ESR, at its resonance
-// 1 / (2π √(ESL C)) (eq. 8); n alike in parallel are nC, ESL/n, ESR/n, the
-// resonance unchanged (eq. 18–22), so n = ESR / Ztarget meet the target
-// there. Measured ESL (same paper): 1206 about 1250 pH, 0612 LICC 550 pH,
-// 0612 IDC 175 pH, 0508 IDC 110 pH. ROHM 63AN091E agrees: use a capacitor
-// below its self-resonance; low ESL for high frequencies.
-const DC_PKGS = [["1206", 1.25], ["0612 LICC", 0.55], ["0612 IDC", 0.175], ["0508 IDC", 0.11]];
+// ESR + jωESL + 1/(jωC), |Z| = √(ESR² + (ωESL − 1/ωC)²) (eq. 4), lowest, at
+// ESR, at its resonance 1 / (2π √(ESL C)) (eq. 8); n alike in parallel are
+// nC, ESL/n, ESR/n, the resonance unchanged (eq. 18–22). Boards mix values
+// (Pierre): kinds in parallel add as complex admittances, and between two
+// resonances they make an anti-resonance peak (AVX; ROHM 63AN091E), which
+// the sweep finds. Measured ESL (AVX): 1206 about 1250 pH, 0612 LICC 550 pH,
+// 0612 IDC 175 pH, 0508 IDC 110 pH.
+const DC_MAX_KINDS = 3;
+const DC_F_MIN = 1e3, DC_F_MAX = 1e10;
 
 function renderDecoupling(domain, tool, favId) {
-  const C = "decoupling";
   const state = {
-    si: { v: 3.3, pct: 5, di: 0.1, tSlow: 1e-6, tFast: 2e-9, c: 0.1e-6, esr: 0.01, esl: 1.25e-9, n: 1 },
-    nTyped: false,
+    si: { v: 3.3, pct: 5, di: 0.1, tSlow: 1e-6, tFast: 2e-9 },
+    // Each kind: C (F), ESR (Ω), ESL (H), how many.
+    kinds: [{ c: 0.1e-6, esr: 0.01, esl: 1.25e-9, n: 1 }],
   };
   const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   // Fields are typed in the units engineers quote them in.
   const SCALE = { v: 1, pct: 1, di: 1, tSlow: 1e-6, tFast: 1e-9, c: 1e-6, esr: 1e-3, esl: 1e-9, n: 1 };
   const z = () => state.si.v * state.si.pct / 100 / state.si.di;
-  const srf = () => 1 / (2 * Math.PI * Math.sqrt(state.si.esl * state.si.c));
-  const nNeed = () => Math.max(1, Math.ceil(state.si.esr / z() - 1e-9));
-  // n alike capacitors in parallel at a frequency.
-  const zAt = (f, n) => {
-    const s = state.si, w = 2 * Math.PI * f;
-    return Math.hypot(s.esr / n, w * s.esl / n - 1 / (w * s.c * n));
-  };
+  const srf = (k) => 1 / (2 * Math.PI * Math.sqrt(k.esl * k.c));
+  // All the kinds in parallel at a frequency: the admittances add.
+  function zAt(f) {
+    const w = 2 * Math.PI * f;
+    let gr = 0, gi = 0;
+    for (const k of state.kinds) {
+      const re = k.esr / k.n, im = (w * k.esl - 1 / (w * k.c)) / k.n;
+      const m = re * re + im * im;
+      gr += re / m; gi -= im / m;
+    }
+    return 1 / Math.hypot(gr, gi);
+  }
+  // A sweep over 1 kHz to 10 GHz, 60 points a decade.
+  const sweep = () => Array.from({ length: 421 }, (_, i) => { const f = 10 ** (3 + i / 60); return [f, zAt(f)]; });
 
   function problem() {
     const s = state.si;
     if (!(s.v > 0) || !(s.pct > 0) || !(s.di > 0)) return "Enter the supply voltage, the ripple allowed and the current step.";
     if (!(s.tSlow > 0) || !(s.tFast > 0)) return "Enter the regulator's response time and the fastest edge.";
-    if (!(s.c > 0) || !(s.esr > 0) || !(s.esl > 0)) return "Enter the capacitor's C, ESR and ESL.";
-    if (!(s.n >= 1 && Number.isInteger(s.n))) return "Enter a whole number of capacitors, one or more.";
+    if (!state.kinds.every((k) => k.c > 0 && k.esr > 0 && k.esl > 0)) return "Enter each capacitor's C, ESR and ESL, above zero.";
+    if (!state.kinds.every((k) => k.n >= 1 && Number.isInteger(k.n))) return "Enter a whole number of each capacitor, one or more.";
     return "";
   }
 
-  function syncN() {
-    if (state.nTyped || problem() && !/capacitors/.test(problem())) return;
-    state.si.n = nNeed();
-    const el = app.querySelector('input[data-key="n"]');
-    if (el && el !== document.activeElement) el.value = fmt(state.si.n);
-  }
-
-  // |Z| of the capacitors over frequency, log-log, with the target.
+  // |Z| of all the capacitors together over frequency, log-log, with each
+  // kind alone faint behind it and the target dashed.
   function diagram() {
     const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
     const lbl = (x, y, t, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
@@ -10972,20 +10975,20 @@ function renderDecoupling(domain, tool, favId) {
     for (const [f, t] of [[1e3, "1k"], [1e6, "1M"], [1e9, "1G"]]) grid += `<path d="M${fx(f)} ${y0} V${y1}" stroke="${wire}" stroke-width="0.6" stroke-dasharray="2 3"/>${lbl(fx(f), 108, t)}`;
     for (const [v, t] of [[1e-2, "10m"], [10, "10"], [1e4, "10k"]]) grid += `<path d="M${x0} ${zy(v)} H${x1}" stroke="${wire}" stroke-width="0.6" stroke-dasharray="2 3"/>${lbl(x0 - 4, zy(v) + 4, t, grey, "end")}`;
     if (problem()) return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${grid}</svg>`;
-    let d = "";
-    for (let k = 0; k <= 140; k++) {
-      const f = 10 ** (3 + 7 * k / 140);
-      d += `${k ? "L" : "M"}${fx(f).toFixed(1)} ${clampY(zy(zAt(f, state.si.n))).toFixed(1)} `;
-    }
-    const zt = z(), fr = srf();
-    const ty = clampY(zy(zt));
+    const path = (fn) => sweep().map(([f], i) => `${i ? "L" : "M"}${fx(f).toFixed(1)} ${clampY(zy(fn(f))).toFixed(1)}`).join(" ");
+    // Each kind alone, faint, when there is more than one.
+    const singles = state.kinds.length > 1 ? state.kinds.map((k) => {
+      const one = (f) => { const w = 2 * Math.PI * f; return Math.hypot(k.esr / k.n, (w * k.esl - 1 / (w * k.c)) / k.n); };
+      return `<path d="${path(one)}" stroke="${part}" stroke-width="1" stroke-opacity="0.35"/>`;
+    }).join("") : "";
+    const ty = clampY(zy(z()));
     return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
       ${grid}
       <path d="M${x0} ${y0} H${x1} M${x0} ${y0} V${y1}" stroke="${wire}" stroke-width="1.2"/>
+      ${singles}
       <path d="M${x0} ${ty} H${x1}" stroke="${calc}" stroke-width="1.4" stroke-dasharray="5 3"/>
-      ${lbl(x0 + 6, ty + 13, `target ${val(zt, "Ω")}`, calc, "start")}
-      <path d="${d}" stroke="${part}" stroke-width="1.8"/>
-      ${fr >= 1e3 && fr <= 1e10 ? `${lbl(fx(fr) + 8, clampY(zy(zAt(fr, state.si.n))) + 2, val(fr, "Hz"), part, "start")}` : ""}
+      ${lbl(x0 + 6, ty + 13, `target ${val(z(), "Ω")}`, calc, "start")}
+      <path d="${path(zAt)}" stroke="${part}" stroke-width="1.8"/>
     </svg>`;
   }
 
@@ -10996,8 +10999,24 @@ function renderDecoupling(domain, tool, favId) {
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
     const bulk = s.di * s.tSlow / dv, lMax = dv * s.tFast / s.di;
-    const n = s.n, fr = srf(), zr = zAt(fr, n);
-    const cOk = s.c * n >= bulk, lOk = s.esl / n <= lMax, zOk = zr <= zt * (1 + 1e-9);
+    const cTot = state.kinds.reduce((a, k) => a + k.c * k.n, 0);
+    const lTot = 1 / state.kinds.reduce((a, k) => a + k.n / k.esl, 0);
+    const pts = sweep();
+    // The band under the target around the lowest point, and the highest
+    // peak between the first and the last resonance (anti-resonance).
+    let iMin = 0;
+    pts.forEach(([, v], i) => { if (v < pts[iMin][1]) iMin = i; });
+    let a = iMin, b = iMin;
+    const under = pts[iMin][1] <= zt;
+    if (under) { while (a > 0 && pts[a - 1][1] <= zt) a--; while (b < pts.length - 1 && pts[b + 1][1] <= zt) b++; }
+    const fres = state.kinds.map(srf).sort((p, q) => p - q);
+    let peak = null;
+    if (state.kinds.length > 1) {
+      for (const [f, v] of pts) if (f > fres[0] && f < fres[fres.length - 1] && (!peak || v > peak[1])) peak = [f, v];
+    }
+    const kindTxt = state.kinds.map((k) => `${val(k.c, "F")} at ${val(srf(k), "Hz")}`).join(", ");
+    const band = !under ? warn(`never: the lowest is ${val(pts[iMin][1], "Ω")} at ${val(pts[iMin][0], "Hz")}; more capacitors or lower ESR`)
+      : `${a === 0 ? "below 1 kHz" : val(pts[a][0], "Hz")} to ${b === pts.length - 1 ? "past 10 GHz" : val(pts[b][0], "Hz")}`;
     return `
         <div class="result-field">
           <div class="result-head"><span class="label">Target impedance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
@@ -11005,63 +11024,77 @@ function renderDecoupling(domain, tool, favId) {
           <div class="result-sub" data-res="sub">${val(dv, "V")} of ripple (${s.pct} % of ${val(s.v, "V")}) over a ${val(s.di, "A")} step</div>
         </div>
         <div class="field notation-box">
-          ${row("Bulk capacitance", `${val(bulk, "F")}, to cover ${val(s.tSlow, "s")} until the regulator responds`, "bulk")}
-          ${row("Most inductance", `${val(lMax, "H")}, for a ${val(s.tFast, "s")} edge`, "lmax")}
-          ${row("One capacitor", `resonates at ${val(fr, "Hz")}, where it is its ${val(s.esr, "Ω")} ESR: ${nNeed()} in parallel meet the target`, "one")}
-          ${row(`Your ${n === 1 ? "capacitor" : `${n} in parallel`}`, `${val(zr, "Ω")} at resonance${zOk ? ", under the target" : warn(", over the target")}`, "yours")}
-          ${row("Their capacitance", cOk ? `${val(s.c * n, "F")}, enough for the bulk` : warn(`${val(s.c * n, "F")}, under the ${val(bulk, "F")} bulk: add bulk capacitors`), "ctot")}
-          ${row("Their inductance", lOk ? `${val(s.esl / n, "H")}, under ${val(lMax, "H")}` : warn(`${val(s.esl / n, "H")}, over ${val(lMax, "H")}: lower-ESL parts or more of them`), "ltot")}
+          ${row("Under the target", band, "band")}
+          ${peak ? row("Anti-resonance", peak[1] > zt ? warn(`${val(peak[1], "Ω")} at ${val(peak[0], "Hz")}, over the target`) : `${val(peak[1], "Ω")} at ${val(peak[0], "Hz")}, under the target`, "peak") : ""}
+          ${row("Resonances", kindTxt, "res")}
+          ${row("Bulk capacitance", cTot >= bulk ? `${val(cTot, "F")} of the ${val(bulk, "F")} needed for ${val(s.tSlow, "s")}` : warn(`${val(cTot, "F")}, under the ${val(bulk, "F")} needed for ${val(s.tSlow, "s")}`), "bulk")}
+          ${row("Inductance", lTot <= lMax ? `${val(lTot, "H")}, under the ${val(lMax, "H")} a ${val(s.tFast, "s")} edge allows` : warn(`${val(lTot, "H")}, over the ${val(lMax, "H")} a ${val(s.tFast, "s")} edge allows`), "ind")}
         </div>`;
   }
 
   function refresh() {
-    syncN();
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
   }
 
-  const example = (si, typed) => () => {
+  const example = (si, kinds) => () => {
     Object.assign(state.si, si);
-    state.nTyped = !!typed;
+    state.kinds = kinds.map((k) => ({ ...k }));
     paint();
   };
   useExamples([
     { title: "AVX's 20 A step at 1.8 V", note: "5 %: 4.5 mΩ; 15 µs to the regulator needs 3333 µF; a 1 ns edge allows 4.5 pH.",
-      apply: example({ v: 1.8, pct: 5, di: 20, tSlow: 15e-6, tFast: 1e-9, c: 0.1e-6, esr: 0.01, esl: 1.25e-9 }) },
+      apply: example({ v: 1.8, pct: 5, di: 20, tSlow: 15e-6, tFast: 1e-9 }, [{ c: 0.1e-6, esr: 0.01, esl: 1.25e-9, n: 3 }]) },
     { title: "A small MCU at 3.3 V", note: "1.65 Ω: one 100 nF meets it at 14.2 MHz, but a 1 µs regulator asks for 606 nF of bulk.",
-      apply: example({ v: 3.3, pct: 5, di: 0.1, tSlow: 1e-6, tFast: 2e-9, c: 0.1e-6, esr: 0.01, esl: 1.25e-9 }) },
+      apply: example({ v: 3.3, pct: 5, di: 0.1, tSlow: 1e-6, tFast: 2e-9 }, [{ c: 0.1e-6, esr: 0.01, esl: 1.25e-9, n: 1 }]) },
+    { title: "10 µF + 100 nF + 1 nF", note: "Mixed values cover a wider band, with peaks between their resonances.",
+      apply: example({ v: 3.3, pct: 5, di: 0.5, tSlow: 1e-6, tFast: 1e-9 }, [{ c: 10e-6, esr: 0.01, esl: 1.25e-9, n: 1 }, { c: 0.1e-6, esr: 0.01, esl: 1.25e-9, n: 2 }, { c: 1e-9, esr: 0.05, esl: 0.55e-9, n: 2 }]) },
     { title: "An FPGA core, 1 V, 1 A", note: "50 mΩ: one 0612 IDC meets it at resonance, but its 175 pH is over the 50 pH a 1 ns edge allows.",
-      apply: example({ v: 1, pct: 5, di: 1, tSlow: 2e-6, tFast: 1e-9, c: 1e-6, esr: 0.01, esl: 0.175e-9 }) },
+      apply: example({ v: 1, pct: 5, di: 1, tSlow: 2e-6, tFast: 1e-9 }, [{ c: 1e-6, esr: 0.01, esl: 0.175e-9, n: 1 }]) },
   ]);
+
+  function kindsHTML() {
+    const n = state.kinds.length;
+    const box = (i, key, value, label) => `<input type="number" inputmode="decimal" step="any" data-kind="${i}" data-key="${key}" value="${fmt(value / SCALE[key])}" aria-label="${label} ${i + 1}" />`;
+    return state.kinds.map((k, i) => `
+      <div class="r-item">
+        <div class="r-line">
+          ${box(i, "c", k.c, "C")}<span class="r-index">µF</span>
+          ${box(i, "esr", k.esr, "ESR")}<span class="r-index">mΩ</span>
+          ${box(i, "esl", k.esl, "ESL")}<span class="r-index">nH</span>
+          <span class="r-index">×</span>${box(i, "n", k.n, "Count")}
+          <button class="r-drop" data-drop="${i}" aria-label="Remove capacitor ${i + 1}" ${n <= 1 ? "disabled" : ""}>×</button>
+        </div>
+      </div>`).join("");
+  }
 
   function paint() {
     const s = state.si;
-    syncN();
     const field = (key, label, u) => `
         <div class="field">
           <label>${label}</label>
           <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / SCALE[key])}" /><span class="unit-fixed">${u}</span></div>
         </div>`;
-    const pkg = DC_PKGS.find(([, l]) => Math.abs(l * 1e-9 - s.esl) < 1e-15);
-    const pkgSel = `<select id="dc-pkg"><option value="">Custom</option>${DC_PKGS.map(([n2], i) => `<option value="${i}" ${pkg && pkg[0] === n2 ? "selected" : ""}>${n2}</option>`).join("")}</select>`;
-    const fields = `
-      <div class="field-pair">${field("v", "Supply", "V")}${field("pct", "Ripple", "%")}${field("di", "Current step", "A")}</div>
-      <div class="field-pair">${field("tSlow", "Regulator", "µs")}${field("tFast", "Fastest edge", "ns")}</div>
-      <div class="field-pair">${field("c", "C", "µF")}${field("esr", "ESR", "mΩ")}${field("esl", "ESL", "nH")}</div>
-      <div class="field-pair"><div class="field"><label>Package</label>${pkgSel}</div>${field("n", "Capacitors you use", "")}</div>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "How much capacitance, and how many, a supply needs")}
 
       <div class="diagram-box">${diagram()}</div>
 
-      ${fields}
+      <div class="field-pair">${field("v", "Supply", "V")}${field("pct", "Ripple", "%")}${field("di", "Current step", "A")}</div>
+      <div class="field-pair">${field("tSlow", "Regulator", "µs")}${field("tFast", "Fastest edge", "ns")}</div>
+
+      <div class="section-label split" style="color:#8FC1F5">
+        <span>Capacitors</span>
+        <button class="label-btn" id="dc-add" ${state.kinds.length >= DC_MAX_KINDS ? "disabled" : ""}>+ add</button>
+      </div>
+      <div class="r-list">${kindsHTML()}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["Ztarget = V × ripple / ΔI", "C = ΔI × t / ΔV,   L = ΔV × t / ΔI", "|Z| = √(ESR² + (ωESL − 1/ωC)²)", "f res = 1 / (2π √(ESL × C)),   n = ESR / Ztarget"],
-        "When a chip's current jumps by ΔI, the supply must not move more than its allowed ripple ΔV, a few percent: so the supply's impedance must stay under Ztarget = ΔV / ΔI at every frequency the jump contains. Until the regulator catches up (its response time), bulk capacitance carries the step: C = ΔI × t / ΔV. The fastest edge sets how little inductance (ESL, the capacitor's own plus its mounting) is allowed. A real capacitor is C in series with ESR and ESL: its impedance falls to its ESR at its self-resonant frequency, then rises again with ESL. Identical capacitors in parallel divide ESR and ESL and multiply C, so n = ESR / Ztarget of them meet the target there."
+        ["Ztarget = V × ripple / ΔI", "C = ΔI × t / ΔV,   L = ΔV × t / ΔI", "Z = ESR + jωESL + 1/(jωC)", "f res = 1 / (2π √(ESL × C)),   Y = Σ 1 / Z"],
+        "When a chip's current jumps by ΔI, the supply must not move more than its allowed ripple ΔV, a few percent: so its impedance must stay under Ztarget = ΔV / ΔI over the frequencies of the jump. Until the regulator catches up (its response time), bulk capacitance carries the step: C = ΔI × t / ΔV. The fastest edge sets how little inductance is allowed. A real capacitor is C in series with ESR and ESL: its impedance falls to its ESR at its self-resonant frequency, then rises with ESL. Capacitors in parallel add as admittances: alike ones divide ESR and ESL; different values cover a wider band, but between two resonances they can peak (anti-resonance). Typical ESL (Kyocera AVX): 1206 about 1.25 nH, 0612 LICC 0.55 nH, 0612 IDC 0.175 nH, 0508 IDC 0.11 nH; the pads and vias add more."
       )}
       ${calcFooter("")}
     `;
@@ -11070,14 +11103,22 @@ function renderDecoupling(domain, tool, favId) {
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
       el.oninput = () => {
-        const k = el.dataset.key;
-        state.si[k] = parseFloat(el.value) * SCALE[k];
-        if (k === "n") state.nTyped = true;
-        if (k === "esl") { const sel = document.getElementById("dc-pkg"); const i = DC_PKGS.findIndex(([, l]) => Math.abs(l * 1e-9 - state.si.esl) < 1e-15); sel.value = i < 0 ? "" : String(i); }
+        const key = el.dataset.key, v = parseFloat(el.value) * SCALE[key];
+        if (el.dataset.kind !== undefined) state.kinds[+el.dataset.kind][key] = v;
+        else state.si[key] = v;
         refresh();
       };
     });
-    document.getElementById("dc-pkg").onchange = (e) => { if (e.target.value !== "") { state.si.esl = DC_PKGS[+e.target.value][1] * 1e-9; paint(); } };
+    app.querySelectorAll("[data-drop]").forEach((btn) => {
+      btn.onclick = () => { if (state.kinds.length > 1) { state.kinds.splice(+btn.dataset.drop, 1); paint(); } };
+    });
+    document.getElementById("dc-add").onclick = () => {
+      if (state.kinds.length >= DC_MAX_KINDS) return;
+      // A new kind starts a decade above the largest, the usual step.
+      const big = state.kinds.reduce((m, k) => (k.c > m.c ? k : m));
+      state.kinds.push({ c: big.c * 10, esr: big.esr, esl: big.esl, n: 1 });
+      paint();
+    };
   }
 
   paint();

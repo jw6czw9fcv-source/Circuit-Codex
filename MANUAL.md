@@ -10476,32 +10476,38 @@ drops as heat.
 
 ### What it computes
 
-The target-impedance method for a supply's decoupling, on one screen:
+The target-impedance method for a supply's decoupling, with mixed values,
+on one screen:
 
 - **Inputs:** the supply voltage, the ripple allowed (%), the current
   step, the regulator's response time and the fastest current edge; then
-  the capacitor (C, ESR, ESL, with a package picker for Kyocera AVX's
-  measured ESL) and how many you use.
+  up to three kinds of capacitor, each a row of C (µF), ESR (mΩ), ESL (nH)
+  and how many, added with "+ add" (a decade larger than the largest)
+  and removed with ×. Boards mix values (Pierre), so the tool does.
 - **The big result:** the target impedance, the ripple allowed over the
   current step.
 - **Below it:**
-  - the bulk capacitance that holds the supply until the regulator
-    responds;
-  - the most inductance the fastest edge allows;
-  - one capacitor's self-resonant frequency, and how many in parallel
-    meet the target there (their ESRs in parallel);
-  - what your count gives: the impedance at resonance, the total
-    capacitance against the bulk, the total ESL against the most
-    inductance, each flagged when short.
-- **The count** follows the number that meets the target until you type
-  your own.
-- **Drawing:** the impedance of your capacitors from 1 kHz to 10 GHz,
-  log-log, with the target as a dashed line and the resonance marked.
+  - the band where all the capacitors together stay under the target,
+    around their lowest point;
+  - with more than one kind, the highest anti-resonance peak between the
+    first and last resonances, flagged when over the target;
+  - each kind's resonant frequency;
+  - the total capacitance against the bulk the regulator's delay needs;
+  - the total ESL (all in parallel) against the most inductance the
+    fastest edge allows.
+- **Drawing:** the impedance of all the capacitors together from 1 kHz to
+  10 GHz, log-log, each kind alone faint behind it, the target dashed.
 - **Units:** fixed as engineers quote them: V, %, A, µs, ns, µF, mΩ,
   nH.
 
-Examples: AVX's 20 A step at 1.8 V, a small MCU at 3.3 V, and an FPGA
-core at 1 V.
+Choosing the capacitors, after AVX: a bulk capacitance for the low
+frequencies (the bulk row), a value that resonates where coverage is
+needed with enough in parallel that their ESRs reach the target, and low
+ESL for the fast edges (the inductance row); then the curve must stay
+under the line with no peak above it.
+
+Examples: AVX's 20 A step at 1.8 V, a small MCU at 3.3 V, 10 µF + 100 nF
++ 1 nF, and an FPGA core at 1 V.
 
 ### Source
 
@@ -10509,7 +10515,7 @@ core at 1 V.
   Bypass/Decoupling Applications"** (read; no date printed):
   - |Z| = √(ESR² + (ωESL − 1/ωC)²) (eq. 4), resonance at
     1 / (2π √(ESL·C)) (eq. 8), where the impedance is the ESR;
-  - "Ztarget = Allowed Ripple Voltage / I" (eq. 13), with ripple a small
+  - "Ztarget = Allowed Ripple Voltage / I" (eq. 13), ripple a small
     percentage of the supply, "i.e. 5%";
   - bulk: C = I dt / dV (eq. 14); "a 20 amp current transient, the VRM
     responds in 15 µSec, and the PDS must remain within 5% of a 1.8V
@@ -10517,50 +10523,55 @@ core at 1 V.
   - inductance: L = V dt / dI (eq. 16); the same with a 1 ns rise: 4.5 pH
     (eq. 17);
   - n identical capacitors in parallel: nC, ESL/n, ESR/n, the resonance
-    unchanged (eq. 18 to 22); "the parallel ESRs approach the desired
-    target impedance";
-  - measured ESL: a 1206 about 1250 pH, a 0612 LICC about 550 pH, a 0612
-    IDC about 175 pH, a 0508 IDC about 110 pH.
+    unchanged (eq. 18 to 22);
+  - "a capacitance value is chosen so that when mounted on the PCB, it
+    will resonate at the desired frequency"; different values in parallel
+    "produce an unwanted anti-resonance";
+  - measured ESL: 1206 about 1250 pH, 0612 LICC about 550 pH, 0612 IDC
+    about 175 pH, 0508 IDC about 110 pH.
 - **ROHM, "Impedance Characteristics of Bypass Capacitor", application
   note 63AN091E rev. 001** (read): use a capacitor below its
-  self-resonance frequency; for high-frequency noise, a low ESL; capacitors
-  of very different self-resonance in parallel can make an anti-resonance.
+  self-resonance; low ESL for high frequencies; capacitors of very
+  different self-resonance in parallel can make an anti-resonance.
 
 ### Why the formulas are these
 
     Ztarget = ΔV / ΔI,   ΔV = V × ripple
     C bulk = ΔI × t regulator / ΔV
     L max = ΔV × t edge / ΔI
-    f res = 1 / (2π √(ESL × C)),   n = ⌈ESR / Ztarget⌉
+    Z kind = (ESR + jωESL + 1/(jωC)) / n,   Y = Σ 1 / Z kind,   |Z| = 1 / |Y|
 
 The supply may sag by ΔV when the load steps by ΔI, so its impedance must
 stay under ΔV / ΔI at every frequency in the step. Until the regulator
 catches up, capacitors carry the step; their charge sets the bulk. During
 the fastest edge, inductance limits how fast current can come out of
-them. One capacitor is lowest, at its ESR, at its resonance; n alike
-divide that ESR.
+them. Each capacitor is lowest at its resonance; in parallel their
+complex admittances add, so between one kind's resonance (already
+inductive) and the next (still capacitive) the two can resonate together:
+the anti-resonance peak.
 
 ### Assumptions and limits
 
-- **The ESR starts at an illustrative 10 mΩ;** neither paper gives one.
-  Type your part's from its datasheet or its maker's impedance curve.
+- **The ESR in the rows is illustrative** (10 mΩ by default); neither
+  paper gives one. Type your parts' from their datasheets.
 - **ESL** is the capacitor's own; the pads and vias add more (AVX: "this
-  is a mounted inductance"), so the real figure is higher.
-- **One kind of capacitor:** mixing values makes anti-resonance peaks
-  between their resonances, which this does not model.
-- **MLCC capacitance falls with DC bias and temperature;** the C typed is
-  the one at your voltage.
+  is a mounted inductance").
+- **The board's planes** are not modelled; they matter above about 1 GHz
+  (AVX figure 5).
+- **MLCC capacitance falls with DC bias and temperature;** type the
+  capacitance at your voltage.
 
 ### How it was checked
 
-9 cases:
-- AVX's example: 4.5 mΩ, 3333 µF, 4.5 pH;
-- at 10 mΩ ESR, 3 parts meet 4.5 mΩ at resonance, 417 pH far over 4.5 pH;
-- a small MCU: 1.65 Ω, 100 nF in 1206 resonates at 14.2 MHz;
-- its 1 µs regulator asks 606 nF of bulk; seven cover it;
-- an FPGA core: 50 mΩ, one 0612 IDC meets it, 175 pH over 50 pH;
-- the package picker fills 110 pH for a 0508 IDC; a typed ESL reads
-  Custom;
+8 cases:
+- AVX's example: 4.5 mΩ, 3333 µF, 4.5 pH; three 100 nF (417 pH) far over;
+- those three get under 4.5 mΩ only around 14.2 MHz (14.1 to 14.7 MHz);
+- a small MCU: 1.65 Ω from 962 kHz to 207 MHz, 606 nF of bulk needed;
+- 10 µF + 2 × 100 nF + 2 × 1 nF: 48.2 kHz to 85.8 MHz, a 4.36 Ω
+  anti-resonance at 136 MHz;
+- an FPGA core: 50 mΩ, 175 pH over 50 pH;
+- "+ add" puts 10 µF beside 1 µF: the band widens, its peak stays under;
+- × removes a kind;
 - a zero current step is refused.
 
 [↑ Index](#index)
