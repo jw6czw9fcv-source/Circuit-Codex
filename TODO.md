@@ -368,7 +368,7 @@ Then:
 - [x] Via current capacity — IPC-2152 area rule + Brooks & Adam 2015 cases, 2026-10-29
 - [ ] Signal propagation delay
 - [ ] Planar (PCB) inductor
-- [ ] Decoupling capacitor
+- [x] Decoupling capacitor — target impedance, bulk, ESL, n in parallel (Kyocera AVX), 2026-10-31
 - [ ] Fuse/breaker sizing
 - [ ] Resettable fuse (PTC) sizing
 - [ ] TVS diode selection

@@ -426,6 +426,12 @@ const FORMULAS = [
 
   // ---- PCB ----
   {
+    tool: "Decoupling capacitor",
+    domain: "pcb",
+    formulas: ["Ztarget = ΔV / ΔI", "C = ΔI × t / ΔV", "f res = 1 / (2π √(ESL × C))"],
+    note: "n alike in parallel: ESR/n, ESL/n, n × C, same resonance (Kyocera AVX, Y. Chase).",
+  },
+  {
     tool: "Via current capacity",
     domain: "pcb",
     formulas: ["A via = π × (r² − (r − b)²)", "vias ≥ A trace / A via", "R via = ρ × l / A via"],
