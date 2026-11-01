@@ -10383,10 +10383,13 @@ one screen:
   dropout), the current wanted, the supply's lowest and highest voltage,
   the load's least and most voltage (an LED string, a battery), and the
   resistor you use.
-- **The big result:** the resistor, Vref / (I − Iadj), and the nearest
-  E24 value with the current it gives.
-- **The resistor you use** follows that E24 value until you type your
-  own; a new current wanted brings it back. For it:
+- **The big result:** the resistor, Vref / (I − Iadj), and the E24 values
+  either side of it with the current each gives.
+- **The resistor you use** follows the nearest E24 value until you type
+  your own; a new current wanted brings it back. When the nearest would
+  pass the part's rating, it takes the larger one instead (Pierre: an
+  LM1086 at 1450 mA picked 820 mΩ, 1.52 A, over its 1.5 A; now 910 mΩ,
+  1.37 A). For it:
   - the current, with its spread over the reference's tolerance;
   - the resistor's heat, Vref × I;
   - the most load voltage it can drive at the lowest supply (supply less
@@ -10395,7 +10398,7 @@ one screen:
   - the regulator's heat at the highest supply and the lowest load
     voltage;
   - warnings under the part's minimum load current (typical, then
-    guaranteed) and over its current rating.
+    guaranteed) and over its current rating, naming the resistor.
 - **Units:** the current in µA, mA or A, the resistor in Ω, kΩ or MΩ.
 - **Drawing:** the regulator with IN, OUT and ADJ, R from OUT, ADJ tied
   to the load side of R, the load to ground.
@@ -10445,7 +10448,7 @@ drops as heat.
 
 ### How it was checked
 
-11 cases:
+13 cases:
 - TI's 24 Ω: 52.1 mA (50 to 54.2 mA over Vref), 65.1 mW in R;
 - that charger from 12 V: 7.7 V left for the battery, 248 mW in the
   regulator;
@@ -10457,6 +10460,8 @@ drops as heat.
 - the LM1117 needs only its 1.13 V dropout at 347 mA: 9.61 V left;
 - a typed resistor holds (4.7 Ω gives 266 mA);
 - over 1.5 A is over the LM317's rating;
+- an LM1086 at 1450 mA picks 910 mΩ (1.37 A), not the nearer 820 mΩ
+  (1.52 A), which is flagged when typed;
 - the remembered regulator.
 
 [↑ Index](#index)
