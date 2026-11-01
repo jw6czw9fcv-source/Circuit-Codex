@@ -97,6 +97,7 @@ will key on, since that is the id the app already holds for each tool.
 ### Power electronics
 
 - Regulators → [Linear regulator](#linear-regulator)
+- Regulators → [Zener + transistor](#zener-transistor)
 - Battery → [Battery runtime](#battery-runtime)
 - Battery → [Battery C-rate](#battery-c-rate)
 - Battery → [Internal resistance](#internal-resistance)
@@ -10247,5 +10248,118 @@ makes each case worst keeps the window honest.
 - a supply under the zener voltage is refused;
 - picking a part brings its knee current (1N4740A: 0.25 mA);
 - the remembered part.
+
+[↑ Index](#index)
+
+---
+
+<a id="zener-transistor"></a>
+## Zener + transistor
+
+`calc: zener-transistor` · Power electronics › Supply & regulation
+(formerly Zener + transistor stabilization)
+
+### What it computes
+
+A zener holding the base of an NPN emitter follower, which passes the
+load current: on one screen,
+
+- **Inputs:** the zener (the same 1N4728A–1N4761A and BZX55 parts as
+  Zener regulation, or custom), the transistor (BD139, TIP31C, 2N3055,
+  or custom with its least hFE), the supply's lowest and highest voltage,
+  the most load current, the zener's least current, the base-emitter drop
+  (0.7 V by default), and the zener's resistor you use.
+- **The big result:** the output, Vz less the base-emitter drop, over the
+  zener's tolerance; under it, the zener's resistor: the largest E24 value
+  in its window, or why none works.
+- **For the resistor you use:**
+  - the base current at full load, IL / (hFE + 1), with the hFE used;
+  - the zener current at the two extremes, flagged under its least
+    current or over its maximum;
+  - the zener's and the resistor's heat at worst;
+  - the transistor's heat at worst, (Vin max − Vout) × IL, compared with
+    its free-air rating and its rating with the case at 25 °C, pointing to
+    Heat sink sizing when it needs one;
+  - its current and VCEO ratings;
+  - the base-emitter drop the datasheet gives at a high current.
+- **The resistor box** follows the suggestion until you type your own.
+- **Units:** currents in µA, mA or A, the resistor in Ω, kΩ or MΩ.
+- **Drawing:** the supply on the collector, the resistor to the base,
+  the reverse-biased zener to ground, the emitter feeding the load.
+- **Remembered:** the zener, the transistor and the units.
+
+Examples: 5 V at 500 mA from 12–18 V with a 1N4734A and a BD139; 12 V at
+0.5 A from 16–20 V with a 1N4743A and a TIP31C; a 2N3055 at 4 A, where no
+resistor works.
+
+### Source
+
+- **Tony R. Kuphaldt, Lessons in Electric Circuits, vol. III, ch. 4**
+  (read, ibiblio HTML), "common collector application: voltage
+  regulator": a common-collector transistor amplifies the current "so
+  that the zener diode circuit only has to handle the amount of current
+  necessary to drive the base of the transistor"; "the load voltage will
+  be approximately 0.7 volts less than the zener diode voltage"; when one
+  transistor's gain is not enough, several can be combined (a
+  Darlington). His ch. 9 shows the zener alone at 5.1 V and 500 mA from
+  12–18 V would dissipate "close to 5W".
+- **ST BD135/BD139, September 2001** (read, a copy on MIT's wiki): IC
+  1.5 A, VCEO 80 V, Ptot 12.5 W at Tcase ≤ 25 °C and 1.25 W at Tamb ≤
+  25 °C, VBE 1 V at IC 0.5 A, hFE 25 min at 0.5 A (40 at 150 mA),
+  Rth j-case 10 °C/W.
+- **Fairchild TIP31 series, rev. A, February 2000** (read): TIP31C VCEO
+  100 V, IC 3 A, PC 40 W at TC 25 °C and 2 W at Ta 25 °C, hFE 25 min at
+  1 A and 10 to 50 at 3 A, VBE(sat) 1.8 V at 3 A. θJC is taken as
+  (150 − 25) / 40 = 3.125 °C/W from the derating, which the sheet does
+  not print.
+- **2N3055, a two-page sheet whose maker is not printed** (read): VCEO
+  60 V, IC 15 A, 115 W at TC 25 °C, RthJC 1.52 °C/W, hFE 20 to 70 at
+  4 A, VBE(on) 1.5 V at 4 A. onsemi's own sheet could not be downloaded.
+- **The zeners:** Vishay's sheets, as in Zener regulation.
+
+### Why the formulas are these
+
+    Vout = Vz − VBE
+    IB = IL / (hFE + 1)
+    Rs ≤ (Vin min − Vz max) / (IB + Iz min)
+    Rs ≥ (Vin max − Vz min) / Iz max
+    P transistor = (Vin max − Vout min) × IL
+
+The emitter follows the base less one diode drop, so the output is set by
+the zener. The emitter carries the load; the base needs that divided by
+the gain plus one, and that is all the zener's resistor has to supply on
+top of the zener's own least current. With no load the base takes
+nothing, so the whole resistor current goes through the zener: that sets
+the other end of the window. The transistor drops everything between the
+supply and the output, at the full load current.
+
+### Assumptions and limits
+
+- **hFE** is the datasheet's minimum at the current it names; it falls
+  at higher currents (the TIP31C's 25 at 1 A is 10 at 3 A). For a load
+  near the transistor's rating, type the lower figure as a custom part.
+- **VBE** is 0.7 V by default, Kuphaldt's figure at modest current; the
+  datasheets give up to 1 to 1.8 V at amps, so the output falls a little
+  as the load grows.
+- **No current limit:** a short on the output puts the whole supply across
+  the transistor; this circuit has no protection.
+- **A base needing more than the zener can give** needs a driver
+  transistor (a Darlington), not drawn here.
+
+### How it was checked
+
+9 cases:
+- 1N4734A and BD139, 12–18 V, 500 mA: base 19.2 mA, a 78.27–302.5 Ω
+  window, 300 Ω, output 4.62–5.18 V;
+- with 300 Ω: 1.17 to 42.3 mA in the zener, 249 mW, 536 mW in the
+  resistor;
+- the BD139 at 6.69 W: over free air, under its case rating;
+- 1N4743A and TIP31C, 16–20 V, 0.5 A: a 110.9–120.6 Ω window, 120 Ω,
+  353 µA left at worst, 4.17 W;
+- a 2N3055 at 4 A needs 190 mA of base: no resistor works;
+- a 50 mA load stays within the BD139's free-air rating (669 mW);
+- 2 A is flagged over the BD139's 1.5 A;
+- a custom hFE of 100 needs 4.95 mA;
+- the remembered transistor and zener.
 
 [↑ Index](#index)

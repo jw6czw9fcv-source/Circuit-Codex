@@ -388,6 +388,12 @@ const FORMULAS = [
     note: "Iz min: the knee current (IZT2 on Vishay sheets); Iz max: IZM or P / Vz. Kuphaldt, Lessons vol. III ch. 3.",
   },
   {
+    tool: "Zener + transistor",
+    domain: "power",
+    formulas: ["Vout = Vz − VBE", "IB = IL / (hFE + 1)", "P = (Vin − Vout) × IL"],
+    note: "Emitter follower: the zener only feeds the base. Kuphaldt, Lessons vol. III ch. 4.",
+  },
+  {
     tool: "Linear regulator",
     domain: "power",
     formulas: ["Vout = Vref (1 + R2/R1) + Iadj·R2", "P = (Vin − Vout) × I + Vin × Iq", "Tj = Ta + P × RθJA"],

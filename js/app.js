@@ -575,6 +575,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "internal-resistance") return renderInternalResistance(domain, tool, favId);
   if (calcId === "linear-regulator") return renderLinearRegulator(domain, tool, favId);
   if (calcId === "zener-regulation") return renderZenerRegulation(domain, tool, favId);
+  if (calcId === "zener-transistor") return renderZenerTransistor(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "via-current") return renderViaCurrent(domain, tool, favId);
@@ -10318,6 +10319,242 @@ function renderZenerRegulation(domain, tool, favId) {
   }
 
   if (!P().custom) state.si.izMin = P().izk;
+  paint();
+}
+
+// ---------- Zener + transistor stabilization ----------
+// The zener holds the base of an emitter follower; the transistor carries
+// the load, so the zener's resistor only feeds the base current, IL / (hFE
+// + 1), and the output sits one base-emitter drop under Vz (Kuphaldt,
+// Lessons in Electric Circuits vol. III, ch. 4, "common collector
+// application: voltage regulator": "the load voltage will be approximately
+// 0.7 volts less than the zener diode voltage"). The resistor's window is
+// the zener tool's, with the base current in place of the load. The
+// transistor drops the rest of the supply and takes its heat.
+// Transistors: ST BD139 (September 2001): 1.5 A, 80 V, Ptot 12.5 W at
+// Tcase 25 °C, 1.25 W in free air, VBE 1 V at 0.5 A, hFE 25 min at 0.5 A,
+// Rth j-case 10 °C/W. Fairchild TIP31C (rev. A, February 2000): 3 A, 100 V,
+// 40 W at Tcase 25 °C, 2 W in free air, hFE 25 min at 1 A (10 at 3 A),
+// VBE 1.8 V at 3 A. 2N3055 (a sheet whose maker is not printed): 15 A,
+// 60 V, 115 W, Rth j-case 1.52 °C/W, hFE 20 min at 4 A, VBE(on) 1.5 V at
+// 4 A.
+const ZT_TRANSISTORS = {
+  bd139: { label: "BD139", pkg: "TO-126", ic: 1.5, vceo: 80, pCase: 12.5, pAir: 1.25, hfe: 25, hfeAt: "0.5 A", vbe: 1, vbeAt: "0.5 A", thjc: 10 },
+  tip31c: { label: "TIP31C", pkg: "TO-220", ic: 3, vceo: 100, pCase: 40, pAir: 2, hfe: 25, hfeAt: "1 A", vbe: 1.8, vbeAt: "3 A", thjc: 3.125 },
+  "2n3055": { label: "2N3055", pkg: "TO-3", ic: 15, vceo: 60, pCase: 115, pAir: null, hfe: 20, hfeAt: "4 A", vbe: 1.5, vbeAt: "4 A", thjc: 1.52 },
+  custom: { label: "Custom", custom: true },
+};
+
+function renderZenerTransistor(domain, tool, favId) {
+  const C = "zener-transistor";
+  const state = {
+    zener: pref(C, "zener", "1n4734a", Object.keys(ZR_PARTS)),
+    tr: pref(C, "tr", "bd139", Object.keys(ZT_TRANSISTORS)),
+    iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
+    rUnit: pref(C, "rUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
+    si: { vinMin: 12, vinMax: 18, ilMax: 0.5, izMin: 1e-3, vbe: 0.7, rs: 300, cvz: 5.6, cpz: 0.5, chfe: 50 },
+    rsTyped: false,
+  };
+  const ZP = () => ZR_PARTS[state.zener], T = () => ZT_TRANSISTORS[state.tr];
+  const Z = () => (ZP().custom
+    ? { vz: state.si.cvz, vzMin: state.si.cvz, vzMax: state.si.cvz, izMax: state.si.cpz / state.si.cvz, pz: state.si.cpz }
+    : ZP());
+  const hfe = () => (T().custom ? state.si.chfe : T().hfe);
+  const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const scale = (k) => (k === "ilMax" || k === "izMin" ? AMP_UNITS[state.iUnit] : k === "rs" ? DIVIDER_R_UNITS[state.rUnit] : 1);
+  // The base current at full load: the emitter carries the load.
+  const ib = () => state.si.ilMax / (hfe() + 1);
+
+  // The window for the zener's resistor, as in Zener regulation, the base
+  // current standing in for the load (and none at no load).
+  function windowOf() {
+    const s = state.si, z = Z();
+    const rMax = (s.vinMin - z.vzMax) / (ib() + s.izMin);
+    const rMin = (s.vinMax - z.vzMin) / z.izMax;
+    const pick = rMax >= rMin ? eSeriesBetween(rMin, rMax, "E24").pop() : undefined;
+    return { rMin, rMax, pick };
+  }
+
+  function problem() {
+    const s = state.si, z = Z();
+    if (ZP().custom && (!(s.cvz > 0) || !(s.cpz > 0))) return "Enter the zener voltage and its power rating.";
+    if (T().custom && !(s.chfe > 0)) return "Enter the transistor's least current gain, hFE.";
+    if (!(s.vinMin > 0) || !(s.vinMax >= s.vinMin)) return "Enter the supply's lowest and highest voltage, the highest at least the lowest.";
+    if (!(s.ilMax >= 0)) return "Enter the most load current.";
+    if (!(s.izMin > 0)) return "Enter the least zener current, above zero.";
+    if (!(s.vbe >= 0)) return "Enter the base-emitter drop.";
+    if (!(s.vinMin > z.vzMax)) return `The lowest supply must be above the zener's ${val(z.vzMax, "V")}.`;
+    if (!(s.rs > 0)) return "Enter the zener's resistor.";
+    return "";
+  }
+
+  function syncRs() {
+    if (state.rsTyped) return;
+    const err = problem();
+    if (err && !/zener's resistor/.test(err)) return;
+    const w = windowOf();
+    if (w.pick) state.si.rs = w.pick;
+    const el = app.querySelector('input[data-key="rs"]');
+    if (el && el !== document.activeElement) el.value = fmt(state.si.rs / scale("rs"));
+  }
+
+  // The supply on the collector, Rs from the supply to the base, the zener
+  // from the base to ground, the emitter feeding the load.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, t, c = part, a = "start") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const zigV = (x, y1, y2) => { let d = `M${x} ${y1}`; const n = 6, h = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + h * (i + 0.5)}`; return `${d} L${x} ${y2}`; };
+    const s = state.si, z = Z();
+    const vin = s.vinMin === s.vinMax ? val(s.vinMin, "V") : `${Number(s.vinMin.toPrecision(3))}–${val(s.vinMax, "V")}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <path d="M30 16 H186 M100 16 V26 M100 50 V60 M100 60 H162 M100 60 V70 M100 84 V100 M186 16 V44 M186 76 H246 M226 76 V82 M226 98 V100 M30 100 H246" stroke="${wire}" stroke-width="1.6"/>
+      <circle cx="30" cy="16" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="30" cy="100" r="3" stroke="${wire}" stroke-width="1.4"/>
+      <circle cx="246" cy="76" r="3" stroke="${wire}" stroke-width="1.4"/>
+      <circle cx="100" cy="16" r="2.5" fill="${wire}"/><circle cx="100" cy="60" r="2.5" fill="${wire}"/><circle cx="100" cy="100" r="2.5" fill="${wire}"/>
+      <circle cx="226" cy="76" r="2.5" fill="${wire}"/><circle cx="226" cy="100" r="2.5" fill="${wire}"/>
+      <path d="${zigV(100, 26, 50)}" stroke="${calc}" stroke-width="1.6"/>
+      ${lbl(108, 41, `Rs ${s.rs > 0 ? formatOhms(s.rs) : "?"}`, calc)}
+      <path d="M90 84 H110 L100 70 Z" stroke="${part}" stroke-width="1.6" fill="none"/>
+      <path d="M86 73 L90 70 H110 L114 67" stroke="${part}" stroke-width="1.6"/>
+      ${lbl(84, 82, `${ZP().custom ? "" : ZP().label + " "}${val(z.vz, "V")}`, part, "end")}
+      <path d="M164 46 V74 M164 54 L186 44 M164 66 L186 76" stroke="${part}" stroke-width="1.8"/>
+      <polygon points="186,76 177,75 181,69" fill="${part}"/>
+      ${lbl(192, 50, T().custom ? "NPN" : T().label)}
+      <path d="${zigV(226, 82, 98)}" stroke="${part}" stroke-width="1.6"/>
+      ${lbl(234, 94, "load")}
+      ${lbl(246, 68, "Vout", grey, "middle")}
+      ${lbl(30, 10, `Vin ${vin}`, grey)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, z = Z(), t = T(), w = windowOf();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const rangeTxt = `${formatOhms(Math.max(w.rMin, 0))} to ${formatOhms(w.rMax)}`;
+    const vout = (vz) => vz - s.vbe;
+    const voutTxt = z.vzMin === z.vzMax ? val(vout(z.vz), "V") : `${val(vout(z.vzMin), "V")} to ${val(vout(z.vzMax), "V")}`;
+    const head = `
+        <div class="result-field">
+          <div class="result-head"><span class="label">Output</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="vout">${voutTxt}</span></div>
+          <div class="result-sub" data-res="sub">Vz less ${val(s.vbe, "V")} base-emitter; the zener's resistor ${w.pick ? `${formatOhms(w.pick)} (E24, any from ${rangeTxt})` : w.rMax >= w.rMin ? `only ${rangeTxt}, no E24 value` : warn(`none works: under ${formatOhms(w.rMax)} to feed the base, over ${formatOhms(w.rMin)} to spare the zener`)}</div>
+        </div>`;
+    // The resistor in use.
+    const r = s.rs;
+    const izLow = (s.vinMin - z.vzMax) / r - ib();
+    const izHigh = (s.vinMax - z.vzMin) / r;
+    const pz = z.vzMax * izHigh, pr = (s.vinMax - z.vzMin) ** 2 / r;
+    const izTxt = `${val(Math.max(izLow, 0), "A")} to ${val(izHigh, "A")}`;
+    const lowOk = izLow >= s.izMin * (1 - 1e-9), highOk = izHigh <= z.izMax * (1 + 1e-9);
+    // The transistor drops the rest of the supply at full load.
+    const pt = (s.vinMax - vout(z.vzMin)) * s.ilMax;
+    const vce = s.vinMax - vout(z.vzMin);
+    const tLimits = [];
+    if (!t.custom && s.ilMax > t.ic) tLimits.push(warn(`over its ${val(t.ic, "A")}`));
+    if (!t.custom && vce > t.vceo) tLimits.push(warn(`over its ${t.vceo} V VCEO`));
+    const heat = t.custom ? val(pt, "W")
+      : t.pAir && pt <= t.pAir ? `${val(pt, "W")}, within its ${val(t.pAir, "W")} in free air`
+      : pt <= t.pCase ? `${val(pt, "W")}: it needs a heatsink (θJC ${t.thjc} °C/W, see Heat sink sizing)`
+      : warn(`${val(pt, "W")}, over even its ${val(t.pCase, "W")} with the case at 25 °C`);
+    return `${head}
+        <div class="field notation-box">
+          ${row("Base current, full load", `${val(ib(), "A")} (hFE ${hfe()}${t.custom ? "" : ` min at ${t.hfeAt}`})`, "ib")}
+          ${row(`Zener current with ${formatOhms(r)}`, !lowOk ? warn(`${izTxt}: under ${val(s.izMin, "A")} at the lowest supply and full load`) : !highOk ? warn(`${izTxt}: over its ${val(z.izMax, "A")}`) : izTxt, "iz")}
+          ${row("Zener heat, worst", pz > z.pz ? warn(`${val(pz, "W")}, over its ${val(z.pz, "W")}`) : `${val(pz, "W")} of its ${val(z.pz, "W")}`, "pz")}
+          ${row("Resistor heat, worst", val(pr, "W"), "pr")}
+          ${row(`${t.custom ? "Transistor" : t.label} heat, worst`, heat, "pt")}
+          ${tLimits.length ? row("Ratings", tLimits.join(" · "), "limits") : ""}
+          ${t.custom ? "" : row("Base-emitter drop", `0.7 V is Kuphaldt's figure; the datasheet gives up to ${val(t.vbe, "V")} at ${t.vbeAt}`, "vbe")}
+        </div>`;
+  }
+
+  function refresh() {
+    syncRs();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (zener, tr, si, extra, typed) => () => {
+    Object.assign(state, { zener, tr }, extra || {});
+    Object.assign(state.si, si);
+    state.rsTyped = !!typed;
+    paint();
+  };
+  useExamples([
+    { title: "5 V, 500 mA from 12–18 V", note: "1N4734A (5.6 V) and a BD139: the zener feeds only 19 mA of base; the BD139 needs a heatsink.",
+      apply: example("1n4734a", "bd139", { vinMin: 12, vinMax: 18, ilMax: 0.5, izMin: 1e-3, vbe: 0.7 }, { iUnit: "mA", rUnit: "Ω" }) },
+    { title: "12 V, 0.5 A from 16–20 V", note: "1N4743A (13 V) and a TIP31C: a narrow 111–121 Ω window, so 120 Ω; 4.2 W to sink.",
+      apply: example("1n4743a", "tip31c", { vinMin: 16, vinMax: 20, ilMax: 0.5, izMin: 0.25e-3, vbe: 0.7 }, { iUnit: "A", rUnit: "Ω" }) },
+    { title: "A 2N3055 at 4 A", note: "Its base needs 190 mA, more than a 12 V zener can spare: no resistor works, it needs a driver.",
+      apply: example("1n4742a", "2n3055", { vinMin: 16, vinMax: 20, ilMax: 4, izMin: 0.25e-3, vbe: 0.7 }, { iUnit: "A", rUnit: "Ω" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    syncRs();
+    const field = (key, label, unitHTML) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / scale(key))}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const iSel = (n) => `<select data-iunit="${n}">${Object.keys(AMP_UNITS).map((u) => `<option ${u === state.iUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const rSel = `<select data-runit="1">${Object.keys(DIVIDER_R_UNITS).map((u) => `<option ${u === state.rUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const groups = {};
+    for (const [k, p] of Object.entries(ZR_PARTS)) (groups[p.group] = groups[p.group] || []).push(`<option value="${k}" ${k === state.zener ? "selected" : ""}>${p.custom ? p.label : `${p.label}, ${p.vz} V`}</option>`);
+    const zSel = `<select id="zt-zener">${Object.entries(groups).map(([g, o]) => (g ? `<optgroup label="${g}">${o.join("")}</optgroup>` : o.join(""))).join("")}</select>`;
+    const tSel = `<select id="zt-tr">${Object.entries(ZT_TRANSISTORS).map(([k, t]) => `<option value="${k}" ${k === state.tr ? "selected" : ""}>${t.custom ? t.label : `${t.label}, ${t.ic} A, ${t.pkg}`}</option>`).join("")}</select>`;
+    let fields = `<div class="field-pair"><div class="field"><label>Zener</label>${zSel}</div><div class="field"><label>Transistor</label>${tSel}</div></div>`;
+    const custom = [];
+    if (ZP().custom) custom.push(field("cvz", "Vz", fixed("V")), field("cpz", "Zener power", fixed("W")));
+    if (T().custom) custom.push(field("chfe", "Least hFE", fixed("")));
+    if (custom.length) fields += `<div class="field-pair">${custom.join("")}</div>`;
+    fields += `
+      <div class="field-pair">${field("vinMin", "Supply, lowest", fixed("V"))}${field("vinMax", "Supply, highest", fixed("V"))}${field("ilMax", "Load, most", iSel(1))}</div>
+      <div class="field-pair">${field("izMin", "Zener, least", iSel(2))}${field("vbe", "Base-emitter", fixed("V"))}${field("rs", "Rs you use", rSel)}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A zener steering a transistor, for more current")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Vout = Vz − VBE", "IB = IL / (hFE + 1)", "Rs ≤ (Vin min − Vz max) / (IB + Iz min)", "P transistor = (Vin max − Vout) × IL"],
+        "The zener holds the transistor's base at Vz; the transistor, an emitter follower, passes the load current from the supply and its emitter sits one base-emitter drop (VBE, about 0.7 V) below the base. The zener's resistor Rs now only feeds the base current, the load divided by the current gain hFE plus one, so a small zener can serve an amp. Rs has the same window as a plain zener regulator: small enough to keep the zener above its least current at the lowest supply and full load, large enough to keep it within its rating at the highest supply with no load. The transistor drops the rest of the supply and takes the heat."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key;
+        state.si[k] = parseFloat(el.value) * scale(k);
+        if (k === "rs") state.rsTyped = true;
+        refresh();
+      };
+    });
+    document.getElementById("zt-zener").onchange = (e) => {
+      state.zener = e.target.value; setPref(C, "zener", state.zener);
+      // A listed zener brings its knee current as the least zener current.
+      if (!ZP().custom) state.si.izMin = ZP().izk;
+      paint();
+    };
+    document.getElementById("zt-tr").onchange = (e) => { state.tr = e.target.value; setPref(C, "tr", state.tr); paint(); };
+    app.querySelectorAll("select[data-iunit]").forEach((el) => { el.onchange = () => { state.iUnit = el.value; setPref(C, "iUnit", el.value); paint(); }; });
+    app.querySelector("select[data-runit]").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
+  }
+
+  if (!ZP().custom) state.si.izMin = ZP().izk;
   paint();
 }
 

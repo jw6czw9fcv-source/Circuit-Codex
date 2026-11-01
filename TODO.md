@@ -347,7 +347,7 @@ Then:
 - [ ] Amateur radio bands
 - [x] Linear regulator (LDO)
 - [x] Zener voltage stabilization — built as Zener regulation (Active › Diodes), 2026-10-29
-- [ ] Zener + transistor stabilization
+- [x] Zener + transistor stabilization — built as Zener + transistor, 2026-10-31
 - [ ] Inrush current limiter (NTC)
 - [ ] Constant current source/driver
 - [ ] Power factor
