@@ -364,6 +364,12 @@ const FORMULAS = [
 
   // ---- Power ----
   {
+    tool: "SMPS flyback basics",
+    domain: "power",
+    formulas: ["N = Vin(min) dmax / ((Vout + Vd)(1 − dmax))", "Vds = Vin(max) + N (Vout + Vd)", "L = Vin(min)² d² η / (2 fs Pout(min))", "Cout = Iout × d / (fs × ΔVout)"],
+    note: "N = Np/Ns, the turns ratio. Continuous conduction (CCM); Pout(min) is where it leaves CCM, 20 to 30 % of full load (TI SSZTCY0, J. Betten).",
+  },
+  {
     tool: "DC/DC boost converter",
     domain: "power",
     formulas: ["D = 1 − Vin × η / Vout", "L = Vin (Vout − Vin) / (ΔIL × fs × Vout)", "Ipeak = Iout / (1 − D) + ΔIL / 2", "Cout = Iout × D / (fs × ΔV)"],

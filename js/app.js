@@ -580,6 +580,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "inrush-limiter") return renderInrushLimiter(domain, tool, favId);
   if (calcId === "buck") return renderBuck(domain, tool, favId);
   if (calcId === "boost") return renderBoost(domain, tool, favId);
+  if (calcId === "flyback") return renderFlyback(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -13000,6 +13001,237 @@ function renderBoost(domain, tool, favId) {
     });
     // A unit change re-expresses the same values; the current pickers move
     // together.
+    app.querySelectorAll("select[data-unit]").forEach((el) => {
+      el.onchange = () => { const key = el.dataset.unit; state[key] = el.value; setPref(C, key, el.value); paint(); };
+    });
+    syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- SMPS flyback basics ----------
+// The power stage of a continuous-conduction (CCM) flyback, by John
+// Betten's "Designing a CCM flyback converter" (TI SSZTCY0, February 2024),
+// a 53 V to 12 V at 5 A design at 250 kHz: the turns ratio from the volt-
+// second balance at the lowest input and the maximum duty cycle, Nps =
+// Vin(min) dmax / ((Vout + Vd)(1 − dmax)) (eqs. 1, 2: 4.08, taken as 4:1);
+// the duty cycle d = Nps (Vout + Vd) / (Vin + Nps (Vout + Vd)) (eq. 4: 0.47
+// at 57 V); the FET's flat-top voltage Vin(max) + Nps (Vout + Vd) (eq. 5:
+// 107 V, then 25-50 % more for ringing: a 200 V FET); the diode's reverse
+// voltage Vout + Vin(max) / Nps (eq. 6: 26 V), its current Iout / (1 −
+// dmax) (eq. 7: 10 A) and loss Iout × Vd (eq. 8); the primary inductance
+// that keeps CCM down to Pout(min), Vin(min)² dmax² η / (2 fsw Pout(min))
+// (eq. 9: 80 µH at 15 W, 20-30 % of full power); the peak primary current
+// Iout / ((1 − dmax) Nps) + Vin(min) dmax / (2 L fsw) (eq. 10: 3.14 A);
+// Cout = Iout dmax / (fsw ΔVout) (eq. 14: 83 µF for 120 mV); Cin = Ipk
+// dmax / (2 fsw ΔVin) (eq. 16: 2 µF for 1.5 V).
+const FLY_PILLS = { t: "Transformer", s: "Switch & diode", c: "Capacitors" };
+const FLY_L_UNITS = { "µH": 1e-6, mH: 1e-3 };
+
+function renderFlyback(domain, tool, favId) {
+  const C = "flyback";
+  const state = {
+    pill: pref(C, "pill", "t", Object.keys(FLY_PILLS)),
+    iUnit: pref(C, "iUnit", "A", Object.keys(MA_A_UNITS)),
+    fUnit: pref(C, "fUnit", "kHz", Object.keys(BUCK_F_UNITS)),
+    lUnit: pref(C, "lUnit", "µH", Object.keys(FLY_L_UNITS)),
+    voUnit: pref(C, "voUnit", "mV", Object.keys(ADC_V_UNITS)),
+    viUnit: pref(C, "viUnit", "V", Object.keys(ADC_V_UNITS)),
+    si: { vmin: 51, vmax: 57, vout: 12, iout: 5, fs: 250e3, vd: 0.5, dmax: 50, eta: 91, ccm: 25, n: 0, l: 0, dvo: 0.12, dvi: 1.5 },
+    // The turns ratio and the inductance follow the inputs until typed.
+    nTyped: false, lTyped: false,
+  };
+  const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const UNIT_OF = { iout: [MA_A_UNITS, "iUnit"], fs: [BUCK_F_UNITS, "fUnit"], l: [FLY_L_UNITS, "lUnit"], dvo: [ADC_V_UNITS, "voUnit"], dvi: [ADC_V_UNITS, "viUnit"] };
+  const scale = (k) => (UNIT_OF[k] ? UNIT_OF[k][0][state[UNIT_OF[k][1]]] : 1);
+
+  const vo = () => state.si.vout + state.si.vd;
+  const nExact = () => { const s = state.si, d = s.dmax / 100; return s.vmin * d / (vo() * (1 - d)); };
+  const dutyAt = (vin) => { const k = state.si.n * vo(); return k / (vin + k); };
+  const pMin = () => state.si.vout * state.si.iout * state.si.ccm / 100;
+  // At the lowest input, with the turns ratio in use.
+  const lMin = () => { const s = state.si, d = dutyAt(s.vmin); return s.vmin * s.vmin * d * d * (s.eta / 100) / (2 * s.fs * pMin()); };
+  // Two figures, rounded up: a flyback transformer is wound to order.
+  const up2 = (x) => { const m = Math.pow(10, Math.floor(Math.log10(x)) - 1); return Math.ceil(x / m - 1e-9) * m; };
+  function follow() {
+    if (problem(true)) return;
+    if (!state.nTyped) state.si.n = Number(nExact().toPrecision(3));
+    if (!state.lTyped && state.si.n > 0) state.si.l = up2(lMin());
+  }
+
+  function problem(early) {
+    const s = state.si;
+    if (!(s.vmin > 0) || !(s.vmax >= s.vmin)) return "Enter the input range, the highest at least the lowest.";
+    if (!(s.vout > 0) || !(s.iout > 0)) return "Enter the output voltage and current.";
+    if (!(s.fs > 0)) return "Enter the switching frequency.";
+    if (!(s.vd >= 0)) return "Enter the diode's drop, zero or more.";
+    if (!(s.dmax > 0 && s.dmax < 100)) return "Enter the maximum duty cycle, between 0 and 100 %.";
+    if (!(s.eta > 0 && s.eta <= 100)) return "Enter the efficiency, above 0 and at most 100 %.";
+    if (!(s.ccm > 0 && s.ccm <= 100)) return "Enter the load where it leaves CCM, above 0 and at most 100 %.";
+    if (early) return "";
+    if (!(s.n > 0)) return "Enter the turns ratio, Np over Ns.";
+    if (!(s.l > 0)) return "Enter the primary inductance.";
+    if (state.pill === "c" && (!(s.dvo > 0) || !(s.dvi > 0))) return "Enter the output and input ripple allowed.";
+    return "";
+  }
+
+  function calc() {
+    const s = state.si, d = dutyAt(s.vmin);
+    const ipk = s.iout / ((1 - d) * s.n) + s.vmin * d / (2 * s.l * s.fs);
+    return { d, dLow: dutyAt(s.vmax), ipk };
+  }
+
+  // A flyback as Betten's figure 1 shows it, simplified: the input
+  // capacitor, the primary winding and the FET on the primary ground; the
+  // secondary, wound the other way (the dots), the diode and the output
+  // capacitor last on the isolated secondary ground.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calcC = "#5DCAA5", grey = "#8A9099";
+    const tone = (p) => (state.pill === p ? calcC : part);
+    const lbl = (x, y, t, c = part, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const coil = (x, y, n, side) => { let d = `M${x} ${y}`; for (let i = 0; i < n; i++) d += ` a6 6 0 0 ${side} 0 12`; return d; };
+    const s = state.si, ok = !problem();
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <path d="M12 20 H96 V28 M96 64 V70 M90 70 H96 M90 86 H96 V98 M30 20 V50 M30 56 V98 M30 98 H96 M128 28 V20 H150 M166 20 H262 M128 64 V80 M240 20 V50 M240 56 V80 M128 80 H240 M60 78 H82" stroke="${wire}" stroke-width="1.6"/>
+      <circle cx="10" cy="20" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="265" cy="20" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="240" cy="20" r="2.5" fill="${wire}"/>
+      <path d="M54 102 H66 M57 106 H63 M60 98 V102" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M180 84 H192 M183 88 H189 M186 80 V84" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M21 50 H39 M21 56 H39" stroke="${tone("c")}" stroke-width="2"/>
+      <path d="${coil(96, 28, 3, 1)} ${coil(128, 28, 3, 0)}" stroke="${tone("t")}" stroke-width="1.6"/>
+      <path d="M110 24 V68 M114 24 V68" stroke="${tone("t")}" stroke-width="1.4"/>
+      <circle cx="88" cy="32" r="2.2" fill="${tone("t")}"/><circle cx="136" cy="60" r="2.2" fill="${tone("t")}"/>
+      <path d="M86 70 V86 M90 68 V88 M82 78 H86" stroke="${tone("s")}" stroke-width="1.8"/>
+      <path d="M150 12 V28 L166 20 Z M166 12 V28" stroke="${tone("s")}" stroke-width="1.6"/>
+      <path d="M231 50 H249 M231 56 H249" stroke="${tone("c")}" stroke-width="2"/>
+      ${lbl(8, 11, "VIN", grey, "start")}${lbl(282, 11, `VOUT ${val(s.vout, "V")}`, grey, "end")}
+      ${lbl(112, 11, ok ? `${fmt(s.n)} : 1` : "Np : Ns", tone("t"))}
+      ${lbl(158, 40, "D", tone("s"))}${lbl(102, 92, "Q", tone("s"), "start")}${lbl(64, 73, "PWM", grey)}
+      ${lbl(42, 57, "CIN", tone("c"), "start")}${lbl(252, 70, "COUT", tone("c"), "start")}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, { d, dLow, ipk } = calc();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    const big = (label, num, sub) => `
+        <div class="result-field">
+          <div class="result-head"><span class="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${num}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const pct = (x) => `${Number((x * 100).toPrecision(3))} %`;
+    if (state.pill === "t") {
+      return `${big(state.nTyped ? "Your turns ratio, Np : Ns" : "Turns ratio, Np : Ns", `${fmt(s.n)} : 1`, `${fmt(Number(nExact().toPrecision(3)))} : 1 gives ${s.dmax} % at ${val(s.vmin, "V")}`)}
+        <div class="field notation-box">
+          ${row("Duty cycle, lowest to highest input", `${pct(d)} to ${pct(dLow)}`, "duty")}
+          ${row(`Inductance for CCM down to ${val(pMin(), "W")}`, `${val(lMin(), "H")} at least${state.lTyped && s.l < lMin() ? `: ${warn(`yours, ${val(s.l, "H")}, leaves CCM sooner`)}` : ""}`, "lmin")}
+          ${row("Peak primary current", `${val(ipk, "A")}, the core's saturation at least`, "ipk")}
+        </div>`;
+    }
+    if (state.pill === "s") {
+      const vds = s.vmax + s.n * vo();
+      return `${big("FET, flat-top drain voltage", val(vds, "V"), `plus 25 to 50 % for ringing: a ${val(vds * 1.25, "V")} to ${val(vds * 1.5, "V")} FET or more`)}
+        <div class="field notation-box">
+          ${row("Peak primary current", val(ipk, "A"), "spk")}
+          ${row("Diode, reverse voltage", val(s.vout + s.vmax / s.n, "V"), "piv")}
+          ${row("Diode current while it conducts", val(s.iout / (1 - d), "A"), "idiode")}
+          ${row("Diode loss at the drop", val(s.iout * s.vd, "W"), "pd")}
+        </div>`;
+    }
+    const cout = s.iout * d / (s.fs * s.dvo);
+    return `${big("Output capacitance, at least", val(cout, "F"), `for ${val(s.dvo, "V")} of ripple`)}
+        <div class="field notation-box">
+          ${row("Output capacitor, RMS current", val(s.iout * Math.sqrt(d / (1 - d)), "A"), "corms")}
+          ${row(`Input capacitance for ${val(s.dvi, "V")}`, val(ipk * d / (2 * s.fs * s.dvi), "F"), "cin")}
+          ${row("Peak primary current", val(ipk, "A"), "cpk")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const set = (k) => { const el = app.querySelector(`input[data-key="${k}"]`); if (el && el !== document.activeElement) el.value = state.si[k] > 0 ? fmt(state.si[k] / scale(k)) : ""; };
+    set("n"); set("l");
+  }
+
+  function refresh() {
+    follow();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  const BETTEN = { vmin: 51, vmax: 57, vout: 12, iout: 5, fs: 250e3, vd: 0.5, dmax: 50, eta: 91, ccm: 25, dvo: 0.12, dvi: 1.5 };
+  const example = (pill, si, extra) => () => {
+    Object.assign(state, { pill, nTyped: false, lTyped: false, iUnit: "A", fUnit: "kHz", lUnit: "µH", voUnit: "mV", viUnit: "V" }, extra || {});
+    Object.assign(state.si, BETTEN, si);
+    if (si.n) state.nTyped = true;
+    if (si.l) state.lTyped = true;
+    follow();
+    paint();
+  };
+  useExamples([
+    { title: "TI's 60 W flyback, 51 to 57 V", note: "12 V at 5 A, 50 % at 51 V: 4.08 : 1, and 78.9 µH keeps CCM down to 15 W.",
+      apply: example("t", {}) },
+    { title: "Its transformer, 4 : 1 and 80 µH", note: "Rounded to 4 : 1 the duty cycle runs 49.5 % to 46.7 %; 3.11 A peak.",
+      apply: example("t", { n: 4, l: 80e-6 }) },
+    { title: "Its FET and diode", note: "57 V + 4 × 12.5 V: 107 V flat-top on the FET, so TI takes 200 V; 26.3 V on the diode.",
+      apply: example("s", { n: 4, l: 80e-6 }) },
+    { title: "Its capacitors", note: "4 : 1, 49.5 % at 51 V: 82.5 µF for 120 mV out, 2.05 µF for 1.5 V in; TI's 83 and 2 µF use 50 %.",
+      apply: example("c", { n: 4, l: 80e-6 }) },
+  ]);
+
+  function paint() {
+    const s = state.si, p = state.pill;
+    follow();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const field = (key, label, unitHTML) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${s[key] > 0 || key === "vd" ? fmt(s[key] / scale(key)) : ""}" />${unitHTML}</div>
+        </div>`;
+    const rows = {
+      t: `<div class="field-pair">${field("dmax", "Max duty", fixed("%"))}${field("n", "Np : Ns", fixed(": 1"))}${field("eta", "Efficiency", fixed("%"))}</div>
+      <div class="field-pair">${field("ccm", "CCM down to", fixed("% load"))}${field("l", "Primary L", sel('data-unit="lUnit"', FLY_L_UNITS, state.lUnit))}</div>`,
+      s: "",
+      c: `<div class="field-pair">${field("dvo", "Output ripple", sel('data-unit="voUnit"', ADC_V_UNITS, state.voUnit))}${field("dvi", "Input ripple", sel('data-unit="viUnit"', ADC_V_UNITS, state.viUnit))}</div>`,
+    }[p];
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Turns ratio, inductance and stresses of a CCM flyback")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.entries(FLY_PILLS), p, domain.bg)}
+
+      <div class="field-pair">${field("vmin", "Vin, lowest", fixed("V"))}${field("vmax", "Vin, highest", fixed("V"))}${field("vout", "Vout", fixed("V"))}</div>
+      <div class="field-pair">${field("iout", "Iout, max", sel('data-unit="iUnit"', MA_A_UNITS, state.iUnit))}${field("fs", "Switching", sel('data-unit="fUnit"', BUCK_F_UNITS, state.fUnit))}${field("vd", "Diode drop", fixed("V"))}</div>
+      ${rows}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["N = Np/Ns = Vin(min) dmax / ((Vout + Vd)(1 − dmax))", "d = N (Vout + Vd) / (Vin + N (Vout + Vd))", "Vds = Vin(max) + N (Vout + Vd),   Vdiode = Vout + Vin(max) / N", "L = Vin(min)² d² η / (2 fs Pout(min))", "Ipk = Iout / ((1 − d) N) + Vin(min) d / (2 L fs)", "Cout = Iout d / (fs ΔVout),   Cin = Ipk d / (2 fs ΔVin)"],
+        "A flyback converter stores energy in a transformer while its switch (the FET Q) is on and releases it to the output through the diode while the switch is off. The windings are wound the opposite way (the dots) and isolate the output from the input. The turns ratio N = Np/Ns comes from balancing the volt-seconds on the core: the input across the primary for the on-time d, the output plus the diode drop Vd reflected back for the rest. Off, the FET sees the input plus that reflected voltage, and ringing from the leakage inductance adds more. In continuous conduction (CCM) the current never falls to zero; the primary inductance sets the load below which it does, Pout(min), usually 20 to 30 % of full load. While the switch is on the output capacitor alone feeds the load, hence its size; the input capacitor supplies the primary's current pulses."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.pill = v; setPref(C, "pill", v); paint(); });
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key, v = parseFloat(el.value);
+        state.si[k] = isFinite(v) ? v * scale(k) : NaN;
+        if (k === "n") state.nTyped = true;
+        if (k === "l") state.lTyped = true;
+        refresh();
+      };
+    });
     app.querySelectorAll("select[data-unit]").forEach((el) => {
       el.onchange = () => { const key = el.dataset.unit; state[key] = el.value; setPref(C, key, el.value); paint(); };
     });

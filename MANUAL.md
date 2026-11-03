@@ -100,6 +100,7 @@ will key on, since that is the id the app already holds for each tool.
 - Regulators → [Zener regulation](#zener-regulation)
 - Regulators → [DC/DC buck converter](#buck)
 - Regulators → [DC/DC boost converter](#boost)
+- Regulators → [SMPS flyback basics](#flyback)
 - Regulators → [Zener + transistor](#zener-transistor)
 - Regulators → [Constant current](#constant-current)
 - Regulators → [Inrush limiter (NTC)](#inrush-limiter)
@@ -11242,5 +11243,166 @@ counts the inductor's peak current, as the ESR really sees it, and gets
 - the proposed inductor follows the output current (0.5 A: 4.7 µH);
 - a switch limit too low is flagged;
 - a step-down is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="flyback"></a>
+## SMPS flyback basics
+
+`calc: flyback` · Power electronics › Supply & regulation
+
+### What it computes
+
+The power stage of an isolated flyback converter in continuous conduction
+(CCM), the way TI's John Betten designs one, on one screen:
+
+- **Shared inputs:** the input range (lowest and highest), the output
+  voltage and current, the switching frequency and the output diode's
+  drop.
+- **Three pills:**
+  - **Transformer:** from the maximum duty cycle you choose at the lowest
+    input, the turns ratio Np : Ns, proposed until you type your own
+    (Betten rounds his 4.08 to 4); the duty cycle over the input range
+    with it; the primary inductance that keeps the converter in CCM down
+    to a share of full load you set, proposed (two figures, rounded up)
+    until you type your own, flagged when yours is lower; the peak primary
+    current.
+  - **Switch & diode:** the FET's flat-top drain voltage and the 25 to
+    50 % more to allow for ringing, the peak primary current, the diode's
+    reverse voltage, its current while it conducts and its loss.
+  - **Capacitors:** the least output capacitance for the ripple allowed,
+    its RMS current, and the input capacitance for the input ripple.
+- **Units:** the current in mA or A, the frequency in kHz or MHz, the
+  inductance in µH or mH, each ripple in mV or V with its own picker.
+- **Drawing:** the input capacitor, the primary winding and the FET Q on
+  the primary ground; the secondary wound the other way (the dots), the
+  diode, and the output capacitor last on the isolated secondary ground.
+  The pill's parts are green.
+- **Remembered:** the pill and the units.
+
+Examples: TI's 60 W design (its turns ratio and inductance as calculated,
+then rounded to its 4 : 1 and 80 µH), its FET and diode, and its
+capacitors.
+
+### Terms
+
+- **Flyback converter:** a switching supply that stores energy in a
+  transformer's core while its switch is on, and releases it to the output
+  through the diode while the switch is off. The two windings are wound
+  the opposite way (the dots) and isolate the output from the input.
+- **Turns ratio (Np : Ns):** primary turns over secondary turns.
+- **The dots (winding sense):** each dot marks the end of a winding that
+  goes positive at the same moment as the other dotted end. In a flyback
+  the dots sit at opposite ends, primary at the input end, secondary at
+  the ground end: the windings are wound (or connected) the opposite way.
+  While the FET is on, the input drives the primary's dotted end positive,
+  so the secondary's dotted (ground) end is positive too and its other
+  end, the diode's anode, is negative: the diode blocks, no current flows
+  to the output, and the energy builds up in the core (in its magnetizing
+  inductance, the primary L). When the FET turns off, the core's field
+  keeps the current going and every winding's voltage reverses: the
+  diode's anode goes positive, the diode conducts and the stored energy
+  "flies back" to the output capacitor and the load (Betten, Power Tips
+  #98: during the on-time the diode "is reverse-biased because of T1's
+  secondary winding polarity"; at turn-off the "secondary voltage
+  polarity reverses"). That is why a flyback's transformer works as two
+  coupled inductors, and why the primary inductance matters. Both
+  windings' turns face the core in the drawing, as in any transformer
+  symbol; only the dots show the sense.
+- **Reflected voltage:** while the diode conducts, the output plus the
+  diode drop appear across the primary multiplied by Np/Ns; the FET sees
+  the input plus that.
+- **Flat-top voltage:** the FET's drain voltage while off, before the
+  ringing that the transformer's leakage inductance adds.
+- **CCM / DCM:** in continuous conduction the transformer's current never
+  falls to zero within a cycle; below a certain load it does
+  (discontinuous conduction, DCM).
+- **Primary inductance (L):** the inductance of the primary winding; it
+  sets the load at which the converter leaves CCM.
+- **RMS current:** the heating value of a current; capacitors are rated
+  for it.
+
+### Source
+
+- **John Betten, "Designing a CCM flyback converter", TI technical article
+  SSZTCY0, February 2024** (read): a 60 W, 53 V to 12 V at 5 A flyback at
+  250 kHz, 51 to 57 V in, 50 % maximum duty cycle at 51 V. Eq. 1, the
+  volt-second balance; eqs. 2, 3: Nps = Vinmin × dmax / ((Vout + Vd)(1 −
+  dmax)), 51 V × 0.5 / (12.5 V × 0.5), "4:1 step-down"; eq. 4: d = Nps
+  (Vout + Vd) / (Vin + Nps (Vout + Vd)), 0.47 at 57 V; eq. 5: Vdsmax =
+  Vinmax + Nps (Vout + Vd) = 107 V, "derate the FET voltage an additional
+  25-50%, selecting a 200V FET"; eq. 6: the diode's reverse voltage Vout +
+  Vinmax / Nps, 26 V; eq. 7: ID1 = Ioutmax / (1 − dmax), 10 A; eq. 8: PD1
+  = Ioutmax × Vd, 1.7 W at the 0.33 V of the diode chosen; eq. 9: Lmin =
+  Vinmin² dmax² η / (2 fsw Poutmin), 80 µH at 0.91 and 15 W, Poutmin
+  "typically 20-30% of POUTMAX"; eq. 10: Ipripk = Ioutmax / ((1 − dmax)
+  Nps) + Vinmin dmax / (2 Lpri fsw), 3.14 A; eq. 14: Coutmin = Ioutmax dmax
+  / (fsw Vripout), 83 µF for 0.12 V; eq. 15, the output RMS current, 5 A;
+  eq. 16: Cinmin = Ipripk dmax / (2 fsw Vinrip), 2 µF for 1.5 V. The PDF's
+  text lost the square root in eq. 15; at 50 % both readings give 5 A, and
+  the tool uses Iout √(d / (1 − d)).
+- **John Betten, "Power Tips #98: Designing a DCM flyback converter", TI**
+  (read): the same converter in discontinuous conduction, its equations
+  for the turns ratio with an idle time, the inductance and the peak
+  current. The tool does not compute DCM; this is for further reading.
+- **Not used:** Unitrode's "60 Watt Flyback Regulator" (TI SLUP072, read):
+  its primary inductance is derived in appendices missing from TI's PDF;
+  Fairchild's AN-4137 could not be downloaded.
+
+### Why the formulas are these
+
+    Np/Ns = Vin(min) × dmax / ((Vout + Vd)(1 − dmax))
+    d = N (Vout + Vd) / (Vin + N (Vout + Vd))
+    Vds = Vin(max) + N (Vout + Vd),   Vdiode = Vout + Vin(max) / N
+    L = Vin(min)² d² η / (2 fs Pout(min))
+    Ipk = Iout / ((1 − d) N) + Vin(min) d / (2 L fs)
+    Cout = Iout d / (fs ΔVout),   Cin = Ipk d / (2 fs ΔVin)
+
+The core must end each cycle where it started: the input across the
+primary for the on-time d must equal the reflected output, (Vout + Vd) ×
+N, for the off-time 1 − d. That gives the turns ratio for the duty cycle
+chosen, and the duty cycle at any input once the ratio is set. The output
+gets current only during 1 − d, so the diode carries Iout / (1 − d) while
+it conducts, and the primary that times 1/N, plus half the ripple: the
+peak. While the switch is on the output capacitor alone feeds the load,
+hence its size.
+
+**Which duty cycle.** Betten works his currents and capacitors at dmax =
+0.5 although his rounded 4 : 1 gives 0.495 at 51 V. The tool works
+everything at the duty cycle the turns ratio in use gives at the lowest
+input, so with 4 : 1 it shows 3.11 A of peak current where he gives
+3.14 A, 77.3 µH where he gives 80 µH, 82.5 µF where he gives 83 µF and
+2.05 µF where he gives 2 µF. With his exact 4.08 : 1 they agree.
+
+### Assumptions and limits
+
+- **CCM at full load only:** below Pout(min) the converter enters DCM, the
+  duty cycle falls and these formulas no longer hold.
+- **The diode drop** is one figure for both the turns ratio and the loss;
+  Betten assumes 0.5 V for the ratio and uses his diode's 0.33 V for the
+  loss.
+- **Ringing:** the flat-top voltages leave out the leakage-inductance
+  spike; the 25 to 50 % allowance is Betten's, and a snubber or clamp is
+  usually needed.
+- **Not computed:** the transformer's core, turns and wire, the leakage
+  inductance, the current-sense resistor, the FET's losses, the control
+  loop and any second output.
+
+### How it was checked
+
+7 cases:
+- TI's design: 51 V at 50 %, 12 V + 0.5 V, gives 4.08 : 1, and 78.9 µH at
+  91 % keeps CCM down to 15 W (its 80 µH); 50 % to 47.2 % over the input;
+- rounded to its 4 : 1: 49.5 % to 46.7 % (its 0.47 at 57 V), 3.11 A peak
+  with its 80 µH;
+- 107 V flat-top on the FET (its 107 V), 26.3 V on the diode (its 26 V),
+  9.9 A while it conducts, 2.5 W at 0.5 V;
+- 82.5 µF for 120 mV, 2.05 µF for 1.5 V, 4.95 A RMS in the output
+  capacitor;
+- the proposed turns ratio follows the input (40 V: 3.2 : 1);
+- a typed inductance under the minimum is flagged;
+- a 100 % maximum duty is refused.
 
 [↑ Index](#index)
