@@ -166,7 +166,7 @@ const DOMAINS = [
       {
         title: "Impedance",
         tools: [
-          { name: "Microstrip impedance" }, { name: "Embedded microstrip impedance" }, { name: "Differential microstrip impedance" },
+          { name: "Microstrip impedance", calc: "microstrip" }, { name: "Embedded microstrip impedance" }, { name: "Differential microstrip impedance" },
           { name: "Stripline impedance" }, { name: "Dual stripline impedance" }, { name: "Coplanar waveguide impedance" },
           { name: "Effective dielectric constant (Er effective)" }, { name: "Signal propagation delay" }, { name: "Crosstalk calculator" },
           { name: "Laminate material reference (Dk/Df) — IPC-4101" },
@@ -321,6 +321,7 @@ const TOOL_KEYWORDS = {
   "formula-search": "formulas equations",
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
   "antenna-length": "antenna length dipole monopole quarter wave half wave vertical ground plane whip long wire end fed cut trim ham radio cb end effect correction factor 468 234",
+  "microstrip": "microstrip impedance characteristic z0 50 ohm controlled impedance pcb trace transmission line dielectric constant er fr-4 prepreg propagation delay signal integrity rf trace width an-905",
   "flyback": "flyback converter smps isolated transformer turns ratio primary inductance ccm continuous conduction reflected voltage drain voltage mosfet diode output capacitor offline power supply",
   "boost": "boost converter step up dc dc smps switching regulator switcher inductor ripple duty cycle schottky diode synchronous output capacitor esr feedback divider vfb battery li-ion tps61030 tps61023 slva372",
   "buck": "buck converter step down dc dc smps switching regulator switcher inductor ripple duty cycle schottky diode synchronous output capacitor esr feedback divider vfb tps54331 slva477",
@@ -402,6 +403,7 @@ const RELATED = {
   "zener-transistor": ["zener-regulation", "heat-sink", "linear-regulator"],
   "constant-current": ["linear-regulator", "led-series-resistor", "heat-sink"],
   "antenna-length": ["wavelength"],
+  "microstrip": ["trace-width", "wavelength", "decoupling"],
   "flyback": ["buck", "boost", "heat-sink", "inrush-limiter"],
   "boost": ["buck", "battery-runtime", "decoupling", "pwm-duty"],
   "buck": ["linear-regulator", "decoupling", "heat-sink", "pwm-duty"],

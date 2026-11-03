@@ -581,6 +581,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "buck") return renderBuck(domain, tool, favId);
   if (calcId === "boost") return renderBoost(domain, tool, favId);
   if (calcId === "flyback") return renderFlyback(domain, tool, favId);
+  if (calcId === "microstrip") return renderMicrostrip(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -13239,6 +13240,208 @@ function renderFlyback(domain, tool, favId) {
     app.querySelectorAll("select[data-unit]").forEach((el) => {
       el.onchange = () => { const key = el.dataset.unit; state[key] = el.value; setPref(C, key, el.value); paint(); };
     });
+    syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- Microstrip impedance ----------
+// A trace over a ground plane, by National Semiconductor's AN-905
+// ("Transmission Line RAPIDESIGNER Operation and Applications Guide", J. A.
+// Mears, May 1996; TI SNLA035), appendix A: Z0 = 60 / √(0.475 εr + 0.67) ×
+// ln(4h / (0.67 (0.8w + t))) for w ≤ 2h ("maximum error ≅ 3%"), and its
+// inverse w = 7.463h / exp(Z0 √(0.475 εr + 0.67) / 60) − 1.25t; the delay
+// Td = 33.36 √(0.475 εr + 0.67) ps/cm, C0 = Td / Z0, L0 = Z0 Td. Its
+// examples: 25 mil on 20 mil of εr 4.3 with 1 oz, 63 Ω; 1.27 mm on
+// 1.02 mm, 64 Ω; 93 Ω on 30 mil of εr 3.8 with ½ oz, 18 mil (0.051 cm);
+// 75 Ω at εr 3.8, 0.70 pF/cm and 3.95 nH/cm. Its appendix D: FR-4 and G-10
+// 4.3, polyimide 4.2, PTFE 2.4. Copper as in Trace width, 1 oz 34.8 µm.
+const MS_LEN_UNITS = { mm: 1e-3, mil: 25.4e-6 };
+const MS_MATERIALS = { fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4], custom: ["Custom", null] };
+
+function renderMicrostrip(domain, tool, favId) {
+  const C = "microstrip";
+  const state = {
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    oz: pref(C, "oz", 1, TRACE_OZ),
+    mat: "fr4",
+    si: { w: 3e-3, h: 1.6e-3, er: 4.3 },
+    // An impedance typed in its box: the width is set to give it.
+    target: null,
+  };
+  const t = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
+  const k = () => Math.sqrt(0.475 * state.si.er + 0.67);
+  const z0 = () => { const s = state.si; return 60 / k() * Math.log(4 * s.h / (0.67 * (0.8 * s.w + t()))); };
+  const wFor = (z) => 7.463 * state.si.h / Math.exp(z * k() / 60) - 1.25 * t();
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d);
+
+  function problem() {
+    const s = state.si;
+    if (!(s.h > 0)) return "Enter the dielectric's thickness.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(wFor(state.target) > 0)) return "Too high an impedance for this dielectric: no width gives it.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    if (!(z0() > 0)) return "The trace is too wide for this dielectric.";
+    return "";
+  }
+
+  // The board in cross-section: the trace on the dielectric over the ground
+  // plane. The trace is green when its width is the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, s, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${s}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    // Each length in both units, the one in use first.
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${Number((v * 1e3).toPrecision(3))} mm` : `${Number((v * 1e3).toPrecision(3))} mm · ${mil(v)}`);
+    const tLabel = state.lUnit === "mil" ? `${mil(t())} · ${Math.round(t() * 1e6)} µm` : `${Math.round(t() * 1e6)} µm · ${mil(t())}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="52" width="210" height="38" stroke="${wire}" stroke-width="1.4"/>
+      <rect x="40" y="90" width="210" height="6" fill="${part}" fill-opacity="0.8"/>
+      <rect x="115" y="44" width="60" height="8" fill="${tone}"/>
+      <path d="M115 28 V40 M175 28 V40 M115 33 H175" stroke="${tone}" stroke-width="1.2"/>
+      ${lbl(145, 24, ok ? `w ${both(s.w)}` : "w", tone)}
+      <path d="M30 52 V90 M26 52 H34 M26 90 H34" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(48, 75, `h ${both(s.h)}`, grey, "start")}
+      ${lbl(181, 48, `t ${tLabel}`, grey, "start")}
+      ${lbl(242, 75, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(145, 108, "ground plane", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, z = z0();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    // Per cm in mm, per inch in mil, as AN-905's two scales.
+    const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
+    const td = 33.36 * k() * per;
+    const ratio = s.w / s.h;
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, w/h ${Number(ratio.toPrecision(3))}</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Characteristic impedance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${Number(z.toPrecision(3))} Ω</span></div>
+          <div class="result-sub" data-res="sub">w/h ${Number(ratio.toPrecision(3))}</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${row("Within the formula's range", ratio <= 2 ? "w ≤ 2h: within about 3 %" : warn(`w is ${Number(ratio.toPrecision(3))} × h, over 2h: the error can exceed 3 %`), "range")}
+          ${row("Effective εr, 0.475 εr + 0.67", Number((0.475 * s.er + 0.67).toPrecision(3)), "eeff")}
+          ${row("Delay", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+          ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
+        </div>`;
+  }
+
+  // The two live boxes: a width gives Z0, a Z0 gives the width.
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number(z0().toPrecision(4))));
+  }
+  function settle() { if (state.target !== null && state.target > 0) { const w = wFor(state.target); if (w > 0) state.si.w = w; } }
+
+  function refresh() {
+    settle();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  const example = (si, extra, target) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    settle();
+    paint();
+  };
+  const MIL = 25.4e-6;
+  useExamples([
+    { title: "AN-905: 25 mil on 20 mil", note: "εr 4.3, 1 oz: 62.7 Ω; the slide rule reads 63 Ω.",
+      apply: example({ w: 25 * MIL, h: 20 * MIL, er: 4.3 }, { lUnit: "mil", oz: 1 }) },
+    { title: "AN-905: 1.27 mm on 1.02 mm", note: "The same in metric, εr 4.3, 1 oz: 64 Ω, as the slide rule.",
+      apply: example({ w: 1.27e-3, h: 1.02e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
+    { title: "AN-905: 93 Ω on 30 mil", note: "εr 3.8, ½ oz: 18.7 mil wide; the slide rule reads 18 mil (0.051 cm).",
+      apply: example({ h: 30 * MIL, er: 3.8 }, { lUnit: "mil", oz: 0.5 }, 93) },
+    { title: "50 Ω on 1.6 mm FR-4", note: "A two-layer board, 1 oz: the trace is 2.98 mm wide.",
+      apply: example({ h: 1.6e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
+    { title: "50 Ω on a 0.2 mm layer", note: "The thin prepreg of a four-layer board, εr 4.3, 1 oz: 0.335 mm.",
+      apply: example({ h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const ozSel = `<select id="ms-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
+    const matSel = `<select id="ms-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The impedance of a PCB trace over a ground plane")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${field("w", "Trace width", sel('data-lunit="1"', MS_LEN_UNITS, state.lUnit), fmt(s.w / MS_LEN_UNITS[state.lUnit]))}${field("h", "Dielectric, h", sel('data-lunit="2"', MS_LEN_UNITS, state.lUnit), fmt(s.h / MS_LEN_UNITS[state.lUnit]))}<div class="field"><label>Copper</label>${ozSel}</div></div>
+      <div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Impedance", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["εe = 0.475 εr + 0.67", "Z0 = 60 / √εe × ln(4h / (0.67 (0.8w + t)))", "w = 7.463h / exp(Z0 √εe / 60) − 1.25t", "Td = 33.36 √εe ps/cm", "C0 = Td / Z0,   L0 = Z0 × Td"],
+        "A microstrip is a trace on the outer layer of a board with a ground plane under it, h below. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or a thinner dielectric lowers Z0. εr is the dielectric constant of the board's material; part of the field runs in the air above the trace, so the signal sees an effective εr between 1 and εr, which sets its speed: the delay per length Td. C0 and L0 are the trace's capacitance and inductance per length. Type a width to get the impedance, or the impedance you need to get the width."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "h") state.si.h = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("ms-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+      // Leaving the impedance box shows what the width really gives.
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("ms-oz").onchange = (e) => { state.oz = parseFloat(e.target.value); setPref(C, "oz", state.oz); refresh(); };
+    document.getElementById("ms-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // The two length pickers move together.
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     syncBoxes();
   }
 

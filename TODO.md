@@ -403,7 +403,7 @@ Then:
 - [x] SMPS flyback basics — built, CCM, TI SSZTCY0 (Betten), 2026-11-02
 - [x] DC/DC buck converter — built, TI SLVA477C + TPS54331 example, 2026-11-02
 - [x] DC/DC boost converter — built, TI SLVA372D + TPS61030/TPS61023 examples, 2026-11-02
-- [ ] Microstrip impedance
+- [x] Microstrip impedance — built, National AN-905 (TI SNLA035), 2026-11-02
 - [ ] Embedded microstrip impedance
 - [ ] Differential microstrip impedance
 - [ ] Stripline impedance

@@ -115,6 +115,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Trace current & resistance → [Trace width](#trace-width)
 - Trace current & resistance → [Via current capacity](#via-current)
+- Impedance → [Microstrip impedance](#microstrip)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -11408,5 +11409,125 @@ input, so with 4 : 1 it shows 3.11 A of peak current where he gives
 - the proposed turns ratio follows the input (40 V: 3.2 : 1);
 - a typed inductance under the minimum is flagged;
 - a 100 % maximum duty is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="microstrip"></a>
+## Microstrip impedance
+
+`calc: microstrip` · PCB & interconnect › Impedance
+
+### What it computes
+
+The characteristic impedance of a trace on an outer layer over a ground
+plane, or the width that gives an impedance, on one screen:
+
+- **Inputs:** the trace width, the dielectric's thickness h (to the ground
+  plane), the copper weight (its thickness t, ½ to 3 oz), the material
+  (FR-4, polyimide, PTFE or custom) and its dielectric constant εr.
+- **Width and impedance are two live boxes:** type a width and the
+  impedance box shows Z0; type the impedance you need and the width box
+  shows the width that gives it (shown again when you leave the box).
+- **The big result:** Z0, or the width for the impedance typed, with the
+  width in the other unit and w/h.
+- **Below it:**
+  - whether w ≤ 2h, the range of the formula (about 3 %), flagged beyond;
+  - the effective dielectric constant;
+  - the delay per length, per cm in mm and per inch in mil, as AN-905's
+    two scales;
+  - the capacitance and inductance per length.
+- **Units:** mm or mil, the width's and the thickness's pickers moving
+  together.
+- **Drawing:** the board in cross-section, the trace with its w and t,
+  the dielectric with its h and εr, the ground plane; w, h and t in both
+  mm and mil (Pierre), the unit in use first. The trace is green when its
+  width is the answer.
+- **Remembered:** the unit and the copper weight.
+
+Examples: AN-905's three slide-rule examples (25 mil on 20 mil, the same in
+metric, the width for 93 Ω on 30 mil), 50 Ω on a 1.6 mm two-layer board
+and on the 0.2 mm prepreg of a four-layer board.
+
+### Terms
+
+- **Microstrip:** a trace on the outer layer of a board with a ground plane
+  under it, separated by the dielectric (the board's insulating material).
+- **Characteristic impedance (Z0):** the ratio of voltage to current a
+  fast signal sees as it travels along the trace, set by its geometry and
+  the dielectric, not by its length. A line driven and ended in its Z0
+  carries a signal without reflections.
+- **Dielectric constant (εr):** how much the material slows the field
+  compared with vacuum; FR-4 about 4.3.
+- **Effective dielectric constant (εe):** part of the field runs in the
+  air above the trace, so the signal sees less than εr.
+- **Delay (Td):** the time a signal takes per length of trace.
+- **C0, L0:** the trace's capacitance and inductance per length.
+- **oz:** copper weight in ounces per square foot; 1 oz is 34.8 µm thick
+  (as in Trace width).
+
+### Source
+
+- **National Semiconductor AN-905, "Transmission Line RAPIDESIGNER
+  Operation and Applications Guide", James A. Mears, May 1996, TI
+  literature number SNLA035** (read, with its appendix A rendered from the
+  PDF, its formulas being images): Z0 = 60 / √(0.475 εr + 0.67) ×
+  ln[4h / (0.67 (0.8w + t))] ohms "if w ≤ 2h (maximum error ≅ 3%)"; the
+  width w = 7.463h / exp(Z0 √(0.475 εr + 0.67) / 60) − 1.25t; all
+  geometric variables in the same units; the intrinsic delay Td = 33.36
+  √(0.475 εr + 0.67) ps/cm; C0 = Td / Z0 pF/cm and L0 = Z0 Td × 10⁻³
+  nH/cm; the differential impedance of an edge-coupled pair, 2 Z0 (1 −
+  0.48 e^(−0.96 s/h)), for a later tool. Its slide-rule examples: a 25 mil
+  trace on 20 mil of εr 4.3 with 1 oz (1.4 mil) copper, 63 Ω; 0.127 cm on
+  0.102 cm, 64 Ω; 93 Ω on 30 mil of εr 3.8 with ½ oz needs 18 mil
+  (0.051 cm in metric); a 75 Ω microstrip at εr 3.8, 0.70 pF/cm and
+  3.95 nH/cm. Appendix D: FR-4 and G-10 4.3, polyimide 4.2, PTFE 2.4,
+  polysulfone 3.5 to 3.9.
+- **Not read:** IPC-2141, whose microstrip formula (87 / √(εr + 1.41) ×
+  ln(5.98h / (0.8w + t))) is widely quoted and gives nearly the same
+  figures; ADI's MT-094, which analog.com refused to serve.
+
+### Why the formulas are these
+
+    εe = 0.475 εr + 0.67
+    Z0 = 60 / √εe × ln(4h / (0.67 (0.8w + t)))
+    w = 7.463h / exp(Z0 √εe / 60) − 1.25t
+    Td = 33.36 √εe ps/cm,   C0 = Td / Z0,   L0 = Z0 × Td
+
+A wider trace, or a ground plane closer under it, adds capacitance per
+length and so lowers the impedance, which falls as the logarithm of h over
+the width. The signal travels at the speed of light divided by √εe (33.36
+ps/cm is 1 cm at the speed of light), and Z0 = √(L0 / C0) with Td =
+√(L0 C0) gives C0 and L0 from Z0 and Td. The width formula is the
+impedance formula solved for w (7.463 = 4 / (0.67 × 0.8)).
+
+### Assumptions and limits
+
+- **w ≤ 2h:** outside it the formula's error grows; the tool flags it and
+  still computes.
+- **AN-905's own caution:** two or three significant figures are what a
+  slide rule gives; the formulas are approximations for printed-circuit
+  work, not a field solver.
+- **One dielectric, no solder mask:** a solder mask over the trace lowers
+  Z0 by a few ohms; that is the embedded microstrip's case, a later tool.
+- **εr changes with frequency and between laminates:** FR-4's 4.3 is a
+  nominal figure; use the maker's value at your frequency.
+- **No losses:** the copper's resistance and the dielectric's loss are
+  left out.
+
+### How it was checked
+
+9 cases:
+- AN-905's 25 mil on 20 mil, εr 4.3, 1 oz: 62.7 Ω (its 63 Ω), 140 ps/in;
+- the same in metric, 1.27 mm on 1.02 mm: 64 Ω (its 64 Ω), within range;
+- 93 Ω on 30 mil, εr 3.8, ½ oz: 18.7 mil (its 18 mil, 0.051 cm), εe 2.48;
+- 50 Ω on 1.6 mm FR-4: 2.98 mm (117 mil, w/h 1.86);
+- 50 Ω on 0.2 mm: 0.335 mm;
+- 75 Ω at εr 3.8: 0.7 pF/cm and 3.94 nH/cm (its 0.70 and 3.95), the
+  material becoming custom;
+- a trace wider than 2h is flagged;
+- the length pickers move together;
+- PTFE sets εr to 2.4.
 
 [↑ Index](#index)

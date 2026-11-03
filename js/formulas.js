@@ -362,6 +362,13 @@ const FORMULAS = [
     note: "f in MHz for the short forms. k ≈ 0.95 between 3 and 50 MHz (FM 24-18): the end effect makes the wire seem longer than it is. Trim it on the air.",
   },
 
+  {
+    tool: "Microstrip impedance",
+    domain: "pcb",
+    formulas: ["εe = 0.475 εr + 0.67", "Z0 = 60 / √εe × ln(4h / (0.67 (0.8w + t)))", "Td = 33.36 √εe ps/cm"],
+    note: "w trace width, t its thickness, h the dielectric to the ground plane; for w ≤ 2h, within about 3 % (National AN-905).",
+  },
+
   // ---- Power ----
   {
     tool: "SMPS flyback basics",
