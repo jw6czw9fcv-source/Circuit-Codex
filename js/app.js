@@ -13094,20 +13094,20 @@ function renderFlyback(domain, tool, favId) {
     const coil = (x, y, n, side) => { let d = `M${x} ${y}`; for (let i = 0; i < n; i++) d += ` a6 6 0 0 ${side} 0 12`; return d; };
     const s = state.si, ok = !problem();
     return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
-      <path d="M12 20 H96 V28 M96 64 V70 M90 70 H96 M90 86 H96 V98 M30 20 V50 M30 56 V98 M30 98 H96 M128 28 V20 H150 M166 20 H262 M128 64 V80 M240 20 V50 M240 56 V80 M128 80 H240 M60 78 H82" stroke="${wire}" stroke-width="1.6"/>
+      <path d="M12 20 H129 V28 M129 64 V70 M123 70 H129 M123 86 H129 V98 M30 20 V50 M30 56 V98 M30 98 H129 M161 28 V20 H183 M199 20 H262 M161 64 V80 M240 20 V50 M240 56 V80 M161 80 H240 M93 78 H115" stroke="${wire}" stroke-width="1.6"/>
       <circle cx="10" cy="20" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="265" cy="20" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="240" cy="20" r="2.5" fill="${wire}"/>
-      <path d="M54 102 H66 M57 106 H63 M60 98 V102" stroke="${wire}" stroke-width="1.4"/>
-      <path d="M180 84 H192 M183 88 H189 M186 80 V84" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M69 102 H81 M72 106 H78 M75 98 V102" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M194 84 H206 M197 88 H203 M200 80 V84" stroke="${wire}" stroke-width="1.4"/>
       <path d="M21 50 H39 M21 56 H39" stroke="${tone("c")}" stroke-width="2"/>
-      <path d="${coil(96, 28, 3, 1)} ${coil(128, 28, 3, 0)}" stroke="${tone("t")}" stroke-width="1.6"/>
-      <path d="M110 24 V68 M114 24 V68" stroke="${tone("t")}" stroke-width="1.4"/>
-      <circle cx="88" cy="32" r="2.2" fill="${tone("t")}"/><circle cx="136" cy="60" r="2.2" fill="${tone("t")}"/>
-      <path d="M86 70 V86 M90 68 V88 M82 78 H86" stroke="${tone("s")}" stroke-width="1.8"/>
-      <path d="M150 12 V28 L166 20 Z M166 12 V28" stroke="${tone("s")}" stroke-width="1.6"/>
+      <path d="${coil(129, 28, 3, 1)} ${coil(161, 28, 3, 0)}" stroke="${tone("t")}" stroke-width="1.6"/>
+      <path d="M143 24 V68 M147 24 V68" stroke="${tone("t")}" stroke-width="1.4"/>
+      <circle cx="121" cy="32" r="2.2" fill="${tone("t")}"/><circle cx="169" cy="60" r="2.2" fill="${tone("t")}"/>
+      <path d="M119 70 V86 M123 68 V88 M115 78 H119" stroke="${tone("s")}" stroke-width="1.8"/>
+      <path d="M183 12 V28 L199 20 Z M199 12 V28" stroke="${tone("s")}" stroke-width="1.6"/>
       <path d="M231 50 H249 M231 56 H249" stroke="${tone("c")}" stroke-width="2"/>
       ${lbl(8, 11, "VIN", grey, "start")}${lbl(282, 11, `VOUT ${val(s.vout, "V")}`, grey, "end")}
-      ${lbl(112, 11, ok ? `${fmt(s.n)} : 1` : "Np : Ns", tone("t"))}
-      ${lbl(158, 40, "D", tone("s"))}${lbl(102, 92, "Q", tone("s"), "start")}${lbl(64, 73, "PWM", grey)}
+      ${lbl(145, 11, ok ? `${fmt(s.n)} : 1` : "Np : Ns", tone("t"))}
+      ${lbl(191, 40, "D", tone("s"))}${lbl(135, 92, "Q", tone("s"), "start")}${lbl(97, 73, "PWM", grey)}
       ${lbl(42, 57, "CIN", tone("c"), "start")}${lbl(252, 70, "COUT", tone("c"), "start")}
     </svg>`;
   }
