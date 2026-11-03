@@ -857,6 +857,8 @@ const CHECK_CASES = {
       expect: [[".pill.active", "Bipolar ±"]] },
   ],
   "dac": [
+    { name: "VREF has its own picker: 3.3 V reads 3300 mV, the target stays in V", do: [["set", "#da-ref-unit", "mV"]],
+      expect: [["#da-ref", "3300"], ["#da-vt-unit", "V"]] },
     { name: "÷ 2ᴺ, 12 bits, 3.3 V, 1.2 V wanted: code 1489 puts out 1.1996 V, −0.4545 LSB", do: [],
       expect: [['[data-res="main"]', "805.7 µV"], ['[data-res="head"]', "1 LSB = 3.3 V / 2¹²"], ["#da-code", "1489"], ['[data-res="hex"]', "0x5D1"],
                ['[data-res="vout"]', "1.1996 V"], ['[data-res="err"]', "−366.2 µV"], ['[data-res="errlsb"]', "−0.4545 LSB"]] },
@@ -988,6 +990,8 @@ const CHECK_CASES = {
       expect: [["#bs-chips .filter-btn.active", "Lithium"]] },
   ],
   "wire-gauge": [
+    { name: "the current in mA: 3 A reads 3000", do: [["set", "#wg-cur-unit", "mA"]],
+      expect: [["#wg-cur", "3000"]] },
     { name: "18 AWG, 3 A over 5 m at 12 V: 644 mV, 5.37 %; limit 18.6 A at 80 °C in 25 °C air", do: [],
       expect: [['[data-res="dmm"]', "Ø 1.024 mm"], ['[data-res="area"]', "0.823 mm²"], ['[data-res="cm"]', "1,624 CM"], ['[data-res="rpm"]', "20.95 mΩ/m at 20 °C"],
                ['[data-res="drop"]', "644 mV"], ['[data-res="pct"]', "5.37 % of 12 V"], ['[data-res="temp"]', "wire at 26 °C"],
@@ -1227,6 +1231,8 @@ const CHECK_CASES = {
       expect: [['[data-res="level"]', "+107 dBµV"], ["#dba-zpreset", "50"]] },
   ],
   "rms-calculator": [
+    { name: "the DC offset's own picker changes the value's unit too", do: [["set", "#rms-unit-dc", "mV"]],
+      expect: [["#rms-unit", "mV"], ["#rms-value", "230000"]] },
     { name: "230 V rms mains peaks at 325.3 V, 650.5 V peak-to-peak", do: [],
       expect: [['[data-res="big"]', "325.3 V"], ['[data-res="levels"]', "RMS 230 V · peak-to-peak 650.5 V"], ['[data-res="swing"]', "From −325.3 V to +325.3 V · mean 0 V"], ['[data-res="meter"]', "230 V (0 %)"], ['[data-res="factors"]', "1.414 · 1.111"]] },
     { name: "example: 120 V rms peaks at 169.7 V", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
@@ -1289,6 +1295,8 @@ const CHECK_CASES = {
       expect: [["#uc-atm", "1"]] },
   ],
   "ppm-converter": [
+    { name: "the measured value's own picker changes the nominal's unit too", do: [["pill", 1], ["set", "#ppm-unit-meas", "kHz"]],
+      expect: [["#ppm-unit", "kHz"], ["#ppm-base", "16000"], ["#ppm-meas", "16000.32"]] },
     { name: "16 MHz at ±20 ppm is ±320 Hz, 15.99968 to 16.00032 MHz", do: [],
       expect: [['[data-res="big"]', "±320 Hz"], ['[data-res="range"]', "15.99968 MHz to 16.00032 MHz"], ['[data-res="ratio"]', "20 ppm = 0.002 % = 2 × 10⁻⁵"], ['[data-res="clock"]', "As a clock: ±1.728 s a day, ±10.52 min a year"]] },
     { name: "example: a counter reading 16.00032 MHz is +20 ppm", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
@@ -1381,6 +1389,8 @@ const CHECK_CASES = {
       expect: [[".placeholder", "/^No unit for .zzzz./"]] },
   ],
   "trace-width": [
+    { name: "the current in mA: 2 A reads 2000, the width unchanged", do: [["set", "#tw-i-unit", "mA"]],
+      expect: [["#tw-i", "2000"], ['[data-res="big"]', "0.93 mm"]] },
     { name: "2 A on outer 1 oz at a 10 °C rise needs 0.93 mm (IPC-2152)", do: [],
       expect: [['[data-res="big"]', "0.93 mm"], ['[data-res="sub"]', "36.6 mil · 61.78 A/mm²"]] },
     { name: "Brooks and Adam: 10 A on 100 mil of 2 oz, outside, rises 39.38 °C", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
@@ -1443,6 +1453,8 @@ const CHECK_CASES = {
       expect: [[".pill.active", "Parallel"], ["#sp-tol", "10"]] },
   ],
   "decoupling": [
+    { name: "the current step in mA: 0.1 A reads 100", do: [["set", "#dc-di-unit", "mA"]],
+      expect: [['input[data-key="di"]', "100"]] },
     { name: "AVX (Y. Chase): 5 % of 1.8 V over 20 A is 4.5 mΩ; 15 µs needs 3333 µF; a 1 ns edge allows 4.5 pH", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="zt"]', "4.5 mΩ"], ['[data-res="bulk"]', "/under the 3.33 mF needed for 15 µs$/"], ['[data-res="ind"]', "/^417 pH, over the 4.5 pH a 1 ns edge allows$/"]] },
     { name: "three 100 nF at 10 mΩ (3.33 mΩ) get under 4.5 mΩ only around their 14.2 MHz resonance", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -1475,6 +1487,8 @@ const CHECK_CASES = {
       expect: [['[data-res="peak"]', "/^93.9 mΩ at 4.14 MHz, over the target$/"]] },
   ],
   "via-current": [
+    { name: "the current in mA: 4 A reads 4000", do: [["set", "#vc-i-unit", "mA"]],
+      expect: [['input[data-key="i"]', "4000"]] },
     { name: "4 A at a 10 °C rise needs a 3.11 mm, 1 oz trace (IPC-2152): 5 of Brooks & Adam's 0.0217 mm² vias", do: [],
       expect: [['[data-res="rule"]', "5 vias"], ['[data-res="sub"]', "4 A needs a 3.11 mm trace for 10 °C: 0.108 mm², one via 0.0217 mm²"], ['input[data-key="n"]', "5"],
         ['[data-res="trace"]', "rises 30 °C, over the 10 °C allowed"], ['[data-res="per"]', "0.8 A, 1.27 mΩ: 1.02 mV, 0.814 mW"], ['[data-res="hole"]', "0.2 mm"]] },
@@ -1576,6 +1590,8 @@ const CHECK_CASES = {
       expect: [[".pill.active", "Junction"]] },
   ],
   "internal-resistance": [
+    { name: "the test resistor in kΩ: 15 Ω reads 0.015", do: [["pill", 1], ["set", "select[data-rlunit]", "kΩ"]],
+      expect: [['input[data-key="rl"]', "0.015"]] },
     { name: "Energizer's dual pulse: 1.485 V at 5 mA, 1.378 V at 505 mA is 214 mΩ", do: [],
       expect: [['[data-res="r"]', "214 mΩ"], ['[data-res="sub"]', "ΔV 107 mV over ΔI 500 mA"], ['[data-res="voc"]', "1.486 V"]] },
     { name: "Energizer's drop: 1 A through 0.1 Ω leaves 1.5 V of 1.6 V", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
@@ -1696,6 +1712,8 @@ const CHECK_CASES = {
       expect: [['[data-res="len"]', "46.72 ft"], ['[data-res="sub"]', "14.24 m; each leg 23.36 ft"]] },
   ],
   "inrush-limiter": [
+    { name: "capacitance in mF and running current in mA: 220 µF reads 0.22, 1 A reads 1000", do: [["set", 'select[data-unit="c"]', "mF"], ["set", 'select[data-unit="i"]', "mA"]],
+      expect: [['input[data-key="c"]', "0.22"], ['input[data-key="i"]', "1000"], ['[data-res="rmin"]', "17.9 Ω"]] },
     { name: "Eaton ELX1247: 110 Vac + 10 % = 121 V, 171 V peak; 20 A allowed needs 8.56 Ω", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="rmin"]', "8.56 Ω"], ['[data-res="sub"]', "171 V peak over the 20 A allowed"], ['[data-res="energy"]', "6.88 J (½ C Vpeak²)"]] },
     { name: "six SL10 parts fit, coolest first: SL1050002 at 440 mΩ and 1.76 W running", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],

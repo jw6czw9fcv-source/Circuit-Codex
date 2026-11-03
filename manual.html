@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=f297cd3a68" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=a12e706c1a" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -6321,15 +6321,15 @@ steps of 1.074 mV, 0.11 °C, against 0.49 °C on 5 V; −1 V on the ADS1115 at
 <section class="tool" id="dac" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Data conversion</div>
   <h2>DAC resolution</h2>
-  <figure class="shot"><img src="manual/img/dac.jpg?h=526274b6fd" loading="lazy" alt="DAC resolution as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/dac.jpg?h=d692f423a6" loading="lazy" alt="DAC resolution as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>For an N-bit DAC, its reference and its output gain: the step between
 neighbouring output levels (the LSB), shown large since it is the resolution,
 then the code to write for a target voltage, the voltage that code really puts
 out, and how far that is from the target, in volts and in LSB. It works both
 ways — type the voltage you want, or type a code to see what it outputs. The
-output range is shown under the fields. The target can be typed in mV or V;
-the divisor pill and the unit are remembered.</p>
+output range is shown under the fields. The target and VREF can each be typed in mV or V,
+each with its own picker; the divisor pill and both units are remembered.</p>
 <p>Examples: an MCP4725 on 5 V, an MCP4822 at ×2, an STM32 DAC set to 0.7 V,
 the ESP32's 8-bit DAC and the SAMD21's 10-bit DAC (the Arduino Zero's).</p>
 <h3>Source</h3>
@@ -7339,7 +7339,7 @@ drops as heat.</p>
 <section class="tool" id="inrush-limiter" style="--accent:#EF9F27">
   <div class="crumb">Power electronics › Supply &amp; regulation</div>
   <h2>Inrush limiter (NTC)</h2>
-  <figure class="shot"><img src="manual/img/inrush-limiter.jpg?h=828c645de3" loading="lazy" alt="Inrush limiter (NTC) as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/inrush-limiter.jpg?h=8e004917c3" loading="lazy" alt="Inrush limiter (NTC) as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Inrush current limiter (NTC))</p>
 <h3>What it computes</h3>
 <p>An NTC thermistor in series with a supply, to hold down the surge that
@@ -7375,7 +7375,9 @@ on a 12 V rail at 3 A the same parts lose 4.5 to 7 %, and an active
 soft-start is the better choice.
 - <strong>Drawing:</strong> the supply, the NTC (the calculated part, green), the
   bridge on AC, the capacitor, and the peak voltage.
-- <strong>Remembered:</strong> AC or DC.</p>
+- <strong>Units:</strong> both currents in mA or A, the capacitance in µF or mF, each
+  with its own picker.
+- <strong>Remembered:</strong> AC or DC, and the units.</p>
 <p>Examples: Eaton's 110 Vac + 10 %, Ametherm's 265 Vac and 100 A, a 230 V
 supply with 220 µF, a 48 V DC rail, and a 12 V rail at 3 A.</p>
 <h3>Source</h3>
@@ -7437,7 +7439,7 @@ resistance is small.</p>
   supplies need a larger series.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>11 cases:
+<p>12 cases:
 - Eaton's 110 Vac + 10 %: 171 V peak, 8.56 Ω for 20 A, 6.88 J;
 - six SL10 parts fit, coolest first (SL1050002, 440 mΩ, 880 mV lost,
   0.8 %, 1.76 W);
@@ -7449,7 +7451,9 @@ resistance is small.</p>
 - a part under half its current is over its light-load resistance;
 - a 48 V DC rail: 5.04 Ω, 1.27 J, three parts carry 3 A;
 - over 265 Vac and over 5 A are flagged;
-- the remembered AC or DC.</p>
+- the remembered AC or DC;
+- capacitance in mF and running current in mA: 220 µF reads 0.22,
+  1 A reads 1000.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/power%3A0%3A6/inrush-limiter">Open the tool</a></p>
 </section>
 <section class="tool" id="battery-runtime" style="--accent:#EF9F27">
@@ -7615,7 +7619,8 @@ three ways, by pill:</p>
 <li>the power lost inside the cell, I²R;</li>
 <li>the power delivered;</li>
 <li>the current that would pull the cell down to a cutoff voltage you set.</li>
-<li><strong>Units:</strong> currents in µA, mA or A, resistance in mΩ or Ω.</li>
+<li><strong>Units:</strong> currents in µA, mA or A, resistance in mΩ or Ω, the test
+  resistor in Ω or kΩ.</li>
 <li><strong>Drawing:</strong> the cell as an ideal source behind its resistance, in a
   dashed box, feeding the load.</li>
 <li><strong>Remembered:</strong> the pill and the units.</li>
@@ -7663,7 +7668,7 @@ R, and half of it then heats the cell.</p>
   a lithium one above all, can burn it.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>10 cases:
+<p>11 cases:
 - Energizer's dual pulse is 214 mΩ, extrapolating to 1.486 V open;
 - Energizer's drop leaves 1.5 V and loses 100 mW;
 - a 9 V battery at 8.6 V across 100 Ω has 6.977 Ω inside, at 86 mA;
@@ -7672,7 +7677,8 @@ R, and half of it then heats the cell.</p>
 - equal currents, readings the wrong way round, and a loaded voltage above
   the open one are refused;
 - a unit change keeps the value;
-- the remembered choices.</p>
+- the remembered choices;
+- the test resistor in kΩ: 15 Ω reads 0.015.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/power%3A1%3A2/internal-resistance">Open the tool</a></p>
 </section>
 <section class="tool" id="battery-sizes" style="--accent:#EF9F27">
@@ -7949,7 +7955,7 @@ bigger heatsink.</p>
 <section class="tool" id="trace-width" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Trace current &amp; resistance</div>
   <h2>Trace width</h2>
-  <figure class="shot"><img src="manual/img/trace-width.jpg?h=736c1c7bc3" loading="lazy" alt="Trace width as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/trace-width.jpg?h=0937e60537" loading="lazy" alt="Trace width as it appears in the app" width="430" height="932"></figure>
   <p>(replaces PCB trace width / resistance, Trace current capacity (ampacity)
 and Trace current — IPC-2152 method)</p>
 <h3>What it computes</h3>
@@ -7991,7 +7997,8 @@ ways, by pill:</p>
   A/mm².</li>
 <li><strong>Switching pills</strong> keeps the answer: a width just solved is the width
   the Rise pill then heats.</li>
-<li><strong>Remembered:</strong> the pill, the layer, the copper and the units.</li>
+<li><strong>Remembered:</strong> the pill, the layer, the copper and the units (the
+  current in mA or A).</li>
 </ul>
 <p>Examples: 2 A at a 10 °C rise, Brooks and Adam's 10 A on 100 mil of 2 oz,
 what a 10 mil trace carries, 3 A on an inner layer, and the drop along a
@@ -8086,7 +8093,7 @@ The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
   vacuum, which the paper fits separately.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>10 cases:
+<p>11 cases:
 - 2 A at a 10 °C rise needs 0.93 mm, 36.6 mil;
 - the paper's 10 A on 100 mil of 2 oz: 39.38 °C outside, 32.52 °C inside;
 - 10 mil of 1 oz carries 948 mA at a 10 °C rise;
@@ -8095,13 +8102,14 @@ The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
 - a width solved and heated again gives back its 10 °C;
 - a unit change keeps the width;
 - a zero current is refused;
-- the remembered choices.</p>
+- the remembered choices;
+- the current in mA: 2 A reads 2000, the width unchanged.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/pcb%3A0%3A0/trace-width">Open the tool</a></p>
 </section>
 <section class="tool" id="via-current" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Trace current &amp; resistance</div>
   <h2>Via current capacity</h2>
-  <figure class="shot"><img src="manual/img/via-current.jpg?h=6fdb3232a3" loading="lazy" alt="Via current capacity as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/via-current.jpg?h=67be0a5908" loading="lazy" alt="Via current capacity as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>How many vias a current needs, on one screen:</p>
 <ul>
@@ -8131,7 +8139,8 @@ The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
   oz, 1 oz = 34.8 µm as in Trace width.</li>
 <li><strong>Drawing:</strong> a trace on each side of the board joined by the via, the
   current going through it.</li>
-<li><strong>Remembered:</strong> the units, the copper weight and the rise.</li>
+<li><strong>Remembered:</strong> the units, the copper weight and the rise. The current
+  has its own mA/A picker.</li>
 </ul>
 <p>Examples: Brooks &amp; Adam's via beside a 1.2 mm trace at 4 A (30 °C rise),
 the same via with a 0.66 mm trace, 10 A on a 2.5 mm 2 oz trace with two
@@ -8195,7 +8204,7 @@ that point; the nearest case is there to show how far.</p>
   rather than current, see Thermal vias.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>14 cases:
+<p>15 cases:
 - 4 A at a 10 °C rise needs a 3.11 mm, 1 oz trace: 5 of their 0.0217 mm²
   vias, 0.8 A each; the 1.2 mm trace rises 30 °C, over the 10 allowed;
 - five vias against the 1.2 mm trace (0.385×) are outside their cases;
@@ -8213,7 +8222,8 @@ that point; the nearest case is there to show how far.</p>
 - plating as thick as the hole's radius is refused;
 - mil turns every length and area to mil (122 mil, 168 mil²);
 - every length's picker switches them all;
-- the remembered copper weight and rise.</p>
+- the remembered copper weight and rise;
+- the current in mA: 4 A reads 4000.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/pcb%3A0%3A1/via-current">Open the tool</a></p>
 </section>
 <section class="tool" id="thermal-vias" style="--accent:#5BC4E0">
@@ -8367,7 +8377,7 @@ by side share the heat, so N of them in parallel divide θ by N.</p>
 <section class="tool" id="decoupling" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Vias &amp; layout</div>
   <h2>Decoupling capacitor</h2>
-  <figure class="shot"><img src="manual/img/decoupling.jpg?h=a9afade00a" loading="lazy" alt="Decoupling capacitor as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/decoupling.jpg?h=ac6ff2ca22" loading="lazy" alt="Decoupling capacitor as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The target-impedance method for a supply's decoupling, with mixed values,
 on one screen:</p>
@@ -8390,8 +8400,8 @@ on one screen:</p>
     fastest edge allows.</li>
 <li><strong>Drawing:</strong> the impedance of all the capacitors together from 1 kHz to
   10 GHz, log-log, each kind alone faint behind it, the target dashed.</li>
-<li><strong>Units:</strong> fixed as engineers quote them: V, %, A, µs, ns, µF, mΩ,
-  nH.</li>
+<li><strong>Units:</strong> as engineers quote them: V, %, µs, ns, µF, mΩ, nH; the
+  current step in mA or A, its picker remembered.</li>
 </ul>
 <p>Choosing the capacitors, after AVX: a bulk capacitance for the low
 frequencies (the bulk row), a value that resonates where coverage is
@@ -8463,7 +8473,7 @@ the anti-resonance peak.</p>
   capacitance at your voltage.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>14 cases:
+<p>15 cases:
 - the rows start as the suggestion; 1 % ripple instead of 5 % moves the
   bulk part from 1 µF to 4.7 µF; an edited row stays when the ripple
   changes;
@@ -8478,13 +8488,14 @@ the anti-resonance peak.</p>
 - an FPGA core: 50 mΩ, 175 pH over 50 pH;
 - "+ add" puts 10 µF beside 1 µF: the band widens, its peak stays under;
 - × removes a kind;
-- a zero current step is refused.</p>
+- a zero current step is refused;
+- the current step in mA: 0.1 A reads 100.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/pcb%3A2%3A5/decoupling">Open the tool</a></p>
 </section>
 <section class="tool" id="wire-gauge" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Cabling</div>
   <h2>Wire sizing</h2>
-  <figure class="shot"><img src="manual/img/wire-gauge.jpg?h=f923fa644f" loading="lazy" alt="Wire sizing as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/wire-gauge.jpg?h=70f605d994" loading="lazy" alt="Wire sizing as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Wire gauge (AWG/SWG); Cable resistance / voltage drop and the
 planned Cable current capacity are merged into it)</p>
 <h3>What it computes</h3>
@@ -8507,8 +8518,8 @@ planned Cable current capacity are merged into it)</p>
 </ul>
 <p>The inputs are the gauge, the insulation's temperature rating (60 to
 260 °C), the number of wires in the bundle, the one-way length, the current,
-the supply, the largest drop allowed and the ambient temperature. The mm²/mm
-and m/ft choices and the insulation rating are remembered.</p>
+the supply, the largest drop allowed and the ambient temperature. The mm²/mm,
+m/ft and mA/A choices and the insulation rating are remembered.</p>
 <p>Examples: a 12 V LED strip 5 m away (the drop decides), 5 V at 3 A over 1 m,
 a short 20 A motor lead (the current decides), a harness of 12 wires, 200 °C
 silicone wire for a drone, and 1.5 mm² cable.</p>
@@ -9476,7 +9487,7 @@ is 223.6 mV rms, −10.8 dBu.</p>
 <section class="tool" id="rms-calculator" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>RMS calculator</h2>
-  <figure class="shot"><img src="manual/img/rms-calculator.jpg?h=407a4285d6" loading="lazy" alt="RMS calculator as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/rms-calculator.jpg?h=09c8258d75" loading="lazy" alt="RMS calculator as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>A periodic waveform's peak, peak-to-peak, rms, mean and rectified average,
 from any one of peak, peak-to-peak, rms or rectified average.</p>
@@ -9490,7 +9501,8 @@ from any one of peak, peak-to-peak, rms or rectified average.</p>
 <li><strong>On a meter:</strong> what an average-responding meter reads and its error, the
   true rms a meter's AC range shows, the rectified average, and the crest
   and form factors.</li>
-<li><strong>Remembered:</strong> the waveform, the known value, the unit and the duty cycle.</li>
+<li><strong>Remembered:</strong> the waveform, the known value, the unit and the duty cycle.
+  The DC offset has its own unit picker, which changes the value's too.</li>
 </ul>
 <p>Examples: 230 V and 120 V mains, a square wave on a cheap meter, 1 A PWM
 pulses at 25 %, a 0 to 3.3 V clock, and a bridge rectifier at 17 V peak.</p>
@@ -9547,7 +9559,7 @@ the DC level. Vac is the rms of what is left around the mean.</p>
   data.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>15 cases:
+<p>16 cases:
 - 230 V rms peaks at 325.3 V, and 120 V rms at 169.7 V;
 - AD737 table 5: square +11.1 %, triangle −3.8 %, 25 % pulse −44.5 % with
   crest factor 2, 1 % pulse −88.9 % with crest factor 10;
@@ -9558,7 +9570,8 @@ the DC level. Vac is the rms of what is left around the mean.</p>
 - switching what is known keeps the signal, and a unit change keeps the
   value;
 - an rms below the offset, and a 100 % duty cycle, are refused;
-- the remembered choices.</p>
+- the remembered choices;
+- the DC offset's own picker changes the value's unit.</p>
 <p>The review made these changes:
 - <strong>New shapes:</strong> sawtooth and a pulse with its duty cycle. The waveform is
   now a picker.
@@ -9760,7 +9773,8 @@ needs the offset.</p>
   it, in seconds a day and a year.</li>
 <li><strong>The range</strong> is shown to as many figures as it takes for the deviation
   to show.</li>
-<li><strong>Remembered:</strong> the mode and the unit.</li>
+<li><strong>Remembered:</strong> the mode and the unit. In Error mode the measured value
+  has its own unit picker, which changes the nominal's too.</li>
 </ul>
 <p>Examples: a 16 MHz crystal at ±20 ppm, a counter reading 16.00032 MHz, a
 watch crystal at ±20 ppm, a 0.1 % resistor in ppm, and a 10 kΩ resistor
@@ -9797,7 +9811,7 @@ that fraction of its time: 20 ppm is 1.728 s a day.</p>
 <li><strong>A zero value</strong> is refused, since ppm is a fraction of it.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>12 cases:
+<p>13 cases:
 - 16 MHz at ±20 ppm: ±320 Hz, 15.99968 to 16.00032 MHz, ±1.728 s a day;
 - 16.00032 MHz read is +20 ppm, and 15.99984 MHz is −10 ppm;
 - 32.768 kHz at ±20 ppm is ±655.4 mHz;
@@ -9806,7 +9820,8 @@ that fraction of its time: 20 ppm is 1.728 s a day.</p>
 - a unit change keeps the value, and with no unit the deviation is a
   plain number;
 - zero and a negative tolerance are refused;
-- the remembered mode and unit.</p>
+- the remembered mode and unit;
+- the measured value's own picker changes the nominal's unit.</p>
 <p>The review made these changes:
 - <strong>New modes:</strong> Error (measured against nominal) and Tempco. The tool
   only applied a tolerance before.

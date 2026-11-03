@@ -6926,8 +6926,8 @@ neighbouring output levels (the LSB), shown large since it is the resolution,
 then the code to write for a target voltage, the voltage that code really puts
 out, and how far that is from the target, in volts and in LSB. It works both
 ways — type the voltage you want, or type a code to see what it outputs. The
-output range is shown under the fields. The target can be typed in mV or V;
-the divisor pill and the unit are remembered.
+output range is shown under the fields. The target and VREF can each be typed in mV or V,
+each with its own picker; the divisor pill and both units are remembered.
 
 Examples: an MCP4725 on 5 V, an MCP4822 at ×2, an STM32 DAC set to 0.7 V,
 the ESP32's 8-bit DAC and the SAMD21's 10-bit DAC (the Arduino Zero's).
@@ -7682,8 +7682,8 @@ One copper wire on one run, on one screen:
 
 The inputs are the gauge, the insulation's temperature rating (60 to
 260 °C), the number of wires in the bundle, the one-way length, the current,
-the supply, the largest drop allowed and the ambient temperature. The mm²/mm
-and m/ft choices and the insulation rating are remembered.
+the supply, the largest drop allowed and the ambient temperature. The mm²/mm,
+m/ft and mA/A choices and the insulation rating are remembered.
 
 Examples: a 12 V LED strip 5 m away (the drop decides), 5 V at 3 A over 1 m,
 a short 20 A motor lead (the current decides), a harness of 12 wires, 200 °C
@@ -8628,6 +8628,7 @@ from any one of peak, peak-to-peak, rms or rectified average.
   true rms a meter's AC range shows, the rectified average, and the crest
   and form factors.
 - **Remembered:** the waveform, the known value, the unit and the duty cycle.
+  The DC offset has its own unit picker, which changes the value's too.
 
 Examples: 230 V and 120 V mains, a square wave on a cheap meter, 1 A PWM
 pulses at 25 %, a 0 to 3.3 V clock, and a bridge rectifier at 17 V peak.
@@ -8689,7 +8690,7 @@ the DC level. Vac is the rms of what is left around the mean.
 
 ### How it was checked
 
-15 cases:
+16 cases:
 - 230 V rms peaks at 325.3 V, and 120 V rms at 169.7 V;
 - AD737 table 5: square +11.1 %, triangle −3.8 %, 25 % pulse −44.5 % with
   crest factor 2, 1 % pulse −88.9 % with crest factor 10;
@@ -8700,7 +8701,8 @@ the DC level. Vac is the rms of what is left around the mean.
 - switching what is known keeps the signal, and a unit change keeps the
   value;
 - an rms below the offset, and a 100 % duty cycle, are refused;
-- the remembered choices.
+- the remembered choices;
+- the DC offset's own picker changes the value's unit.
 
 The review made these changes:
 - **New shapes:** sawtooth and a pulse with its duty cycle. The waveform is
@@ -8859,7 +8861,8 @@ Parts per million of a value, three ways, by pill:
   it, in seconds a day and a year.
 - **The range** is shown to as many figures as it takes for the deviation
   to show.
-- **Remembered:** the mode and the unit.
+- **Remembered:** the mode and the unit. In Error mode the measured value
+  has its own unit picker, which changes the nominal's too.
 
 Examples: a 16 MHz crystal at ±20 ppm, a counter reading 16.00032 MHz, a
 watch crystal at ±20 ppm, a 0.1 % resistor in ppm, and a 10 kΩ resistor
@@ -8903,7 +8906,7 @@ that fraction of its time: 20 ppm is 1.728 s a day.
 
 ### How it was checked
 
-12 cases:
+13 cases:
 - 16 MHz at ±20 ppm: ±320 Hz, 15.99968 to 16.00032 MHz, ±1.728 s a day;
 - 16.00032 MHz read is +20 ppm, and 15.99984 MHz is −10 ppm;
 - 32.768 kHz at ±20 ppm is ±655.4 mHz;
@@ -8912,7 +8915,8 @@ that fraction of its time: 20 ppm is 1.728 s a day.
 - a unit change keeps the value, and with no unit the deviation is a
   plain number;
 - zero and a negative tolerance are refused;
-- the remembered mode and unit.
+- the remembered mode and unit;
+- the measured value's own picker changes the nominal's unit.
 
 The review made these changes:
 - **New modes:** Error (measured against nominal) and Tempco. The tool
@@ -9228,7 +9232,8 @@ ways, by pill:
   A/mm².
 - **Switching pills** keeps the answer: a width just solved is the width
   the Rise pill then heats.
-- **Remembered:** the pill, the layer, the copper and the units.
+- **Remembered:** the pill, the layer, the copper and the units (the
+  current in mA or A).
 
 Examples: 2 A at a 10 °C rise, Brooks and Adam's 10 A on 100 mil of 2 oz,
 what a 10 mil trace carries, 3 A on an inner layer, and the drop along a
@@ -9290,7 +9295,7 @@ The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
 
 ### How it was checked
 
-10 cases:
+11 cases:
 - 2 A at a 10 °C rise needs 0.93 mm, 36.6 mil;
 - the paper's 10 A on 100 mil of 2 oz: 39.38 °C outside, 32.52 °C inside;
 - 10 mil of 1 oz carries 948 mA at a 10 °C rise;
@@ -9299,7 +9304,8 @@ The resistance uses the same copper as Wire sizing: 1/58 Ω·mm²/m at
 - a width solved and heated again gives back its 10 °C;
 - a unit change keeps the width;
 - a zero current is refused;
-- the remembered choices.
+- the remembered choices;
+- the current in mA: 2 A reads 2000, the width unchanged.
 
 [↑ Index](#index)
 
@@ -9517,7 +9523,8 @@ three ways, by pill:
   - the power lost inside the cell, I²R;
   - the power delivered;
   - the current that would pull the cell down to a cutoff voltage you set.
-- **Units:** currents in µA, mA or A, resistance in mΩ or Ω.
+- **Units:** currents in µA, mA or A, resistance in mΩ or Ω, the test
+  resistor in Ω or kΩ.
 - **Drawing:** the cell as an ideal source behind its resistance, in a
   dashed box, feeding the load.
 - **Remembered:** the pill and the units.
@@ -9571,7 +9578,7 @@ R, and half of it then heats the cell.
 
 ### How it was checked
 
-10 cases:
+11 cases:
 - Energizer's dual pulse is 214 mΩ, extrapolating to 1.486 V open;
 - Energizer's drop leaves 1.5 V and loses 100 mW;
 - a 9 V battery at 8.6 V across 100 Ω has 6.977 Ω inside, at 86 mA;
@@ -9580,7 +9587,8 @@ R, and half of it then heats the cell.
 - equal currents, readings the wrong way round, and a loaded voltage above
   the open one are refused;
 - a unit change keeps the value;
-- the remembered choices.
+- the remembered choices;
+- the test resistor in kΩ: 15 Ω reads 0.015.
 
 [↑ Index](#index)
 
@@ -10093,7 +10101,8 @@ How many vias a current needs, on one screen:
   oz, 1 oz = 34.8 µm as in Trace width.
 - **Drawing:** a trace on each side of the board joined by the via, the
   current going through it.
-- **Remembered:** the units, the copper weight and the rise.
+- **Remembered:** the units, the copper weight and the rise. The current
+  has its own mA/A picker.
 
 Examples: Brooks & Adam's via beside a 1.2 mm trace at 4 A (30 °C rise),
 the same via with a 0.66 mm trace, 10 A on a 2.5 mm 2 oz trace with two
@@ -10163,7 +10172,7 @@ that point; the nearest case is there to show how far.
 
 ### How it was checked
 
-14 cases:
+15 cases:
 - 4 A at a 10 °C rise needs a 3.11 mm, 1 oz trace: 5 of their 0.0217 mm²
   vias, 0.8 A each; the 1.2 mm trace rises 30 °C, over the 10 allowed;
 - five vias against the 1.2 mm trace (0.385×) are outside their cases;
@@ -10181,7 +10190,8 @@ that point; the nearest case is there to show how far.
 - plating as thick as the hole's radius is refused;
 - mil turns every length and area to mil (122 mil, 168 mil²);
 - every length's picker switches them all;
-- the remembered copper weight and rise.
+- the remembered copper weight and rise;
+- the current in mA: 4 A reads 4000.
 
 [↑ Index](#index)
 
@@ -10543,8 +10553,8 @@ on one screen:
     fastest edge allows.
 - **Drawing:** the impedance of all the capacitors together from 1 kHz to
   10 GHz, log-log, each kind alone faint behind it, the target dashed.
-- **Units:** fixed as engineers quote them: V, %, A, µs, ns, µF, mΩ,
-  nH.
+- **Units:** as engineers quote them: V, %, µs, ns, µF, mΩ, nH; the
+  current step in mA or A, its picker remembered.
 
 Choosing the capacitors, after AVX: a bulk capacitance for the low
 frequencies (the bulk row), a value that resonates where coverage is
@@ -10622,7 +10632,7 @@ the anti-resonance peak.
 
 ### How it was checked
 
-14 cases:
+15 cases:
 - the rows start as the suggestion; 1 % ripple instead of 5 % moves the
   bulk part from 1 µF to 4.7 µF; an edited row stays when the ripple
   changes;
@@ -10637,7 +10647,8 @@ the anti-resonance peak.
 - an FPGA core: 50 mΩ, 175 pH over 50 pH;
 - "+ add" puts 10 µF beside 1 µF: the band widens, its peak stays under;
 - × removes a kind;
-- a zero current step is refused.
+- a zero current step is refused;
+- the current step in mA: 0.1 A reads 100.
 
 [↑ Index](#index)
 
@@ -10684,7 +10695,9 @@ on a 12 V rail at 3 A the same parts lose 4.5 to 7 %, and an active
 soft-start is the better choice.
 - **Drawing:** the supply, the NTC (the calculated part, green), the
   bridge on AC, the capacitor, and the peak voltage.
-- **Remembered:** AC or DC.
+- **Units:** both currents in mA or A, the capacitance in µF or mF, each
+  with its own picker.
+- **Remembered:** AC or DC, and the units.
 
 Examples: Eaton's 110 Vac + 10 %, Ametherm's 265 Vac and 100 A, a 230 V
 supply with 220 µF, a 48 V DC rail, and a 12 V rail at 3 A.
@@ -10751,7 +10764,7 @@ resistance is small.
 
 ### How it was checked
 
-11 cases:
+12 cases:
 - Eaton's 110 Vac + 10 %: 171 V peak, 8.56 Ω for 20 A, 6.88 J;
 - six SL10 parts fit, coolest first (SL1050002, 440 mΩ, 880 mV lost,
   0.8 %, 1.76 W);
@@ -10763,7 +10776,9 @@ resistance is small.
 - a part under half its current is over its light-load resistance;
 - a 48 V DC rail: 5.04 Ω, 1.27 J, three parts carry 3 A;
 - over 265 Vac and over 5 A are flagged;
-- the remembered AC or DC.
+- the remembered AC or DC;
+- capacitance in mF and running current in mA: 220 µF reads 0.22,
+  1 A reads 1000.
 
 [↑ Index](#index)
 

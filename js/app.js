@@ -2661,6 +2661,8 @@ function renderVoltageDivider(domain, tool, favId) {
 // current in proportion to the *other* resistor, so the smaller resistor carries
 // the larger share. I1 = Iin x R2 / (R1 + R2).
 const AMP_UNITS = { "µA": 1e-6, mA: 1e-3, A: 1 };
+// Load and supply currents: never µA.
+const MA_A_UNITS = { mA: 1e-3, A: 1 };
 
 function renderCurrentDivider(domain, tool, favId) {
   const C = "current-divider";
@@ -6116,6 +6118,7 @@ function renderWireGauge(domain, tool, favId) {
     d: awgDiameterMm(18), source: "awg", awg: 18, swg: "19",
     sizeUnit: pref(C, "sizeUnit", "mm²", Object.keys(WG_METRIC_UNITS)),
     lenUnit: pref(C, "lenUnit", "m", Object.keys(WG_LENGTH_UNITS)),
+    curUnit: pref(C, "curUnit", "A", Object.keys(MA_A_UNITS)),
     ins: pref(C, "ins", 80, INSULATION_C),
     wires: 1, lenM: 5, cur: 3, supply: 12, maxDrop: 3, amb: 25,
   };
@@ -6325,7 +6328,7 @@ function renderWireGauge(domain, tool, favId) {
       <div class="section-label" style="color:#8FC1F5">Run</div>
       <div class="field-pair">
         ${numField("wg-len", "Length, one way", lenShown(), `<select id="wg-len-unit">${unitOptions(WG_LENGTH_UNITS, state.lenUnit)}</select>`)}
-        ${numField("wg-cur", "Current", state.cur, fixed("A"))}
+        ${numField("wg-cur", "Current", +(state.cur / MA_A_UNITS[state.curUnit]).toPrecision(4), `<select id="wg-cur-unit">${unitOptions(MA_A_UNITS, state.curUnit)}</select>`)}
       </div>
       <div class="field-pair">
         ${numField("wg-supply", "Supply", state.supply, fixed("V"))}
@@ -6383,6 +6386,11 @@ function renderWireGauge(domain, tool, favId) {
       setPref(C, "lenUnit", state.lenUnit);
       paint();
     };
+    document.getElementById("wg-cur-unit").onchange = (e) => {
+      state.curUnit = e.target.value;
+      setPref(C, "curUnit", state.curUnit);
+      paint();
+    };
     // Number fields refresh only the results, keeping the caret where it is.
     const bind = (id, apply) => {
       document.getElementById(id).oninput = (e) => {
@@ -6394,7 +6402,7 @@ function renderWireGauge(domain, tool, favId) {
     };
     bind("wg-wires", (v) => { state.wires = v; });
     bind("wg-len", (v) => { state.lenM = v * WG_LENGTH_UNITS[state.lenUnit]; });
-    bind("wg-cur", (v) => { state.cur = v; });
+    bind("wg-cur", (v) => { state.cur = v * MA_A_UNITS[state.curUnit]; });
     bind("wg-supply", (v) => { state.supply = v; });
     bind("wg-maxdrop", (v) => { state.maxDrop = v; });
     bind("wg-amb", (v) => { state.amb = v; });
@@ -6467,6 +6475,7 @@ function renderTraceWidth(domain, tool, favId) {
     oz: pref(C, "oz", 1, TRACE_OZ),
     wUnit: pref(C, "wUnit", "mm", Object.keys(TRACE_W_UNITS)),
     lUnit: pref(C, "lUnit", "mm", Object.keys(TRACE_L_UNITS)),
+    iUnit: pref(C, "iUnit", "A", Object.keys(MA_A_UNITS)),
     amps: 2, rise: 10, wMil: 10, lenMm: 50, amb: 25,
   };
   const um = (oz) => Math.round(oz * TRACE_OZ_MIL * 25.4);
@@ -6559,7 +6568,7 @@ function renderTraceWidth(domain, tool, favId) {
     const sel = (id, opts, cur) => `<select id="${id}">${opts.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur) ? "selected" : ""}>${l}</option>`).join("")}</select>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const widthField = numField("tw-w", "Width", fmt(state.wMil / TRACE_W_UNITS[state.wUnit]), sel("tw-w-unit", Object.keys(TRACE_W_UNITS).map((u) => [u, u]), state.wUnit));
-    const ampsField = numField("tw-i", "Current", fmt(state.amps), fixed("A"));
+    const ampsField = numField("tw-i", "Current", fmt(state.amps / MA_A_UNITS[state.iUnit]), sel("tw-i-unit", Object.keys(MA_A_UNITS).map((u) => [u, u]), state.iUnit));
     const riseField = numField("tw-rise", "Temp. rise", fmt(state.rise), fixed("°C"));
     const known = m === "width" ? ampsField + riseField : m === "current" ? widthField + riseField : widthField + ampsField;
     app.innerHTML = `
@@ -6602,7 +6611,7 @@ function renderTraceWidth(domain, tool, favId) {
     const read = (id) => parseFloat(document.getElementById(id).value);
     const bind = (id, apply) => { const el = document.getElementById(id); if (el) el.oninput = () => { apply(read(id)); refresh(); }; };
     bind("tw-w", (v) => { state.wMil = v * TRACE_W_UNITS[state.wUnit]; });
-    bind("tw-i", (v) => { state.amps = v; });
+    bind("tw-i", (v) => { state.amps = v * MA_A_UNITS[state.iUnit]; });
     bind("tw-rise", (v) => { state.rise = v; });
     bind("tw-len", (v) => { state.lenMm = v * TRACE_L_UNITS[state.lUnit]; });
     bind("tw-amb", (v) => { state.amb = v; });
@@ -6612,6 +6621,7 @@ function renderTraceWidth(domain, tool, favId) {
     // A unit change re-expresses the same width or length.
     onSel("tw-w-unit", (v) => { state.wUnit = v; setPref(C, "wUnit", v); });
     onSel("tw-len-unit", (v) => { state.lUnit = v; setPref(C, "lUnit", v); });
+    onSel("tw-i-unit", (v) => { state.iUnit = v; setPref(C, "iUnit", v); });
   }
 
   paint();
@@ -9334,6 +9344,8 @@ function renderRmsCalculator(domain, tool, favId) {
 
   function paint() {
     const isPulse = state.waveform === "pulse";
+    // The value and the DC offset share one unit; either picker changes both.
+    const unitSel = (id) => `<select id="${id}" data-rms-unit="1">${Object.keys(RMS_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "Peak, rms and average of a waveform")}
 
@@ -9356,12 +9368,12 @@ function renderRmsCalculator(domain, tool, favId) {
           <label><select id="rms-known" class="label-select">${Object.keys(RMS_KNOWN).map((k) => `<option value="${k}" ${state.known === k ? "selected" : ""}>${RMS_KNOWN[k]}</option>`).join("")}</select></label>
           <div class="field-row">
             <input id="rms-value" type="number" inputmode="decimal" step="any" value="${fmt(state.value / RMS_UNITS[state.unit])}" />
-            <select id="rms-unit">${Object.keys(RMS_UNITS).map((u) => `<option ${state.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select>
+            ${unitSel("rms-unit")}
           </div>
         </div>
         <div class="field">
           <label>DC offset</label>
-          <div class="field-row"><input id="rms-dc" type="number" inputmode="decimal" step="any" value="${fmt(state.dc / RMS_UNITS[state.unit])}" /><span class="unit-fixed">${state.unit}</span></div>
+          <div class="field-row"><input id="rms-dc" type="number" inputmode="decimal" step="any" value="${fmt(state.dc / RMS_UNITS[state.unit])}" />${unitSel("rms-unit-dc")}</div>
         </div>
       </div>
 
@@ -9389,13 +9401,13 @@ function renderRmsCalculator(domain, tool, favId) {
       refresh();
     };
     // A unit of the same quantity keeps the value; volts to amps keeps the number.
-    document.getElementById("rms-unit").onchange = (e) => {
+    app.querySelectorAll("select[data-rms-unit]").forEach((sel) => { sel.onchange = (e) => {
       const old = state.unit, next = e.target.value;
       const sameQty = old.endsWith("A") === next.endsWith("A");
       if (!sameQty) { state.value = (state.value / RMS_UNITS[old]) * RMS_UNITS[next]; state.dc = (state.dc / RMS_UNITS[old]) * RMS_UNITS[next]; }
       state.unit = next; setPref(C, "unit", next);
       paint();
-    };
+    }; });
     document.getElementById("rms-dc").oninput = () => { const v = read("rms-dc"); state.dc = isFinite(v) ? v * RMS_UNITS[state.unit] : NaN; refresh(); };
     const duty = document.getElementById("rms-duty");
     if (duty) duty.oninput = () => { state.duty = read("rms-duty"); if (state.duty > 0 && state.duty < 100) setPref(C, "duty", state.duty); refresh(); };
@@ -10930,7 +10942,9 @@ const DC_MAX_KINDS = 3;
 const DC_F_MIN = 1e3, DC_F_MAX = 1e10;
 
 function renderDecoupling(domain, tool, favId) {
+  const C = "decoupling";
   const state = {
+    diUnit: pref(C, "diUnit", "A", Object.keys(MA_A_UNITS)),
     si: { v: 3.3, pct: 5, di: 0.1, tSlow: 1e-6, tFast: 2e-9 },
     // Each kind: C (F), ESR (Ω), ESL (H), how many.
     kinds: [],
@@ -10940,7 +10954,9 @@ function renderDecoupling(domain, tool, favId) {
   const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   // Fields are typed in the units engineers quote them in.
+  // The current step is in mA or A, its picker's.
   const SCALE = { v: 1, pct: 1, di: 1, tSlow: 1e-6, tFast: 1e-9, c: 1e-6, esr: 1e-3, esl: 1e-9, n: 1 };
+  const scaleOf = (key) => (key === "di" ? MA_A_UNITS[state.diUnit] : SCALE[key]);
   const z = () => state.si.v * state.si.pct / 100 / state.si.di;
   const srf = (k) => 1 / (2 * Math.PI * Math.sqrt(k.esl * k.c));
   // All the kinds in parallel at a frequency: the admittances add.
@@ -11098,14 +11114,15 @@ function renderDecoupling(domain, tool, favId) {
     const field = (key, label, u) => `
         <div class="field">
           <label>${label}</label>
-          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / SCALE[key])}" /><span class="unit-fixed">${u}</span></div>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / scaleOf(key))}" />${u.startsWith("<") ? u : `<span class="unit-fixed">${u}</span>`}</div>
         </div>`;
+    const diSel = `<select id="dc-di-unit">${Object.keys(MA_A_UNITS).map((u) => `<option ${u === state.diUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "How much capacitance, and how many, a supply needs")}
 
       <div class="diagram-box">${diagram()}</div>
 
-      <div class="field-pair">${field("v", "Supply", "V")}${field("pct", "Ripple", "%")}${field("di", "Current step", "A")}</div>
+      <div class="field-pair">${field("v", "Supply", "V")}${field("pct", "Ripple", "%")}${field("di", "Current step", diSel)}</div>
       <div class="field-pair">${field("tSlow", "Regulator", "µs")}${field("tFast", "Fastest edge", "ns")}</div>
 
       <div class="section-label split" style="color:#8FC1F5">
@@ -11130,11 +11147,12 @@ function renderDecoupling(domain, tool, favId) {
     app.querySelectorAll("input[data-key]:not([data-kind])").forEach((el) => {
       el.oninput = () => {
         const key = el.dataset.key;
-        state.si[key] = parseFloat(el.value) * SCALE[key];
+        state.si[key] = parseFloat(el.value) * scaleOf(key);
         if (!state.kindsTyped && siOk()) { state.kinds = suggest(); app.querySelector(".r-list").innerHTML = kindsHTML(); bindRows(); }
         refresh();
       };
     });
+    document.getElementById("dc-di-unit").onchange = (e) => { state.diUnit = e.target.value; setPref(C, "diUnit", state.diUnit); paint(); };
     bindRows();
     document.getElementById("dc-suggest").onclick = () => {
       if (!siOk()) return;
@@ -11211,6 +11229,7 @@ function renderViaCurrent(domain, tool, favId) {
     lUnit: pref(C, "lUnit", "mm", Object.keys(VC_LEN_UNITS)),
     bUnit: pref(C, "bUnit", "µm", Object.keys(VC_PLATE_UNITS)),
     oz: pref(C, "oz", 1, TRACE_OZ),
+    iUnit: pref(C, "iUnit", "A", Object.keys(MA_A_UNITS)),
     si: { drill: 0.26e-3, b: 30e-6, l: 1.6e-3, w: 1.2e-3, i: 4, rise: pref(C, "rise", 10, VC_RISES), n: 1 },
     // The vias box follows the rule until a count is typed.
     nTyped: false,
@@ -11218,7 +11237,7 @@ function renderViaCurrent(domain, tool, favId) {
   const len = (v) => `${Number((v / VC_LEN_UNITS[state.lUnit]).toPrecision(3))} ${state.lUnit}`;
   // Four figures: a converted 0.26 mm reads 10.24 mil, not 10.2362.
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
-  const scale = (k) => (k === "b" ? VC_PLATE_UNITS[state.bUnit] : k === "i" || k === "n" || k === "rise" ? 1 : VC_LEN_UNITS[state.lUnit]);
+  const scale = (k) => (k === "b" ? VC_PLATE_UNITS[state.bUnit] : k === "i" ? MA_A_UNITS[state.iUnit] : k === "n" || k === "rise" ? 1 : VC_LEN_UNITS[state.lUnit]);
   // Areas and the cases' widths follow the length unit: mm² or mil².
   const mm2 = (a) => (state.lUnit === "mil" ? `${Number((a / 0.0254 ** 2).toPrecision(3))} mil²` : `${Number(a.toPrecision(3))} mm²`);
   const caseW = (w) => (state.lUnit === "mil" ? `${Number((w / 0.0254).toPrecision(3))} mil` : `${w} mm`);
@@ -11354,7 +11373,7 @@ function renderViaCurrent(domain, tool, favId) {
     const riseSel = `<select id="vc-rise">${VC_RISES.map((r) => `<option value="${r}" ${r === s.rise ? "selected" : ""}>${r} °C</option>`).join("")}</select>`;
     const fields = `
       <div class="field-pair">${field("drill", "Drill", sel('data-lunit="1"', VC_LEN_UNITS, state.lUnit))}${field("b", "Plating", sel('data-bunit="1"', VC_PLATE_UNITS, state.bUnit))}${field("l", "Board", sel('data-lunit="2"', VC_LEN_UNITS, state.lUnit))}</div>
-      <div class="field-pair">${field("w", "Trace width", sel('data-lunit="3"', VC_LEN_UNITS, state.lUnit))}<div class="field"><label>Trace copper</label>${ozSel}</div>${field("i", "Current", fixed("A"))}</div>
+      <div class="field-pair">${field("w", "Trace width", sel('data-lunit="3"', VC_LEN_UNITS, state.lUnit))}<div class="field"><label>Trace copper</label>${ozSel}</div>${field("i", "Current", `<select id="vc-i-unit">${Object.keys(MA_A_UNITS).map((u) => `<option ${u === state.iUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`)}</div>
       <div class="field-pair"><div class="field"><label>Temperature rise</label>${riseSel}</div>${field("n", "Vias you use", fixed(""))}</div>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "How many vias a trace's current needs")}
@@ -11385,6 +11404,7 @@ function renderViaCurrent(domain, tool, favId) {
     });
     document.getElementById("vc-oz").onchange = (e) => { state.oz = parseFloat(e.target.value); setPref(C, "oz", state.oz); refresh(); };
     document.getElementById("vc-rise").onchange = (e) => { state.si.rise = parseFloat(e.target.value); setPref(C, "rise", state.si.rise); refresh(); };
+    document.getElementById("vc-i-unit").onchange = (e) => { state.iUnit = e.target.value; setPref(C, "iUnit", state.iUnit); paint(); };
     // A unit change re-expresses the same value.
     // The two pickers move together: mm with µm plating, or mil for all.
     const units = (imperial) => {
@@ -12137,16 +12157,25 @@ const ICL_SL10 = [
   ["SL1050002", 50, 25, 2, 18, 0.44, 1.2], ["SL1012101", 120, 20, 1, 14, 2, 6.6],
 ];
 const ICL_MODES = { ac: "AC mains", dc: "DC" };
+// The boxes with a unit picker: both currents, and the capacitance (bulk
+// capacitors run to thousands of µF).
+const ICL_UNITS = { ipk: MA_A_UNITS, i: MA_A_UNITS, c: { "µF": 1e-6, mF: 1e-3 } };
 
 function renderInrushLimiter(domain, tool, favId) {
   const C = "inrush-limiter";
   const state = {
     mode: pref(C, "mode", "ac", Object.keys(ICL_MODES)),
+    units: {
+      ipk: pref(C, "ipkUnit", "A", Object.keys(MA_A_UNITS)),
+      i: pref(C, "iUnit", "A", Object.keys(MA_A_UNITS)),
+      c: pref(C, "cUnit", "µF", Object.keys(ICL_UNITS.c)),
+    },
     si: { v: 230, tol: 10, ipk: 20, c: 220e-6, i: 1 },
   };
   const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
-  const SCALE = { v: 1, tol: 1, ipk: 1, c: 1e-6, i: 1 };
+  const SCALE = { v: 1, tol: 1 };
+  const scale = (k) => (ICL_UNITS[k] ? ICL_UNITS[k][state.units[k]] : SCALE[k]);
   // The highest voltage the capacitor charges to.
   const vpk = () => state.si.v * (1 + state.si.tol / 100) * (state.mode === "ac" ? Math.SQRT2 : 1);
   // A part's running resistance at a current, between its two listed
@@ -12256,10 +12285,13 @@ function renderInrushLimiter(domain, tool, favId) {
 
   function paint() {
     const s = state.si, m = state.mode;
+    // A box with a picker shows it; the others their fixed unit.
     const field = (key, label, u) => `
         <div class="field">
           <label>${label}</label>
-          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / SCALE[key])}" /><span class="unit-fixed">${u}</span></div>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(s[key] / scale(key))}" />${ICL_UNITS[key]
+            ? `<select data-unit="${key}">${Object.keys(ICL_UNITS[key]).map((x) => `<option ${x === state.units[key] ? "selected" : ""}>${x}</option>`).join("")}</select>`
+            : `<span class="unit-fixed">${u}</span>`}</div>
         </div>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "The NTC that tames a power supply's turn-on surge")}
@@ -12268,8 +12300,8 @@ function renderInrushLimiter(domain, tool, favId) {
 
       ${pillRow(Object.entries(ICL_MODES), m, domain.bg)}
 
-      <div class="field-pair">${field("v", m === "ac" ? "Line" : "Supply", m === "ac" ? "Vac" : "V")}${field("tol", "High by", "%")}${field("ipk", "Inrush allowed", "A")}</div>
-      <div class="field-pair">${field("c", "Capacitance", "µF")}${field("i", m === "ac" ? "Running current" : "Running current", m === "ac" ? "A rms" : "A")}</div>
+      <div class="field-pair">${field("v", m === "ac" ? "Line" : "Supply", m === "ac" ? "Vac" : "V")}${field("tol", "High by", "%")}${field("ipk", "Inrush allowed")}</div>
+      <div class="field-pair">${field("c", "Capacitance")}${field("i", m === "ac" ? "Running, rms" : "Running current")}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -12284,7 +12316,11 @@ function renderInrushLimiter(domain, tool, favId) {
     wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
-      el.oninput = () => { const k = el.dataset.key; state.si[k] = parseFloat(el.value) * SCALE[k]; refresh(); };
+      el.oninput = () => { const k = el.dataset.key; state.si[k] = parseFloat(el.value) * scale(k); refresh(); };
+    });
+    // A unit change re-expresses the same value.
+    app.querySelectorAll("select[data-unit]").forEach((el) => {
+      el.onchange = () => { const k = el.dataset.unit; state.units[k] = el.value; setPref(C, `${k}Unit`, el.value); paint(); };
     });
   }
 
@@ -12481,6 +12517,8 @@ function renderAntennaLength(domain, tool, favId) {
 // as the cell discharges.
 const BIR_MODES = { pair: "Two loads", resistor: "Resistor", drop: "Drop" };
 const BIR_R_UNITS = { "mΩ": 1e-3, "Ω": 1 };
+// The test resistor: a few ohms for a cell, kilohms for a coin cell.
+const BIR_RL_UNITS = { "Ω": 1, "kΩ": 1e3 };
 
 function renderInternalResistance(domain, tool, favId) {
   const C = "internal-resistance";
@@ -12488,12 +12526,13 @@ function renderInternalResistance(domain, tool, favId) {
     mode: pref(C, "mode", "pair", Object.keys(BIR_MODES)),
     iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
     rUnit: pref(C, "rUnit", "mΩ", Object.keys(BIR_R_UNITS)),
+    rlUnit: pref(C, "rlUnit", "Ω", Object.keys(BIR_RL_UNITS)),
     si: { v1: 1.485, i1: 0.005, v2: 1.378, i2: 0.505, voc: 1.6, vl: 1.5, rl: 15, r: 0.1, iload: 1, cut: 0 },
   };
   const val = (v, u) => siFormat(Number(v.toPrecision(4)), u, 4).replace(/^-/, "−");
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(6)) : "");
   const unitOf = { v1: null, v2: null, voc: null, vl: null, cut: null, i1: "i", i2: "i", iload: "i", rl: "rl", r: "r" };
-  const scale = (k) => (unitOf[k] === "i" ? AMP_UNITS[state.iUnit] : unitOf[k] === "r" ? BIR_R_UNITS[state.rUnit] : 1);
+  const scale = (k) => (unitOf[k] === "i" ? AMP_UNITS[state.iUnit] : unitOf[k] === "r" ? BIR_R_UNITS[state.rUnit] : unitOf[k] === "rl" ? BIR_RL_UNITS[state.rlUnit] : 1);
 
   // R and the open-circuit voltage from the readings of the mode in use.
   function solve() {
@@ -12593,7 +12632,7 @@ function renderInternalResistance(domain, tool, favId) {
     { title: "Energizer's voltage drop", note: "1 A through 0.1 Ω loses 0.1 V: a 1.6 V cell delivers 1.5 V.",
       apply: example("drop", { voc: 1.6, r: 0.1, iload: 1, cut: 0 }, { iUnit: "A", rUnit: "Ω" }) },
     { title: "A 9 V battery and a 100 Ω resistor", note: "Reading 9.2 V open and 8.6 V loaded: 86 mA, and 6.98 Ω inside.",
-      apply: example("resistor", { voc: 9.2, vl: 8.6, rl: 100 }, { rUnit: "Ω" }) },
+      apply: example("resistor", { voc: 9.2, vl: 8.6, rl: 100 }, { rUnit: "Ω", rlUnit: "Ω" }) },
     { title: "A lithium-ion cell at two loads", note: "3.95 V at 0.5 A and 3.85 V at 2.5 A: 50 mΩ.",
       apply: example("pair", { v1: 3.95, i1: 0.5, v2: 3.85, i2: 2.5 }, { iUnit: "A", rUnit: "mΩ" }) },
     { title: "That cell at 10 A", note: "50 mΩ from 4.0 V: 3.5 V left and 5 W heating the cell; 20 A takes it to 3.0 V.",
@@ -12615,7 +12654,7 @@ function renderInternalResistance(domain, tool, favId) {
       fields = `<div class="field-pair">${field("v1", "Light load, V1", fixedV)}${field("i1", "at I1", iSel("i1"))}</div>
         <div class="field-pair">${field("v2", "Heavy load, V2", fixedV)}${field("i2", "at I2", iSel("i2"))}</div>`;
     } else if (m === "resistor") {
-      fields = `<div class="field-pair">${field("voc", "Open circuit", fixedV)}${field("vl", "With the resistor", fixedV)}${field("rl", "Resistor", `<span class="unit-fixed">Ω</span>`)}</div>`;
+      fields = `<div class="field-pair">${field("voc", "Open circuit", fixedV)}${field("vl", "With the resistor", fixedV)}${field("rl", "Resistor", `<select data-rlunit="rl">${Object.keys(BIR_RL_UNITS).map((u) => `<option ${u === state.rlUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`)}</div>`;
     } else {
       fields = `<div class="field-pair">${field("voc", "Open circuit", fixedV)}${field("r", "Resistance", rSel)}</div>
         <div class="field-pair">${field("iload", "Load current", iSel("iload"))}${field("cut", "Cutoff (0 = none)", fixedV)}</div>`;
@@ -12650,6 +12689,9 @@ function renderInternalResistance(domain, tool, favId) {
     });
     app.querySelectorAll("select[data-runit]").forEach((el) => {
       el.onchange = () => { state.rUnit = el.value; setPref(C, "rUnit", el.value); paint(); };
+    });
+    app.querySelectorAll("select[data-rlunit]").forEach((el) => {
+      el.onchange = () => { state.rlUnit = el.value; setPref(C, "rlUnit", el.value); paint(); };
     });
   }
 
@@ -15663,16 +15705,18 @@ function renderPpmConverter(domain, tool, favId) {
   function paint() {
     const m = state.mode;
     const num = (id, key, v) => `<input id="${id}" data-key="${key}" type="number" inputmode="decimal" step="any" value="${v}" />`;
-    const unitSel = `<select id="ppm-unit">${Object.keys(PPM_UNITS).map((u) => `<option value="${u}" ${u === state.unit ? "selected" : ""}>${u || "none"}</option>`).join("")}</select>`;
+    // The measured value has the nominal's unit, and a picker of its own
+    // that changes both.
+    const unitSel = (id = "ppm-unit") => `<select id="${id}" data-ppm-unit="1">${Object.keys(PPM_UNITS).map((u) => `<option value="${u}" ${u === state.unit ? "selected" : ""}>${u || "none"}</option>`).join("")}</select>`;
     const baseLabel = m === "err" ? "Nominal" : m === "tc" ? "Value at the first temperature" : "Value";
-    const baseField = `<div class="field"><label>${baseLabel}</label><div class="field-row">${num("ppm-base", "base", shown(state.base))}${unitSel}</div></div>`;
+    const baseField = `<div class="field"><label>${baseLabel}</label><div class="field-row">${num("ppm-base", "base", shown(state.base))}${unitSel()}</div></div>`;
     let fields;
     if (m === "tol") {
       fields = `<div class="field-pair">${baseField}
         <div class="field"><label>Tolerance, ±</label><div class="field-row">${num("ppm-tol", "ppm", state.ppm)}<span class="unit-fixed">ppm</span></div></div></div>`;
     } else if (m === "err") {
       fields = `<div class="field-pair">${baseField}
-        <div class="field"><label>Measured</label><div class="field-row">${num("ppm-meas", "measured", shown(state.measured))}<span class="unit-fixed">${state.unit}</span></div></div></div>`;
+        <div class="field"><label>Measured</label><div class="field-row">${num("ppm-meas", "measured", shown(state.measured))}${unitSel("ppm-unit-meas")}</div></div></div>`;
     } else {
       fields = `${baseField}
         <div class="field-pair">
@@ -15712,7 +15756,7 @@ function renderPpmConverter(domain, tool, favId) {
       };
     });
     // A unit of the same quantity keeps the value; another quantity keeps the numbers.
-    document.getElementById("ppm-unit").onchange = (e) => {
+    app.querySelectorAll("select[data-ppm-unit]").forEach((sel) => { sel.onchange = (e) => {
       const old = state.unit, next = e.target.value;
       if (PPM_BASE_UNIT[old] !== PPM_BASE_UNIT[next]) {
         state.base = (state.base / PPM_UNITS[old]) * PPM_UNITS[next];
@@ -15720,7 +15764,7 @@ function renderPpmConverter(domain, tool, favId) {
       }
       state.unit = next; setPref(C, "unit", next);
       paint();
-    };
+    }; });
   }
 
   paint();
@@ -24685,12 +24729,14 @@ const DAC_KINDS = {
 
 function renderDac(domain, tool, favId) {
   const C = "dac";
-  // The target is volts or millivolts; a reference is always volts.
+  // The reference and the target are each in volts or millivolts, each with
+  // its own picker, as in ADC resolution.
   const units = Object.keys(ADC_V_UNITS);
   const state = {
     kind: pref(C, "kind", "pow2", Object.keys(DAC_KINDS)),
     bits: 12, ref: 3.3, gain: 1, vt: 1.2, code: 0,
     vtUnit: pref(C, "vtUnit", "V", units),
+    refUnit: pref(C, "refUnit", "V", units),
   };
 
   const pow2 = () => state.kind === "pow2";
@@ -24888,7 +24934,7 @@ function renderDac(domain, tool, favId) {
 
       <div class="field-pair">
         ${field("da-bits", "Resolution", state.bits, `<span class="unit-fixed">bits</span>`)}
-        ${field("da-ref", "VREF", state.ref, `<span class="unit-fixed">V</span>`)}
+        ${field("da-ref", "VREF", fig(state.ref / ADC_V_UNITS[state.refUnit]), unitSelect("da-ref-unit", state.refUnit))}
         ${field("da-gain", "Gain", state.gain, "")}
       </div>
       <div class="field-pair">
@@ -24929,6 +24975,7 @@ function renderDac(domain, tool, favId) {
         if (!isFinite(v)) return;
         if (name === "code") state.code = Math.min(codeMax(), Math.max(0, Math.round(v)));
         else if (name === "vt") state.vt = v * ADC_V_UNITS[state.vtUnit];
+        else if (name === "ref") state.ref = v * ADC_V_UNITS[state.refUnit];
         else state[name] = v;
         afterEdit(name);
       };
@@ -24939,6 +24986,12 @@ function renderDac(domain, tool, favId) {
       state.vtUnit = e.target.value;
       setPref(C, "vtUnit", state.vtUnit);
       syncField("da-vt", shownVt());
+      refresh();
+    };
+    document.getElementById("da-ref-unit").onchange = (e) => {
+      state.refUnit = e.target.value;
+      setPref(C, "refUnit", state.refUnit);
+      syncField("da-ref", fig(state.ref / ADC_V_UNITS[state.refUnit]));
       refresh();
     };
   }
