@@ -10975,8 +10975,11 @@ the way TI's application note lays it out, on one screen:
   frequency in kHz or MHz, the inductor in nH or µH, IFB in nA or µA, R2 in
   Ω or kΩ; ripple and overshoot in mV, ESR in mΩ.
 - **Drawing:** the power stage as TI draws it, with the feedback divider:
-  the IC with its SW and FB pins, the input and output capacitors, the
-  diode, the inductor, R1 and R2. The part the pill works out is green.
+  the IC with its SW and FB pins, the input capacitor, the diode, the
+  inductor, R1 and R2 with their middle wired back to the FB pin (the wire
+  crosses the diode's lead above the diode, without a junction), and the
+  output capacitor last, by the output. The part the pill works out is
+  green.
 - **Remembered:** the pill and the units.
 
 Examples: TI's TPS54331 design (its inductor, its feedback divider, its

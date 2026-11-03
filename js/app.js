@@ -12582,7 +12582,9 @@ function renderBuck(domain, tool, favId) {
   }
 
   // The power stage as TI draws it (SLVA477 figure 1-1), with the feedback
-  // divider of figure 5-1: the part the pill works out in green.
+  // divider of figure 5-1 wired back to the IC's FB pin, the output
+  // capacitor last: the part the pill works out in green. The FB wire
+  // crosses the diode's lead above the diode, without a junction.
   function diagram() {
     const wire = "#5A6169", part = "#8FC1F5", calcC = "#5DCAA5", grey = "#8A9099";
     const tone = (p) => (state.pill === p ? calcC : part);
@@ -12590,22 +12592,22 @@ function renderBuck(domain, tool, favId) {
     const zigV = (x, y1, y2) => { let d = `M${x} ${y1}`; const n = 6, h = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + h * (i + 0.5)}`; return `${d} L${x} ${y2}`; };
     const s = state.si;
     return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
-      <path d="M12 24 H50 M96 24 H128 M176 24 H262 M30 24 V56 M30 62 V100 M73 54 V100 M116 24 V52 M116 66 V100 M190 24 V56 M190 62 V100 M244 24 V32 M244 56 V68 M244 92 V100 M30 100 H244" stroke="${wire}" stroke-width="1.6"/>
+      <path d="M12 24 H50 M96 24 H128 M176 24 H262 M30 24 V56 M30 62 V100 M73 66 V100 M116 24 V70 M116 84 V100 M200 24 V30 M200 54 V64 M200 88 V100 M240 24 V56 M240 62 V100 M30 100 H240 M96 58 H200" stroke="${wire}" stroke-width="1.6"/>
       <circle cx="10" cy="24" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="265" cy="24" r="3" stroke="${wire}" stroke-width="1.4"/>
-      <circle cx="116" cy="24" r="2.5" fill="${wire}"/><circle cx="190" cy="24" r="2.5" fill="${wire}"/><circle cx="244" cy="24" r="2.5" fill="${wire}"/><circle cx="244" cy="62" r="2.5" fill="${wire}"/>
+      <circle cx="116" cy="24" r="2.5" fill="${wire}"/><circle cx="200" cy="24" r="2.5" fill="${wire}"/><circle cx="240" cy="24" r="2.5" fill="${wire}"/><circle cx="200" cy="58" r="2.5" fill="${wire}"/>
       <path d="M144 104 H156 M147 108 H153" stroke="${wire}" stroke-width="1.4"/><path d="M150 100 V104" stroke="${wire}" stroke-width="1.4"/>
       <path d="M21 56 H39 M21 62 H39" stroke="${part}" stroke-width="2"/>
-      <rect x="50" y="10" width="46" height="44" rx="3" stroke="${part}" stroke-width="1.6"/>
-      ${lbl(64, 40, "IC")}${lbl(92, 28, "SW", grey, "end")}${lbl(92, 50, "FB", grey, "end")}
-      <path d="M108 66 H124 L116 52 Z M108 52 H124" stroke="${tone("d")}" stroke-width="1.6"/>
+      <rect x="50" y="10" width="46" height="56" rx="3" stroke="${part}" stroke-width="1.6"/>
+      ${lbl(64, 42, "IC")}${lbl(92, 28, "SW", grey, "end")}${lbl(92, 62, "FB", grey, "end")}
+      <path d="M108 84 H124 L116 70 Z M108 70 H124" stroke="${tone("d")}" stroke-width="1.6"/>
       <path d="M128 24 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0" stroke="${tone("l")}" stroke-width="1.8"/>
-      <path d="M181 56 H199 M181 62 H199" stroke="${tone("c")}" stroke-width="2"/>
-      <path d="${zigV(244, 32, 56)}" stroke="${tone("fb")}" stroke-width="1.6"/>
-      <path d="${zigV(244, 68, 92)}" stroke="${part}" stroke-width="1.6"/>
+      <path d="${zigV(200, 30, 54)}" stroke="${tone("fb")}" stroke-width="1.6"/>
+      <path d="${zigV(200, 64, 88)}" stroke="${part}" stroke-width="1.6"/>
+      <path d="M231 56 H249 M231 62 H249" stroke="${tone("c")}" stroke-width="2"/>
       ${lbl(8, 14, "VIN", grey, "start")}${lbl(282, 14, `VOUT ${val(s.vout, "V")}`, grey, "end")}
       ${lbl(152, 13, `L ${s.l > 0 && !problem(true) ? val(s.l, "H") : ""}`, tone("l"))}
-      ${lbl(36, 76, "CIN", part, "start")}${lbl(128, 74, "D", tone("d"), "start")}${lbl(200, 50, "COUT", tone("c"), "start")}
-      ${lbl(252, 48, "R1", tone("fb"), "start")}${lbl(252, 84, "R2", part, "start")}${lbl(238, 66, "FB", grey, "end")}
+      ${lbl(36, 84, "CIN", part, "start")}${lbl(128, 82, "D", tone("d"), "start")}${lbl(252, 76, "COUT", tone("c"), "start")}
+      ${lbl(208, 46, "R1", tone("fb"), "start")}${lbl(208, 80, "R2", part, "start")}
     </svg>`;
   }
 

@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=a0a09f50c2" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=827d6c9219" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -7143,7 +7143,7 @@ makes each case worst keeps the window honest.</p>
 <section class="tool" id="buck" style="--accent:#EF9F27">
   <div class="crumb">Power electronics › Supply &amp; regulation</div>
   <h2>DC/DC buck converter</h2>
-  <figure class="shot"><img src="manual/img/buck.jpg?h=db13a650ea" loading="lazy" alt="DC/DC buck converter as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/buck.jpg?h=b1a89219f9" loading="lazy" alt="DC/DC buck converter as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The power stage of a buck (step-down) converter in continuous conduction,
 the way TI's application note lays it out, on one screen:</p>
@@ -7173,8 +7173,11 @@ the way TI's application note lays it out, on one screen:</p>
   frequency in kHz or MHz, the inductor in nH or µH, IFB in nA or µA, R2 in
   Ω or kΩ; ripple and overshoot in mV, ESR in mΩ.</li>
 <li><strong>Drawing:</strong> the power stage as TI draws it, with the feedback divider:
-  the IC with its SW and FB pins, the input and output capacitors, the
-  diode, the inductor, R1 and R2. The part the pill works out is green.</li>
+  the IC with its SW and FB pins, the input capacitor, the diode, the
+  inductor, R1 and R2 with their middle wired back to the FB pin (the wire
+  crosses the diode's lead above the diode, without a junction), and the
+  output capacitor last, by the output. The part the pill works out is
+  green.</li>
 <li><strong>Remembered:</strong> the pill and the units.</li>
 </ul>
 <p>Examples: TI's TPS54331 design (its inductor, its feedback divider, its
