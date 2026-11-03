@@ -11269,21 +11269,22 @@ The power stage of an isolated flyback converter in continuous conduction
     to a share of full load you set, proposed (two figures, rounded up)
     until you type your own, flagged when yours is lower; the peak primary
     current.
-  - **Switch & diode:** the FET's flat-top drain voltage and the 25 to
+  - **Switch & diode:** the MOSFET's flat-top drain voltage and the 25 to
     50 % more to allow for ringing, the peak primary current, the diode's
     reverse voltage, its current while it conducts and its loss.
   - **Capacitors:** the least output capacitance for the ripple allowed,
     its RMS current, and the input capacitance for the input ripple.
 - **Units:** the current in mA or A, the frequency in kHz or MHz, the
   inductance in µH or mH, each ripple in mV or V with its own picker.
-- **Drawing:** the input capacitor, the primary winding and the FET Q on
-  the primary ground; the secondary wound the other way (the dots), the
+- **Drawing:** the input capacitor, the primary winding and the
+  n-channel MOSFET Q (gate plate, three-dash channel, body arrow tied to
+  the source, as in the MOSFET tools) on the primary ground; the secondary wound the other way (the dots), the
   diode, and the output capacitor last on the isolated secondary ground.
   The pill's parts are green.
 - **Remembered:** the pill and the units.
 
 Examples: TI's 60 W design (its turns ratio and inductance as calculated,
-then rounded to its 4 : 1 and 80 µH), its FET and diode, and its
+then rounded to its 4 : 1 and 80 µH), its MOSFET and diode, and its
 capacitors.
 
 ### Terms
@@ -11292,16 +11293,19 @@ capacitors.
   transformer's core while its switch is on, and releases it to the output
   through the diode while the switch is off. The two windings are wound
   the opposite way (the dots) and isolate the output from the input.
+- **MOSFET (the switch, Q):** an n-channel enhancement MOSFET. FET
+  (field-effect transistor) is the family it belongs to, with the JFET;
+  Betten's article just says "FET".
 - **Turns ratio (Np : Ns):** primary turns over secondary turns.
 - **The dots (winding sense):** each dot marks the end of a winding that
   goes positive at the same moment as the other dotted end. In a flyback
   the dots sit at opposite ends, primary at the input end, secondary at
   the ground end: the windings are wound (or connected) the opposite way.
-  While the FET is on, the input drives the primary's dotted end positive,
+  While the MOSFET is on, the input drives the primary's dotted end positive,
   so the secondary's dotted (ground) end is positive too and its other
   end, the diode's anode, is negative: the diode blocks, no current flows
   to the output, and the energy builds up in the core (in its magnetizing
-  inductance, the primary L). When the FET turns off, the core's field
+  inductance, the primary L). When the MOSFET turns off, the core's field
   keeps the current going and every winding's voltage reverses: the
   diode's anode goes positive, the diode conducts and the stored energy
   "flies back" to the output capacitor and the load (Betten, Power Tips
@@ -11312,9 +11316,9 @@ capacitors.
   windings' turns face the core in the drawing, as in any transformer
   symbol; only the dots show the sense.
 - **Reflected voltage:** while the diode conducts, the output plus the
-  diode drop appear across the primary multiplied by Np/Ns; the FET sees
+  diode drop appear across the primary multiplied by Np/Ns; the MOSFET sees
   the input plus that.
-- **Flat-top voltage:** the FET's drain voltage while off, before the
+- **Flat-top voltage:** the MOSFET's drain voltage while off, before the
   ringing that the transformer's leakage inductance adds.
 - **CCM / DCM:** in continuous conduction the transformer's current never
   falls to zero within a cycle; below a certain load it does
@@ -11387,7 +11391,7 @@ input, so with 4 : 1 it shows 3.11 A of peak current where he gives
   spike; the 25 to 50 % allowance is Betten's, and a snubber or clamp is
   usually needed.
 - **Not computed:** the transformer's core, turns and wire, the leakage
-  inductance, the current-sense resistor, the FET's losses, the control
+  inductance, the current-sense resistor, the MOSFET's losses, the control
   loop and any second output.
 
 ### How it was checked
@@ -11397,7 +11401,7 @@ input, so with 4 : 1 it shows 3.11 A of peak current where he gives
   91 % keeps CCM down to 15 W (its 80 µH); 50 % to 47.2 % over the input;
 - rounded to its 4 : 1: 49.5 % to 46.7 % (its 0.47 at 57 V), 3.11 A peak
   with its 80 µH;
-- 107 V flat-top on the FET (its 107 V), 26.3 V on the diode (its 26 V),
+- 107 V flat-top on the MOSFET (its 107 V), 26.3 V on the diode (its 26 V),
   9.9 A while it conducts, 2.5 W at 0.5 V;
 - 82.5 µF for 120 mV, 2.05 µF for 1.5 V, 4.95 A RMS in the output
   capacitor;

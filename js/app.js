@@ -13084,7 +13084,9 @@ function renderFlyback(domain, tool, favId) {
   }
 
   // A flyback as Betten's figure 1 shows it, simplified: the input
-  // capacitor, the primary winding and the FET on the primary ground; the
+  // capacitor, the primary winding and the n-channel MOSFET (drawn as the
+  // MOSFET tools draw it: gate plate, three-dash channel, body arrow tied
+  // to the source) on the primary ground; the
   // secondary, wound the other way (the dots), the diode and the output
   // capacitor last on the isolated secondary ground.
   function diagram() {
@@ -13094,7 +13096,7 @@ function renderFlyback(domain, tool, favId) {
     const coil = (x, y, n, side) => { let d = `M${x} ${y}`; for (let i = 0; i < n; i++) d += ` a6 6 0 0 ${side} 0 12`; return d; };
     const s = state.si, ok = !problem();
     return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
-      <path d="M12 20 H129 V28 M129 64 V70 M123 70 H129 M123 86 H129 V98 M30 20 V50 M30 56 V98 M30 98 H129 M161 28 V20 H183 M199 20 H262 M161 64 V80 M240 20 V50 M240 56 V80 M161 80 H240 M93 78 H115" stroke="${wire}" stroke-width="1.6"/>
+      <path d="M12 20 H129 V28 M129 64 V70.5 M129 78 V98 M30 20 V50 M30 56 V98 M30 98 H129 M161 28 V20 H183 M199 20 H262 M161 64 V80 M240 20 V50 M240 56 V80 M161 80 H240 M93 78 H115" stroke="${wire}" stroke-width="1.6"/>
       <circle cx="10" cy="20" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="265" cy="20" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="240" cy="20" r="2.5" fill="${wire}"/>
       <path d="M69 102 H81 M72 106 H78 M75 98 V102" stroke="${wire}" stroke-width="1.4"/>
       <path d="M194 84 H206 M197 88 H203 M200 80 V84" stroke="${wire}" stroke-width="1.4"/>
@@ -13102,7 +13104,9 @@ function renderFlyback(domain, tool, favId) {
       <path d="${coil(129, 28, 3, 1)} ${coil(161, 28, 3, 0)}" stroke="${tone("t")}" stroke-width="1.6"/>
       <path d="M143 24 V68 M147 24 V68" stroke="${tone("t")}" stroke-width="1.4"/>
       <circle cx="121" cy="32" r="2.2" fill="${tone("t")}"/><circle cx="169" cy="60" r="2.2" fill="${tone("t")}"/>
-      <path d="M119 70 V86 M123 68 V88 M115 78 H119" stroke="${tone("s")}" stroke-width="1.8"/>
+      <path d="M119 70 V86 M115 78 H119 M123 68 V73 M123 75.5 V80.5 M123 83 V88" stroke="${tone("s")}" stroke-width="1.8" stroke-linecap="butt"/>
+      <path d="M123 70.5 H129 M123 85.5 H129 M127 78 H129" stroke="${tone("s")}" stroke-width="1.6"/>
+      <path d="M123.5 78 L128 75 L128 81 Z" fill="${tone("s")}"/>
       <path d="M183 12 V28 L199 20 Z M199 12 V28" stroke="${tone("s")}" stroke-width="1.6"/>
       <path d="M231 50 H249 M231 56 H249" stroke="${tone("c")}" stroke-width="2"/>
       ${lbl(8, 11, "VIN", grey, "start")}${lbl(282, 11, `VOUT ${val(s.vout, "V")}`, grey, "end")}
@@ -13135,7 +13139,7 @@ function renderFlyback(domain, tool, favId) {
     }
     if (state.pill === "s") {
       const vds = s.vmax + s.n * vo();
-      return `${big("FET, flat-top drain voltage", val(vds, "V"), `plus 25 to 50 % for ringing: a ${val(vds * 1.25, "V")} to ${val(vds * 1.5, "V")} FET or more`)}
+      return `${big("MOSFET, flat-top drain voltage", val(vds, "V"), `plus 25 to 50 % for ringing: a ${val(vds * 1.25, "V")} to ${val(vds * 1.5, "V")} MOSFET or more`)}
         <div class="field notation-box">
           ${row("Peak primary current", val(ipk, "A"), "spk")}
           ${row("Diode, reverse voltage", val(s.vout + s.vmax / s.n, "V"), "piv")}
@@ -13178,7 +13182,7 @@ function renderFlyback(domain, tool, favId) {
       apply: example("t", {}) },
     { title: "Its transformer, 4 : 1 and 80 µH", note: "Rounded to 4 : 1 the duty cycle runs 49.5 % to 46.7 %; 3.11 A peak.",
       apply: example("t", { n: 4, l: 80e-6 }) },
-    { title: "Its FET and diode", note: "57 V + 4 × 12.5 V: 107 V flat-top on the FET, so TI takes 200 V; 26.3 V on the diode.",
+    { title: "Its MOSFET and diode", note: "57 V + 4 × 12.5 V: 107 V flat-top on the MOSFET, so TI takes 200 V; 26.3 V on the diode.",
       apply: example("s", { n: 4, l: 80e-6 }) },
     { title: "Its capacitors", note: "4 : 1, 49.5 % at 51 V: 82.5 µF for 120 mV out, 2.05 µF for 1.5 V in; TI's 83 and 2 µF use 50 %.",
       apply: example("c", { n: 4, l: 80e-6 }) },
@@ -13216,7 +13220,7 @@ function renderFlyback(domain, tool, favId) {
 
       ${formulaSection(
         ["N = Np/Ns = Vin(min) dmax / ((Vout + Vd)(1 − dmax))", "d = N (Vout + Vd) / (Vin + N (Vout + Vd))", "Vds = Vin(max) + N (Vout + Vd),   Vdiode = Vout + Vin(max) / N", "L = Vin(min)² d² η / (2 fs Pout(min))", "Ipk = Iout / ((1 − d) N) + Vin(min) d / (2 L fs)", "Cout = Iout d / (fs ΔVout),   Cin = Ipk d / (2 fs ΔVin)"],
-        "A flyback converter stores energy in a transformer while its switch (the FET Q) is on and releases it to the output through the diode while the switch is off. The windings are wound the opposite way (the dots) and isolate the output from the input. The turns ratio N = Np/Ns comes from balancing the volt-seconds on the core: the input across the primary for the on-time d, the output plus the diode drop Vd reflected back for the rest. Off, the FET sees the input plus that reflected voltage, and ringing from the leakage inductance adds more. In continuous conduction (CCM) the current never falls to zero; the primary inductance sets the load below which it does, Pout(min), usually 20 to 30 % of full load. While the switch is on the output capacitor alone feeds the load, hence its size; the input capacitor supplies the primary's current pulses."
+        "A flyback converter stores energy in a transformer while its switch (the n-channel MOSFET Q) is on and releases it to the output through the diode while the switch is off. The windings are wound the opposite way (the dots) and isolate the output from the input. The turns ratio N = Np/Ns comes from balancing the volt-seconds on the core: the input across the primary for the on-time d, the output plus the diode drop Vd reflected back for the rest. Off, the MOSFET sees the input plus that reflected voltage, and ringing from the leakage inductance adds more. In continuous conduction (CCM) the current never falls to zero; the primary inductance sets the load below which it does, Pout(min), usually 20 to 30 % of full load. While the switch is on the output capacitor alone feeds the load, hence its size; the input capacitor supplies the primary's current pulses."
       )}
       ${calcFooter("")}
     `;
