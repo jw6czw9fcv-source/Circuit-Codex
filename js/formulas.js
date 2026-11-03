@@ -364,6 +364,12 @@ const FORMULAS = [
 
   // ---- Power ----
   {
+    tool: "DC/DC boost converter",
+    domain: "power",
+    formulas: ["D = 1 − Vin × η / Vout", "L = Vin (Vout − Vin) / (ΔIL × fs × Vout)", "Ipeak = Iout / (1 − D) + ΔIL / 2", "Cout = Iout × D / (fs × ΔV)"],
+    note: "Vin the lowest input, η the efficiency, fs the switching frequency, ΔIL the inductor ripple, 10 to 40 % of the inductor current Iout / (1 − D) (TI SLVA372).",
+  },
+  {
     tool: "DC/DC buck converter",
     domain: "power",
     formulas: ["D = Vout / (Vin × η)", "L = Vout (Vin − Vout) / (ΔIL × fs × Vin)", "ΔIL = (Vin − Vout) × D / (fs × L)", "Cout = ΔIL / (8 fs ΔV)"],

@@ -99,6 +99,7 @@ will key on, since that is the id the app already holds for each tool.
 - Regulators → [Linear regulator](#linear-regulator)
 - Regulators → [Zener regulation](#zener-regulation)
 - Regulators → [DC/DC buck converter](#buck)
+- Regulators → [DC/DC boost converter](#boost)
 - Regulators → [Zener + transistor](#zener-transistor)
 - Regulators → [Constant current](#constant-current)
 - Regulators → [Inrush limiter (NTC)](#inrush-limiter)
@@ -11091,5 +11092,155 @@ peak with 6.8 µH, where SLVA477's formulas, which this tool uses, give
 - a switch limit too low is flagged;
 - the current pickers move together;
 - a step-up is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="boost"></a>
+## DC/DC boost converter
+
+`calc: boost` · Power electronics › Supply & regulation
+
+### What it computes
+
+The power stage of a boost (step-up) converter in continuous conduction,
+as TI's application note lays it out, on one screen, the twin of DC/DC
+buck converter:
+
+- **Shared inputs:** the lowest input voltage (the worst case for a
+  boost), the output voltage, the most output current, the switching
+  frequency and the efficiency η (80 % by default).
+- **Four pills:**
+  - **Inductor:** the ripple you allow, as a share of the average
+    inductor current, gives the smallest inductor, and the box proposes
+    the next standard value up (E6). It follows the inputs until you type
+    your own. Then the duty cycle, the average inductor current (what the
+    input draws), the ripple with that inductor, the peak current (the
+    inductor's saturation rating and the switch's), and, with the switch's
+    minimum current limit, the most the IC can deliver, flagged when under
+    the output current. A limit of 0 skips that row.
+  - **Diode:** it carries the whole output current; its power at VF, the
+    reverse voltage (the output) and the peak current it must stand.
+  - **Output cap:** the least capacitance for the output ripple allowed,
+    the ripple its ESR adds, the total, and the peak current into it.
+  - **Feedback:** as in the buck: R1 exact and as the nearest E96
+    resistor, the output it gives, and the divider current against 100 ×
+    IFB.
+- **Units:** the currents in mA or A (one picker moves them all), the
+  frequency in kHz or MHz, the inductor in nH or µH, IFB in nA or µA, R2 in
+  Ω or kΩ; ripple in mV, ESR in mΩ.
+- **Drawing:** the power stage as TI draws it: the inductor from the input
+  to the switch node, the IC's switch below it, the diode on to the
+  output, R1 and R2 with their middle wired to the FB pin, the output
+  capacitor last. The part the pill works out is green.
+- **Remembered:** the pill and the units.
+
+Examples: TI's TPS61030 design (its inductor and its output capacitor),
+TPS61023's feedback divider, and a 5 V to 12 V Schottky diode.
+
+### Terms
+
+- **Boost converter:** a switching regulator that steps a voltage up. The
+  switch charges the inductor from the input; when it opens, the inductor
+  pushes its current through the diode into the output.
+- **Duty cycle (D):** the fraction of each cycle the switch is on; ideally
+  1 − Vin / Vout.
+- **Inductor current (IL):** in a boost it is the input current, larger
+  than the output current by Vout / Vin (and the losses).
+- The other terms (efficiency, ripple, continuous conduction, saturation
+  current, ESR, VFB, IFB, synchronous) are as in DC/DC buck converter.
+
+### Source
+
+- **TI SLVA372D, "Basic Calculation of a Boost Converter's Power Stage",
+  Brigitte Hauke, November 2009, revised November 2022** (read, all 10
+  pages): D = 1 − VIN(min) × η / VOUT (eq. 1; η "e.g. estimated 80%" in
+  section 2, 85 % in section 8); ΔIL = VIN(min) × D / (fS × L) (eq. 2);
+  IMAXOUT = (ILIM(min) − ΔIL / 2) × (1 − D) (eq. 3); ISW(max) = ΔIL / 2 +
+  IOUT(max) / (1 − D) (eq. 4); L = VIN (VOUT − VIN) / (ΔIL fS VOUT) (eq. 5)
+  with ΔIL = (0.2 to 0.4) × IOUT(max) × VOUT / VIN (eq. 6); IF = IOUT(max),
+  PD = IF × VF (eqs. 7, 8); the divider as in SLVA477 (eqs. 9 to 11);
+  COUT(min) = IOUT(max) × D / (fS × ΔVOUT) (eq. 12); ΔVOUT(ESR) = ESR ×
+  (IOUT(max) / (1 − D) + ΔIL / 2) (eq. 13). It has no load-step formula and
+  no worked numbers.
+- **TI TPS61030 datasheet, SLUS534G, March 2015, section 11.2** (read): 1.8
+  to 5.5 V in, 5 V out, 600 kHz; "for an output current of 1000 mA at 5 V,
+  at least 3500 mA of average current flows through the inductor at a
+  minimum input voltage of 1.8 V" (its eq. 4, with 0.8 for the losses);
+  L = VBAT (VOUT − VBAT) / (ΔIL f VOUT) with ΔIL "10% × IL": "the desired
+  inductor has the value of 5.5 µH. In typical applications a 6.8 µH
+  inductance is recommended"; the switch's current limit 4500 mA at 5 V;
+  "with a chosen ripple voltage of 10 mV, a minimum capacitance of 100 µF
+  is needed"; 80 mΩ of ESR adds 80 mV.
+- **TI TPS61023 datasheet, SLVSF14B, August 2020, section 8.2** (read): 2.7
+  to 4.35 V to 5 V at 1.5 A; VREF 0.595 V typical, FB leakage 4 nA typical,
+  20 nA maximum; R1 732 kΩ, R2 100 kΩ; the ripple best under 40 % of the
+  average inductor current; η "use 90% for most applications"; its current
+  limit is a valley limit, not the peak limit SLVA372 assumes.
+
+### Why the formulas are these
+
+    D = 1 − Vin × η / Vout,   IL = Iout / (1 − D)
+    L = Vin (Vout − Vin) / (ΔIL × fs × Vout)
+    ΔIL = Vin × D / (fs × L),   Ipeak = IL + ΔIL / 2
+    IF = Iout,   PD = IF × VF
+    Cout = Iout × D / (fs × ΔV)
+    R1 = R2 (Vout / VFB − 1)
+
+While the switch is on, the inductor sees the input and its current rises
+at Vin / L for D / fs seconds: that rise is the ripple. The output gets the
+inductor's current only while the switch is off, a fraction 1 − D of the
+time, so the inductor carries Iout / (1 − D) on average, which is Iout ×
+Vout / (Vin × η). While the switch is on, the capacitor alone feeds the
+load for D / fs seconds, losing Iout × D / fs of charge: hence its size.
+The diode passes every bit of the output current. The ESR sees the full
+inductor current at the instant the switch opens.
+
+**Which input voltage.** The lowest input gives the largest duty cycle,
+the largest inductor current and the largest switch current, so the tool
+uses it everywhere, as the TPS61030 and TPS61023 datasheets do; SLVA372
+puts the typical input in its inductor formula.
+
+**The ripple's base.** SLVA372 takes the ripple as a share of Iout × Vout /
+Vin; both datasheets take it as a share of the average inductor current,
+which includes the losses, and so does this tool: that is how TPS61030's
+10 % gives its 5.5 µH.
+
+**Where TPS61030 differs.** Its capacitor formula, Iout (Vout − Vin) /
+(f ΔV Vout), is SLVA372's with η left out, so it asks 107 µF ("100 µF")
+where SLVA372's asks 119 µF. Its ESR ripple is Iout × ESR, 80 mV; SLVA372
+counts the inductor's peak current, as the ESR really sees it, and gets
+290 mV.
+
+### Assumptions and limits
+
+- **Continuous conduction only.**
+- **The IC decides much:** use its datasheet's inductor and capacitor
+  ranges, above all with internal compensation (SLVA372 section 7); its
+  frequency, current limit, VFB and IFB come from it too.
+- **Peak current limits only:** the IC row assumes the switch limit is a
+  peak limit, as SLVA372 does; an IC with a valley limit (TPS61023) can
+  deliver more, by its own datasheet's formula.
+- **Ceramic capacitors lose capacitance** with DC bias: X5R or better, and
+  check the value at the working voltage.
+- **The input capacitor** is the datasheet's minimum; not computed here.
+
+### How it was checked
+
+8 cases:
+- TPS61030's design, 1.8 V to 5 V at 1 A, 80 %, 600 kHz, 10 %: 3.47 A in
+  the inductor (its "at least 3500 mA"), 5.53 µH at least (its 5.5 µH), the
+  next E6 value 6.8 µH (its recommendation);
+- the same: D 71.2 %, 314 mA of ripple, 3.63 A peak, its 4.5 A limit
+  delivering 1.25 A;
+- its output capacitor: 119 µF for 10 mV, and its 80 mΩ ESR adds 290 mV;
+- TPS61023's divider: R1 for 5 V over 100 kΩ on 0.595 V is 740.3 kΩ, E96
+  732 kΩ (its R1) gives 4.95 V, 298 × its 20 nA maximum leakage;
+- 5 V to 12 V at 0.5 A: the diode carries 500 mA, 200 mW at 0.4 V, and
+  blocks 12 V;
+- the proposed inductor follows the output current (0.5 A: 4.7 µH);
+- a switch limit too low is flagged;
+- a step-down is refused.
 
 [↑ Index](#index)

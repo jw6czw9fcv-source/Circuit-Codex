@@ -579,6 +579,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "constant-current") return renderConstantCurrent(domain, tool, favId);
   if (calcId === "inrush-limiter") return renderInrushLimiter(domain, tool, favId);
   if (calcId === "buck") return renderBuck(domain, tool, favId);
+  if (calcId === "boost") return renderBoost(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -12735,6 +12736,254 @@ function renderBuck(domain, tool, favId) {
       ${formulaSection(
         ["D = Vout / (Vin × η)", "L = Vout (Vin − Vout) / (ΔIL × fs × Vin)", "ΔIL = (Vin − Vout) × D / (fs × L),   Ipeak = Iout + ΔIL / 2", "IF = Iout (1 − D),   PD = IF × VF", "Cout = ΔIL / (8 fs ΔV),   Cout = ΔI² L / (2 Vout Vos)", "R1 = R2 (Vout / VFB − 1)"],
         "A buck converter steps a voltage down by switching: the switch connects the inductor to the input for a fraction D of each cycle (the duty cycle), and the diode, or a second switch in a synchronous converter, carries the inductor's current the rest of the time. The inductor's current rises and falls by the ripple ΔIL each cycle around the output current; 20 to 40 % of it is usual, and the peak sets the inductor's saturation rating and the switch's current limit. η, the efficiency, raises D a little: the converter also supplies its own losses. The output capacitor smooths the ripple, its ESR (equivalent series resistance) adds ripple of its own, and a sudden load step needs enough capacitance to hold the output until the inductor catches up. The feedback divider sets the output from the IC's reference VFB; its current should be at least 100 times the FB pin's bias current IFB. The highest input gives the most ripple, so it is the one to enter."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint, (v) => { state.pill = v; setPref(C, "pill", v); paint(); });
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key, v = parseFloat(el.value);
+        state.si[k] = isFinite(v) ? v * scale(k) : (k === "ilim" ? 0 : NaN);
+        if (k === "l") state.lTyped = true;
+        refresh();
+      };
+    });
+    // A unit change re-expresses the same values; the current pickers move
+    // together.
+    app.querySelectorAll("select[data-unit]").forEach((el) => {
+      el.onchange = () => { const key = el.dataset.unit; state[key] = el.value; setPref(C, key, el.value); paint(); };
+    });
+    syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- DC/DC boost converter ----------
+// The power stage of a boost converter in continuous conduction, by TI's
+// SLVA372D ("Basic Calculation of a Boost Converter's Power Stage", B.
+// Hauke, November 2009, revised November 2022): duty cycle D = 1 − Vin(min)
+// × η / Vout (eq. 1, η about 80 %); ripple ΔIL = Vin(min) × D / (fs × L)
+// (eq. 2); what the IC can deliver, (ILIM(min) − ΔIL/2)(1 − D) (eq. 3); the
+// peak switch current ΔIL/2 + Iout / (1 − D) (eq. 4); the inductor L = Vin
+// (Vout − Vin) / (ΔIL fs Vout) (eq. 5); the diode IF = Iout, PD = IF VF
+// (eqs. 7, 8); the divider as in the buck (eqs. 9 to 11); Cout(min) = Iout
+// D / (fs ΔVout) (eq. 12) and the ESR's ripple ESR (Iout / (1 − D) + ΔIL/2)
+// (eq. 13). The ripple is a share of the average inductor current, Iout /
+// (1 − D) = Iout Vout / (Vin η), and the lowest input sets everything, as in
+// the TPS61030 datasheet (SLUS534G, March 2015): 1.8 V to 5 V at 1 A,
+// 600 kHz, 80 %: "at least 3500 mA" in the inductor, 10 % of it gives its
+// "5.5 µH", and TI recommends 6.8 µH, the next E6 value. TPS61023
+// (SLVSF14B, August 2020): VREF 0.595 V, R2 100 k, R1 732 k.
+const BOOST_PILLS = { l: "Inductor", d: "Diode", c: "Output cap", fb: "Feedback" };
+
+function renderBoost(domain, tool, favId) {
+  const C = "boost";
+  const state = {
+    pill: pref(C, "pill", "l", Object.keys(BOOST_PILLS)),
+    // The currents share one unit.
+    iUnit: pref(C, "iUnit", "A", Object.keys(MA_A_UNITS)),
+    fUnit: pref(C, "fUnit", "kHz", Object.keys(BUCK_F_UNITS)),
+    lUnit: pref(C, "lUnit", "µH", Object.keys(BUCK_L_UNITS)),
+    ifbUnit: pref(C, "ifbUnit", "nA", Object.keys(BUCK_IFB_UNITS)),
+    rUnit: pref(C, "rUnit", "kΩ", Object.keys(BUCK_R_UNITS)),
+    si: { vin: 3.3, vout: 5, iout: 1, fs: 1e6, eta: 80, kr: 30, l: 0, ilim: 4, vf: 0.4,
+      dv: 0.05, esr: 0.005, vfb: 0.6, ifb: 20e-9, r2: 100e3 },
+    // The inductor follows the next standard value up until one is typed.
+    lTyped: false,
+  };
+  const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d).replace(/^-/, "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const UNIT_OF = { iout: "i", ilim: "i", fs: "f", l: "l", ifb: "ifb", r2: "r" };
+  const TABLES = { i: [MA_A_UNITS, "iUnit"], f: [BUCK_F_UNITS, "fUnit"], l: [BUCK_L_UNITS, "lUnit"], ifb: [BUCK_IFB_UNITS, "ifbUnit"], r: [BUCK_R_UNITS, "rUnit"] };
+  const FIXED = { dv: 1e-3, esr: 1e-3 };
+  const scale = (k) => { const u = UNIT_OF[k]; if (u) { const [t, key] = TABLES[u]; return t[state[key]]; } return FIXED[k] || 1; };
+
+  const duty = () => 1 - state.si.vin * state.si.eta / 100 / state.si.vout;
+  // The average inductor current: what the input draws.
+  const iL = () => state.si.iout / (1 - duty());
+  // The smallest inductor for the ripple asked, and the next E6 value up.
+  const lMin = () => { const s = state.si; return s.vin * (s.vout - s.vin) / (s.kr / 100 * iL() * s.fs * s.vout); };
+  const e6Up = (x) => {
+    const m = Math.pow(10, Math.floor(Math.log10(x)));
+    return BUCK_E6.find((v) => v * m >= x * (1 - 1e-9)) * m;
+  };
+  function follow() { if (!state.lTyped && !problem(true)) state.si.l = e6Up(lMin()); }
+
+  function problem(beforeL) {
+    const s = state.si;
+    if (!(s.vin > 0) || !(s.vout > 0)) return "Enter the input and output voltages.";
+    if (!(s.vout > s.vin)) return "A boost converter steps up: the output must be above the input.";
+    if (!(s.iout > 0)) return "Enter the output current.";
+    if (!(s.fs > 0)) return "Enter the switching frequency.";
+    if (!(s.eta > 0 && s.eta <= 100)) return "Enter the efficiency, above 0 and at most 100 %.";
+    if (!(s.kr > 0)) return "Enter the ripple, as a share of the inductor current.";
+    if (!(duty() > 0)) return "With these losses the input already reaches the output: raise the efficiency or the output.";
+    if (beforeL) return "";
+    if (!(s.l > 0)) return "Enter the inductor.";
+    if (state.pill === "c" && (!(s.dv > 0) || !(s.esr >= 0))) return "Enter the ripple allowed and the ESR.";
+    if (state.pill === "fb" && (!(s.vfb > 0) || !(s.vfb < s.vout) || !(s.r2 > 0) || !(s.ifb >= 0))) return "Enter VFB, below the output, R2 and the feedback current.";
+    return "";
+  }
+
+  function calc() {
+    const s = state.si, D = duty();
+    const dIL = s.vin * D / (s.fs * s.l);
+    return { D, dIL, ipk: dIL / 2 + s.iout / (1 - D) };
+  }
+
+  // The power stage as TI draws it (SLVA372 figure 1-1): the inductor from
+  // the input to the switch node, the IC's switch below it, the diode on to
+  // the output; the divider of figure 5-1 wired back to the FB pin, the
+  // output capacitor last. The part the pill works out in green.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calcC = "#5DCAA5", grey = "#8A9099";
+    const tone = (p) => (state.pill === p ? calcC : part);
+    const lbl = (x, y, t, c = part, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+    const zigV = (x, y1, y2) => { let d = `M${x} ${y1}`; const n = 6, h = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + h * (i + 0.5)}`; return `${d} L${x} ${y2}`; };
+    const s = state.si;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <path d="M12 24 H46 M94 24 H120 M136 24 H262 M28 24 V56 M28 62 V100 M110 24 V44 M115 84 V100 M200 24 V30 M200 60 V72 M200 94 V100 M240 24 V56 M240 62 V100 M28 100 H240 M140 66 H200" stroke="${wire}" stroke-width="1.6"/>
+      <circle cx="10" cy="24" r="3" stroke="${wire}" stroke-width="1.4"/><circle cx="265" cy="24" r="3" stroke="${wire}" stroke-width="1.4"/>
+      <circle cx="110" cy="24" r="2.5" fill="${wire}"/><circle cx="200" cy="24" r="2.5" fill="${wire}"/><circle cx="240" cy="24" r="2.5" fill="${wire}"/><circle cx="200" cy="66" r="2.5" fill="${wire}"/>
+      <path d="M164 104 H176 M167 108 H173" stroke="${wire}" stroke-width="1.4"/><path d="M170 100 V104" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M19 56 H37 M19 62 H37" stroke="${part}" stroke-width="2"/>
+      <path d="M46 24 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0 a6 6 0 0 1 12 0" stroke="${tone("l")}" stroke-width="1.8"/>
+      <path d="M120 16 V32 L136 24 Z M136 16 V32" stroke="${tone("d")}" stroke-width="1.6"/>
+      <rect x="90" y="44" width="50" height="40" rx="3" stroke="${part}" stroke-width="1.6"/>
+      ${lbl(104, 72, "IC")}${lbl(110, 56, "SW", grey)}${lbl(136, 70, "FB", grey, "end")}
+      <path d="${zigV(200, 30, 60)}" stroke="${tone("fb")}" stroke-width="1.6"/>
+      <path d="${zigV(200, 72, 94)}" stroke="${part}" stroke-width="1.6"/>
+      <path d="M231 56 H249 M231 62 H249" stroke="${tone("c")}" stroke-width="2"/>
+      ${lbl(8, 14, "VIN", grey, "start")}${lbl(282, 14, `VOUT ${val(s.vout, "V")}`, grey, "end")}
+      ${lbl(70, 13, `L ${s.l > 0 && !problem(true) ? val(s.l, "H") : ""}`, tone("l"))}
+      ${lbl(128, 12, "D", tone("d"))}
+      ${lbl(34, 84, "CIN", part, "start")}${lbl(252, 76, "COUT", tone("c"), "start")}
+      ${lbl(208, 48, "R1", tone("fb"), "start")}${lbl(208, 88, "R2", part, "start")}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, { D, dIL, ipk } = calc();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (t) => `<span style="color:#E0A85E">${t}</span>`;
+    const big = (label, num, sub) => `
+        <div class="result-field">
+          <div class="result-head"><span class="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${num}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const pct = (x) => `${Number((x * 100).toPrecision(3))} %`;
+    if (state.pill === "l") {
+      const icMax = s.ilim > 0 ? (s.ilim - dIL / 2) * (1 - D) : null;
+      return `${big(state.lTyped ? "Your inductor" : "Inductor, next standard value", val(s.l, "H"), `at least ${val(lMin(), "H")} for ${s.kr} % ripple (${val(s.kr / 100 * iL(), "A")})`)}
+        <div class="field notation-box">
+          ${row("Duty cycle at the lowest input", pct(D), "duty")}
+          ${row("Inductor current, average", `${val(iL(), "A")}, drawn from the input`, "il")}
+          ${row("Ripple with this inductor", `${val(dIL, "A")} (${pct(dIL / iL())} of it)`, "ripple")}
+          ${row("Peak current: inductor and switch", `${val(ipk, "A")}, its saturation rating at least`, "peak")}
+          ${icMax !== null ? row("The IC can deliver", icMax >= s.iout ? `${val(icMax, "A")}, enough` : warn(`${val(Math.max(icMax, 0), "A")}, under the ${val(s.iout, "A")} needed: more inductance or a bigger IC`), "icmax") : ""}
+        </div>`;
+    }
+    if (state.pill === "d") {
+      return `${big("Diode, average current", val(s.iout, "A"), "all of the output current flows through it")}
+        <div class="field notation-box">
+          ${row("Power in the diode", val(s.iout * s.vf, "W"), "pd")}
+          ${row("Reverse voltage, at least", val(s.vout, "V"), "vr")}
+          ${row("Peak current", `${val(ipk, "A")}, within a Schottky's surge rating`, "dpeak")}
+          ${row("Synchronous converter", "a second switch replaces the diode: no diode loss", "sync")}
+        </div>`;
+    }
+    if (state.pill === "c") {
+      const cr = s.iout * D / (s.fs * s.dv);
+      const esrV = s.esr * (iL() + dIL / 2);
+      return `${big("Output capacitance, at least", val(cr, "F"), `for ${val(s.dv, "V")} of ripple, the output alone while the switch is on`)}
+        <div class="field notation-box">
+          ${row("The ESR adds", esrV > s.dv ? warn(`${val(esrV, "V")}, more than the ripple allowed: lower ESR`) : `${val(esrV, "V")} of ripple`, "esr")}
+          ${row("Ripple in all, at most", val(s.dv + esrV, "V"), "vtot")}
+          ${row("Current into it, peak", `${val(ipk, "A")}, the inductor's peak`, "cpeak")}
+        </div>`;
+    }
+    // Twelve figures first, so an exact half rounds the way it reads.
+    const r1x = Number((s.r2 * (s.vout / s.vfb - 1)).toPrecision(12));
+    const r1 = nearestESeries(r1x, "E96").value;
+    const vo = s.vfb * (1 + r1 / s.r2), idiv = s.vfb / s.r2;
+    return `${big("R1, nearest E96", formatOhms(r1), `exactly ${formatOhms(Number(r1x.toPrecision(4)))} for ${val(s.vout, "V")}`)}
+        <div class="field notation-box">
+          ${row("Output with it", `${val(vo, "V", 4)} (${(vo / s.vout - 1) * 100 >= 0 ? "+" : "−"}${Math.abs((vo / s.vout - 1) * 100).toFixed(2)} %)`, "vo")}
+          ${row("Divider current", s.ifb > 0 && idiv < 100 * s.ifb ? warn(`${val(idiv, "A")}, under 100 × IFB (${val(100 * s.ifb, "A")}): lower R2`) : `${val(idiv, "A")}${s.ifb > 0 ? `, ${Math.round(idiv / s.ifb)} × IFB` : ""}`, "idiv")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const el = app.querySelector('input[data-key="l"]');
+    if (el && el !== document.activeElement) el.value = state.si.l > 0 ? fmt(state.si.l / scale("l")) : "";
+  }
+
+  function refresh() {
+    follow();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  const example = (pill, si, extra) => () => {
+    Object.assign(state, { pill, lTyped: false, fUnit: "kHz", iUnit: "A", lUnit: "µH" }, extra || {});
+    Object.assign(state.si, si);
+    if (si.l) state.lTyped = true;
+    follow();
+    paint();
+  };
+  const T30 = { vin: 1.8, vout: 5, iout: 1, fs: 600e3, eta: 80, kr: 10, l: 0 };
+  useExamples([
+    { title: "TI TPS61030: 1.8 V to 5 V, 1 A", note: "3.47 A in the inductor; 10 % ripple at 600 kHz needs 5.53 µH, so TI's 6.8 µH.",
+      apply: example("l", { ...T30, ilim: 4.5 }) },
+    { title: "Its output capacitor, 10 mV", note: "SLVA372 asks 119 µF; TI's 100 µF leaves out η. Its 80 mΩ ESR adds far more.",
+      apply: example("c", { ...T30, dv: 0.01, esr: 0.08 }) },
+    { title: "TI TPS61023 feedback: 732 k", note: "VREF 0.595 V, R2 100 kΩ: R1 for 5 V is 740.3 kΩ; E96 732 kΩ gives 4.95 V.",
+      apply: example("fb", { vin: 2.7, vout: 5, iout: 1.5, fs: 1e6, eta: 90, kr: 40, l: 0, vfb: 0.595, ifb: 20e-9, r2: 100e3 }, { rUnit: "kΩ", ifbUnit: "nA", fUnit: "MHz" }) },
+    { title: "5 V to 12 V, 0.5 A, Schottky", note: "The diode carries all 0.5 A: 200 mW at 0.4 V, and it must block 12 V.",
+      apply: example("d", { vin: 5, vout: 12, iout: 0.5, fs: 1e6, eta: 85, kr: 30, l: 0, vf: 0.4 }, { fUnit: "MHz" }) },
+  ]);
+
+  function paint() {
+    const s = state.si, p = state.pill;
+    follow();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const field = (key, label, unitHTML) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${s[key] > 0 || key === "ilim" || key === "esr" ? fmt(s[key] / scale(key)) : ""}" />${unitHTML}</div>
+        </div>`;
+    const iSel = (n) => sel(`data-unit="iUnit" data-n="${n}"`, MA_A_UNITS, state.iUnit);
+    const rows = {
+      l: `${field("kr", "Ripple", fixed("%"))}${field("l", "Inductor", sel('data-unit="lUnit"', BUCK_L_UNITS, state.lUnit))}${field("ilim", "Switch limit, min", iSel(2))}`,
+      d: `${field("vf", "Diode VF", fixed("V"))}`,
+      c: `${field("dv", "Ripple", fixed("mV"))}${field("esr", "ESR", fixed("mΩ"))}`,
+      fb: `${field("vfb", "VFB", fixed("V"))}${field("ifb", "IFB", sel('data-unit="ifbUnit"', BUCK_IFB_UNITS, state.ifbUnit))}${field("r2", "R2", sel('data-unit="rUnit"', BUCK_R_UNITS, state.rUnit))}`,
+    }[p];
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Inductor, diode, capacitor and divider of a step-up")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${pillRow(Object.entries(BOOST_PILLS), p, domain.bg)}
+
+      <div class="field-pair">${field("vin", "Vin, lowest", fixed("V"))}${field("vout", "Vout", fixed("V"))}${field("iout", "Iout, max", iSel(1))}</div>
+      <div class="field-pair">${field("fs", "Switching", sel('data-unit="fUnit"', BUCK_F_UNITS, state.fUnit))}${field("eta", "Efficiency", fixed("%"))}</div>
+      <div class="field-pair">${rows}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["D = 1 − Vin × η / Vout,   IL = Iout / (1 − D)", "L = Vin (Vout − Vin) / (ΔIL × fs × Vout)", "ΔIL = Vin × D / (fs × L),   Ipeak = IL + ΔIL / 2", "IF = Iout,   PD = IF × VF", "Cout = Iout × D / (fs × ΔV)", "R1 = R2 (Vout / VFB − 1)"],
+        "A boost converter steps a voltage up. While the switch is on (a fraction D of each cycle, the duty cycle) the inductor charges from the input; when it opens, the inductor's current flows on through the diode, or a second switch in a synchronous converter, adding the inductor's voltage to the input's. The inductor carries the input current, IL, larger than the output current by Vout / Vin: the ripple ΔIL is taken as 10 to 40 % of IL, and the peak, IL + ΔIL / 2, sets the inductor's saturation rating and must stay under the switch's current limit. η, the efficiency, raises D: the converter also supplies its own losses. While the switch is on the output capacitor alone feeds the load, hence its size; its ESR (equivalent series resistance) adds ripple from the full inductor current. The feedback divider sets the output from the IC's reference VFB; its current should be at least 100 times the FB pin's bias current IFB. The lowest input is the worst case, so it is the one to enter."
       )}
       ${calcFooter("")}
     `;

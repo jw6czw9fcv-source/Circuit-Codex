@@ -402,7 +402,7 @@ Then:
 - [ ] Intermodulation
 - [ ] SMPS flyback basics
 - [x] DC/DC buck converter — built, TI SLVA477C + TPS54331 example, 2026-11-02
-- [ ] DC/DC boost converter
+- [x] DC/DC boost converter — built, TI SLVA372D + TPS61030/TPS61023 examples, 2026-11-02
 - [ ] Microstrip impedance
 - [ ] Embedded microstrip impedance
 - [ ] Differential microstrip impedance
