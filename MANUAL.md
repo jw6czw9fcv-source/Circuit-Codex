@@ -98,6 +98,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Regulators → [Linear regulator](#linear-regulator)
 - Regulators → [Zener regulation](#zener-regulation)
+- Regulators → [DC/DC buck converter](#buck)
 - Regulators → [Zener + transistor](#zener-transistor)
 - Regulators → [Constant current](#constant-current)
 - Regulators → [Inrush limiter (NTC)](#inrush-limiter)
@@ -10934,5 +10935,158 @@ The length box works the formula backwards: f = (the factor in front) / L.
 - 144 MHz flags the 0.95.
 - A correction of 0 and 2.5 half waves are refused.
 - 468 / f at 10 MHz: 46.72 ft, 14.24 m, legs of 23.36 ft.
+
+[↑ Index](#index)
+
+---
+
+<a id="buck"></a>
+## DC/DC buck converter
+
+`calc: buck` · Power electronics › Supply & regulation
+
+### What it computes
+
+The power stage of a buck (step-down) converter in continuous conduction,
+the way TI's application note lays it out, on one screen:
+
+- **Shared inputs:** the highest input voltage, the output voltage, the
+  most output current, the switching frequency and the efficiency η
+  (90 % by default).
+- **Four pills:**
+  - **Inductor:** the ripple you allow (a share of the output current)
+    gives the smallest inductor, and the box proposes the next standard
+    value up (E6: 1, 1.5, 2.2, 3.3, 4.7, 6.8). It follows the inputs until
+    you type your own. Then the duty cycle, the ripple with that
+    inductor, the peak current (the inductor's saturation rating and the
+    switch's), and, with the switch's minimum current limit, the most the
+    IC can deliver, flagged when under the output current. A limit of 0
+    skips that row.
+  - **Diode:** its average current, the power at its forward voltage VF,
+    the reverse voltage and peak current it must stand. A synchronous
+    converter has a second switch instead, and no diode loss.
+  - **Output cap:** the least capacitance for the output ripple allowed,
+    the ripple its ESR adds, and the capacitance a load step needs to stay
+    within an overshoot. The larger of the two is the result.
+  - **Feedback:** from the IC's feedback voltage VFB and R2, R1 exact and
+    as the nearest E96 resistor, the output it gives, and the divider
+    current against 100 × the FB pin's bias current IFB.
+- **Units:** the currents in mA or A (one picker moves them all), the
+  frequency in kHz or MHz, the inductor in nH or µH, IFB in nA or µA, R2 in
+  Ω or kΩ; ripple and overshoot in mV, ESR in mΩ.
+- **Drawing:** the power stage as TI draws it, with the feedback divider:
+  the IC with its SW and FB pins, the input and output capacitors, the
+  diode, the inductor, R1 and R2. The part the pill works out is green.
+- **Remembered:** the pill and the units.
+
+Examples: TI's TPS54331 design (its inductor, its feedback divider, its
+output capacitor), a 12 V to 5 V Schottky diode, and a 2 MHz 5 V to 1.2 V.
+
+### Terms
+
+- **Buck converter:** a switching regulator that steps a voltage down. A
+  switch connects the inductor to the input for part of each cycle; the
+  rest of the time a diode (or a second switch) lets the inductor's current
+  keep flowing to the output.
+- **Duty cycle (D):** the fraction of each cycle the switch is on. Ideally
+  Vout / Vin; the losses make it a little more.
+- **Efficiency (η):** output power over input power.
+- **Inductor ripple (ΔIL):** how far the inductor's current rises and falls
+  each cycle, peak to peak.
+- **Continuous conduction:** the inductor's current never falls to zero;
+  the formulas assume it.
+- **Saturation current:** above it the inductor's core saturates and its
+  inductance collapses; it must exceed the peak current.
+- **ESR:** the capacitor's equivalent series resistance.
+- **VFB, IFB:** the voltage the IC regulates its FB pin to, and the small
+  current that pin draws.
+- **Synchronous converter:** one with a second switch in place of the
+  diode.
+
+### Source
+
+- **TI SLVA477C, "Basic Calculation of a Buck Converter's Power Stage",
+  Brigitte Hauke, December 2011, revised September 2026** (read, all 9
+  pages): D = Vout / (Vin(max) × η) (eq. 1; η "e.g., estimated 90%" in
+  section 2, 85 % in its appendix); ΔIL = (Vin(max) − Vout) × D / (fs × L)
+  (eq. 2); IMAXOUT = ILIM(min) − ΔIL / 2 (eq. 3); ISW(max) = ΔIL / 2 +
+  IOUT(max), "the peak current, the inductor, the integrated switch(es), and
+  the external diode have to withstand" (eq. 4); L = Vout (Vin − Vout) /
+  (ΔIL fs Vin) (eq. 5) with ΔIL "20% to 40% of the output current" (eq. 6);
+  IF = IOUT(max) (1 − D), PD = IF × VF (eqs. 7, 8); the divider current at
+  least 100 × IFB, R2 = VFB / IR1/2, R1 = R2 (VOUT / VFB − 1) (eqs. 9 to 11);
+  COUT(min) = ΔIL / (8 fs ΔVOUT) (eq. 12); ΔVOUT(ESR) = ESR × ΔIL (eq. 13);
+  COUT(min),OS = ΔIOUT² L / (2 VOUT VOS) (eq. 14). It has no worked
+  numbers.
+- **TI TPS54331 datasheet, SLVS839H, October 2023, section 8.2** (read):
+  its design is 7 to 28 V in, 3.3 V, 3 A, 570 kHz, 30 mV of output ripple;
+  LMIN = VOUT (VIN(max) − VOUT) / (VIN(max) × KIND × IOUT × FSW) (eq. 8),
+  KIND = 0.3, "calculated as 5.7 μH", and "a large value was selected:
+  6.8 μH"; the divider R5 = 10.2 kΩ over R6 = 3.24 kΩ on its 0.8 V
+  reference, "resulting in a 3.31-V output voltage"; two 47 µF ceramics at
+  the output.
+
+### Why the formulas are these
+
+    D = Vout / (Vin × η)
+    L = Vout (Vin − Vout) / (ΔIL × fs × Vin)
+    ΔIL = (Vin − Vout) × D / (fs × L),   Ipeak = Iout + ΔIL / 2
+    IF = Iout (1 − D),   PD = IF × VF
+    Cout = ΔIL / (8 fs ΔV),   Cout = ΔI² L / (2 Vout Vos)
+    R1 = R2 (Vout / VFB − 1)
+
+While the switch is on, the inductor sees Vin − Vout and its current rises
+at (Vin − Vout) / L for D / fs seconds: that rise is the ripple. The
+inductor's current averages the output current, so its peak is half the
+ripple above it. While the switch is off the diode carries it, a fraction
+1 − D of the time. The ripple current flows into the output capacitor,
+whose charge swings by ΔIL / (8 fs) each cycle, hence the capacitance for a
+ripple voltage. When the load jumps, the energy ½ L ΔI² the inductor must
+gain comes from the capacitor first, ½ C ((Vout + Vos)² − Vout²) ≈ C Vout
+Vos, hence the load-step capacitance.
+
+**Which input voltage.** SLVA477 puts the typical input in the inductor
+formula; the TPS54331 datasheet puts the highest, where the ripple is the
+largest, and so does this tool, so the ripple stays within what you allow
+over the whole input range. With 28 V in, it gives the datasheet's 5.7 µH.
+
+**The datasheet's ripple.** TPS54331's ripple formula (its eq. 9) divides by
+a further 0.8 and leaves out η: it gives 0.939 A of ripple and 3.47 A of
+peak with 6.8 µH, where SLVA477's formulas, which this tool uses, give
+0.835 A and 3.42 A.
+
+### Assumptions and limits
+
+- **Continuous conduction only:** at light load the inductor's current
+  reaches zero and the formulas no longer hold.
+- **The IC decides much:** use the inductor and capacitor ranges its
+  datasheet gives, above all when its compensation is internal (SLVA477
+  section 7); the switching frequency, the current limit, VFB and IFB come
+  from it too.
+- **Ceramic capacitors lose capacitance** with DC bias and temperature:
+  X5R or better (SLVA477), and check the value at the working voltage.
+- **The input capacitor** is the datasheet's minimum, raised when the
+  input is noisy (SLVA477 section 6); it is not computed here.
+- **No losses beyond η and the diode:** the switch's and the inductor's
+  losses, and the inductor's RMS current, are not computed.
+
+### How it was checked
+
+11 cases:
+- TPS54331's design, 28 V to 3.3 V at 3 A, 570 kHz, 30 %: 5.67 µH at least
+  (its 5.7 µH), the next E6 value 6.8 µH (its choice);
+- the same at 90 %: D 13.1 %, 835 mA of ripple, 3.42 A peak, a 3.5 A
+  limit delivering 3.08 A;
+- its divider: R1 for 3.3 V over 3.24 kΩ on 0.8 V is 10.13 kΩ, E96
+  10.2 kΩ (its R5) gives 3.319 V (its 3.31 V);
+- its output capacitor: 6.1 µF for 30 mV of ripple, 10.3 µF for a 1 A
+  step within 100 mV;
+- 12 V to 5 V at 2 A: the diode carries 1.07 A and burns 537 mW at 0.5 V;
+- 5 V to 1.2 V at 2 MHz: 760 nH at least, so 1 µH;
+- the proposed inductor follows the output current (1 A: 22 µH) until one
+  is typed, and a typed one stays while its ripple follows;
+- a switch limit too low is flagged;
+- the current pickers move together;
+- a step-up is refused.
 
 [↑ Index](#index)

@@ -364,6 +364,12 @@ const FORMULAS = [
 
   // ---- Power ----
   {
+    tool: "DC/DC buck converter",
+    domain: "power",
+    formulas: ["D = Vout / (Vin × η)", "L = Vout (Vin − Vout) / (ΔIL × fs × Vin)", "ΔIL = (Vin − Vout) × D / (fs × L)", "Cout = ΔIL / (8 fs ΔV)"],
+    note: "Vin the highest input, η the efficiency, fs the switching frequency, ΔIL the inductor ripple, 20 to 40 % of Iout (TI SLVA477).",
+  },
+  {
     tool: "Battery runtime",
     domain: "power",
     formulas: ["Runtime = Capacity × Usable % / I"],

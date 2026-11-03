@@ -137,7 +137,7 @@ const DOMAINS = [
       {
         title: "Supply & regulation",
         tools: [
-          { name: "Linear regulator", was: "Linear regulator (LDO)", calc: "linear-regulator" }, { name: "Zener regulation", calc: "zener-regulation", mergedNames: ["Zener voltage stabilization"] }, { name: "DC/DC buck converter" }, { name: "DC/DC boost converter" },
+          { name: "Linear regulator", was: "Linear regulator (LDO)", calc: "linear-regulator" }, { name: "Zener regulation", calc: "zener-regulation", mergedNames: ["Zener voltage stabilization"] }, { name: "DC/DC buck converter", calc: "buck" }, { name: "DC/DC boost converter" },
           { name: "Zener + transistor", was: "Zener + transistor stabilization", calc: "zener-transistor" }, { name: "Constant current", was: "Constant current source/driver", calc: "constant-current" }, { name: "Inrush limiter (NTC)", was: "Inrush current limiter (NTC)", calc: "inrush-limiter" }, { name: "SMPS flyback basics" },
           { name: "Power factor" }, { name: "POE classes" },
         ],
@@ -321,6 +321,7 @@ const TOOL_KEYWORDS = {
   "formula-search": "formulas equations",
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
   "antenna-length": "antenna length dipole monopole quarter wave half wave vertical ground plane whip long wire end fed cut trim ham radio cb end effect correction factor 468 234",
+  "buck": "buck converter step down dc dc smps switching regulator switcher inductor ripple duty cycle schottky diode synchronous output capacitor esr feedback divider vfb tps54331 slva477",
   "inrush-limiter": "inrush current limiter ntc thermistor surge turn-on soft start power supply smps bulk capacitor energy joules sl10 ametherm r25 cold resistance",
   "constant-current": "constant current source driver sink regulator lm317 lm1117 ams1117 lm1086 led driver battery charger current limiter iadj vref resistor",
   "zener-transistor": "zener transistor stabilization stabiliser regulator series pass transistor emitter follower common collector bd139 tip31c 2n3055 npn hfe base current vbe darlington",
@@ -399,6 +400,7 @@ const RELATED = {
   "zener-transistor": ["zener-regulation", "heat-sink", "linear-regulator"],
   "constant-current": ["linear-regulator", "led-series-resistor", "heat-sink"],
   "antenna-length": ["wavelength"],
+  "buck": ["linear-regulator", "decoupling", "heat-sink", "pwm-duty"],
   "inrush-limiter": ["thermistor", "rectifier-halfwave", "decoupling"],
   "heat-sink": ["linear-regulator", "thermal-vias", "mosfet-switch"],
   "thermal-vias": ["heat-sink", "via-current", "trace-width"],
