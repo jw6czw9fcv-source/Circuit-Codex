@@ -13491,10 +13491,12 @@ function renderMicrostrip(domain, tool, favId) {
 // 127 µm, 49.79 Ω, both reproduced. Z. Peterson's slide 24 ("High Speed
 // Design Basics", Altium 2022) prints the same equation as Wadell's, with
 // 60 for 30, εr for e and πT/4(W + 1.1T) for the second term: the table
-// rules those out. Its IPC-2141 formula, Z0 = 94.15 / (√εr (W/(B − T) +
+// rules those out. Shown beside it: IPC-2141A's Z0 = 60/√εr × ln(1.9B /
+// (0.8W + T)) (ADI MT-094, eq. 7; National's AN-905, TI SNLA035, writes
+// 4b / (0.67π (0.8w + t)), the same, best for b − t > 2w and b > 4t), and
+// the formula slide 24 labels IPC-2141, Z0 = 94.15 / (√εr (W/(B − T) +
 // Cf/π)), Cf = 2B/(B − T) ln(B/(B − T) + 1) − T/(B − T) ln(1/(1 − T/B)² −
-// 1), for W/B > 0.35, and National's AN-905 (TI SNLA035), Z0 = 60/√εr ×
-// ln(4b / (0.67π (0.8w + t))), b − t > 2w and b > 4t, are shown beside it.
+// 1), for W/B > 0.35, which is not MT-094's IPC-2141A formula.
 const SL_T_UNITS = { oz: TRACE_OZ_MIL * 25.4e-6, "µm": 1e-6, mil: 25.4e-6 };
 
 function renderStripline(domain, tool, favId) {
@@ -13598,8 +13600,8 @@ function renderStripline(domain, tool, favId) {
         </div>`;
     return `${main}
         <div class="field notation-box">
-          ${row("IPC-2141, for comparison", ipcOk ? cmp(zIpc()) : warn(`only for w/b over 0.35`), "ipc")}
-          ${row("AN-905, for comparison", anOk ? cmp(zAn()) : warn(`${cmp(zAn())}, out of range`), "an")}
+          ${row("IPC-2141A, for comparison", anOk ? cmp(zAn()) : warn(`${cmp(zAn())}, out of range`), "an")}
+          ${row("Wide-strip formula, slide 24", ipcOk ? cmp(zIpc()) : warn(`only for w/b over 0.35`), "ipc")}
           ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
         </div>`;
@@ -13638,7 +13640,7 @@ function renderStripline(domain, tool, favId) {
       apply: example({ w: 155e-6, b: 861e-6, t: 1e-6, er: 10 }, { lUnit: "mm", tUnit: "µm" }) },
     { title: "Hafner et al., 127 µm sapphire", note: "A 45 µm strip: 49.79 Ω, their table I.",
       apply: example({ w: 45e-6, b: 255e-6, t: 1e-6, er: 10 }, { lUnit: "mm", tUnit: "µm" }) },
-    { title: "50 Ω between planes 0.6 mm apart", note: "FR-4, 1 oz: a 0.217 mm trace; IPC-2141 and AN-905 agree within 2 %.",
+    { title: "50 Ω between planes 0.6 mm apart", note: "FR-4, 1 oz: a 0.217 mm trace; the two other formulas agree within 2 %.",
       apply: example({ b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 50) },
     { title: "AN-905: 35 Ω at εr 2.4", note: "Its stripline scales: 1.47 pF/cm and 1.8 nH/cm; here 1.48 and 1.81.",
       apply: example({ b: 0.6e-3, t: OZ, er: 2.4 }, { lUnit: "mm", tUnit: "oz" }, 35) },
@@ -13668,7 +13670,7 @@ function renderStripline(domain, tool, favId) {
 
       ${formulaSection(
         ["h = (b − t) / 2,   m = 6 / (3 + t/h)", "d = √((t/(4h + t))² + (1/4π / (w/t + 1.1))^m)", "w' = w + t/π × ln(e / d)", "x = 16h / (π w'),   y = x (x + √(x² + 6.27)) / 2", "Z0 = 30 / √εr × ln(1 + y)", "Td = 33.36 √εr ps/cm,  C0 = Td/Z0,  L0 = Z0 Td"],
-        "A stripline is a trace on an inner layer, centred between two ground planes b apart, with dielectric h thick on each side. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or closer planes lower Z0. This is Wheeler's formula: w' is the width corrected for the copper's thickness t. All the field runs in the dielectric, so the signal sees the full εr, which sets its speed, the delay per length Td; C0 and L0 are the capacitance and inductance per length. The simpler IPC-2141 and AN-905 formulas are shown for comparison, each within its range. Type a width to get the impedance, or the impedance you need to get the width."
+        "A stripline is a trace on an inner layer, centred between two ground planes b apart, with dielectric h thick on each side. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or closer planes lower Z0. This is Wheeler's formula: w' is the width corrected for the copper's thickness t. All the field runs in the dielectric, so the signal sees the full εr, which sets its speed, the delay per length Td; C0 and L0 are the capacitance and inductance per length. The simpler IPC-2141A formula and a wide-strip formula are shown for comparison, each within its range. Type a width to get the impedance, or the impedance you need to get the width."
       )}
       ${calcFooter("")}
     `;

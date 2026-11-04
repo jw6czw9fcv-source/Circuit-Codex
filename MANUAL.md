@@ -11493,8 +11493,19 @@ and on the 0.2 mm prepreg of a four-layer board.
   on 20 mil of εr 4.3 with 1 oz copper, 63 Ω; 0.127 cm on 0.102 cm, 64 Ω;
   93 Ω on 30 mil of εr 3.8 with ½ oz, 18 mil (0.051 cm). Appendix D: FR-4
   and G-10 4.3, polyimide 4.2, PTFE 2.4.
+- **Walt Kester, ADI tutorial MT-094, "Microstrip and Stripline Design",
+  Rev. 0, January 2009** (read, Pierre's copy): its eq. 3, quoted from
+  IPC-2141A, is the same IPC formula, in mils; its example: a 20 mil, 1 oz
+  (T 1.4 mil) trace on 10 mil of FR-4 at εr 4.0 is "about 50 Ω" by the
+  W/H = 2 rule of thumb, while eq. 3 "predicts Zo to be about 46 Ω"; "The
+  IPC microstrip equation is most accurate between 50 and 100 Ω, but is
+  substantially less so for lower (or higher) impedances"; 75 Ω takes
+  "about 8.3 mils". The tool gives 46.2 Ω by IPC-2141A and 48.9 Ω by
+  Wadell for that trace, and 8.35 mil for 75 Ω by IPC-2141A (8.56 by
+  Wadell).
 - **Not read:** IPC-2141A itself, and Wadell's "Transmission Line Design
-  Handbook" (1991): both formulas are taken from Peterson's slide.
+  Handbook" (1991): the formulas are taken from Peterson's slide and
+  MT-094.
 
 ### Why the formulas are these
 
@@ -11535,7 +11546,7 @@ more than IPC-2141's.
 
 ### How it was checked
 
-9 cases, the expected values computed independently from the slide's
+10 cases, the expected values computed independently from the slide's
 equations:
 - AN-905's 25 mil on 20 mil, εr 4.3, 1 oz: 62.4 Ω (IPC-2141 62.7 Ω,
   +0.5 %; its slide rule 63 Ω), 151 ps/in;
@@ -11549,7 +11560,9 @@ equations:
 - beyond w = 2h the IPC-2141 comparison is flagged (4 mm on 1.6 mm,
   42.3 Ω);
 - the length pickers move together;
-- PTFE sets εr to 2.4.
+- PTFE sets εr to 2.4;
+- MT-094's 20 mil on 10 mil at εr 4.0: 48.9 Ω by Wadell, its IPC-2141A
+  eq. 3 46.2 Ω (its "about 46 Ω").
 
 The first version used AN-905's (IPC-2141's) formula; Pierre chose
 Wadell's equations once his copy of Peterson's slides showed both.
@@ -11577,10 +11590,10 @@ two ground planes, or the width that gives an impedance, on one screen:
 - **The big result:** Z0 by Wheeler's formula, or the width for the
   impedance typed, with w/b and the dielectric on each side, h = (b − t)/2.
 - **Below it:**
-  - IPC-2141's formula as Peterson's slide 24 gives it, for w/b over 0.35
-    only;
-  - AN-905's stripline formula, flagged outside b − t > 2w and b > 4t;
-    both with their difference from Wheeler's;
+  - IPC-2141A's formula (MT-094's eq. 7, AN-905's), flagged outside
+    b − t > 2w and b > 4t;
+  - the wide-strip formula slide 24 labels IPC-2141, for w/b over 0.35
+    only; both with their difference from Wheeler's;
   - the delay per length, the signal seeing the full εr;
   - the capacitance and inductance per length.
 - **Units:** mm or mil for the width and the spacing, moving together;
@@ -11632,6 +11645,12 @@ Examples: the two stripline resonators of Hafner et al. (their table I),
   stripline Z0 = 60/√εr × ln[4b / (0.67π (0.8w + t))], best "if b − t > 2w
   and b > 4t"; its stripline scales: delay 56 ps/cm at εr 2.8; a 35 Ω
   stripline at εr 2.4, 1.47 pF/cm and 1.8 nH/cm.
+- **Walt Kester, ADI MT-094, "Microstrip and Stripline Design", January
+  2009** (read, Pierre's copy): IPC-2141A's symmetric stripline Z0 =
+  60/√εr × ln(1.9B / (0.8W + T)) (eq. 7), B = 2H + T, "accuracy …
+  typically on the order of 6%" (Bogatin); this is AN-905's formula
+  (4 / (0.67π) = 1.900). So the formula slide 24 labels IPC-2141 is not
+  this one; the tool shows it as the "wide-strip formula".
 - **Not read:** Wheeler's 1978 paper and Wadell's handbook themselves.
 
 ### Why the formulas are these
