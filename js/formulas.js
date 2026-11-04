@@ -363,6 +363,12 @@ const FORMULAS = [
   },
 
   {
+    tool: "Stripline impedance",
+    domain: "pcb",
+    formulas: ["x = 16h / (π w'),   y = x (x + √(x² + 6.27)) / 2", "Z0 = 30 / √εr × ln(1 + y)", "Td = 33.36 √εr ps/cm"],
+    note: "Wheeler (1978): h the dielectric on each side of the strip, w' its width corrected for the copper's thickness (Hafner et al. 2014).",
+  },
+  {
     tool: "Microstrip impedance",
     domain: "pcb",
     formulas: ["x = 4h / w',   a = (14 + 8/εr) / 11", "b = √(a² x² + π² (1 + 1/εr) / 2)", "Z0 = 60 / √(2εr + 2) × ln(1 + x (a x + b))"],

@@ -116,6 +116,7 @@ will key on, since that is the id the app already holds for each tool.
 - Trace current & resistance → [Trace width](#trace-width)
 - Trace current & resistance → [Via current capacity](#via-current)
 - Impedance → [Microstrip impedance](#microstrip)
+- Impedance → [Stripline impedance](#stripline)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -11551,5 +11552,124 @@ equations:
 
 The first version used AN-905's (IPC-2141's) formula; Pierre chose
 Wadell's equations once his copy of Peterson's slides showed both.
+
+[↑ Index](#index)
+
+---
+
+<a id="stripline"></a>
+## Stripline impedance
+
+`calc: stripline` · PCB & interconnect › Impedance
+
+### What it computes
+
+The characteristic impedance of a trace on an inner layer, centred between
+two ground planes, or the width that gives an impedance, on one screen:
+
+- **Inputs:** the trace width, the spacing between the planes b, the
+  copper's thickness t (in oz, µm or mil, its own picker), the material
+  (FR-4, polyimide, PTFE or custom) and its dielectric constant εr.
+- **Width and impedance are two live boxes:** type a width and the
+  impedance box shows Z0; type the impedance you need and the width box
+  shows the width that gives it.
+- **The big result:** Z0 by Wheeler's formula, or the width for the
+  impedance typed, with w/b and the dielectric on each side, h = (b − t)/2.
+- **Below it:**
+  - IPC-2141's formula as Peterson's slide 24 gives it, for w/b over 0.35
+    only;
+  - AN-905's stripline formula, flagged outside b − t > 2w and b > 4t;
+    both with their difference from Wheeler's;
+  - the delay per length, the signal seeing the full εr;
+  - the capacitance and inductance per length.
+- **Units:** mm or mil for the width and the spacing, moving together;
+  oz, µm or mil for the copper.
+- **Drawing:** the two ground planes, the dielectric between them with b
+  and εr, the trace centred with its w and t, lengths in mm and mil. The
+  trace is green when its width is the answer.
+- **Remembered:** the length unit and the copper unit.
+
+Examples: the two stripline resonators of Hafner et al. (their table I),
+50 Ω between planes 0.6 mm apart in FR-4, and AN-905's 35 Ω stripline at
+εr 2.4.
+
+### Terms
+
+- **Stripline:** a trace on an inner layer with a ground plane above and
+  below, the dielectric filling the space between.
+- **b, h:** b is the spacing between the planes; h = (b − t)/2 is the
+  dielectric between the trace and each plane.
+- **Characteristic impedance (Z0), εr, C0, L0, oz:** as in Microstrip
+  impedance.
+- **Delay:** all the field runs in the dielectric, so a stripline is slower
+  than a microstrip on the same material: Td depends on εr only.
+
+### Source
+
+- **D. Hafner, M. Dressel and M. Scheffler, "Surface-resistance
+  measurements using superconducting stripline resonators", Rev. Sci.
+  Instrum. 85, 014702 (2014), arXiv 1309.5331, appendix A** (read):
+  Wheeler's approximate impedance of a stripline (H. A. Wheeler, IEEE
+  Trans. MTT-26, 866, 1978), Zc = 30/√ε × ln[1 + ½ (16h/πw')(16h/πw' +
+  √((16h/πw')² + 6.27))], with the equivalent zero-thickness width w' = w +
+  (t/π) ln(e / √((t/(4h + t))² + ((1/4π)/(w/t + 1.10))^(6/(3 + t/h)))); its
+  table I, computed with it: t 1 µm, w 155 µm, εr 10, h 430 µm, 50.06 Ω;
+  w 45 µm, h 127 µm, 49.79 Ω. The tool reproduces both to the hundredth.
+  The text extraction of the PDF garbled the first term of w'; the form
+  t/(4h + t), as on Peterson's slide, is the one that reproduces the table.
+- **Zachariah Peterson, "High Speed Design Basics", Altium, May 2022, slide
+  24** (read, Pierre's copy, rendered):
+  - IPC-2141: Z0 = 94.15 / (√εr (W/(B − T) + Cf/π)) "when W/B > 0.35",
+    Cf = 2B/(B − T) ln(B/(B − T) + 1) − (T/(B − T)) ln(1/(1 − T/B)² − 1),
+    marked "Only accurate for 50 Ohm traces";
+  - Wadell's equations, "Highly accurate": the same equation as Wheeler's
+    above, but printed with 60/√εr where Hafner et al. have 30/√εr, εr
+    where they have e, and πT/4(W + 1.1T) where they have (1/4π)/(W/T +
+    1.1). Their table rules out the slide's version (its 60 alone would
+    double the impedance), so the tool follows Hafner et al.
+- **National Semiconductor AN-905, TI SNLA035, appendix A** (read):
+  stripline Z0 = 60/√εr × ln[4b / (0.67π (0.8w + t))], best "if b − t > 2w
+  and b > 4t"; its stripline scales: delay 56 ps/cm at εr 2.8; a 35 Ω
+  stripline at εr 2.4, 1.47 pF/cm and 1.8 nH/cm.
+- **Not read:** Wheeler's 1978 paper and Wadell's handbook themselves.
+
+### Why the formulas are these
+
+    h = (b − t) / 2,   m = 6 / (3 + t/h)
+    d = √((t/(4h + t))² + (1/4π / (w/t + 1.1))^m)
+    w' = w + t/π × ln(e / d)
+    x = 16h / (π w'),   y = x (x + √(x² + 6.27)) / 2
+    Z0 = 30 / √εr × ln(1 + y)
+    Td = 33.36 √εr ps/cm,   C0 = Td / Z0,   L0 = Z0 × Td
+
+Wheeler's formula fits the exact solution for a zero-thickness strip
+between two planes, and replaces the real strip by a slightly wider one of
+zero thickness, w', to account for its copper. All the field is in the
+dielectric, so the wave travels at c / √εr. As for the microstrip, the
+width for an impedance is found by halving the range of widths.
+
+### Assumptions and limits
+
+- **Symmetric stripline:** the trace centred between the planes; an
+  off-centre trace is the dual stripline's case, a later tool.
+- **One dielectric:** core and prepreg of different εr are averaged by
+  the user.
+- **Closed-form approximation:** a field solver, or the board maker's
+  stack-up calculation, decides.
+- **No losses.**
+
+### How it was checked
+
+8 cases:
+- Hafner et al.'s two resonators: 50.06 Ω and 49.79 Ω, as their table I;
+- 50 Ω between planes 0.6 mm apart, FR-4, 1 oz: 0.217 mm, IPC-2141
+  −0.6 %, AN-905 −1.7 %;
+- 35 Ω at εr 2.4: 1.48 pF/cm and 1.81 nH/cm (AN-905's 1.47 and 1.8),
+  51.7 ps/cm;
+- the default 0.2 mm trace between planes 0.6 mm apart: 51.8 Ω, AN-905
+  51.1 Ω;
+- the copper's own picker (1 oz is 34.8 µm);
+- copper as thick as half the spacing is refused;
+- the length pickers move together.
 
 [↑ Index](#index)

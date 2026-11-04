@@ -406,7 +406,7 @@ Then:
 - [x] Microstrip impedance — built, National AN-905 (TI SNLA035), 2026-11-02
 - [ ] Embedded microstrip impedance
 - [ ] Differential microstrip impedance
-- [ ] Stripline impedance
+- [x] Stripline impedance — built, Wheeler 1978 via Hafner et al. 2014 (table I reproduced), 2026-11-03
 - [ ] Dual stripline impedance
 - [ ] Coplanar waveguide impedance
 - [ ] Via impedance (R, L, C)
