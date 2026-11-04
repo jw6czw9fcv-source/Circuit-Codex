@@ -13247,16 +13247,20 @@ function renderFlyback(domain, tool, favId) {
 }
 
 // ---------- Microstrip impedance ----------
-// A trace over a ground plane, by National Semiconductor's AN-905
-// ("Transmission Line RAPIDESIGNER Operation and Applications Guide", J. A.
-// Mears, May 1996; TI SNLA035), appendix A: Z0 = 60 / √(0.475 εr + 0.67) ×
-// ln(4h / (0.67 (0.8w + t))) for w ≤ 2h ("maximum error ≅ 3%"), and its
-// inverse w = 7.463h / exp(Z0 √(0.475 εr + 0.67) / 60) − 1.25t; the delay
-// Td = 33.36 √(0.475 εr + 0.67) ps/cm, C0 = Td / Z0, L0 = Z0 Td. Its
-// examples: 25 mil on 20 mil of εr 4.3 with 1 oz, 63 Ω; 1.27 mm on
-// 1.02 mm, 64 Ω; 93 Ω on 30 mil of εr 3.8 with ½ oz, 18 mil (0.051 cm);
-// 75 Ω at εr 3.8, 0.70 pF/cm and 3.95 nH/cm. Its appendix D: FR-4 and G-10
-// 4.3, polyimide 4.2, PTFE 2.4. Copper as in Trace width, 1 oz 34.8 µm.
+// A trace over a ground plane, by Wadell's equations as Z. Peterson's "High
+// Speed Design Basics" (Altium, May 2022, slide 23) gives them, "highly
+// accurate": Z0 = 60 / √(2εr + 2) × ln(1 + 4h/w' × ((14 + 8/εr)/11 × 4h/w'
+// + √(((14 + 8/εr)/11)² (4h/w')² + π² (1 + 1/εr)/2))), the width corrected
+// for the copper's thickness, w' = w + ((1 + 1/εr)/2)(t/π) ln(4e /
+// √((t/h)² + ((1/π)/(w/t + 1.1))²)); εeff = (εr + 1)/2 + (εr − 1)/2 ×
+// ((1 + 12h/w)^−0.5 + 0.04 (1 − w/h)²) for w < h, without the last term
+// above. The same slide gives IPC-2141's Z0 = 87 / √(εr + 1.41) × ln(5.98h /
+// (0.8w + t)), "only accurate for 50 Ohm traces", shown beside it; National's
+// AN-905 (TI SNLA035, appendix A) writes the same formula as 60 / √(0.475 εr
+// + 0.67) × ln(4h / (0.67 (0.8w + t))), for w ≤ 2h ("maximum error ≅ 3%").
+// Its examples: 25 mil on 20 mil of εr 4.3, 1 oz, 63 Ω; 1.27 mm on 1.02 mm,
+// 64 Ω; 93 Ω on 30 mil of εr 3.8, ½ oz, 18 mil. Its appendix D: FR-4 and
+// G-10 4.3, polyimide 4.2, PTFE 2.4. Copper as in Trace width, 1 oz 34.8 µm.
 const MS_LEN_UNITS = { mm: 1e-3, mil: 25.4e-6 };
 const MS_MATERIALS = { fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4], custom: ["Custom", null] };
 
@@ -13271,9 +13275,27 @@ function renderMicrostrip(domain, tool, favId) {
     target: null,
   };
   const t = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
-  const k = () => Math.sqrt(0.475 * state.si.er + 0.67);
-  const z0 = () => { const s = state.si; return 60 / k() * Math.log(4 * s.h / (0.67 * (0.8 * s.w + t()))); };
-  const wFor = (z) => 7.463 * state.si.h / Math.exp(z * k() / 60) - 1.25 * t();
+  // Wadell's Z0 at a width.
+  const zAt = (w) => {
+    const { h, er } = state.si, tt = t();
+    const wp = w + (1 + 1 / er) / 2 * (tt / Math.PI) * Math.log(4 * Math.E / Math.sqrt((tt / h) ** 2 + ((1 / Math.PI) / (w / tt + 1.1)) ** 2));
+    const a = (14 + 8 / er) / 11, x = 4 * h / wp;
+    return 60 / Math.sqrt(2 * er + 2) * Math.log(1 + x * (a * x + Math.sqrt(a * a * x * x + Math.PI ** 2 * (1 + 1 / er) / 2)));
+  };
+  const z0 = () => zAt(state.si.w);
+  const zIpc = () => { const s = state.si; return 87 / Math.sqrt(s.er + 1.41) * Math.log(5.98 * s.h / (0.8 * s.w + t())); };
+  const eEff = () => {
+    const { w, h, er } = state.si;
+    return (er + 1) / 2 + (er - 1) / 2 * ((1 + 12 * h / w) ** -0.5 + (w < h ? 0.04 * (1 - w / h) ** 2 : 0));
+  };
+  // The width for an impedance: Z0 falls as the width grows, so halving
+  // the bracket (on a log scale) from 10⁻⁴ h to 100 h finds it; NaN outside.
+  const wFor = (z) => {
+    let lo = state.si.h * 1e-4, hi = state.si.h * 100;
+    if (!(z < zAt(lo) && z > zAt(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (zAt(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   const val = (v, u, d = 3) => siFormat(Number(v.toPrecision(d)), u, d);
@@ -13284,7 +13306,7 @@ function renderMicrostrip(domain, tool, favId) {
     if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
     if (state.target !== null) {
       if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
-      if (!(wFor(state.target) > 0)) return "Too high an impedance for this dielectric: no width gives it.";
+      if (!(wFor(state.target) > 0)) return "No width between 0.0001 and 100 times the dielectric gives that impedance.";
     }
     if (!(s.w > 0)) return "Enter the trace width.";
     if (!(z0() > 0)) return "The trace is too wide for this dielectric.";
@@ -13322,10 +13344,13 @@ function renderMicrostrip(domain, tool, favId) {
     const s = state.si, z = z0();
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
-    // Per cm in mm, per inch in mil, as AN-905's two scales.
+    // Per cm in mm, per inch in mil, as AN-905's two scales; 1/c is
+    // 33.356 ps/cm.
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
-    const td = 33.36 * k() * per;
+    const ee = eEff(), td = 33.356 * Math.sqrt(ee) * per;
     const ratio = s.w / s.h;
+    const zi = zIpc(), diff = (zi / z - 1) * 100;
+    const ipcText = zi > 0 ? `${Number(zi.toPrecision(3))} Ω (${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(1)} %)` : "none";
     const main = state.target !== null
       ? `<div class="result-field">
           <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
@@ -13339,8 +13364,8 @@ function renderMicrostrip(domain, tool, favId) {
         </div>`;
     return `${main}
         <div class="field notation-box">
-          ${row("Within the formula's range", ratio <= 2 ? "w ≤ 2h: within about 3 %" : warn(`w is ${Number(ratio.toPrecision(3))} × h, over 2h: the error can exceed 3 %`), "range")}
-          ${row("Effective εr, 0.475 εr + 0.67", Number((0.475 * s.er + 0.67).toPrecision(3)), "eeff")}
+          ${row("IPC-2141 formula, for comparison", ratio <= 2 ? ipcText : warn(`${ipcText}, outside its w ≤ 2h`), "ipc")}
+          ${row("Effective εr", Number(ee.toPrecision(3)), "eeff")}
           ${row("Delay", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
         </div>`;
@@ -13372,15 +13397,15 @@ function renderMicrostrip(domain, tool, favId) {
   };
   const MIL = 25.4e-6;
   useExamples([
-    { title: "AN-905: 25 mil on 20 mil", note: "εr 4.3, 1 oz: 62.7 Ω; the slide rule reads 63 Ω.",
+    { title: "AN-905: 25 mil on 20 mil", note: "εr 4.3, 1 oz: 62.4 Ω; AN-905's slide rule reads 63 Ω, IPC-2141 62.7.",
       apply: example({ w: 25 * MIL, h: 20 * MIL, er: 4.3 }, { lUnit: "mil", oz: 1 }) },
-    { title: "AN-905: 1.27 mm on 1.02 mm", note: "The same in metric, εr 4.3, 1 oz: 64 Ω, as the slide rule.",
+    { title: "AN-905: 1.27 mm on 1.02 mm", note: "The same in metric: 63.3 Ω; the slide rule reads 64 Ω.",
       apply: example({ w: 1.27e-3, h: 1.02e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
-    { title: "AN-905: 93 Ω on 30 mil", note: "εr 3.8, ½ oz: 18.7 mil wide; the slide rule reads 18 mil (0.051 cm).",
+    { title: "AN-905: 93 Ω on 30 mil", note: "εr 3.8, ½ oz: 18 mil wide, as its slide rule (0.051 cm).",
       apply: example({ h: 30 * MIL, er: 3.8 }, { lUnit: "mil", oz: 0.5 }, 93) },
-    { title: "50 Ω on 1.6 mm FR-4", note: "A two-layer board, 1 oz: the trace is 2.98 mm wide.",
+    { title: "50 Ω on 1.6 mm FR-4", note: "A two-layer board, 1 oz: the trace is 3.06 mm wide.",
       apply: example({ h: 1.6e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
-    { title: "50 Ω on a 0.2 mm layer", note: "The thin prepreg of a four-layer board, εr 4.3, 1 oz: 0.335 mm.",
+    { title: "50 Ω on a 0.2 mm layer", note: "The thin prepreg of a four-layer board, εr 4.3, 1 oz: 0.36 mm; IPC-2141 says 47.7 Ω.",
       apply: example({ h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
   ]);
 
@@ -13408,8 +13433,8 @@ function renderMicrostrip(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["εe = 0.475 εr + 0.67", "Z0 = 60 / √εe × ln(4h / (0.67 (0.8w + t)))", "w = 7.463h / exp(Z0 √εe / 60) − 1.25t", "Td = 33.36 √εe ps/cm", "C0 = Td / Z0,   L0 = Z0 × Td"],
-        "A microstrip is a trace on the outer layer of a board with a ground plane under it, h below. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or a thinner dielectric lowers Z0. εr is the dielectric constant of the board's material; part of the field runs in the air above the trace, so the signal sees an effective εr between 1 and εr, which sets its speed: the delay per length Td. C0 and L0 are the trace's capacitance and inductance per length. Type a width to get the impedance, or the impedance you need to get the width."
+        ["d = √((t/h)² + (1/π / (w/t + 1.1))²)", "w' = w + (1 + 1/εr)/2 × t/π × ln(4e / d)", "x = 4h / w',   a = (14 + 8/εr) / 11", "b = √(a² x² + π² (1 + 1/εr) / 2)", "Z0 = 60 / √(2εr + 2) × ln(1 + x (a x + b))", "εeff = (εr+1)/2 + (εr−1)/2 / √(1 + 12h/w)", "Td = 33.36 √εeff ps/cm", "C0 = Td / Z0,   L0 = Z0 × Td"],
+        "A microstrip is a trace on the outer layer of a board with a ground plane under it, h below. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or a thinner dielectric lowers Z0. These are Wadell's equations: w' is the width corrected for the copper's thickness t, and for w < h the effective εr adds (εr−1)/2 × 0.04 (1 − w/h)². εr is the dielectric constant of the board's material; part of the field runs in the air above the trace, so the signal sees an effective εr between 1 and εr, which sets its speed: the delay per length Td. C0 and L0 are the trace's capacitance and inductance per length. The simpler IPC-2141 formula is shown for comparison. Type a width to get the impedance, or the impedance you need to get the width."
       )}
       ${calcFooter("")}
     `;

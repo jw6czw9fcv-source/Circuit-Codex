@@ -11430,13 +11430,13 @@ plane, or the width that gives an impedance, on one screen:
 - **Width and impedance are two live boxes:** type a width and the
   impedance box shows Z0; type the impedance you need and the width box
   shows the width that gives it (shown again when you leave the box).
-- **The big result:** Z0, or the width for the impedance typed, with the
-  width in the other unit and w/h.
+- **The big result:** Z0 by Wadell's equations, or the width for the
+  impedance typed, with the width in the other unit and w/h.
 - **Below it:**
-  - whether w ≤ 2h, the range of the formula (about 3 %), flagged beyond;
+  - the simpler IPC-2141 formula's Z0 for the same trace, and how far it
+    is from Wadell's; flagged when w > 2h, outside its range;
   - the effective dielectric constant;
-  - the delay per length, per cm in mm and per inch in mil, as AN-905's
-    two scales;
+  - the delay per length, per cm in mm and per inch in mil;
   - the capacitance and inductance per length.
 - **Units:** mm or mil, the width's and the thickness's pickers moving
   together.
@@ -11460,8 +11460,10 @@ and on the 0.2 mm prepreg of a four-layer board.
   carries a signal without reflections.
 - **Dielectric constant (εr):** how much the material slows the field
   compared with vacuum; FR-4 about 4.3.
-- **Effective dielectric constant (εe):** part of the field runs in the
+- **Effective dielectric constant (εeff):** part of the field runs in the
   air above the trace, so the signal sees less than εr.
+- **Effective width (w'):** the trace's thickness widens it electrically;
+  Wadell's equations replace w by w'.
 - **Delay (Td):** the time a signal takes per length of trace.
 - **C0, L0:** the trace's capacitance and inductance per length.
 - **oz:** copper weight in ounces per square foot; 1 oz is 34.8 µm thick
@@ -11469,46 +11471,59 @@ and on the 0.2 mm prepreg of a four-layer board.
 
 ### Source
 
+- **Zachariah Peterson, "High Speed Design Basics", Altium, 3 May 2022**
+  (read; Pierre's copy, slide 23 rendered, its equations being images):
+  - IPC-2141: Z0 = 87 / (εr + 1.41)^0.5 × ln(5.98h / (0.8w + t)), marked
+    "Only accurate for 50 Ohm traces";
+  - Wadell's equations, marked "Highly accurate": Z0 = 60 / (2εr + 2)^0.5
+    × ln(1 + 4h/w' × [(14 + 8/εr)/11 × 4h/w' + √(((14 + 8/εr)/11)² (4h/w')²
+    + π² (1 + 1/εr)/2)]), where w' = w + ((1 + 1/εr)/2)(t/π) ln(4e /
+    √((t/h)² + ((1/π)/(w/t + 1.1))²)); and εeff = (εr + 1)/2 + (εr − 1)/2
+    × ((1 + 12h/w)^−0.5 + 0.04 (1 − w/h)²) if w < h, (εr + 1)/2 + (εr −
+    1)/2 × (1 + 12h/w)^−0.5 if w > h;
+  - slide 25 ranks IPC-2141 lowest in accuracy, Wadell's equations
+    moderate, field solvers high.
 - **National Semiconductor AN-905, "Transmission Line RAPIDESIGNER
   Operation and Applications Guide", James A. Mears, May 1996, TI
-  literature number SNLA035** (read, with its appendix A rendered from the
-  PDF, its formulas being images): Z0 = 60 / √(0.475 εr + 0.67) ×
-  ln[4h / (0.67 (0.8w + t))] ohms "if w ≤ 2h (maximum error ≅ 3%)"; the
-  width w = 7.463h / exp(Z0 √(0.475 εr + 0.67) / 60) − 1.25t; all
-  geometric variables in the same units; the intrinsic delay Td = 33.36
-  √(0.475 εr + 0.67) ps/cm; C0 = Td / Z0 pF/cm and L0 = Z0 Td × 10⁻³
-  nH/cm; the differential impedance of an edge-coupled pair, 2 Z0 (1 −
-  0.48 e^(−0.96 s/h)), for a later tool. Its slide-rule examples: a 25 mil
-  trace on 20 mil of εr 4.3 with 1 oz (1.4 mil) copper, 63 Ω; 0.127 cm on
-  0.102 cm, 64 Ω; 93 Ω on 30 mil of εr 3.8 with ½ oz needs 18 mil
-  (0.051 cm in metric); a 75 Ω microstrip at εr 3.8, 0.70 pF/cm and
-  3.95 nH/cm. Appendix D: FR-4 and G-10 4.3, polyimide 4.2, PTFE 2.4,
-  polysulfone 3.5 to 3.9.
-- **Not read:** IPC-2141, whose microstrip formula (87 / √(εr + 1.41) ×
-  ln(5.98h / (0.8w + t))) is widely quoted and gives nearly the same
-  figures; ADI's MT-094, which analog.com refused to serve.
+  SNLA035** (read, appendix A rendered): the same formula as IPC-2141,
+  written Z0 = 60 / √(0.475 εr + 0.67) × ln[4h / (0.67 (0.8w + t))] "if
+  w ≤ 2h (maximum error ≅ 3%)"; its slide-rule examples: a 25 mil trace
+  on 20 mil of εr 4.3 with 1 oz copper, 63 Ω; 0.127 cm on 0.102 cm, 64 Ω;
+  93 Ω on 30 mil of εr 3.8 with ½ oz, 18 mil (0.051 cm). Appendix D: FR-4
+  and G-10 4.3, polyimide 4.2, PTFE 2.4.
+- **Not read:** IPC-2141A itself, and Wadell's "Transmission Line Design
+  Handbook" (1991): both formulas are taken from Peterson's slide.
 
 ### Why the formulas are these
 
-    εe = 0.475 εr + 0.67
-    Z0 = 60 / √εe × ln(4h / (0.67 (0.8w + t)))
-    w = 7.463h / exp(Z0 √εe / 60) − 1.25t
-    Td = 33.36 √εe ps/cm,   C0 = Td / Z0,   L0 = Z0 × Td
+    d = √((t/h)² + (1/π / (w/t + 1.1))²)
+    w' = w + (1 + 1/εr)/2 × t/π × ln(4e / d)
+    x = 4h / w',   a = (14 + 8/εr) / 11
+    b = √(a² x² + π² (1 + 1/εr) / 2)
+    Z0 = 60 / √(2εr + 2) × ln(1 + x (a x + b))
+    εeff = (εr+1)/2 + (εr−1)/2 / √(1 + 12h/w)   (+ (εr−1)/2 × 0.04 (1 − w/h)² for w < h)
+    Td = 33.36 √εeff ps/cm,   C0 = Td / Z0,   L0 = Z0 × Td
 
 A wider trace, or a ground plane closer under it, adds capacitance per
-length and so lowers the impedance, which falls as the logarithm of h over
-the width. The signal travels at the speed of light divided by √εe (33.36
-ps/cm is 1 cm at the speed of light), and Z0 = √(L0 / C0) with Td =
-√(L0 C0) gives C0 and L0 from Z0 and Td. The width formula is the
-impedance formula solved for w (7.463 = 4 / (0.67 × 0.8)).
+length and so lowers the impedance. Wadell's formula follows the field
+over the whole range of w/h, where IPC-2141's logarithm is a fit good near
+50 Ω and for w ≤ 2h. The signal travels at the speed of light divided by
+√εeff (33.36 ps/cm is 1 cm at the speed of light), and Z0 = √(L0 / C0)
+with Td = √(L0 C0) gives C0 and L0. The width for an impedance has no
+closed form here: Z0 falls steadily as the width grows, so the tool halves
+the range of widths until it lands on it.
+
+**How the two compare.** Within w ≤ 2h they differ by about 0.5 to 5 %:
+AN-905's 25 mil example is 62.4 Ω by Wadell, 62.7 Ω by IPC-2141; 50 Ω on
+0.2 mm FR-4 needs 0.36 mm by Wadell, where IPC-2141 gives that trace
+47.7 Ω. Beyond 2h they part: 4 mm on 1.6 mm is 42.3 Ω by Wadell, 6.7 %
+more than IPC-2141's.
 
 ### Assumptions and limits
 
-- **w ≤ 2h:** outside it the formula's error grows; the tool flags it and
-  still computes.
-- **AN-905's own caution:** two or three significant figures are what a
-  slide rule gives; the formulas are approximations for printed-circuit
-  work, not a field solver.
+- **Closed-form equations:** a 2D field solver is more accurate (Peterson,
+  slide 25); the tool is for design and checking, the board maker's
+  stack-up calculation decides.
 - **One dielectric, no solder mask:** a solder mask over the trace lowers
   Z0 by a few ohms; that is the embedded microstrip's case, a later tool.
 - **εr changes with frequency and between laminates:** FR-4's 4.3 is a
@@ -11518,16 +11533,23 @@ impedance formula solved for w (7.463 = 4 / (0.67 × 0.8)).
 
 ### How it was checked
 
-9 cases:
-- AN-905's 25 mil on 20 mil, εr 4.3, 1 oz: 62.7 Ω (its 63 Ω), 140 ps/in;
-- the same in metric, 1.27 mm on 1.02 mm: 64 Ω (its 64 Ω), within range;
-- 93 Ω on 30 mil, εr 3.8, ½ oz: 18.7 mil (its 18 mil, 0.051 cm), εe 2.48;
-- 50 Ω on 1.6 mm FR-4: 2.98 mm (117 mil, w/h 1.86);
-- 50 Ω on 0.2 mm: 0.335 mm;
-- 75 Ω at εr 3.8: 0.7 pF/cm and 3.94 nH/cm (its 0.70 and 3.95), the
-  material becoming custom;
-- a trace wider than 2h is flagged;
+9 cases, the expected values computed independently from the slide's
+equations:
+- AN-905's 25 mil on 20 mil, εr 4.3, 1 oz: 62.4 Ω (IPC-2141 62.7 Ω,
+  +0.5 %; its slide rule 63 Ω), 151 ps/in;
+- the same in metric, 1.27 mm on 1.02 mm: 63.3 Ω (IPC-2141 64 Ω; its slide
+  rule 64 Ω), εeff 3.16;
+- 93 Ω on 30 mil, εr 3.8, ½ oz: 18 mil (its slide rule's 18 mil);
+- 50 Ω on 1.6 mm FR-4: 3.06 mm, where IPC-2141 gives 49.1 Ω;
+- 50 Ω on 0.2 mm: 0.36 mm, IPC-2141 4.7 % low;
+- 75 Ω at εr 3.8: 0.742 pF/cm and 4.18 nH/cm, the material becoming
+  custom;
+- beyond w = 2h the IPC-2141 comparison is flagged (4 mm on 1.6 mm,
+  42.3 Ω);
 - the length pickers move together;
 - PTFE sets εr to 2.4.
+
+The first version used AN-905's (IPC-2141's) formula; Pierre chose
+Wadell's equations once his copy of Peterson's slides showed both.
 
 [↑ Index](#index)

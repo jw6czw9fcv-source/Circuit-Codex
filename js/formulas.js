@@ -365,8 +365,8 @@ const FORMULAS = [
   {
     tool: "Microstrip impedance",
     domain: "pcb",
-    formulas: ["εe = 0.475 εr + 0.67", "Z0 = 60 / √εe × ln(4h / (0.67 (0.8w + t)))", "Td = 33.36 √εe ps/cm"],
-    note: "w trace width, t its thickness, h the dielectric to the ground plane; for w ≤ 2h, within about 3 % (National AN-905).",
+    formulas: ["x = 4h / w',   a = (14 + 8/εr) / 11", "b = √(a² x² + π² (1 + 1/εr) / 2)", "Z0 = 60 / √(2εr + 2) × ln(1 + x (a x + b))"],
+    note: "Wadell's equations; w' is the width w corrected for the copper's thickness t, h the dielectric to the ground plane. IPC-2141's simpler 87/√(εr + 1.41) × ln(5.98h / (0.8w + t)) holds for w ≤ 2h.",
   },
 
   // ---- Power ----
