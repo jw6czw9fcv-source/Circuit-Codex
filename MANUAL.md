@@ -116,6 +116,7 @@ will key on, since that is the id the app already holds for each tool.
 - Trace current & resistance → [Trace width](#trace-width)
 - Trace current & resistance → [Via current capacity](#via-current)
 - Impedance → [Microstrip impedance](#microstrip)
+- Impedance → [Embedded microstrip](#embedded-microstrip)
 - Impedance → [Differential microstrip](#diff-microstrip)
 - Impedance → [Stripline impedance](#stripline)
 - Vias & layout → [Thermal vias](#thermal-vias)
@@ -11435,7 +11436,7 @@ plane, or the width that gives an impedance, on one screen:
 - **The big result:** Z0 by Wadell's equations, or the width for the
   impedance typed, with the width in the other unit and w/h.
 - **Below it:**
-  - the simpler IPC-2141 formula's Z0 for the same trace, and how far it
+  - the older, simpler IPC-2141 formula's Z0 for the same trace, and how far it
     is from Wadell's; flagged when w > 2h, outside its range;
   - the effective dielectric constant;
   - the delay per length, per cm in mm and per inch in mil;
@@ -11503,9 +11504,18 @@ and on the 0.2 mm prepreg of a four-layer board.
   "about 8.3 mils". The tool gives 46.2 Ω by IPC-2141A and 48.9 Ω by
   Wadell for that trace, and 8.35 mil for 75 Ω by IPC-2141A (8.56 by
   Wadell).
-- **Not read:** IPC-2141A itself, and Wadell's "Transmission Line Design
-  Handbook" (1991): the formulas are taken from Peterson's slide and
-  MT-094.
+- **IPC-2141A, "Design Guide for High-Speed Controlled Impedance Circuit
+  Boards", March 2004, §4.2.2** (read, Pierre's scanned copy): its surface
+  microstrip formulas [4-4]–[4-6] are Wadell's above, the same εeff, but
+  with εr,eff written where Wadell has εr in the Z0 formula; read that way
+  they come out 12 to 14 % high, so the tool keeps Wadell's. The
+  87/√(εr + 1.41) formula, which Peterson's slide labels IPC-2141 and
+  MT-094 quotes from IPC-2141A, is in neither the 2004 text nor its errata;
+  AN-905 (1996) already uses it, so it is presumably the first IPC-2141's
+  (not read). The tool shows it as the "older IPC formula".
+- **Not read:** IPC-2141 (1996) itself, and Wadell's "Transmission Line
+  Design Handbook" (1991): the formulas are taken from Peterson's slide,
+  AN-905 and MT-094.
 
 ### Why the formulas are these
 
@@ -11538,7 +11548,8 @@ more than IPC-2141's.
   slide 25); the tool is for design and checking, the board maker's
   stack-up calculation decides.
 - **One dielectric, no solder mask:** a solder mask over the trace lowers
-  Z0 by a few ohms; that is the embedded microstrip's case, a later tool.
+  Z0 by a few ohms; that is [Embedded microstrip](#embedded-microstrip)'s
+  case.
 - **εr changes with frequency and between laminates:** FR-4's 4.3 is a
   nominal figure; use the maker's value at your frequency.
 - **No losses:** the copper's resistance and the dielectric's loss are
@@ -11590,10 +11601,12 @@ two ground planes, or the width that gives an impedance, on one screen:
 - **The big result:** Z0 by Wheeler's formula, or the width for the
   impedance typed, with w/b and the dielectric on each side, h = (b − t)/2.
 - **Below it:**
-  - IPC-2141A's formula (MT-094's eq. 7, AN-905's), flagged outside
-    b − t > 2w and b > 4t;
-  - the wide-strip formula slide 24 labels IPC-2141, for w/b over 0.35
-    only; both with their difference from Wheeler's;
+  - IPC-2141A's simpler formula set: its wide-strip formula for w/b of
+    0.35 and over, its narrow-strip one below; the narrow one's limits
+    (t/b ≤ 0.25, t/w ≤ 0.11) are named when the trace is outside them, as
+    1 oz copper on a 0.2 mm trace is;
+  - AN-905's formula (MT-094's eq. 7), flagged outside b − t > 2w and
+    b > 4t; both with their difference from Wheeler's;
   - the delay per length, the signal seeing the full εr;
   - the capacitance and inductance per length.
 - **Units:** mm or mil for the width and the spacing, moving together;
@@ -11649,8 +11662,20 @@ Examples: the two stripline resonators of Hafner et al. (their table I),
   2009** (read, Pierre's copy): IPC-2141A's symmetric stripline Z0 =
   60/√εr × ln(1.9B / (0.8W + T)) (eq. 7), B = 2H + T, "accuracy …
   typically on the order of 6%" (Bogatin); this is AN-905's formula
-  (4 / (0.67π) = 1.900). So the formula slide 24 labels IPC-2141 is not
-  this one; the tool shows it as the "wide-strip formula".
+  (4 / (0.67π) = 1.900).
+- **IPC-2141A, March 2004, §4.2.4** (read, Pierre's scanned copy):
+  - formula set 1 [4-9]–[4-11] is slide 24's "Wadell" equation exactly,
+    with its 60 and πt/4(w + 1.1t): the slide copied IPC's misprints, and
+    Hafner et al.'s table rules them out as above;
+  - formula set 2: for w/b < 0.35, t/b ≤ 0.25 and t/w ≤ 0.11, Z0 = 60/√εr
+    × ln(4b/(πD)), D = w/2 × (1 + t/(πw) (1 + ln(4πw/t)) + 0.551 (t/w)²)
+    [4-12], [4-14], the strip treated as a round wire of diameter D; for
+    w/b ≥ 0.35, Z0 = 94.15 / ((w/b)/(1 − t/b) + θ/π) [4-15], θ = 2b/(b − t)
+    ln((2b − t)/(b − t)) − t/(b − t) ln((2bt − t²)/(b − t)²) [4-16]. [4-15]
+    is printed without √εr; slide 24's version, with it, is the one that
+    gives ohms in a dielectric, and the tool uses it;
+  - the 60 ln(1.9B/(0.8W + T)) formula MT-094 attributes to IPC-2141A is
+    not in the 2004 text; the tool labels it AN-905's.
 - **Not read:** Wheeler's 1978 paper and Wadell's handbook themselves.
 
 ### Why the formulas are these
@@ -11682,15 +11707,122 @@ width for an impedance is found by halving the range of widths.
 
 8 cases:
 - Hafner et al.'s two resonators: 50.06 Ω and 49.79 Ω, as their table I;
-- 50 Ω between planes 0.6 mm apart, FR-4, 1 oz: 0.217 mm, IPC-2141
-  −0.6 %, AN-905 −1.7 %;
+  IPC-2141A's narrow-strip formula 49.9 Ω for the first;
+- 50 Ω between planes 0.6 mm apart, FR-4, 1 oz: 0.217 mm, IPC-2141A's
+  wide-strip formula −0.6 %, AN-905 −1.7 %;
 - 35 Ω at εr 2.4: 1.48 pF/cm and 1.81 nH/cm (AN-905's 1.47 and 1.8),
   51.7 ps/cm;
 - the default 0.2 mm trace between planes 0.6 mm apart: 51.8 Ω, AN-905
-  51.1 Ω;
+  51.1 Ω, outside IPC-2141A's narrow-strip limit (t/w 0.17);
 - the copper's own picker (1 oz is 34.8 µm);
 - copper as thick as half the spacing is refused;
 - the length pickers move together.
+
+[↑ Index](#index)
+
+---
+
+<a id="embedded-microstrip"></a>
+## Embedded microstrip
+
+`calc: embedded-microstrip` · PCB & interconnect › Impedance
+(formerly Embedded microstrip impedance)
+
+### What it computes
+
+The impedance of a microstrip covered by more dielectric (solder mask over
+an outer-layer trace, or prepreg over an inner trace with no plane above), or
+the width that gives an impedance under that cover:
+
+- **Inputs:** the trace width w, the dielectric under it h1, H2 from the
+  ground plane to the top of the cover, the copper weight, the material and
+  εr (the cover taken as the same εr).
+- **Width and impedance are two live boxes:** type a width and the
+  impedance box shows the covered Z0; type the impedance you need and the
+  width box shows the width that gives it covered.
+- **The big result:** the covered Z0, with the uncovered one and how much
+  the cover takes off; or the width, with the Z0 it would have uncovered.
+- **Below it:**
+  - the cover b = H2 − h1 and how much of it is over the copper's top,
+    flagged when it is thinner than the copper;
+  - the deep limit, the impedance once the cover is thick enough that all
+    the field is in the dielectric;
+  - the effective εr uncovered and covered;
+  - the delay per length, covered.
+- **Units:** mm or mil for the lengths, moving together; oz for the copper.
+- **Drawing:** the ground plane, the dielectric with the trace on h1, the
+  cover up to H2, in mm and mil. The trace is green when its width is the
+  answer.
+- **Remembered:** the length unit and the copper weight.
+
+Examples: solder mask over a 50 Ω trace on 0.2 mm, the width for 50 Ω under
+that mask, no cover (the surface microstrip), and 0.2 mm of prepreg over
+the trace.
+
+### Terms
+
+- **Embedded microstrip:** a microstrip with dielectric over the trace as
+  well as under it, but no plane above (a plane above makes it a
+  stripline).
+- **h1, H2, b:** h1 is the dielectric between the plane and the bottom of
+  the trace; H2 runs from the plane to the top of the cover; b = H2 − h1 is
+  the cover measured from the bottom of the trace (IPC-2141A figure
+  4-3(b)).
+- **Solder mask:** the thin coating over the outer layers; its thickness
+  over the copper comes from the board maker.
+- **Deep limit:** under a thick enough cover, the trace sees εr all round;
+  Z0 falls to the uncovered value × √(εeff / εr) and goes no lower.
+- **Z0, εr, εeff, oz:** as in Microstrip impedance.
+
+### Source
+
+- **IPC-2141A, "Design Guide for High-Speed Controlled Impedance Circuit
+  Boards", March 2004, §4.2.3** (read, Pierre's scanned copy): embedded
+  microstrip Z0,embed = Z0,surf / √(e^(−2b/h) + (εr/εr,eff)(1 − e^(−2b/h)))
+  [4-7], with b = h2 − h1 [4-8]; its figure 4-3(b) draws h1 from the plane
+  to the trace and h2 from the plane to the top of the cover; Z0,surf and
+  εr,eff are its surface microstrip's [4-4]–[4-6].
+- **IPC-2141A errata** (read, a Wayback Machine copy): writes [4-7]'s
+  exponent with h1, the dielectric under the trace, as the tool does.
+- **Uncovered Z0 and εeff:** Wadell's equations, as in Microstrip
+  impedance (IPC-2141A's [4-6] εeff is the same; for its [4-4] see there).
+
+### Why the formulas are these
+
+    b = H2 − h1,   k = e^(−2b/h1)
+    Z0,emb = Z0 / √(k + (εr / εeff)(1 − k))
+    εeff,emb = εeff k + εr (1 − k),   Td = 33.36 √εeff,emb ps/cm
+    deep limit = Z0 √(εeff / εr)
+
+Uncovered, part of the field runs in the air over the trace and the line
+sees εeff. A cover puts dielectric where that air was: the line sees more
+of εr, its capacitance rises and Z0 falls. The exponential blends the two
+cases, k = 1 with no cover, k → 0 under a cover a few h1 thick. With
+b = 0 the formula gives the surface microstrip back. As in Microstrip
+impedance, the width for an impedance is found by halving the range of
+widths.
+
+### Assumptions and limits
+
+- **One εr for the board and the cover,** as IPC-2141A's formula has; a
+  solder mask's own εr, from its maker, may differ.
+- **No plane above the cover.**
+- **Uniform cover:** real solder mask is thinner over the copper's edges
+  and thicker between traces.
+- **Closed-form approximation:** the board maker's stack-up calculation
+  decides.
+- **No losses.**
+
+### How it was checked
+
+5 cases, the expected values computed independently from [4-7] and
+Wadell's equations:
+- 0.36 mm on 0.2 mm of FR-4 under 20 µm of mask: 46.9 Ω (50.0 Ω
+  uncovered, −6.2 %), εeff 3.25 → 3.69, 64.1 ps/cm;
+- 50 Ω under that mask: 0.319 mm;
+- no cover, 3 mm on 1.6 mm: 50.6 Ω, Microstrip impedance's value;
+- 0.2 mm of prepreg over the 0.36 mm trace: 44.2 Ω, deep limit 43.5 Ω;
+- the default: 46.9 Ω.
 
 [↑ Index](#index)
 
@@ -11718,7 +11850,8 @@ over a ground plane, or the trace width that gives it at a spacing:
 - **Below it:**
   - the odd-mode impedance, each trace's share of the pair, Zdiff / 2;
   - one trace alone, by Wadell's equations as in Microstrip impedance;
-  - Zdiff with IPC-2141's single-trace Z0 instead, and the difference;
+  - Zdiff with the older IPC-2141 single-trace Z0 instead, and the
+    difference;
   - s/h against AN-905's range, 0.2 to 3, flagged outside.
 - **Units:** mm or mil, the three length pickers moving together.
 - **Drawing:** the pair on the dielectric over the ground plane, w and s
@@ -11757,6 +11890,13 @@ LVDS's 100 Ω on a 0.2 mm layer.
 - **Single-trace Z0:** Wadell's equations and IPC-2141's formula, both from
   Z. Peterson's "High Speed Design Basics" (Altium, 2022, slide 23), as in
   Microstrip impedance.
+- **IPC-2141A, March 2004, §4.4.1** (read, Pierre's scanned copy): its
+  edge-coupled surface microstrip is not AN-905's exponential: [4-24]–[4-41]
+  give the odd-mode impedance Z0,o = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff
+  Q10), with εeff,o and ten fitted terms Q1 to Q10 in u = w/h and g = s/h,
+  citing its references 2 and 6. §4.4 warns that the balanced-line formulas
+  "exist in various forms, some of which are not in agreement". The tool
+  does not use it yet.
 
 ### Why the formulas are these
 

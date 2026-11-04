@@ -584,6 +584,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "microstrip") return renderMicrostrip(domain, tool, favId);
   if (calcId === "stripline") return renderStripline(domain, tool, favId);
   if (calcId === "diff-microstrip") return renderDiffMicrostrip(domain, tool, favId);
+  if (calcId === "embedded-microstrip") return renderEmbeddedMicrostrip(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -13256,8 +13257,11 @@ function renderFlyback(domain, tool, favId) {
 // for the copper's thickness, w' = w + ((1 + 1/εr)/2)(t/π) ln(4e /
 // √((t/h)² + ((1/π)/(w/t + 1.1))²)); εeff = (εr + 1)/2 + (εr − 1)/2 ×
 // ((1 + 12h/w)^−0.5 + 0.04 (1 − w/h)²) for w < h, without the last term
-// above. The same slide gives IPC-2141's Z0 = 87 / √(εr + 1.41) × ln(5.98h /
-// (0.8w + t)), "only accurate for 50 Ohm traces", shown beside it; National's
+// above. IPC-2141A (March 2004, §4.2.2 [4-4]–[4-6], Pierre's copy) prints
+// the same εeff and Wheeler's Z0 but with εr,eff in place of εr, which reads
+// 12 to 14 % high; the tool keeps Wadell's. The slide's "IPC-2141" Z0 = 87 /
+// √(εr + 1.41) × ln(5.98h / (0.8w + t)), "only accurate for 50 Ohm traces",
+// is not in IPC-2141A; shown beside it as the older IPC formula. National's
 // AN-905 (TI SNLA035, appendix A) writes the same formula as 60 / √(0.475 εr
 // + 0.67) × ln(4h / (0.67 (0.8w + t))), for w ≤ 2h ("maximum error ≅ 3%").
 // Its examples: 25 mil on 20 mil of εr 4.3, 1 oz, 63 Ω; 1.27 mm on 1.02 mm,
@@ -13271,7 +13275,7 @@ function wadellMicrostripZ(w, h, t, er) {
   const a = (14 + 8 / er) / 11, x = 4 * h / wp;
   return 60 / Math.sqrt(2 * er + 2) * Math.log(1 + x * (a * x + Math.sqrt(a * a * x * x + Math.PI ** 2 * (1 + 1 / er) / 2)));
 }
-// IPC-2141's microstrip Z0 (the same slide; AN-905's formula).
+// The older IPC microstrip Z0 (Peterson's slide 23, MT-094 eq. 3, AN-905).
 const ipcMicrostripZ = (w, h, t, er) => 87 / Math.sqrt(er + 1.41) * Math.log(5.98 * h / (0.8 * w + t));
 const MS_MATERIALS = { fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4], custom: ["Custom", null] };
 
@@ -13370,7 +13374,7 @@ function renderMicrostrip(domain, tool, favId) {
         </div>`;
     return `${main}
         <div class="field notation-box">
-          ${row("IPC-2141 formula, for comparison", ratio <= 2 ? ipcText : warn(`${ipcText}, outside its w ≤ 2h`), "ipc")}
+          ${row("Older IPC formula, for comparison", ratio <= 2 ? ipcText : warn(`${ipcText}, outside its w ≤ 2h`), "ipc")}
           ${row("Effective εr", Number(ee.toPrecision(3)), "eeff")}
           ${row("Delay", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
@@ -13440,7 +13444,7 @@ function renderMicrostrip(domain, tool, favId) {
 
       ${formulaSection(
         ["d = √((t/h)² + (1/π / (w/t + 1.1))²)", "w' = w + (1 + 1/εr)/2 × t/π × ln(4e / d)", "x = 4h / w',   a = (14 + 8/εr) / 11", "b = √(a² x² + π² (1 + 1/εr) / 2)", "Z0 = 60 / √(2εr + 2) × ln(1 + x (a x + b))", "εeff = (εr+1)/2 + (εr−1)/2 / √(1 + 12h/w)", "Td = 33.36 √εeff ps/cm", "C0 = Td / Z0,   L0 = Z0 × Td"],
-        "A microstrip is a trace on the outer layer of a board with a ground plane under it, h below. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or a thinner dielectric lowers Z0. These are Wadell's equations: w' is the width corrected for the copper's thickness t, and for w < h the effective εr adds (εr−1)/2 × 0.04 (1 − w/h)². εr is the dielectric constant of the board's material; part of the field runs in the air above the trace, so the signal sees an effective εr between 1 and εr, which sets its speed: the delay per length Td. C0 and L0 are the trace's capacitance and inductance per length. The simpler IPC-2141 formula is shown for comparison. Type a width to get the impedance, or the impedance you need to get the width."
+        "A microstrip is a trace on the outer layer of a board with a ground plane under it, h below. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or a thinner dielectric lowers Z0. These are Wadell's equations: w' is the width corrected for the copper's thickness t, and for w < h the effective εr adds (εr−1)/2 × 0.04 (1 − w/h)². εr is the dielectric constant of the board's material; part of the field runs in the air above the trace, so the signal sees an effective εr between 1 and εr, which sets its speed: the delay per length Td. C0 and L0 are the trace's capacitance and inductance per length. The simpler, older IPC formula is shown for comparison. Type a width to get the impedance, or the impedance you need to get the width."
       )}
       ${calcFooter("")}
     `;
@@ -13491,12 +13495,17 @@ function renderMicrostrip(domain, tool, favId) {
 // 127 µm, 49.79 Ω, both reproduced. Z. Peterson's slide 24 ("High Speed
 // Design Basics", Altium 2022) prints the same equation as Wadell's, with
 // 60 for 30, εr for e and πT/4(W + 1.1T) for the second term: the table
-// rules those out. Shown beside it: IPC-2141A's Z0 = 60/√εr × ln(1.9B /
-// (0.8W + T)) (ADI MT-094, eq. 7; National's AN-905, TI SNLA035, writes
-// 4b / (0.67π (0.8w + t)), the same, best for b − t > 2w and b > 4t), and
-// the formula slide 24 labels IPC-2141, Z0 = 94.15 / (√εr (W/(B − T) +
-// Cf/π)), Cf = 2B/(B − T) ln(B/(B − T) + 1) − T/(B − T) ln(1/(1 − T/B)² −
-// 1), for W/B > 0.35, which is not MT-094's IPC-2141A formula.
+// rules those out. IPC-2141A (March 2004, Pierre's copy) prints that same
+// equation as its formula set 1 [4-9]–[4-11], with the 60 and πt/4(w +
+// 1.1t): the slide copied it. Shown beside it: IPC-2141A's formula set 2,
+// for w/b ≥ 0.35 Z0 = 94.15 / (√εr (w/b / (1 − t/b) + θ/π)), θ = 2b/(b − t)
+// ln((2b − t)/(b − t)) − t/(b − t) ln((2bt − t²)/(b − t)²) [4-15], [4-16]
+// (IPC prints it without the √εr, slide 24 with it), and for w/b < 0.35,
+// t/b ≤ 0.25, t/w ≤ 0.11, Z0 = 60/√εr × ln(4b/(πD)), D = w/2 (1 + t/(πw)
+// (1 + ln(4πw/t)) + 0.551 (t/w)²) [4-12], [4-14]; and National's AN-905
+// (TI SNLA035), Z0 = 60/√εr × ln(4b / (0.67π (0.8w + t))), b − t > 2w and
+// b > 4t, which ADI's MT-094 (eq. 7) attributes to IPC-2141A although the
+// 2004 text does not contain it.
 const SL_T_UNITS = { oz: TRACE_OZ_MIL * 25.4e-6, "µm": 1e-6, mil: 25.4e-6 };
 
 function renderStripline(domain, tool, favId) {
@@ -13527,6 +13536,12 @@ function renderStripline(domain, tool, favId) {
     return 94.15 / (Math.sqrt(er) * (w / (b - t) + cf / Math.PI));
   };
   const zAn = () => { const { w, b, t, er } = state.si; return 60 / Math.sqrt(er) * Math.log(4 * b / (0.67 * Math.PI * (0.8 * w + t))); };
+  // IPC-2141A [4-12], [4-14]: the narrow strip as a round wire of diameter D.
+  const zNarrow = () => {
+    const { w, b, t, er } = state.si;
+    const d = w / 2 * (1 + t / (Math.PI * w) * (1 + Math.log(4 * Math.PI * w / t)) + 0.551 * (t / w) ** 2);
+    return 60 / Math.sqrt(er) * Math.log(4 * b / (Math.PI * d));
+  };
   // The width for an impedance: Z0 falls as the width grows, so halving
   // the bracket (on a log scale) from 10⁻⁴ b to 100 b finds it; NaN outside.
   const wFor = (z) => {
@@ -13586,7 +13601,10 @@ function renderStripline(domain, tool, favId) {
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
     const td = 33.356 * Math.sqrt(s.er) * per;
     const cmp = (zc) => { const d = (zc / z - 1) * 100; return zc > 0 ? `${Number(zc.toPrecision(3))} Ω (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : "none"; };
-    const ipcOk = s.w / s.b > 0.35, anOk = s.b - s.t > 2 * s.w && s.b > 4 * s.t;
+    // IPC-2141A's formula set 2: [4-15] for w/b ≥ 0.35, [4-12] below it
+    // while t/b ≤ 0.25 and t/w ≤ 0.11.
+    const ipcOk = s.w / s.b >= 0.35, narrowOk = !ipcOk && s.t / s.b <= 0.25 && s.t / s.w <= 0.11;
+    const anOk = s.b - s.t > 2 * s.w && s.b > 4 * s.t;
     const main = state.target !== null
       ? `<div class="result-field">
           <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
@@ -13600,8 +13618,8 @@ function renderStripline(domain, tool, favId) {
         </div>`;
     return `${main}
         <div class="field notation-box">
-          ${row("IPC-2141A, for comparison", anOk ? cmp(zAn()) : warn(`${cmp(zAn())}, out of range`), "an")}
-          ${row("Wide-strip formula, slide 24", ipcOk ? cmp(zIpc()) : warn(`only for w/b over 0.35`), "ipc")}
+          ${row("IPC-2141A, for comparison", ipcOk ? `${cmp(zIpc())}, wide strip` : narrowOk ? `${cmp(zNarrow())}, narrow strip` : warn(s.t / s.b > 0.25 ? "narrow strip, t/b over 0.25" : `narrow, t/w ${Number((s.t / s.w).toPrecision(2))} over 0.11`), "ipc")}
+          ${row("AN-905 (MT-094), for comparison", anOk ? cmp(zAn()) : warn(`${cmp(zAn())}, out of range`), "an")}
           ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
         </div>`;
@@ -13670,7 +13688,7 @@ function renderStripline(domain, tool, favId) {
 
       ${formulaSection(
         ["h = (b − t) / 2,   m = 6 / (3 + t/h)", "d = √((t/(4h + t))² + (1/4π / (w/t + 1.1))^m)", "w' = w + t/π × ln(e / d)", "x = 16h / (π w'),   y = x (x + √(x² + 6.27)) / 2", "Z0 = 30 / √εr × ln(1 + y)", "Td = 33.36 √εr ps/cm,  C0 = Td/Z0,  L0 = Z0 Td"],
-        "A stripline is a trace on an inner layer, centred between two ground planes b apart, with dielectric h thick on each side. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or closer planes lower Z0. This is Wheeler's formula: w' is the width corrected for the copper's thickness t. All the field runs in the dielectric, so the signal sees the full εr, which sets its speed, the delay per length Td; C0 and L0 are the capacitance and inductance per length. The simpler IPC-2141A formula and a wide-strip formula are shown for comparison, each within its range. Type a width to get the impedance, or the impedance you need to get the width."
+        "A stripline is a trace on an inner layer, centred between two ground planes b apart, with dielectric h thick on each side. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees travelling along it: when it matches the driver and the load, the signal arrives without reflections. A wider trace or closer planes lower Z0. This is Wheeler's formula: w' is the width corrected for the copper's thickness t. All the field runs in the dielectric, so the signal sees the full εr, which sets its speed, the delay per length Td; C0 and L0 are the capacitance and inductance per length. IPC-2141A's simpler formulas (one for a wide strip, one for a narrow one) and AN-905's are shown for comparison, each within its range. Type a width to get the impedance, or the impedance you need to get the width."
       )}
       ${calcFooter("")}
     `;
@@ -13807,7 +13825,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
         <div class="field notation-box">
           ${row("Odd mode, each trace in the pair", ohm(zd / 2), "odd")}
           ${row("Single trace, alone", ohm(z1), "single")}
-          ${row("With IPC-2141's Z0, for comparison", zi > 0 ? `${ohm(zi)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : "none", "ipc")}
+          ${row("With the older IPC Z0, for comparison", zi > 0 ? `${ohm(zi)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : "none", "ipc")}
           ${row("s/h, AN-905's range", ratio >= 0.2 && ratio <= 3 ? `${Number(ratio.toPrecision(3))}, within 0.2 to 3 (±10 %)` : warn(`${Number(ratio.toPrecision(3))}, outside 0.2 to 3`), "range")}
         </div>`;
   }
@@ -13905,6 +13923,214 @@ function renderDiffMicrostrip(domain, tool, favId) {
     });
     document.getElementById("dm-oz").onchange = (e) => { state.oz = parseFloat(e.target.value); setPref(C, "oz", state.oz); refresh(); };
     document.getElementById("dm-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // The three length pickers move together.
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- Embedded microstrip ----------
+// A microstrip covered by more dielectric: solder mask, or prepreg on an
+// inner layer. IPC-2141A (March 2004, §4.2.3, Pierre's copy) [4-7]:
+// Z0,embedded = Z0,surf / √(e^(−2b/h) + (εr/εr,eff)(1 − e^(−2b/h))), with
+// b = h2 − h1 [4-8], figure 4-3(b) drawing h1 from the plane to the trace
+// and h2 from the plane to the top of the cover; its errata writes h1 for h.
+// No cover, the surface microstrip; a thick one, Z0,surf × √(εr,eff/εr),
+// the field all in the dielectric. Z0,surf is Microstrip impedance's
+// (Wadell's equations), εr,eff IPC-2141A's [4-6], the same as Wadell's.
+// The covered line's effective εr follows from the same expression,
+// εr,eff e^(−2b/h1) + εr (1 − e^(−2b/h1)).
+function renderEmbeddedMicrostrip(domain, tool, favId) {
+  const C = "embedded-microstrip";
+  const state = {
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    oz: pref(C, "oz", 1, TRACE_OZ),
+    mat: "fr4",
+    si: { w: 0.36e-3, h1: 0.2e-3, h2: 0.255e-3, er: 4.3 },
+    // An impedance typed in its box: the width is set to give it.
+    target: null,
+  };
+  const t = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  const eEff = (w) => { const { h1, er } = state.si; return (er + 1) / 2 + (er - 1) / 2 * ((1 + 12 * h1 / w) ** -0.5 + (w < h1 ? 0.04 * (1 - w / h1) ** 2 : 0)); };
+  // e^(−2b/h1): how much of the field still sees the surface's air.
+  const air = () => Math.exp(-2 * (state.si.h2 - state.si.h1) / state.si.h1);
+  const zSurf = (w) => wadellMicrostripZ(w, state.si.h1, t(), state.si.er);
+  const zAt = (w) => zSurf(w) / Math.sqrt(air() + state.si.er / eEff(w) * (1 - air()));
+  const solve = (z) => {
+    let lo = state.si.h1 * 1e-4, hi = state.si.h1 * 100;
+    if (!(z < zAt(lo) && z > zAt(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (zAt(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
+  const geomOk = () => { const s = state.si; return s.h1 > 0 && s.h2 >= s.h1 && s.er >= 1; };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.h1 > 0)) return "Enter the dielectric under the trace, h1.";
+    if (!(s.h2 >= s.h1)) return "H2, to the top of the cover, cannot be below h1.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(solve(state.target) > 0)) return "No width between 0.0001 and 100 times h1 gives that impedance.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    return "";
+  }
+
+  // The board in cross-section: the trace on its dielectric, the cover over
+  // it, the ground plane under; green when the width is the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mm = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mm(v)}` : `${mm(v)} · ${mil(v)}`);
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="30" width="242" height="60" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M40 58 H282" stroke="${wire}" stroke-width="1" stroke-dasharray="4 3"/>
+      <rect x="40" y="90" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <rect x="131" y="50" width="60" height="8" fill="${tone}"/>
+      ${lbl(161, 46, ok ? `w ${both(s.w)}` : "w", tone)}
+      <path d="M30 58 V90 M26 58 H34 M26 90 H34" stroke="${wire}" stroke-width="1.2"/>
+      <path d="M18 30 V90 M14 30 H22" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(46, 78, `h1 ${both(s.h1)}`, grey, "start")}
+      ${lbl(14, 24, `H2 ${both(s.h2)}`, grey, "start")}
+      ${lbl(276, 78, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(276, 42, "cover", grey, "end")}
+      ${lbl(161, 108, "ground plane", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, z = zAt(s.w), zs = zSurf(s.w), ee = eEff(s.w);
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
+    // The covered line's effective εr, from the same blend.
+    const eCov = ee * air() + s.er * (1 - air());
+    const td = 33.356 * Math.sqrt(eCov) * per;
+    const cover = s.h2 - s.h1;
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω, covered</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}; uncovered it would be ${ohm(zs)}</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Characteristic impedance, covered</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(z)}</span></div>
+          <div class="result-sub" data-res="sub">${ohm(zs)} uncovered: the cover takes ${Number(((1 - z / zs) * 100).toPrecision(2))} %</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${row("Cover b", cover > t() ? `${len(cover)}, ${len(cover - t())} over the top` : cover <= 0 ? "none: a surface microstrip" : warn(`${len(cover)}, thinner than the copper`), "cover")}
+          ${row("Buried deep, it would be", ohm(zs * Math.sqrt(ee / s.er)), "deep")}
+          ${row("Effective εr, uncovered and covered", `${Number(ee.toPrecision(3))}, ${Number(eCov.toPrecision(3))}`, "eeff")}
+          ${row("Delay, covered", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number(zAt(state.si.w).toPrecision(4))));
+  }
+  function settle() { if (state.target > 0 && geomOk()) { const w = solve(state.target); if (w > 0) state.si.w = w; } }
+
+  function refresh() {
+    settle();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  const example = (si, extra, target) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    settle();
+    paint();
+  };
+  const OZ = TRACE_OZ_MIL * 25.4e-6;
+  useExamples([
+    { title: "Solder mask on a 50 Ω trace", note: "0.36 mm on 0.2 mm of FR-4, 20 µm of mask over the copper: 50 Ω becomes 46.9 Ω.",
+      apply: example({ w: 0.36e-3, h1: 0.2e-3, h2: 0.2e-3 + OZ + 20e-6, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
+    { title: "50 Ω under solder mask", note: "The same layer and mask: 0.319 mm wide gives 50 Ω covered.",
+      apply: example({ h1: 0.2e-3, h2: 0.2e-3 + OZ + 20e-6, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
+    { title: "No cover: the surface microstrip", note: "H2 equal to h1: Wadell's 50.6 Ω for 3 mm on 1.6 mm, as in Microstrip impedance.",
+      apply: example({ w: 3e-3, h1: 1.6e-3, h2: 1.6e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
+    { title: "Buried under 0.2 mm of prepreg", note: "A thick cover: the 0.36 mm trace drops to 44.2 Ω, near its deep limit of 43.5 Ω.",
+      apply: example({ w: 0.36e-3, h1: 0.2e-3, h2: 0.4e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const ozSel = `<select id="em-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
+    const matSel = `<select id="em-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A microstrip under solder mask or more dielectric")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Trace width", 1)}${lf("h1", "Under it, h1", 2)}${lf("h2", "To the top, H2", 3)}</div>
+      <div class="field-pair"><div class="field"><label>Copper</label>${ozSel}</div><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${field("z", "Impedance", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["b = H2 − h1,   k = e^(−2b / h1)", "Z0 = Z0,surf / √(k + (εr / εr,eff)(1 − k))", "Z0,surf, εr,eff: Microstrip impedance's"],
+        "An embedded microstrip is a trace with dielectric on top of it as well as under it: solder mask on an outer layer, or prepreg on an inner one with no plane above. The field that ran in the air above a bare microstrip now runs partly in the cover, so the signal sees more dielectric and the impedance falls, a little under thin solder mask, more under a thick cover, down to the limit where the trace is buried deep. h1 is the dielectric under the trace, H2 the height of the cover's top above the plane, b their difference. The formula is IPC-2141A's (§4.2.3); Z0,surf and εr,eff are the bare microstrip's. Type a width to get the impedance, or the impedance you need to get the width."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "h1" || key === "h2") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("em-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("em-oz").onchange = (e) => { state.oz = parseFloat(e.target.value); setPref(C, "oz", state.oz); refresh(); };
+    document.getElementById("em-mat").onchange = (e) => {
       state.mat = e.target.value;
       const er = MS_MATERIALS[state.mat][1];
       if (er) state.si.er = er;

@@ -363,6 +363,12 @@ const FORMULAS = [
   },
 
   {
+    tool: "Embedded microstrip",
+    domain: "pcb",
+    formulas: ["k = e^(−2b/h1),   b = H2 − h1", "Z0,emb = Z0 / √(k + (εr / εr,eff)(1 − k))"],
+    note: "Z0 and εr,eff are the uncovered microstrip's, h1 the dielectric under the trace, H2 the plane to the top of the cover (IPC-2141A [4-7], [4-8]).",
+  },
+  {
     tool: "Differential microstrip",
     domain: "pcb",
     formulas: ["Zdiff = 2 Z0 × (1 − 0.48 e^(−0.96 s/h))", "Zodd = Zdiff / 2"],
@@ -378,7 +384,7 @@ const FORMULAS = [
     tool: "Microstrip impedance",
     domain: "pcb",
     formulas: ["x = 4h / w',   a = (14 + 8/εr) / 11", "b = √(a² x² + π² (1 + 1/εr) / 2)", "Z0 = 60 / √(2εr + 2) × ln(1 + x (a x + b))"],
-    note: "Wadell's equations; w' is the width w corrected for the copper's thickness t, h the dielectric to the ground plane. IPC-2141's simpler 87/√(εr + 1.41) × ln(5.98h / (0.8w + t)) holds for w ≤ 2h.",
+    note: "Wadell's equations; w' is the width w corrected for the copper's thickness t, h the dielectric to the ground plane. The older IPC formula, 87/√(εr + 1.41) × ln(5.98h / (0.8w + t)), holds for w ≤ 2h.",
   },
 
   // ---- Power ----
