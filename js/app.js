@@ -583,6 +583,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "flyback") return renderFlyback(domain, tool, favId);
   if (calcId === "microstrip") return renderMicrostrip(domain, tool, favId);
   if (calcId === "stripline") return renderStripline(domain, tool, favId);
+  if (calcId === "diff-microstrip") return renderDiffMicrostrip(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -13263,6 +13264,15 @@ function renderFlyback(domain, tool, favId) {
 // 64 Ω; 93 Ω on 30 mil of εr 3.8, ½ oz, 18 mil. Its appendix D: FR-4 and
 // G-10 4.3, polyimide 4.2, PTFE 2.4. Copper as in Trace width, 1 oz 34.8 µm.
 const MS_LEN_UNITS = { mm: 1e-3, mil: 25.4e-6 };
+// Wadell's microstrip Z0 (Peterson's slide 23), shared with Differential
+// microstrip impedance.
+function wadellMicrostripZ(w, h, t, er) {
+  const wp = t > 0 ? w + (1 + 1 / er) / 2 * (t / Math.PI) * Math.log(4 * Math.E / Math.sqrt((t / h) ** 2 + ((1 / Math.PI) / (w / t + 1.1)) ** 2)) : w;
+  const a = (14 + 8 / er) / 11, x = 4 * h / wp;
+  return 60 / Math.sqrt(2 * er + 2) * Math.log(1 + x * (a * x + Math.sqrt(a * a * x * x + Math.PI ** 2 * (1 + 1 / er) / 2)));
+}
+// IPC-2141's microstrip Z0 (the same slide; AN-905's formula).
+const ipcMicrostripZ = (w, h, t, er) => 87 / Math.sqrt(er + 1.41) * Math.log(5.98 * h / (0.8 * w + t));
 const MS_MATERIALS = { fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4], custom: ["Custom", null] };
 
 function renderMicrostrip(domain, tool, favId) {
@@ -13277,14 +13287,9 @@ function renderMicrostrip(domain, tool, favId) {
   };
   const t = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
   // Wadell's Z0 at a width.
-  const zAt = (w) => {
-    const { h, er } = state.si, tt = t();
-    const wp = w + (1 + 1 / er) / 2 * (tt / Math.PI) * Math.log(4 * Math.E / Math.sqrt((tt / h) ** 2 + ((1 / Math.PI) / (w / tt + 1.1)) ** 2));
-    const a = (14 + 8 / er) / 11, x = 4 * h / wp;
-    return 60 / Math.sqrt(2 * er + 2) * Math.log(1 + x * (a * x + Math.sqrt(a * a * x * x + Math.PI ** 2 * (1 + 1 / er) / 2)));
-  };
+  const zAt = (w) => wadellMicrostripZ(w, state.si.h, t(), state.si.er);
   const z0 = () => zAt(state.si.w);
-  const zIpc = () => { const s = state.si; return 87 / Math.sqrt(s.er + 1.41) * Math.log(5.98 * s.h / (0.8 * s.w + t())); };
+  const zIpc = () => ipcMicrostripZ(state.si.w, state.si.h, t(), state.si.er);
   const eEff = () => {
     const { w, h, er } = state.si;
     return (er + 1) / 2 + (er - 1) / 2 * ((1 + 12 * h / w) ** -0.5 + (w < h ? 0.04 * (1 - w / h) ** 2 : 0));
@@ -13697,6 +13702,214 @@ function renderStripline(domain, tool, favId) {
     // The two length pickers move together; the copper has its own.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- Differential microstrip impedance ----------
+// Two edge-coupled traces on an outer layer over a ground plane. National's
+// AN-905 (TI SNLA035, appendix A): Zdiff ≅ 2 Z0 (1 − 0.48 e^(−0.96 s/h)),
+// "derived from empirical data … errors of up to ±10%", practical for Z0
+// and Zdiff of 20 to 150 Ω, its slide rule limited to 0.20 ≤ s/h ≤ 3.0; Z0
+// is one trace's impedance, here Wadell's as in Microstrip impedance, and
+// IPC-2141's beside it. Its examples: two 75 Ω microstrips 0.10 cm apart on
+// 0.076 cm, factor 0.86, 128 Ω; 10 mil apart on 20 mil, factor 0.702,
+// 105 Ω.
+function renderDiffMicrostrip(domain, tool, favId) {
+  const C = "diff-microstrip";
+  const state = {
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    oz: pref(C, "oz", 1, TRACE_OZ),
+    mat: "fr4",
+    si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, er: 4.3 },
+    // A differential impedance typed in its box: the width is set to give
+    // it, the spacing kept.
+    target: null,
+  };
+  const t = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  const k = () => 1 - 0.48 * Math.exp(-0.96 * state.si.s / state.si.h);
+  const zSingle = (w) => wadellMicrostripZ(w, state.si.h, t(), state.si.er);
+  const zDiffAt = (w) => 2 * zSingle(w) * k();
+  // The width for an impedance, by halving the bracket as in Microstrip
+  // impedance; NaN outside.
+  const solve = (f, z) => {
+    let lo = state.si.h * 1e-4, hi = state.si.h * 100;
+    if (!(z < f(lo) && z > f(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (f(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.h > 0)) return "Enter the dielectric's thickness.";
+    if (!(s.s > 0)) return "Enter the spacing between the traces.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(solve(zDiffAt, state.target) > 0)) return "No width between 0.0001 and 100 times the dielectric gives that impedance.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    return "";
+  }
+
+  // The pair in cross-section on the dielectric over the ground plane,
+  // green when the width is the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mm = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mm(v)}` : `${mm(v)} · ${mil(v)}`);
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="56" width="242" height="34" stroke="${wire}" stroke-width="1.4"/>
+      <rect x="40" y="90" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <rect x="101" y="48" width="44" height="8" fill="${tone}"/><rect x="177" y="48" width="44" height="8" fill="${tone}"/>
+      <path d="M101 35 V45 M145 35 V45 M101 40 H145" stroke="${tone}" stroke-width="1.2"/>
+      <path d="M177 35 V45 M145 40 H177" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(123, 30, ok ? `w ${both(s.w)}` : "w", tone)}
+      ${lbl(183, 44, `s ${both(s.s)}`, grey, "start")}
+      <path d="M30 56 V90 M26 56 H34 M26 90 H34" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(46, 77, `h ${both(s.h)}`, grey, "start")}
+      ${lbl(276, 77, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(161, 108, "ground plane", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, z1 = zSingle(s.w), zd = 2 * z1 * k();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const ratio = s.s / s.h;
+    const zi = 2 * ipcMicrostripZ(s.w, s.h, t(), s.er) * k(), d = (zi / zd - 1) * 100;
+    const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, ${len(s.s)} apart</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Differential impedance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(zd)}</span></div>
+          <div class="result-sub" data-res="sub">each trace ${ohm(z1)} alone, coupling ${Number(k().toPrecision(3))}</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${row("Odd mode, each trace in the pair", ohm(zd / 2), "odd")}
+          ${row("Single trace, alone", ohm(z1), "single")}
+          ${row("With IPC-2141's Z0, for comparison", zi > 0 ? `${ohm(zi)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : "none", "ipc")}
+          ${row("s/h, AN-905's range", ratio >= 0.2 && ratio <= 3 ? `${Number(ratio.toPrecision(3))}, within 0.2 to 3 (±10 %)` : warn(`${Number(ratio.toPrecision(3))}, outside 0.2 to 3`), "range")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number(zDiffAt(state.si.w).toPrecision(4))));
+  }
+  function settle() {
+    const s = state.si;
+    if (state.target > 0 && s.h > 0 && s.s > 0 && s.er >= 1) { const w = solve(zDiffAt, state.target); if (w > 0) s.w = w; }
+  }
+
+  function refresh() {
+    settle();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  // single: a width giving that Z0 for one trace, as AN-905's examples
+  // start from the trace's impedance.
+  const example = (si, extra, target, single) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    if (single) state.si.w = solve(zSingle, single);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    settle();
+    paint();
+  };
+  const MIL = 25.4e-6;
+  useExamples([
+    { title: "AN-905: 75 Ω traces 1 mm apart", note: "On 0.76 mm of εr 4.3: 130 Ω differential; its slide rule reads 128 Ω.",
+      apply: example({ s: 1e-3, h: 0.76e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, null, 75) },
+    { title: "AN-905: 10 mil apart on 20 mil", note: "Two 75 Ω traces: 105 Ω, as its slide rule.",
+      apply: example({ s: 10 * MIL, h: 20 * MIL, er: 4.3 }, { lUnit: "mil", oz: 1 }, null, 75) },
+    { title: "USB, 90 Ω on a 0.2 mm layer", note: "FR-4, 1 oz, 0.2 mm apart: each trace 0.301 mm wide.",
+      apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 90) },
+    { title: "Ethernet or LVDS, 100 Ω", note: "The same layer and spacing: 0.245 mm traces, 50 Ω each in the pair.",
+      apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 100) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const ozSel = `<select id="dm-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
+    const matSel = `<select id="dm-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The impedance of a pair of traces over a ground plane")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Spacing, s", 2)}${lf("h", "Dielectric, h", 3)}</div>
+      <div class="field-pair"><div class="field"><label>Copper</label>${ozSel}</div><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${field("z", "Differential impedance", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Zdiff = 2 Z0 × (1 − 0.48 e^(−0.96 s/h))", "Zodd = Zdiff / 2", "Z0: one trace alone (Wadell)"],
+        "A differential pair carries a signal as two equal and opposite voltages on two traces side by side. Its differential impedance Zdiff is what the driver sees between the two traces; a line driven and ended in it carries the signal without reflections. USB uses 90 Ω, Ethernet and LVDS 100 Ω. Each trace alone has its impedance Z0; brought closer, the two couple and Zdiff falls below 2 Z0, by the factor in brackets. The odd-mode impedance is each trace's share of the pair. AN-905's factor is empirical, within about ±10 % for s/h between 0.2 and 3. Type a width to get Zdiff, or the Zdiff you need to get the width at your spacing."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "s" || key === "h") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("dm-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("dm-oz").onchange = (e) => { state.oz = parseFloat(e.target.value); setPref(C, "oz", state.oz); refresh(); };
+    document.getElementById("dm-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // The three length pickers move together.
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     syncBoxes();
   }
 

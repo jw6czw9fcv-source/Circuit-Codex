@@ -166,7 +166,7 @@ const DOMAINS = [
       {
         title: "Impedance",
         tools: [
-          { name: "Microstrip impedance", calc: "microstrip" }, { name: "Embedded microstrip impedance" }, { name: "Differential microstrip impedance" },
+          { name: "Microstrip impedance", calc: "microstrip" }, { name: "Embedded microstrip impedance" }, { name: "Differential microstrip", was: "Differential microstrip impedance", calc: "diff-microstrip" },
           { name: "Stripline impedance", calc: "stripline" }, { name: "Dual stripline impedance" }, { name: "Coplanar waveguide impedance" },
           { name: "Effective dielectric constant (Er effective)" }, { name: "Signal propagation delay" }, { name: "Crosstalk calculator" },
           { name: "Laminate material reference (Dk/Df) — IPC-4101" },
@@ -321,6 +321,7 @@ const TOOL_KEYWORDS = {
   "formula-search": "formulas equations",
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
   "antenna-length": "antenna length dipole monopole quarter wave half wave vertical ground plane whip long wire end fed cut trim ham radio cb end effect correction factor 468 234",
+  "diff-microstrip": "differential microstrip impedance pair zdiff odd mode edge coupled usb 90 ohm ethernet lvds 100 ohm hdmi pcie controlled impedance pcb trace spacing an-905",
   "stripline": "stripline impedance characteristic z0 50 ohm controlled impedance inner layer pcb trace between planes transmission line dielectric constant er fr-4 propagation delay wheeler signal integrity",
   "microstrip": "microstrip impedance characteristic z0 50 ohm controlled impedance pcb trace transmission line dielectric constant er fr-4 prepreg propagation delay signal integrity rf trace width an-905",
   "flyback": "flyback converter smps isolated transformer turns ratio primary inductance ccm continuous conduction reflected voltage drain voltage mosfet diode output capacitor offline power supply",
@@ -404,6 +405,7 @@ const RELATED = {
   "zener-transistor": ["zener-regulation", "heat-sink", "linear-regulator"],
   "constant-current": ["linear-regulator", "led-series-resistor", "heat-sink"],
   "antenna-length": ["wavelength"],
+  "diff-microstrip": ["microstrip", "stripline", "trace-width"],
   "stripline": ["microstrip", "trace-width", "wavelength"],
   "microstrip": ["trace-width", "wavelength", "decoupling"],
   "flyback": ["buck", "boost", "heat-sink", "inrush-limiter"],

@@ -363,6 +363,12 @@ const FORMULAS = [
   },
 
   {
+    tool: "Differential microstrip",
+    domain: "pcb",
+    formulas: ["Zdiff = 2 Z0 × (1 − 0.48 e^(−0.96 s/h))", "Zodd = Zdiff / 2"],
+    note: "Z0 one trace alone, s the gap between the two, h the dielectric; empirical, within about ±10 % for s/h 0.2 to 3 (National AN-905).",
+  },
+  {
     tool: "Stripline impedance",
     domain: "pcb",
     formulas: ["x = 16h / (π w'),   y = x (x + √(x² + 6.27)) / 2", "Z0 = 30 / √εr × ln(1 + y)", "Td = 33.36 √εr ps/cm"],

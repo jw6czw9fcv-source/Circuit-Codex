@@ -116,6 +116,7 @@ will key on, since that is the id the app already holds for each tool.
 - Trace current & resistance → [Trace width](#trace-width)
 - Trace current & resistance → [Via current capacity](#via-current)
 - Impedance → [Microstrip impedance](#microstrip)
+- Impedance → [Differential microstrip](#diff-microstrip)
 - Impedance → [Stripline impedance](#stripline)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
@@ -11671,5 +11672,106 @@ width for an impedance is found by halving the range of widths.
 - the copper's own picker (1 oz is 34.8 µm);
 - copper as thick as half the spacing is refused;
 - the length pickers move together.
+
+[↑ Index](#index)
+
+---
+
+<a id="diff-microstrip"></a>
+## Differential microstrip
+
+`calc: diff-microstrip` · PCB & interconnect › Impedance
+(formerly Differential microstrip impedance)
+
+### What it computes
+
+The differential impedance of two edge-coupled traces on an outer layer
+over a ground plane, or the trace width that gives it at a spacing:
+
+- **Inputs:** each trace's width w, the gap between them s, the dielectric
+  h, the copper weight, the material and εr.
+- **Width and differential impedance are two live boxes:** type a width
+  and the impedance box shows Zdiff; type the Zdiff you need (90 Ω for
+  USB, 100 Ω for Ethernet or LVDS) and the width box shows the width at
+  your spacing.
+- **The big result:** Zdiff, with each trace's impedance alone and the
+  coupling factor; or the width for the Zdiff typed.
+- **Below it:**
+  - the odd-mode impedance, each trace's share of the pair, Zdiff / 2;
+  - one trace alone, by Wadell's equations as in Microstrip impedance;
+  - Zdiff with IPC-2141's single-trace Z0 instead, and the difference;
+  - s/h against AN-905's range, 0.2 to 3, flagged outside.
+- **Units:** mm or mil, the three length pickers moving together.
+- **Drawing:** the pair on the dielectric over the ground plane, w and s
+  as a chain dimension, h and εr, in mm and mil. The traces are green when
+  their width is the answer.
+- **Remembered:** the unit and the copper weight.
+
+Examples: AN-905's two slide-rule examples, USB's 90 Ω and Ethernet's or
+LVDS's 100 Ω on a 0.2 mm layer.
+
+### Terms
+
+- **Differential pair:** two traces carrying a signal as equal and
+  opposite voltages; the receiver reads the difference, so noise common to
+  both cancels.
+- **Differential impedance (Zdiff):** the impedance the driver sees
+  between the two traces.
+- **Odd-mode impedance:** the impedance of one trace while the other
+  carries the opposite signal, half of Zdiff.
+- **Coupling:** brought close, each trace's field reaches the other; Zdiff
+  falls below twice one trace's impedance.
+- **Edge-coupled:** side by side on the same layer (AN-905's only case).
+- **Z0, εr, oz:** as in Microstrip impedance.
+
+### Source
+
+- **National Semiconductor AN-905, TI SNLA035** (read, appendix A
+  rendered): for microstrip, Zdiff ≅ 2 Z0 (1 − 0.48 e^(−0.96 s/h)) ohms;
+  "These functions were derived from empirical data … Various sources cite
+  possible errors of up to ±10%. The practical ranges for Z0 and Zdiff are
+  from 20Ω to about 150Ω"; the slide rule's range "0.20 ≤ s/h ≤ 3.0";
+  "Both conductors of the pair must have the same physical cross sectional
+  dimensions"; its examples: two 75 Ω microstrips 0.10 cm apart on a
+  0.076 cm substrate, factor 0.86, 128 Ω; 10 mils apart on 20 mils,
+  factor 0.702, 105 Ω.
+- **Single-trace Z0:** Wadell's equations and IPC-2141's formula, both from
+  Z. Peterson's "High Speed Design Basics" (Altium, 2022, slide 23), as in
+  Microstrip impedance.
+
+### Why the formulas are these
+
+    Zdiff = 2 Z0 × (1 − 0.48 e^(−0.96 s/h))
+    Zodd = Zdiff / 2
+
+Far apart, the two traces are independent and the pair is two lines in
+series: Zdiff = 2 Z0. Brought closer, their mutual capacitance and
+inductance lower it; AN-905 fits that fall with an exponential in s/h.
+The width for a Zdiff is found by halving the range of widths, the
+spacing kept.
+
+### Assumptions and limits
+
+- **Empirical, ±10 %:** a field solver or the board maker's calculation
+  decides for a controlled-impedance board.
+- **Equal traces, edge-coupled, no solder mask.**
+- **The coupling factor is AN-905's, the single-trace Z0 Wadell's:** the
+  factor was fitted with AN-905's own Z0 (IPC-2141's formula); the
+  comparison row shows that combination too.
+- **Spacing to other traces:** AN-905 asks for more than 2s to the next
+  pair, to keep crosstalk and the impedance in hand.
+
+### How it was checked
+
+7 cases:
+- AN-905's 75 Ω traces 1 mm apart on 0.76 mm: 130 Ω (129.6), coupling
+  0.864 (its factor 0.86, 128 Ω);
+- 10 mil apart on 20 mil: 105 Ω (its 105 Ω), 52.7 Ω odd mode, s/h 0.5;
+- USB 90 Ω on 0.2 mm, 0.2 mm apart: 0.301 mm, 55.1 Ω alone, IPC-based
+  87.2 Ω;
+- 100 Ω on the same layer: 0.245 mm, 50 Ω odd mode;
+- the default pair: 116 Ω, IPC-based 114 Ω;
+- a spacing beyond 3 h is flagged;
+- the three length pickers move together.
 
 [↑ Index](#index)

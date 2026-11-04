@@ -405,7 +405,7 @@ Then:
 - [x] DC/DC boost converter — built, TI SLVA372D + TPS61030/TPS61023 examples, 2026-11-02
 - [x] Microstrip impedance — built, National AN-905 (TI SNLA035), 2026-11-02
 - [ ] Embedded microstrip impedance
-- [ ] Differential microstrip impedance
+- [x] Differential microstrip impedance — built as Differential microstrip, AN-905 coupling on Wadell's Z0, 2026-11-03
 - [x] Stripline impedance — built, Wheeler 1978 via Hafner et al. 2014 (table I reproduced), 2026-11-03
 - [ ] Dual stripline impedance
 - [ ] Coplanar waveguide impedance
