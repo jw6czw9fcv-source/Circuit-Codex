@@ -167,7 +167,7 @@ const DOMAINS = [
         title: "Impedance",
         tools: [
           { name: "Microstrip impedance", calc: "microstrip" }, { name: "Embedded microstrip", was: "Embedded microstrip impedance", calc: "embedded-microstrip" }, { name: "Differential microstrip", was: "Differential microstrip impedance", calc: "diff-microstrip" },
-          { name: "Stripline impedance", calc: "stripline" }, { name: "Dual stripline", was: "Dual stripline impedance", calc: "dual-stripline" }, { name: "Differential stripline", calc: "diff-stripline" }, { name: "Broadside stripline", calc: "broadside-stripline" }, { name: "Coplanar waveguide impedance" },
+          { name: "Stripline impedance", calc: "stripline" }, { name: "Asymmetric stripline", was: "Dual stripline impedance", calc: "dual-stripline" }, { name: "Edge-coupled stripline", was: "Differential stripline", calc: "diff-stripline" }, { name: "Broadside stripline", calc: "broadside-stripline" }, { name: "Coplanar waveguide impedance" },
           { name: "Effective dielectric constant (Er effective)" }, { name: "Signal propagation delay" }, { name: "Crosstalk calculator" },
           { name: "Laminate material reference (Dk/Df) — IPC-4101" },
         ],

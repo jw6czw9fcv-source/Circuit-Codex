@@ -1,4 +1,4 @@
-"""Check for Dual stripline (and Stripline impedance): a 2D finite-difference field solver for a (possibly offset) stripline.
+"""Check for Asymmetric stripline (and Stripline impedance): a 2D finite-difference field solver for a (possibly offset) stripline.
 
 Cross-section: ground planes at y = 0 and y = B = h1 + t + h2, a trace of
 width w and thickness t (t = 0 allowed) whose bottom is h1 above the lower

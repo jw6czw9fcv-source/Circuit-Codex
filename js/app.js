@@ -13759,9 +13759,12 @@ function renderStripline(domain, tool, favId) {
   paint();
 }
 
-// ---------- Dual stripline impedance ----------
-// A trace between two ground planes but nearer one of them: the dual (or
-// offset, asymmetric) stripline. IPC-2141A (March 2004, §4.2.5, figure
+// ---------- Asymmetric stripline ----------
+// A trace between two ground planes but nearer one of them: the asymmetric
+// (or offset) stripline, IPC-2141A's name (first built as Dual stripline;
+// Pierre renamed it 2026-11-05, as "dual stripline" is the name used for a
+// stack-up with two signal layers between the same planes, whose other
+// layer this tool leaves out). IPC-2141A (March 2004, §4.2.5, figure
 // 4-3(d), Pierre's copy) [4-17]–[4-19]: Z0,AS = 1/εr × [Z0,SS(εr = 1, b =
 // h1 + h2 + t) − ΔZ0,air], ΔZ0,air = 0.0325π Z0,air² (0.5 − ½ (2h1 + t)/(h1 +
 // h2 + t))^2.2 ((t + w)/(h1 + h2 + t))^2.9, Z0,air = 2 Z0,SS(b = h1) Z0,SS(b =
@@ -13952,7 +13955,7 @@ function renderDualStripline(domain, tool, favId) {
 
       ${formulaSection(
         ["Z(b): stripline Z0 in air, planes b apart", "Z1 = Z(2h1 + t),   Z2 = Z(2h2 + t)", "Zair = 2 Z1 Z2 / (Z1 + Z2)", "a = ½ − (h1 + t/2) / B,   B = h1 + h2 + t", "ΔZ = 0.0325π Zair² |a|^2.2 ((t + w)/B)^2.9", "Z0 = (Zair − ΔZ) / √εr"],
-        "A dual (or offset) stripline is a trace between two ground planes but nearer one of them, as on a board with two signal layers between the same planes. h1 is the dielectric under the trace, h2 over it, t the copper. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees along it. Each side of the trace acts as half of a centred stripline with that side's spacing; the two halves in parallel give Zair, and IPC-2141A's term ΔZ corrects for the offset. The nearer plane pulls Z0 below a centred trace's. All the field runs in the dielectric, so the signal sees the full εr, which sets the delay per length. Type a width to get the impedance, or the impedance you need to get the width."
+        "An asymmetric (or offset) stripline is a trace between two ground planes but nearer one of them, as each trace is on a board with two signal layers between the same planes (traces on the other layer are left out). h1 is the dielectric under the trace, h2 over it, t the copper. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees along it. Each side of the trace acts as half of a centred stripline with that side's spacing; the two halves in parallel give Zair, and IPC-2141A's term ΔZ corrects for the offset. The nearer plane pulls Z0 below a centred trace's. All the field runs in the dielectric, so the signal sees the full εr, which sets the delay per length. Type a width to get the impedance, or the impedance you need to get the width."
       )}
       ${calcFooter("")}
     `;
@@ -13990,8 +13993,10 @@ function renderDualStripline(domain, tool, favId) {
   paint();
 }
 
-// ---------- Differential stripline ----------
-// Two edge-coupled traces centred between two ground planes. IPC-2141A
+// ---------- Edge-coupled stripline ----------
+// Two edge-coupled traces centred between two ground planes (first named
+// Differential stripline; Pierre renamed it 2026-11-05, Broadside stripline
+// being a differential stripline too). IPC-2141A
 // (March 2004, §4.4.2, figure 4-6(b), Pierre's copy) [4-42]–[4-45], citing
 // its references 2 and 7, the odd-mode impedance of thick strips from the
 // zero-thickness ones: for s/t ≥ 5, 1/Z0,o = 1/Z0(w, t) + (C'f(t)/C'f(0))
@@ -14175,7 +14180,7 @@ function renderDiffStripline(domain, tool, favId) {
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
     const matSel = `<select id="dsl-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     app.innerHTML = `
-      ${calcHeader(tool, favId, "A pair of traces between two planes")}
+      ${calcHeader(tool, favId, "A side-by-side pair between two planes")}
 
       <div class="diagram-box">${diagram()}</div>
 
@@ -14240,7 +14245,7 @@ function renderDiffStripline(domain, tool, favId) {
 // thin pair with the planes 2t closer (each strip's outer face where its
 // plane sees it), plus the admittance the copper adds to one strip between
 // its plane and the mid-plane, taken from two symmetric striplines in
-// parallel (Wheeler's, planes 2h1 + t and s + t apart, as in Dual
+// parallel (Wheeler's, planes 2h1 + t and s + t apart, as in Asymmetric
 // stripline, without its offset term): within 1.5 % of the solver for ½ to
 // 2 oz.
 function renderBroadsideStripline(domain, tool, favId) {

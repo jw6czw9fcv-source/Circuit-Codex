@@ -119,8 +119,8 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Embedded microstrip](#embedded-microstrip)
 - Impedance → [Differential microstrip](#diff-microstrip)
 - Impedance → [Stripline impedance](#stripline)
-- Impedance → [Dual stripline](#dual-stripline)
-- Impedance → [Differential stripline](#diff-stripline)
+- Impedance → [Asymmetric stripline](#dual-stripline)
+- Impedance → [Edge-coupled stripline](#diff-stripline)
 - Impedance → [Broadside stripline](#broadside-stripline)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
@@ -11699,7 +11699,7 @@ width for an impedance is found by halving the range of widths.
 ### Assumptions and limits
 
 - **Symmetric stripline:** the trace centred between the planes; an
-  off-centre trace is the dual stripline's case, a later tool.
+  off-centre trace is Asymmetric stripline's case.
 - **One dielectric:** core and prepreg of different εr are averaged by
   the user.
 - **Closed-form approximation:** a field solver, or the board maker's
@@ -11726,16 +11726,16 @@ width for an impedance is found by halving the range of widths.
 ---
 
 <a id="dual-stripline"></a>
-## Dual stripline
+## Asymmetric stripline
 
 `calc: dual-stripline` · PCB & interconnect › Impedance
-(formerly Dual stripline impedance)
+(formerly Dual stripline impedance, then Dual stripline)
 
 ### What it computes
 
 The impedance of a trace between two ground planes but nearer one of them
-(the dual, offset or asymmetric stripline, as on a board with two signal
-layers between the same pair of planes), or the width that gives an
+(the asymmetric or offset stripline, IPC-2141A's §4.2.5, as each trace is
+on a board with two signal layers between the same pair of planes), or the width that gives an
 impedance:
 
 - **Inputs:** the trace width w, the dielectric under it h1 and over it
@@ -11764,8 +11764,13 @@ narrow trace close to one plane.
 
 ### Terms
 
-- **Dual stripline:** a stripline whose trace is not centred: h1 ≠ h2,
-  as each trace is when two signal layers share the same planes.
+- **Asymmetric (offset) stripline:** a stripline whose trace is not
+  centred: h1 ≠ h2. A board with two signal layers between the same planes
+  (a dual stripline) has each layer's traces offset like this; the tool
+  leaves out the other layer's traces.
+- **Name:** IPC-2141A's. The tool was first called Dual stripline; Pierre
+  renamed it on 2026-11-05, since that name is used for the two-layer
+  stack-up, not for one offset trace.
 - **h1, h2, B:** the dielectric between the trace and the lower and the
   upper plane; B = h1 + h2 + t is the spacing between the planes.
 - **Z0, εr, C0, L0, oz:** as in Microstrip impedance and Stripline
@@ -11851,9 +11856,10 @@ takes the offset term's (½ − …) as a magnitude, either plane the near one.
 ---
 
 <a id="diff-stripline"></a>
-## Differential stripline
+## Edge-coupled stripline
 
 `calc: diff-stripline` · PCB & interconnect › Impedance
+(formerly Edge-coupled stripline)
 
 ### What it computes
 
@@ -12006,7 +12012,7 @@ the trace width that gives it:
   s, the spacing between the planes b, the copper's thickness t (its own
   picker), the material and εr.
 - **Width and differential impedance are two live boxes,** as in
-  Differential stripline.
+  Edge-coupled stripline.
 - **The big result:** Zdiff with the copper (the tool's method, within
   1.5 % of a field solver), with the odd-mode impedance; or the width for
   the Zdiff typed.
@@ -12058,7 +12064,7 @@ there. k has no closed form: the tool halves the range from s/b to 1 until
 w/b comes out. The width for a Zdiff is found the same way.
 
 **The constant.** Against the field solver (tools/fd_lines.py, as in
-Differential stripline) the printed formula's ratio is 0.9934 for every
+Edge-coupled stripline) the printed formula's ratio is 0.9934 for every
 geometry tried: its shape is exact, and the constant that matches is
 η0π/4 = 295.9, not 293.9. With 295.9 the tool is within 0.1 % of the
 solver for paper-thin traces at w/s ≥ 0.35 (80.0 against 79.97 Ω for
@@ -12076,7 +12082,7 @@ accurate value first) allows for it, by the tool's method, not IPC's:
 
 The paper-thin pair with the planes 2t closer, plus the admittance the
 copper adds to one strip between its plane and the mid-plane, from the
-two half-striplines of Dual stripline (without its offset term, which
+two half-striplines of Asymmetric stripline (without its offset term, which
 fails this close to a plane). Against the solver, for w 0.1 to 0.5 mm,
 s 0.1 to 0.2 mm, b 0.4 to 0.8 mm, εr 4.3: −1.4 to −0.1 % for ½, 1 and
 2 oz.
@@ -12318,7 +12324,7 @@ LVDS's 100 Ω on a 0.2 mm layer.
     Z0,o = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff Q10),  Zdiff = 2 Z0,o
 
 It is printed correctly: against tools/fd_lines.py (the field solver of
-Differential stripline, with the board and the air above it, checked
+Edge-coupled stripline, with the board and the air above it, checked
 against Polar's microstrip table to 0.3 %) it is within 0.3 % for
 paper-thin traces (0.1 to 0.5 mm wide, 0.05 to 0.5 mm apart, on 0.2 mm
 of εr 4.3). Its terms carry no copper thickness, and with 1 oz copper it

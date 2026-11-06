@@ -1,6 +1,6 @@
 """2D finite-difference field solver for PCB transmission lines, the check
-behind Dual stripline, Differential stripline, Broadside stripline and the
-IPC row of Differential microstrip.
+behind Asymmetric stripline, Edge-coupled stripline, Broadside stripline,
+Embedded microstrip and Differential microstrip.
 
 A graded rectangular grid (fine at the conductors, coarse far away, every
 edge of the geometry on a grid line); a permittivity per cell; conductors at
