@@ -369,6 +369,12 @@ const FORMULAS = [
     note: "Z1, Z2: centred striplines in air with planes 2h1 + t and 2h2 + t apart; ΔZ IPC-2141A's offset term [4-18], its [4-17] corrected.",
   },
   {
+    tool: "Differential stripline",
+    domain: "pcb",
+    formulas: ["1/Zo = 1/Z(t) + (Cf(t)/Cf(0)) (1/Zo,0 − 1/Z0)", "Zdiff = 2 Zo / √εr"],
+    note: "In air, for s/t ≥ 5 (IPC-2141A [4-42], sign corrected); Z0, Zo,0 Cohn's paper-thin strip alone and in the pair, Cf the edge fringing [4-44].",
+  },
+  {
     tool: "Embedded microstrip",
     domain: "pcb",
     formulas: ["k = e^(−2b/h1),   b = H2 − h1", "Z0,emb = Z0 / √(k + (εr / εr,eff)(1 − k))"],

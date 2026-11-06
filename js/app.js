@@ -584,6 +584,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "microstrip") return renderMicrostrip(domain, tool, favId);
   if (calcId === "stripline") return renderStripline(domain, tool, favId);
   if (calcId === "dual-stripline") return renderDualStripline(domain, tool, favId);
+  if (calcId === "diff-stripline") return renderDiffStripline(domain, tool, favId);
   if (calcId === "diff-microstrip") return renderDiffMicrostrip(domain, tool, favId);
   if (calcId === "embedded-microstrip") return renderEmbeddedMicrostrip(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
@@ -13947,6 +13948,242 @@ function renderDualStripline(domain, tool, favId) {
       if (key === "z") el.onblur = () => setTimeout(syncBoxes);
     });
     document.getElementById("ds-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- Differential stripline ----------
+// Two edge-coupled traces centred between two ground planes. IPC-2141A
+// (March 2004, §4.4.2, figure 4-6(b), Pierre's copy) [4-42]–[4-45], citing
+// its references 2 and 7, the odd-mode impedance of thick strips from the
+// zero-thickness ones: for s/t ≥ 5, 1/Z0,o = 1/Z0(w, t) + (C'f(t)/C'f(0))
+// (1/Z0,o(w, 0, s) − 1/Z0(w, 0)); for s/t < 5, 1/Z0,o = 1/Z0(w, t) +
+// (1/Z0,o(w, 0, s) − 1/Z0(w, 0)) − (2/η0)(C'f(t) − C'f(0) − t/s), C'f in
+// units of ε: C'f(t) = (1/π)(2b/(b − t) ln((2b − t)/(b − t)) − t/(b − t)
+// ln(b²/(b − t)² − 1)), C'f(0) = 2 ln 2/π. Three misprints corrected:
+// [4-42] has a minus before the C'f ratio, making the pair's odd mode higher
+// than one trace alone (13 to 50 % off); [4-43] ends in ε/s for εt/s;
+// [4-44] has (2b − t)/(b − t) for t/(b − t), diverging at t = 0 where [4-45]
+// is finite (IPC's own θ [4-16] has t/(b − t)). IPC's ε is the dielectric's;
+// the tool works in air and divides by √εr at the end. Z0(w, t) is
+// Wheeler's, as in Stripline impedance; the zero-thickness Z0(w, 0) and
+// Z0,o(w, 0, s) are Cohn's exact ones (as Polar's Burkhardt, Gregg and
+// Staniforth quote them, IPC 1999), 30π K(k)/K(k'), k = sech(πw/2b), and
+// k_o = tanh(πw/2b)/tanh(π(w + s)/2b), K by the arithmetic-geometric mean.
+// Checked against tools/fd_lines.py: 1 to 3.5 % high.
+function ellipRatio(k, kp) { // K(k)/K(k'), from K(k) = π / (2 agm(1, k'))
+  const agm = (a, b) => { for (let i = 0; i < 60 && Math.abs(a - b) > 1e-15 * a; i++) [a, b] = [(a + b) / 2, Math.sqrt(a * b)]; return a; };
+  return agm(1, k) / agm(1, kp);
+}
+function renderDiffStripline(domain, tool, favId) {
+  const C = "diff-stripline";
+  const OZ = TRACE_OZ_MIL * 25.4e-6, ETA = 376.730313668;
+  const state = {
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    mat: "fr4",
+    si: { w: 0.15e-3, s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3 },
+    target: null,
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  // In air: Wheeler's thick strip, Cohn's zero-thickness single and odd mode.
+  const zW = (w) => {
+    const { b, t } = state.si, h = (b - t) / 2, m = 6 / (3 + t / h);
+    const wp = t > 0 ? w + t / Math.PI * Math.log(Math.E / Math.sqrt((t / (4 * h + t)) ** 2 + ((1 / (4 * Math.PI)) / (w / t + 1.1)) ** m)) : w;
+    const x = 16 * h / (Math.PI * wp);
+    return 30 * Math.log(1 + 0.5 * x * (x + Math.sqrt(x * x + 6.27)));
+  };
+  const z00 = (w) => { const a = Math.PI * w / (2 * state.si.b); return 30 * Math.PI * ellipRatio(1 / Math.cosh(a), Math.tanh(a)); };
+  const zo0 = (w) => {
+    const { b, s } = state.si, ko = Math.tanh(Math.PI * w / (2 * b)) / Math.tanh(Math.PI * (w + s) / (2 * b));
+    return 30 * Math.PI * ellipRatio(Math.sqrt(1 - ko * ko), ko);
+  };
+  const cf = (t) => { const b = state.si.b; return t > 0 ? (2 * b / (b - t) * Math.log((2 * b - t) / (b - t)) - t / (b - t) * Math.log(b * b / (b - t) ** 2 - 1)) / Math.PI : 2 * Math.LN2 / Math.PI; };
+  const wideGap = () => !(state.si.t > 0) || state.si.s / state.si.t >= 5;
+  const zOdd = (w) => {
+    const { s, t, er } = state.si;
+    const y = wideGap()
+      ? 1 / zW(w) + cf(t) / cf(0) * (1 / zo0(w) - 1 / z00(w))
+      : 1 / zW(w) + (1 / zo0(w) - 1 / z00(w)) - 2 / ETA * (cf(t) - cf(0) - t / s);
+    return 1 / (y * Math.sqrt(er));
+  };
+  const zDiffAt = (w) => 2 * zOdd(w);
+  const zSingle = () => zW(state.si.w) / Math.sqrt(state.si.er);
+  const geomOk = () => { const s = state.si; return s.b > 0 && s.s > 0 && s.t >= 0 && s.t < s.b / 2 && s.er >= 1; };
+  const wFor = (z) => {
+    let lo = state.si.b * 1e-4, hi = state.si.b * 100;
+    if (!(z < zDiffAt(lo) && z > zDiffAt(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (zDiffAt(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.b > 0)) return "Enter the spacing between the planes.";
+    if (!(s.s > 0)) return "Enter the gap between the traces.";
+    if (!(s.t >= 0)) return "Enter the copper's thickness, zero or more.";
+    if (!(s.t < s.b / 2)) return "The copper must be thinner than half the spacing between the planes.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(wFor(state.target) > 0)) return "No width between 0.0001 and 100 times the spacing gives that impedance.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    return "";
+  }
+
+  // The pair centred between the two planes, green when the width is the
+  // answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mm = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mm(v)}` : `${mm(v)} · ${mil(v)}`);
+    const tLabel = state.lUnit === "mil" ? `${mil(s.t)} · ${Number((s.t * 1e6).toPrecision(3))} µm` : `${Number((s.t * 1e6).toPrecision(3))} µm · ${mil(s.t)}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="14" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <rect x="40" y="84" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <path d="M40 20 V84 M282 20 V84" stroke="${wire}" stroke-width="1.4"/>
+      <rect x="101" y="48" width="44" height="8" fill="${tone}"/><rect x="177" y="48" width="44" height="8" fill="${tone}"/>
+      <path d="M101 33 V43 M145 33 V43 M101 38 H145" stroke="${tone}" stroke-width="1.2"/>
+      <path d="M177 33 V43 M145 38 H177" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(123, 31, ok ? `w ${both(s.w)}` : "w", tone)}
+      ${lbl(183, 42, `s ${both(s.s)}`, grey, "start")}
+      <path d="M30 20 V84 M26 20 H34 M26 84 H34" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(46, 79, `b ${both(s.b)}`, grey, "start")}
+      ${lbl(276, 65, `t ${tLabel}`, grey, "end")}
+      ${lbl(276, 79, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(161, 10, "ground planes, above and below", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, zo = zOdd(s.w), z1 = zSingle();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
+    const td = 33.356 * Math.sqrt(s.er) * per;
+    const st = s.t > 0 ? `s/t ${Number((s.s / s.t).toPrecision(3))}` : "no copper thickness";
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, ${len(s.s)} apart</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Differential impedance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(2 * zo)}</span></div>
+          <div class="result-sub" data-res="sub">each trace ${ohm(z1)} alone, coupling ${Number((zo / z1).toPrecision(3))}</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${row("Odd mode, each trace in the pair", ohm(zo), "odd")}
+          ${row("Single trace, alone", ohm(z1), "single")}
+          ${row("IPC-2141A's form", `${st}: ${wideGap() ? "[4-42], s/t ≥ 5" : "[4-43], s/t < 5"}`, "form")}
+          ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number(zDiffAt(state.si.w).toPrecision(4))));
+  }
+  function settle() { if (state.target > 0 && geomOk()) { const w = wFor(state.target); if (w > 0) state.si.w = w; } }
+
+  function refresh() {
+    settle();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  const example = (si, extra, target) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    settle();
+    paint();
+  };
+  useExamples([
+    { title: "Ethernet or LVDS, 100 Ω", note: "Planes 0.6 mm apart, FR-4, 1 oz, 0.2 mm gap: 0.14 mm traces.",
+      apply: example({ s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 100) },
+    { title: "USB, 90 Ω", note: "The same planes and gap: 0.189 mm traces.",
+      apply: example({ s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 90) },
+    { title: "A close pair, 0.1 mm gap", note: "0.15 mm traces: 77.6 Ω, IPC's narrow-gap form; a field solver gives 76.8 Ω.",
+      apply: example({ w: 0.15e-3, s: 0.1e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+    { title: "Far apart: no coupling", note: "A 2 mm gap: 116 Ω, twice one trace's 58 Ω.",
+      apply: example({ w: 0.15e-3, s: 2e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="dsl-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A pair of traces between two planes")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Gap, s", 2)}${lf("b", "Planes apart, b", 3)}</div>
+      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${field("z", "Differential impedance", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["In air: ΔY = 1/Zo,0 − 1/Z0", "s/t ≥ 5: 1/Zo = 1/Z(t) + (Cf(t)/Cf(0)) ΔY", "s/t < 5: 1/Zo = 1/Z(t) + ΔY − (2/η0) ΔC", "ΔC = Cf(t) − Cf(0) − t/s", "Zdiff = 2 Zo / √εr"],
+        "A differential pair on an inner layer: two traces side by side, centred between two ground planes b apart, carrying a signal as two equal and opposite voltages. Its differential impedance Zdiff is what the driver sees between the traces; USB uses 90 Ω, Ethernet and LVDS 100 Ω. The odd-mode impedance Zo is each trace's share, half of Zdiff. IPC-2141A builds it from the exact impedances of paper-thin strips (Cohn's: Z0 one strip alone, Zo,0 one of a pair) and Z(t), one strip alone with its copper t, with Cf the fringing capacitance at a strip's edge; under s/t of 5 the copper walls facing each other across the gap add their own capacitance, t/s. Air is worked first, then divided by √εr. Type a width to get Zdiff, or the Zdiff you need to get the width at your gap."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "s" || key === "b") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("dsl-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("dsl-mat").onchange = (e) => {
       state.mat = e.target.value;
       const er = MS_MATERIALS[state.mat][1];
       if (er) state.si.er = er;

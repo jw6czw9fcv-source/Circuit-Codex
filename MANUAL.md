@@ -120,6 +120,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Differential microstrip](#diff-microstrip)
 - Impedance → [Stripline impedance](#stripline)
 - Impedance → [Dual stripline](#dual-stripline)
+- Impedance → [Differential stripline](#diff-stripline)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -11842,6 +11843,147 @@ takes the offset term's (½ − …) as a magnitude, either plane the near one.
   correction;
 - 0.1 mm trace 0.1 and 0.5 mm from the planes: 53.3 Ω (solver 50.77 Ω);
 - h1 and h2 swapped: the same impedance;
+- the three length pickers move together.
+
+[↑ Index](#index)
+
+---
+
+<a id="diff-stripline"></a>
+## Differential stripline
+
+`calc: diff-stripline` · PCB & interconnect › Impedance
+
+### What it computes
+
+The differential impedance of two edge-coupled traces centred between two
+ground planes (a differential pair on an inner layer), or the trace width
+that gives it at a gap:
+
+- **Inputs:** each trace's width w, the gap between them s, the spacing
+  between the planes b, the copper's thickness t (its own picker), the
+  material and εr.
+- **Width and differential impedance are two live boxes:** type a width
+  and the impedance box shows Zdiff; type the Zdiff you need (90 Ω for
+  USB, 100 Ω for Ethernet or LVDS) and the width box shows the width at
+  your gap.
+- **The big result:** Zdiff, with each trace's impedance alone and the
+  coupling (odd mode over one trace alone); or the width for the Zdiff
+  typed.
+- **Below it:**
+  - the odd-mode impedance, each trace's share of the pair, Zdiff / 2;
+  - one trace alone, by Wheeler's formula as in Stripline impedance;
+  - which of IPC-2141A's two forms applies, by s/t;
+  - the delay per length, the signal seeing the full εr.
+- **Units:** mm or mil for the three lengths, moving together; oz, µm or
+  mil for the copper.
+- **Drawing:** the two planes, the pair centred between them, w and s as a
+  chain dimension, b, t and εr, in mm and mil. The traces are green when
+  their width is the answer.
+- **Remembered:** the length unit and the copper unit.
+
+Examples: 100 Ω and 90 Ω between planes 0.6 mm apart with a 0.2 mm gap, a
+close pair (IPC's narrow-gap form), and a pair far enough apart that it no
+longer couples.
+
+### Terms
+
+- **Differential pair, differential impedance (Zdiff), odd mode,
+  coupling:** as in Differential microstrip.
+- **Edge-coupled:** side by side on the same layer; a pair one above the
+  other is broadside-coupled.
+- **Fringing capacitance (Cf):** the capacitance from a strip's edge to the
+  planes, beyond the part directly under and over it. A thicker strip has
+  more.
+- **Paper-thin strip:** a strip of zero thickness, for which Cohn found the
+  impedance exactly; the thick strip is worked out from it.
+- **b, t, εr, oz:** as in Stripline impedance.
+
+### Source
+
+- **IPC-2141A, "Design Guide for High-Speed Controlled Impedance Circuit
+  Boards", March 2004, §4.4.2, figure 4-6(b)** (read, Pierre's scanned
+  copy), citing its references 2 and 7:
+  - [4-42] for s/t ≥ 5: Z0,o(w/b, t/b, s/b) = {1/Z0(w/b, t/b) −
+    (C'f(t/b)/C'f(0)) [1/Z0,o(w/b, 0, s/b) − 1/Z0(w/b, 0)]}^−1;
+  - [4-43] for s/t ≤ 5: Z0,o = {1/Z0(w/b, t/b) + [1/Z0,o(w/b, 0, s/b) −
+    1/Z0(w/b, 0)] − (2/(377ε)) (C'f(t/b) − C'f(0) − ε/s)}^−1;
+  - Z0(w/b, t/b) its stripline [4-9]; Z0(w/b, 0) and Z0,o(w/b, 0, s/b)
+    the zero-thickness impedances of its references 2 and 7;
+  - [4-44] C'f(t/b) = (0.0885 εr/π) {2b/(b − t) ln((2b − t)/(b − t)) −
+    ((2b − t)/(b − t)) ln(b²/(b − t)² − 1)}; [4-45] C'f(0) = (0.0885 εr/π)
+    2 ln 2.
+- **A. J. Burkhardt, C. S. Gregg and J. A. Staniforth, "Calculation of
+  PCB Track Impedance", Polar Instruments, IPC Printed Circuits Expo 1999**
+  (read): Cohn's exact zero-thickness stripline, Z0 = η0/(4√εr) ×
+  K(k)/K(k'), k = sech(πw/2b), k' = tanh(πw/2b), and the coupled pair's
+  odd mode with k0 = tanh(πw/2b) coth(π(w + s)/2b) (their equations 4, 5,
+  7, 8); their table 1, a surface microstrip computed by their
+  boundary-element solver: 30.09, 50.63 and 89.63 Ω for 3.3, 1.5 and
+  0.45 mm on 0.794 mm, εr 4.2, 35 µm copper.
+- **Not read:** Cohn's papers themselves, and IPC's references 2 and 7.
+
+### Why the formulas are these
+
+    In air:   Z0, Zo,0 = 30π K(k)/K(k'), Cohn's paper-thin strip alone and in the pair
+              Z(t): Wheeler's strip alone, with its copper
+              ΔY = 1/Zo,0 − 1/Z0
+    s/t ≥ 5:  1/Zo = 1/Z(t) + (Cf(t)/Cf(0)) ΔY
+    s/t < 5:  1/Zo = 1/Z(t) + ΔY − (2/η0)(Cf(t) − Cf(0) − t/s)
+    Zdiff = 2 Zo / √εr
+
+The odd-mode admittance of a paper-thin strip in a pair is known exactly;
+so is one strip alone. Their difference ΔY is what the neighbour adds.
+For a strip with copper, IPC starts from that strip alone, Z(t), and adds
+ΔY, scaled by how much the copper raises the edge's fringing capacitance
+when the gap is wide. Across a narrow gap the two copper walls face each
+other: for the odd mode the plane midway between them is at 0 V, adding a
+parallel-plate capacitance t/(s/2) per wall in units of ε. In one
+dielectric everything scales as 1/√εr, so the tool works in air (IPC's
+ε becomes ε0) and divides at the end. K is computed by the
+arithmetic-geometric mean, K(k) = π / (2 agm(1, k')).
+
+**Three misprints corrected.**
+- [4-42] subtracts the scaled ΔY: a strip would then have a higher
+  impedance next to its odd-mode partner than alone, which the field
+  contradicts (13 to 50 % off). With the sign that [4-43] and the physics
+  give, it adds it.
+- [4-43] ends in ε/s, which is not a capacitance per length; the copper
+  walls' parallel-plate term is εt/s, and the field solver agrees with
+  that within 1.4 %.
+- [4-44]'s second coefficient (2b − t)/(b − t) multiplies ln 0 as t goes to
+  zero, where [4-45] says C'f(0) = 2 ln 2 (in units of ε0 εr, over π). With
+  t/(b − t), as in IPC's own θ [4-16] (b²/(b − t)² − 1 = (2bt − t²)/
+  (b − t)²), it does.
+
+**How it was checked.** tools/fd_lines.py, a finite-difference field
+solver on a graded grid (fine at the copper, three refinements,
+extrapolated), reproduces Cohn's exact zero-thickness values to 0.1 %
+(59.42 against 59.47 Ω alone, 50.82 against 50.87 Ω odd mode; w 0.2 mm,
+s 0.2 mm, b 0.6 mm, εr 4.3) and Polar's microstrip table to 0.3 %
+(30.01, 50.54, 89.54 Ω). Against it, the tool's Zdiff is 1 to 3.5 % high
+for 1 oz copper: 3.4 % at 0.2 mm gaps (s/t 5.7, [4-42]), 1.0 % at 0.1 mm
+([4-43]), 0.0 % with the traces 2 mm apart.
+
+### Assumptions and limits
+
+- **Accuracy:** 1 to 3.5 % high against the field solver for 1 oz copper;
+  §4.4 itself warns that the balanced-line formulas "exist in various
+  forms, some of which are not in agreement". The board maker's stack-up
+  calculation decides.
+- **Centred between the planes, equal traces, one dielectric, no losses.**
+- **The jump at s/t = 5:** IPC's two forms differ there by about 2 %.
+
+### How it was checked
+
+6 cases (the field-solver values from tools/fd_lines.py):
+- 100 Ω, planes 0.6 mm apart, FR-4, 1 oz, 0.2 mm gap: 0.14 mm traces,
+  59.5 Ω alone, [4-42] (solver 96.7 Ω for those traces);
+- 90 Ω, same planes and gap: 0.189 mm (solver 87.6 Ω);
+- 0.15 mm traces 0.1 mm apart: 77.6 Ω by [4-43], coupling 0.669 (solver
+  76.8 Ω);
+- 2 mm apart: 116 Ω, twice one trace's 58 Ω (solver 116.0 Ω);
+- the default pair: 97.6 Ω (solver 94.6 Ω), 69.2 ps/cm;
 - the three length pickers move together.
 
 [↑ Index](#index)
