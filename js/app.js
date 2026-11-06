@@ -13279,6 +13279,34 @@ function wadellMicrostripZ(w, h, t, er) {
 }
 // The older IPC microstrip Z0 (Peterson's slide 23, MT-094 eq. 3, AN-905).
 const ipcMicrostripZ = (w, h, t, er) => 87 / Math.sqrt(er + 1.41) * Math.log(5.98 * h / (0.8 * w + t));
+// IPC-2141A (March 2004, §4.4.1, Pierre's copy) [4-24]–[4-41]: the odd-mode
+// impedance of an edge-coupled surface microstrip pair, Z0,o = Z0 √(εeff /
+// εeff,o) / (1 − Z0/η0 √εeff Q10), u = w/h, g = s/h, Z0 and εeff one paper-
+// thin trace alone (Wadell's, IPC's [4-6]). As printed it matches the field
+// solver (tools/fd_lines.py) within 0.3 % for paper-thin traces. Its terms
+// carry no copper thickness (1 oz reads 2 to 18 % high), so the trace is
+// widened to Wadell's w' and the gap narrowed by as much: then within
+// −0.4 to +2.8 % of the solver for 1 oz. NaN when the copper closes the gap.
+function ipcCoupledMicrostripOdd(w, s, h, t, er) {
+  const wp = t > 0 ? w + (1 + 1 / er) / 2 * (t / Math.PI) * Math.log(4 * Math.E / Math.sqrt((t / h) ** 2 + ((1 / Math.PI) / (w / t + 1.1)) ** 2)) : w;
+  const sp = s - (wp - w);
+  if (!(sp > 0)) return NaN;
+  const u = wp / h, g = sp / h;
+  const z0 = wadellMicrostripZ(wp, h, 0, er);
+  const e0 = (er + 1) / 2 + (er - 1) / 2 * ((1 + 12 / u) ** -0.5 + (u < 1 ? 0.04 * (1 - u) ** 2 : 0));
+  const b0 = 0.747 * er / (0.15 + er), c0 = b0 - (b0 - 0.207) * Math.exp(-0.414 * u), d0 = 0.593 + 0.694 * Math.exp(-0.562 * u);
+  const a0 = 0.7287 * (e0 - 0.5 * (er + 1)) * (1 - Math.exp(-0.179 * u));
+  const eo = (0.5 * (er + 1) + a0 - e0) * Math.exp(-c0 * g ** d0) + e0;
+  const q1 = 0.8695 * u ** 0.194, q2 = 1 + 0.7519 * g + 0.189 * g ** 2.31;
+  const q3 = 0.1975 + (16.6 + (8.4 / g) ** 6) ** -0.387 + Math.log(g ** 10 / (1 + (g / 3.4) ** 10)) / 241;
+  const q4 = 2 * q1 / (q2 * (Math.exp(-g) * u ** q3 + (2 - Math.exp(-g)) * u ** -q3));
+  const q5 = 1.794 + 1.14 * Math.log(1 + 0.638 / (g + 0.517 * g ** 2.43));
+  const q6 = 0.2305 + Math.log(g ** 10 / (1 + (g / 5.8) ** 10)) / 281.3 + Math.log(1 + 0.598 * g ** 1.154) / 5.1;
+  const q7 = (10 + 190 * g * g) / (1 + 82.3 * g ** 3), q8 = Math.exp(-6.5 - 0.95 * Math.log(g) - (g / 0.15) ** 5);
+  const q9 = Math.log(q7) * (q8 + 1 / 16.5);
+  const q10 = (q2 * q4 - q5 * Math.exp(Math.log(u) * q6 * u ** -q9)) / q2;
+  return z0 * Math.sqrt(e0 / eo) / (1 - z0 / 376.730313668 * Math.sqrt(e0) * q10);
+}
 const MS_MATERIALS = { fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4], custom: ["Custom", null] };
 
 function renderMicrostrip(domain, tool, favId) {
@@ -14277,7 +14305,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const ratio = s.s / s.h;
-    const zi = 2 * ipcMicrostripZ(s.w, s.h, t(), s.er) * k(), d = (zi / zd - 1) * 100;
+    const zi = 2 * ipcCoupledMicrostripOdd(s.w, s.s, s.h, t(), s.er), d = (zi / zd - 1) * 100;
     const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
     const main = state.target !== null
       ? `<div class="result-field">
@@ -14294,7 +14322,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
         <div class="field notation-box">
           ${row("Odd mode, each trace in the pair", ohm(zd / 2), "odd")}
           ${row("Single trace, alone", ohm(z1), "single")}
-          ${row("With the older IPC Z0, for comparison", zi > 0 ? `${ohm(zi)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : "none", "ipc")}
+          ${row("IPC-2141A's pair formula, for comparison", zi > 0 ? `${ohm(zi)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : warn("the copper closes the gap"), "ipc")}
           ${row("s/h, AN-905's range", ratio >= 0.2 && ratio <= 3 ? `${Number(ratio.toPrecision(3))}, within 0.2 to 3 (±10 %)` : warn(`${Number(ratio.toPrecision(3))}, outside 0.2 to 3`), "range")}
         </div>`;
   }

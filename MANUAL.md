@@ -12118,8 +12118,7 @@ over a ground plane, or the trace width that gives it at a spacing:
 - **Below it:**
   - the odd-mode impedance, each trace's share of the pair, Zdiff / 2;
   - one trace alone, by Wadell's equations as in Microstrip impedance;
-  - Zdiff with the older IPC-2141 single-trace Z0 instead, and the
-    difference;
+  - Zdiff by IPC-2141A's pair formula, and the difference;
   - s/h against AN-905's range, 0.2 to 3, flagged outside.
 - **Units:** mm or mil, the three length pickers moving together.
 - **Drawing:** the pair on the dielectric over the ground plane, w and s
@@ -12164,7 +12163,39 @@ LVDS's 100 Ω on a 0.2 mm layer.
   Q10), with εeff,o and ten fitted terms Q1 to Q10 in u = w/h and g = s/h,
   citing its references 2 and 6. §4.4 warns that the balanced-line formulas
   "exist in various forms, some of which are not in agreement". The tool
-  does not use it yet.
+  shows it for comparison (see below).
+
+**IPC-2141A's pair formula, and how it was checked.** Its terms
+[4-25]–[4-41] are, in full:
+
+    u = w/h,  g = s/h,  Z0 and εeff one paper-thin trace alone
+    a0 = 0.7287 (εeff − (εr+1)/2)(1 − e^(−0.179u))
+    b0 = 0.747 εr / (0.15 + εr),  c0 = b0 − (b0 − 0.207) e^(−0.414u)
+    d0 = 0.593 + 0.694 e^(−0.562u)
+    εeff,o = ((εr+1)/2 + a0 − εeff) e^(−c0 g^d0) + εeff
+    Q1 = 0.8695 u^0.194,  Q2 = 1 + 0.7519g + 0.189g^2.31
+    Q3 = 0.1975 + (16.6 + (8.4/g)^6)^−0.387 + ln(g^10 / (1 + (g/3.4)^10)) / 241
+    Q4 = 2Q1 / (Q2 (e^−g u^Q3 + (2 − e^−g) u^−Q3))
+    Q5 = 1.794 + 1.14 ln(1 + 0.638 / (g + 0.517g^2.43))
+    Q6 = 0.2305 + ln(g^10 / (1 + (g/5.8)^10)) / 281.3 + ln(1 + 0.598g^1.154) / 5.1
+    Q7 = (10 + 190g²) / (1 + 82.3g³),  Q8 = e^(−6.5 − 0.95 ln g − (g/0.15)^5)
+    Q9 = ln(Q7) (Q8 + 1/16.5),  Q10 = (Q2Q4 − Q5 e^(ln(u) Q6 u^−Q9)) / Q2
+    Z0,o = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff Q10),  Zdiff = 2 Z0,o
+
+It is printed correctly: against tools/fd_lines.py (the field solver of
+Differential stripline, with the board and the air above it, checked
+against Polar's microstrip table to 0.3 %) it is within 0.3 % for
+paper-thin traces (0.1 to 0.5 mm wide, 0.05 to 0.5 mm apart, on 0.2 mm
+of εr 4.3). Its terms carry no copper thickness, and with 1 oz copper it
+reads 2 to 18 % high. The tool widens each trace to Wadell's w' and
+narrows the gap by as much: then it is within −0.4 to +2.8 % of the
+solver, where AN-905's factor is within −2.1 to +11.1 % (worst for a
+0.05 mm gap). For the tool's examples the solver falls between the two:
+- AN-905's 75 Ω traces 1 mm apart on 0.76 mm: AN-905 129.6 Ω, IPC
+  132.4 Ω, solver 131.7 Ω;
+- 10 mil apart on 20 mil: 105.5, 108.0, 106.9 Ω;
+- USB, 0.301 mm traces 0.2 mm apart on 0.2 mm: 90.0, 93.6, 91.9 Ω;
+- 0.245 mm on the same layer: 100.0, 103.0, 101.0 Ω.
 
 ### Why the formulas are these
 
@@ -12183,21 +12214,23 @@ spacing kept.
   decides for a controlled-impedance board.
 - **Equal traces, edge-coupled, no solder mask.**
 - **The coupling factor is AN-905's, the single-trace Z0 Wadell's:** the
-  factor was fitted with AN-905's own Z0 (IPC-2141's formula); the
-  comparison row shows that combination too.
+  factor was fitted with AN-905's own Z0 (the older IPC-2141 formula).
+- **IPC's pair formula with copper:** the w' widening and narrower gap are
+  the tool's, checked against the field solver, not IPC's.
 - **Spacing to other traces:** AN-905 asks for more than 2s to the next
   pair, to keep crosstalk and the impedance in hand.
 
 ### How it was checked
 
-7 cases:
+8 cases:
 - AN-905's 75 Ω traces 1 mm apart on 0.76 mm: 130 Ω (129.6), coupling
   0.864 (its factor 0.86, 128 Ω);
 - 10 mil apart on 20 mil: 105 Ω (its 105 Ω), 52.7 Ω odd mode, s/h 0.5;
-- USB 90 Ω on 0.2 mm, 0.2 mm apart: 0.301 mm, 55.1 Ω alone, IPC-based
-  87.2 Ω;
+  IPC-2141A's pair formula 108 Ω (+2.4 %);
+- USB 90 Ω on 0.2 mm, 0.2 mm apart: 0.301 mm, 55.1 Ω alone, IPC-2141A
+  93.6 Ω (+4.0 %);
 - 100 Ω on the same layer: 0.245 mm, 50 Ω odd mode;
-- the default pair: 116 Ω, IPC-based 114 Ω;
+- the default pair: 116 Ω, IPC-2141A 117 Ω (+0.9 %);
 - a spacing beyond 3 h is flagged;
 - the three length pickers move together.
 
