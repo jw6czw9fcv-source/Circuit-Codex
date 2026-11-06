@@ -377,8 +377,8 @@ const FORMULAS = [
   {
     tool: "Broadside stripline",
     domain: "pcb",
-    formulas: ["w/b = (A − (s/b) B) / π,  solved for k", "Zo = 295.9/√εr × (s/b) / tanh⁻¹(k)"],
-    note: "Paper-thin traces (IPC-2141A [4-46]–[4-48], constant corrected); A, B, R in k as in the tool. Zdiff = 2 Zo; real copper lowers it.",
+    formulas: ["Zo,thin = 295.9/√εr × (s/b) / tanh⁻¹(k)", "1/Zo = 1/Zo,thin(b − 2t) + ΔY,  Zdiff = 2 Zo"],
+    note: "k from w/b (IPC-2141A [4-46]–[4-48], paper-thin, constant corrected); ΔY the copper's edges, from two half-striplines in parallel.",
   },
   {
     tool: "Embedded microstrip",
@@ -389,8 +389,8 @@ const FORMULAS = [
   {
     tool: "Differential microstrip",
     domain: "pcb",
-    formulas: ["Zdiff = 2 Z0 × (1 − 0.48 e^(−0.96 s/h))", "Zodd = Zdiff / 2"],
-    note: "Z0 one trace alone, s the gap between the two, h the dielectric; empirical, within about ±10 % for s/h 0.2 to 3 (National AN-905).",
+    formulas: ["Zo = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff Q10)", "Zdiff = 2 Zo"],
+    note: "IPC-2141A [4-24]–[4-41], Q10 and εeff,o fitted in w/h and s/h; copper by widening w to w'. AN-905's 2 Z0 (1 − 0.48 e^(−0.96 s/h)) is the simpler estimate.",
   },
   {
     tool: "Stripline impedance",

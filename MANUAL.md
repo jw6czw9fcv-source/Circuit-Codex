@@ -12007,11 +12007,11 @@ the trace width that gives it:
   picker), the material and εr.
 - **Width and differential impedance are two live boxes,** as in
   Differential stripline.
-- **The big result:** Zdiff for paper-thin traces, IPC-2141A's case, with
-  the odd-mode impedance; or the paper-thin width for the Zdiff typed.
+- **The big result:** Zdiff with the copper (the tool's method, within
+  1.5 % of a field solver), with the odd-mode impedance; or the width for
+  the Zdiff typed.
 - **Below it:**
-  - the Zdiff the real copper gives, an estimate (see below), and how much
-    lower it is, in amber;
+  - IPC-2141A's paper-thin Zdiff, and how much higher it reads;
   - w/s against IPC's range, 0.35 or more, flagged below;
   - the delay per length, the signal seeing the full εr.
 - **Units:** mm or mil for the three lengths, moving together; oz, µm or
@@ -12022,7 +12022,8 @@ the trace width that gives it:
 - **Remembered:** the length unit and the copper unit.
 
 Examples: 100 Ω between planes 0.8 mm apart, a 0.15 mm pair 0.15 mm
-apart, wide traces close together, and narrow traces flagged.
+apart, wide traces close together, and narrow traces flagged, all with
+1 oz copper.
 
 ### Terms
 
@@ -12064,9 +12065,10 @@ solver for paper-thin traces at w/s ≥ 0.35 (80.0 against 79.97 Ω for
 0.15 mm traces 0.15 mm apart, planes 0.6 mm apart), 1.2 % low at w/s
 0.25.
 
-**The copper estimate.** 1 oz copper lowers Zdiff by 6 to 25 % against
-the solver: each trace's outer face moves 35 µm closer to its plane, and
-its edges add fringing. The tool's estimate, which is not IPC's:
+**The copper, the big result.** 1 oz copper lowers Zdiff by 6 to 25 %
+against the solver: each trace's outer face moves 35 µm closer to its
+plane, and its edges add fringing. So the big result (Pierre, the most
+accurate value first) allows for it, by the tool's method, not IPC's:
 
     h1 = (b − s)/2 − t,  the copper's outer face to its plane
     Zpar(t) = halves in parallel: Z(2h1 + t) ∥ Z(s + t), Wheeler's striplines, ×2 / √εr
@@ -12081,25 +12083,23 @@ s 0.1 to 0.2 mm, b 0.4 to 0.8 mm, εr 4.3: −1.4 to −0.1 % for ½, 1 and
 
 ### Assumptions and limits
 
-- **The big result is paper-thin:** read the copper row for a real board;
-  the width solved is the paper-thin one.
+- **The copper method is the tool's,** checked against the solver over
+  the range above only; with no copper entered, the big result is IPC's.
 - **Centred pair, equal traces, one dielectric:** core and prepreg are
   averaged by the user.
-- **The copper estimate is the tool's,** checked against the solver over
-  the range above only.
 - **No losses.**
 
 ### How it was checked
 
-6 cases (field-solver values from tools/fd_lines.py):
-- 100 Ω, planes 0.8 mm apart, 0.2 mm between: 0.134 mm paper-thin (solver
-  100.03 Ω); with 1 oz 85.2 Ω, −15 % (solver 85.5 Ω);
-- 0.15 mm traces 0.15 mm apart, planes 0.6 mm: 80 Ω (79.97), odd mode
-  40 Ω; 1 oz 67.8 Ω (solver 68.0 Ω); 69.2 ps/cm;
-- 0.3 mm traces 0.1 mm apart: 39.2 Ω (39.24), 1 oz 35.4 Ω (solver
-  35.6 Ω);
-- 0.05 mm traces 0.2 mm apart: 148 Ω (solver 149.8 Ω), w/s 0.25 flagged;
-- no copper: no estimate;
+7 cases (field-solver values from tools/fd_lines.py):
+- 100 Ω with 1 oz, planes 0.8 mm apart, 0.2 mm between: 0.0909 mm
+  traces (solver 100.3 Ω for them); paper-thin they would read 121 Ω;
+- 0.15 mm traces 0.15 mm apart, planes 0.6 mm, 1 oz: 67.8 Ω (solver
+  68.0 Ω), odd mode 33.9 Ω; paper-thin 80 Ω (solver 79.97 Ω); 69.2 ps/cm;
+- 0.3 mm traces 0.1 mm apart: 35.4 Ω (solver 35.6 Ω), paper-thin 39.2 Ω;
+- 0.05 mm traces 0.2 mm apart: 113 Ω (solver 114.4 Ω), w/s 0.25 flagged;
+- no copper: IPC's paper-thin value, 80 Ω;
+- copper reaching the planes is refused;
 - traces as far apart as the planes are refused.
 
 [↑ Index](#index)
@@ -12197,6 +12197,22 @@ widths.
   decides.
 - **No losses.**
 
+**Checked against a field solver.** tools/fd_lines.py, with the board,
+the cover and the air above (as in Differential microstrip), for 1 oz
+copper on FR-4:
+- 0.36 mm on 0.2 mm, uncovered: Wadell 50.0 Ω, solver 49.9 Ω;
+- under 10, 20 and 30 µm of mask over the copper: 47.3, 46.9 and 46.5 Ω,
+  solver 47.4, 47.1 and 46.8 Ω (−0.3 to −0.5 %);
+- dielectric only beside the trace, up to its top: 47.8 Ω, solver 47.9 Ω;
+- 0.1 and 0.2 mm of cover over the trace: 45.6 and 44.2 Ω, solver 46.0 and
+  44.6 Ω (−0.9 %);
+- 1 mm of cover, the deep limit: 43.5 Ω, solver 42.8 Ω (+1.6 %);
+- 0.15 mm on 0.1 mm under 20 µm of mask: 48.3 Ω, solver 48.4 Ω;
+- 3 mm on 1.6 mm, filled to the copper's top: 50.3 Ω, solver 50.2 Ω.
+
+So [4-7] on Wadell's Z0 is within −0.9 to +1.6 % of the solver: it stays
+the big result.
+
 ### How it was checked
 
 5 cases, the expected values computed independently from [4-7] and
@@ -12229,12 +12245,14 @@ over a ground plane, or the trace width that gives it at a spacing:
   and the impedance box shows Zdiff; type the Zdiff you need (90 Ω for
   USB, 100 Ω for Ethernet or LVDS) and the width box shows the width at
   your spacing.
-- **The big result:** Zdiff, with each trace's impedance alone and the
-  coupling factor; or the width for the Zdiff typed.
+- **The big result:** Zdiff by IPC-2141A's pair formula, the copper allowed
+  for (the closest to a field solver, within 3 % for 1 oz), with each
+  trace's impedance alone and the coupling (Zdiff over twice that); or the
+  width for the Zdiff typed.
 - **Below it:**
   - the odd-mode impedance, each trace's share of the pair, Zdiff / 2;
   - one trace alone, by Wadell's equations as in Microstrip impedance;
-  - Zdiff by IPC-2141A's pair formula, and the difference;
+  - Zdiff by AN-905's simpler factor, and the difference;
   - s/h against AN-905's range, 0.2 to 3, flagged outside.
 - **Units:** mm or mil, the three length pickers moving together.
 - **Drawing:** the pair on the dielectric over the ground plane, w and s
@@ -12278,8 +12296,9 @@ LVDS's 100 Ω on a 0.2 mm layer.
   give the odd-mode impedance Z0,o = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff
   Q10), with εeff,o and ten fitted terms Q1 to Q10 in u = w/h and g = s/h,
   citing its references 2 and 6. §4.4 warns that the balanced-line formulas
-  "exist in various forms, some of which are not in agreement". The tool
-  shows it for comparison (see below).
+  "exist in various forms, some of which are not in agreement". It is the
+  big result since 2026-11-05 (Pierre: the most accurate value first);
+  AN-905's factor, the first version's, is shown for comparison.
 
 **IPC-2141A's pair formula, and how it was checked.** Its terms
 [4-25]–[4-41] are, in full:
@@ -12310,44 +12329,53 @@ solver, where AN-905's factor is within −2.1 to +11.1 % (worst for a
 - AN-905's 75 Ω traces 1 mm apart on 0.76 mm: AN-905 129.6 Ω, IPC
   132.4 Ω, solver 131.7 Ω;
 - 10 mil apart on 20 mil: 105.5, 108.0, 106.9 Ω;
-- USB, 0.301 mm traces 0.2 mm apart on 0.2 mm: 90.0, 93.6, 91.9 Ω;
-- 0.245 mm on the same layer: 100.0, 103.0, 101.0 Ω.
+- the USB width it gives, 0.326 mm 0.2 mm apart on 0.2 mm: IPC 90.0 Ω,
+  AN-905 86.3 Ω, solver 88.5 Ω;
+- the 100 Ω width, 0.261 mm: 100.0, 96.8, 98.1 Ω;
+- the default pair, 0.15 mm 0.15 mm apart: 117.3, 116.3, 114.4 Ω.
 
 ### Why the formulas are these
 
-    Zdiff = 2 Z0 × (1 − 0.48 e^(−0.96 s/h))
-    Zodd = Zdiff / 2
+    w' = w + (1 + 1/εr)/2 × t/π × ln(4e / √((t/h)² + (1/π / (w/t + 1.1))²))
+    u = w'/h,   g = (s − (w' − w))/h
+    the terms above, with Z0 and εeff of a paper-thin trace w' wide
+    Zdiff = 2 Z0,o
+    AN-905, for comparison: Zdiff = 2 Z0 × (1 − 0.48 e^(−0.96 s/h))
 
 Far apart, the two traces are independent and the pair is two lines in
 series: Zdiff = 2 Z0. Brought closer, their mutual capacitance and
-inductance lower it; AN-905 fits that fall with an exponential in s/h.
-The width for a Zdiff is found by halving the range of widths, the
-spacing kept.
+inductance lower it. IPC's terms fit that fall for paper-thin traces,
+through the odd mode's own effective εr and the coupling term Q10; the
+copper's thickness makes each trace act wider (w', as in Microstrip
+impedance) and so the gap narrower. AN-905 fits the fall with a single
+exponential in s/h. The width for a Zdiff is found by halving the range of
+widths, the spacing kept.
 
 ### Assumptions and limits
 
-- **Empirical, ±10 %:** a field solver or the board maker's calculation
+- **Within 3 % of the solver for 1 oz:** the board maker's calculation
   decides for a controlled-impedance board.
 - **Equal traces, edge-coupled, no solder mask.**
-- **The coupling factor is AN-905's, the single-trace Z0 Wadell's:** the
-  factor was fitted with AN-905's own Z0 (the older IPC-2141 formula).
 - **IPC's pair formula with copper:** the w' widening and narrower gap are
   the tool's, checked against the field solver, not IPC's.
+- **AN-905's row:** its factor was fitted with AN-905's own Z0 (the older
+  IPC-2141 formula); here it multiplies Wadell's.
 - **Spacing to other traces:** AN-905 asks for more than 2s to the next
   pair, to keep crosstalk and the impedance in hand.
 
 ### How it was checked
 
-8 cases:
-- AN-905's 75 Ω traces 1 mm apart on 0.76 mm: 130 Ω (129.6), coupling
-  0.864 (its factor 0.86, 128 Ω);
-- 10 mil apart on 20 mil: 105 Ω (its 105 Ω), 52.7 Ω odd mode, s/h 0.5;
-  IPC-2141A's pair formula 108 Ω (+2.4 %);
-- USB 90 Ω on 0.2 mm, 0.2 mm apart: 0.301 mm, 55.1 Ω alone, IPC-2141A
-  93.6 Ω (+4.0 %);
-- 100 Ω on the same layer: 0.245 mm, 50 Ω odd mode;
-- the default pair: 116 Ω, IPC-2141A 117 Ω (+0.9 %);
+8 cases (field-solver values from tools/fd_lines.py):
+- AN-905's 75 Ω traces 1 mm apart on 0.76 mm: 132 Ω (132.4; solver
+  131.7 Ω), coupling 0.883; AN-905 130 Ω (−2.1 %; its slide rule 128 Ω);
+- 10 mil apart on 20 mil: 108 Ω (solver 106.9 Ω), 54 Ω odd mode; AN-905
+  105 Ω (−2.3 %), s/h 0.5;
+- USB 90 Ω on 0.2 mm, 0.2 mm apart: 0.326 mm, 52.8 Ω alone; AN-905
+  86.3 Ω (−4.1 %);
+- 100 Ω on the same layer: 0.261 mm, 50 Ω odd mode;
+- the default pair: 117 Ω (solver 114.4 Ω); AN-905 116 Ω (−0.9 %);
 - a spacing beyond 3 h is flagged;
+- a gap the copper closes is refused;
 - the three length pickers move together.
 
 [↑ Index](#index)

@@ -137,6 +137,21 @@ def microstrip_pair(w, t, s, h, er, mode, level):
     return ETA0 / (k * math.sqrt(S * Sa)), S / Sa
 
 
+def embedded(w, t, h1, H2, er, level, er_cover=None):
+    """One trace on h1 of substrate, a cover of the same (or er_cover)
+    dielectric up to H2 above the plane, air above to a far lid (20 h1)."""
+    x1 = w / 2; X = x1 + 20 * h1; top = max(20 * h1, H2 + 10 * h1)
+    ys = sorted(set([0, h1, h1 + t, H2, top]))
+    h0, hm = _h(min(h1, w, (H2 - h1) if H2 > h1 else h1))
+    g = Grid([0, x1, X], ys, h0, max(hm, h1), level)
+    g.row(0); g.row(top); g.col(X)
+    g.layer(0, h1, er)
+    if H2 > h1: g.layer(h1, H2, er_cover or er)
+    g.box(0, x1, h1, h1 + t)
+    S, Sa = g.S(), g.S(air=True)
+    return ETA0 / (2 * math.sqrt(S * Sa)), S / Sa
+
+
 def cohn_single(w, b, er):
     k = 1 / math.cosh(math.pi * w / (2 * b)); kp = math.tanh(math.pi * w / (2 * b))
     return 30 * math.pi / math.sqrt(er) * ellipk(k * k) / ellipk(kp * kp)
