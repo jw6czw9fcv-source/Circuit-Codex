@@ -375,6 +375,12 @@ const FORMULAS = [
     note: "In air, for s/t ≥ 5 (IPC-2141A [4-42], sign corrected); Z0, Zo,0 Cohn's paper-thin strip alone and in the pair, Cf the edge fringing [4-44].",
   },
   {
+    tool: "Broadside stripline",
+    domain: "pcb",
+    formulas: ["w/b = (A − (s/b) B) / π,  solved for k", "Zo = 295.9/√εr × (s/b) / tanh⁻¹(k)"],
+    note: "Paper-thin traces (IPC-2141A [4-46]–[4-48], constant corrected); A, B, R in k as in the tool. Zdiff = 2 Zo; real copper lowers it.",
+  },
+  {
     tool: "Embedded microstrip",
     domain: "pcb",
     formulas: ["k = e^(−2b/h1),   b = H2 − h1", "Z0,emb = Z0 / √(k + (εr / εr,eff)(1 − k))"],

@@ -121,6 +121,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Stripline impedance](#stripline)
 - Impedance → [Dual stripline](#dual-stripline)
 - Impedance → [Differential stripline](#diff-stripline)
+- Impedance → [Broadside stripline](#broadside-stripline)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -11985,6 +11986,121 @@ for 1 oz copper: 3.4 % at 0.2 mm gaps (s/t 5.7, [4-42]), 1.0 % at 0.1 mm
 - 2 mm apart: 116 Ω, twice one trace's 58 Ω (solver 116.0 Ω);
 - the default pair: 97.6 Ω (solver 94.6 Ω), 69.2 ps/cm;
 - the three length pickers move together.
+
+[↑ Index](#index)
+
+---
+
+<a id="broadside-stripline"></a>
+## Broadside stripline
+
+`calc: broadside-stripline` · PCB & interconnect › Impedance
+
+### What it computes
+
+The differential impedance of two traces one above the other on two inner
+layers (a broadside-coupled pair), centred between two ground planes, or
+the trace width that gives it:
+
+- **Inputs:** each trace's width w, the dielectric between the two traces
+  s, the spacing between the planes b, the copper's thickness t (its own
+  picker), the material and εr.
+- **Width and differential impedance are two live boxes,** as in
+  Differential stripline.
+- **The big result:** Zdiff for paper-thin traces, IPC-2141A's case, with
+  the odd-mode impedance; or the paper-thin width for the Zdiff typed.
+- **Below it:**
+  - the Zdiff the real copper gives, an estimate (see below), and how much
+    lower it is, in amber;
+  - w/s against IPC's range, 0.35 or more, flagged below;
+  - the delay per length, the signal seeing the full εr.
+- **Units:** mm or mil for the three lengths, moving together; oz, µm or
+  mil for the copper.
+- **Drawing:** the two planes, the pair stacked between them with w and s,
+  b, t and εr, in mm and mil. The traces are green when their width is the
+  answer.
+- **Remembered:** the length unit and the copper unit.
+
+Examples: 100 Ω between planes 0.8 mm apart, a 0.15 mm pair 0.15 mm
+apart, wide traces close together, and narrow traces flagged.
+
+### Terms
+
+- **Broadside-coupled:** the two traces of a pair face each other across
+  the dielectric between two layers, instead of side by side.
+- **Paper-thin:** copper of zero thickness. Here the traces face each
+  other with their full width, so their thickness matters more than for a
+  side-by-side pair.
+- **Odd mode, Zdiff:** as in Differential microstrip.
+
+### Source
+
+- **IPC-2141A, "Design Guide for High-Speed Controlled Impedance Circuit
+  Boards", March 2004, §4.4.3, figure 4-6(c)** (read, Pierre's scanned
+  copy), citing its references 2, 8 and 9: Z0,o = (293.9/√εr) (s/b) /
+  tanh⁻¹(k) [4-46], k the solution of w/b = (1/π)[ln((1 + R)/(1 − R)) −
+  (s/b) ln((k + R)/(k − R))] [4-47], R = √(k(kb − s)/(b − ks)) [4-48];
+  "nearly exact for w/s ≥ 0.35, and is more accurate for substrates with
+  large values of εr". No copper thickness.
+- **Not read:** IPC's references 2, 8 and 9.
+
+### Why the formulas are these
+
+    R = √(k (kb − s) / (b − ks))
+    w/b = (ln((1+R)/(1−R)) − (s/b) ln((k+R)/(k−R))) / π,  solved for k
+    Zo = 295.9/√εr × (s/b) / tanh⁻¹(k),   Zdiff = 2 Zo
+
+For the odd mode the plane midway between the two traces is at 0 V, so
+each trace is a strip between its ground plane and that mid-plane; the
+formula is the exact (conformal-mapping) solution for a paper-thin strip
+there. k has no closed form: the tool halves the range from s/b to 1 until
+w/b comes out. The width for a Zdiff is found the same way.
+
+**The constant.** Against the field solver (tools/fd_lines.py, as in
+Differential stripline) the printed formula's ratio is 0.9934 for every
+geometry tried: its shape is exact, and the constant that matches is
+η0π/4 = 295.9, not 293.9. With 295.9 the tool is within 0.1 % of the
+solver for paper-thin traces at w/s ≥ 0.35 (80.0 against 79.97 Ω for
+0.15 mm traces 0.15 mm apart, planes 0.6 mm apart), 1.2 % low at w/s
+0.25.
+
+**The copper estimate.** 1 oz copper lowers Zdiff by 6 to 25 % against
+the solver: each trace's outer face moves 35 µm closer to its plane, and
+its edges add fringing. The tool's estimate, which is not IPC's:
+
+    h1 = (b − s)/2 − t,  the copper's outer face to its plane
+    Zpar(t) = halves in parallel: Z(2h1 + t) ∥ Z(s + t), Wheeler's striplines, ×2 / √εr
+    1/Zo,cu = 1/Zo,thin(planes b − 2t apart) + 1/Zpar(t) − 1/Zpar(0)
+
+The paper-thin pair with the planes 2t closer, plus the admittance the
+copper adds to one strip between its plane and the mid-plane, from the
+two half-striplines of Dual stripline (without its offset term, which
+fails this close to a plane). Against the solver, for w 0.1 to 0.5 mm,
+s 0.1 to 0.2 mm, b 0.4 to 0.8 mm, εr 4.3: −1.4 to −0.1 % for ½, 1 and
+2 oz.
+
+### Assumptions and limits
+
+- **The big result is paper-thin:** read the copper row for a real board;
+  the width solved is the paper-thin one.
+- **Centred pair, equal traces, one dielectric:** core and prepreg are
+  averaged by the user.
+- **The copper estimate is the tool's,** checked against the solver over
+  the range above only.
+- **No losses.**
+
+### How it was checked
+
+6 cases (field-solver values from tools/fd_lines.py):
+- 100 Ω, planes 0.8 mm apart, 0.2 mm between: 0.134 mm paper-thin (solver
+  100.03 Ω); with 1 oz 85.2 Ω, −15 % (solver 85.5 Ω);
+- 0.15 mm traces 0.15 mm apart, planes 0.6 mm: 80 Ω (79.97), odd mode
+  40 Ω; 1 oz 67.8 Ω (solver 68.0 Ω); 69.2 ps/cm;
+- 0.3 mm traces 0.1 mm apart: 39.2 Ω (39.24), 1 oz 35.4 Ω (solver
+  35.6 Ω);
+- 0.05 mm traces 0.2 mm apart: 148 Ω (solver 149.8 Ω), w/s 0.25 flagged;
+- no copper: no estimate;
+- traces as far apart as the planes are refused.
 
 [↑ Index](#index)
 

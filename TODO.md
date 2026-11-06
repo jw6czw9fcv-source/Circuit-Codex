@@ -409,7 +409,7 @@ Then:
 - [x] Stripline impedance — built, Wheeler 1978 via Hafner et al. 2014 (table I reproduced), 2026-11-03
 - [x] Dual stripline impedance — built as Dual stripline, IPC-2141A §4.2.5 corrected (checked with a field solver), 2026-11-05
 - [x] Differential stripline (edge-coupled) — built, IPC-2141A §4.4.2 with 3 misprints corrected, checked with tools/fd_lines.py, 2026-11-05
-- [ ] Broadside-coupled stripline — IPC-2141A §4.4.3 is for zero-thickness strips: 6–18 % high for 1 oz (fd_lines.py); ask Pierre
+- [x] Broadside-coupled stripline — built as Broadside stripline, IPC-2141A §4.4.3 paper-thin (constant 295.9) + copper estimate within 1.5 % of fd_lines.py, 2026-11-05
 - [ ] Coplanar waveguide impedance
 - [ ] Via impedance (R, L, C)
 - [ ] Crosstalk calculator

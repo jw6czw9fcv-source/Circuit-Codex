@@ -585,6 +585,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "stripline") return renderStripline(domain, tool, favId);
   if (calcId === "dual-stripline") return renderDualStripline(domain, tool, favId);
   if (calcId === "diff-stripline") return renderDiffStripline(domain, tool, favId);
+  if (calcId === "broadside-stripline") return renderBroadsideStripline(domain, tool, favId);
   if (calcId === "diff-microstrip") return renderDiffMicrostrip(domain, tool, favId);
   if (calcId === "embedded-microstrip") return renderEmbeddedMicrostrip(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
@@ -14212,6 +14213,239 @@ function renderDiffStripline(domain, tool, favId) {
       if (key === "z") el.onblur = () => setTimeout(syncBoxes);
     });
     document.getElementById("dsl-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- Broadside stripline ----------
+// Two traces one above the other, between two ground planes, carrying a
+// differential signal. IPC-2141A (March 2004, §4.4.3, figure 4-6(c),
+// Pierre's copy) [4-46]–[4-48], citing its references 2, 8 and 9, for
+// paper-thin strips: Z0,o = 293.9/√εr × (s/b) / tanh⁻¹(k), k solving w/b =
+// (1/π)(ln((1 + R)/(1 − R)) − (s/b) ln((k + R)/(k − R))), R = √(k(kb − s)/
+// (b − ks)), "nearly exact for w/s ≥ 0.35". Against tools/fd_lines.py the
+// ratio is 0.9934 for every geometry: the shape is exact and the constant
+// is η0π/4 = 295.9, not 293.9. Copper thickness is not in it, and 1 oz
+// lowers Zdiff by 6 to 25 %; the tool estimates that (not IPC): the paper-
+// thin pair with the planes 2t closer (each strip's outer face where its
+// plane sees it), plus the admittance the copper adds to one strip between
+// its plane and the mid-plane, taken from two symmetric striplines in
+// parallel (Wheeler's, planes 2h1 + t and s + t apart, as in Dual
+// stripline, without its offset term): within 1.5 % of the solver for ½ to
+// 2 oz.
+function renderBroadsideStripline(domain, tool, favId) {
+  const C = "broadside-stripline";
+  const OZ = TRACE_OZ_MIL * 25.4e-6, K0 = 376.730313668 * Math.PI / 4;
+  const state = {
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    mat: "fr4",
+    si: { w: 0.15e-3, s: 0.15e-3, b: 0.6e-3, t: OZ, er: 4.3 },
+    target: null,
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  // IPC's paper-thin odd mode, planes b apart: k by halving (s/b, 1).
+  const thinOdd = (w, s, b, er) => {
+    const sb = s / b, wb = w / b;
+    const wOf = (k) => { const R = Math.sqrt(k * (k - sb) / (1 - k * sb)); return (Math.log((1 + R) / (1 - R)) - sb * Math.log((k + R) / (k - R))) / Math.PI; };
+    let lo = sb, hi = 1;
+    for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (wOf(mid) < wb) lo = mid; else hi = mid; }
+    const k = (lo + hi) / 2;
+    return K0 / Math.sqrt(er) * sb / Math.atanh(k);
+  };
+  const zDiffAt = (w) => 2 * thinOdd(w, state.si.s, state.si.b, state.si.er);
+  // Wheeler's symmetric stripline, in air.
+  const zSS = (w, b, t) => {
+    const h = (b - t) / 2, m = 6 / (3 + t / h);
+    const wp = t > 0 ? w + t / Math.PI * Math.log(Math.E / Math.sqrt((t / (4 * h + t)) ** 2 + ((1 / (4 * Math.PI)) / (w / t + 1.1)) ** m)) : w;
+    const x = 16 * h / (Math.PI * wp);
+    return 30 * Math.log(1 + 0.5 * x * (x + Math.sqrt(x * x + 6.27)));
+  };
+  const h1 = () => (state.si.b - state.si.s) / 2 - state.si.t;
+  const copperDiff = () => {
+    const { w, s, b, t, er } = state.si, a = h1();
+    if (!(t > 0)) return zDiffAt(w);
+    const par = (tt) => { const za = zSS(w, 2 * a + tt, tt), zb = zSS(w, s + tt, tt); return 2 * za * zb / (za + zb) / Math.sqrt(er); };
+    return 2 / (1 / thinOdd(w, s, b - 2 * t, er) + 1 / par(t) - 1 / par(0));
+  };
+  const geomOk = () => { const s = state.si; return s.b > 0 && s.s > 0 && s.s < s.b && s.er >= 1; };
+  const wFor = (z) => {
+    let lo = state.si.b * 1e-4, hi = state.si.b * 100;
+    if (!(z < zDiffAt(lo) && z > zDiffAt(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (zDiffAt(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.b > 0)) return "Enter the spacing between the planes.";
+    if (!(s.s > 0)) return "Enter the dielectric between the two traces.";
+    if (!(s.s < s.b)) return "The traces must be closer to each other than the planes are.";
+    if (!(s.t >= 0)) return "Enter the copper's thickness, zero or more.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(wFor(state.target) > 0)) return "No width between 0.0001 and 100 times the spacing gives that impedance.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    return "";
+  }
+
+  // The pair one above the other, centred between the planes; green when
+  // the width is the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mm = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mm(v)}` : `${mm(v)} · ${mil(v)}`);
+    const tLabel = state.lUnit === "mil" ? `${mil(s.t)} · ${Number((s.t * 1e6).toPrecision(3))} µm` : `${Number((s.t * 1e6).toPrecision(3))} µm · ${mil(s.t)}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="14" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <rect x="40" y="84" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <path d="M40 20 V84 M282 20 V84" stroke="${wire}" stroke-width="1.4"/>
+      <rect x="101" y="40" width="60" height="7" fill="${tone}"/><rect x="101" y="57" width="60" height="7" fill="${tone}"/>
+      ${lbl(131, 35, ok ? `w ${both(s.w)}` : "w", tone)}
+      <path d="M168 47 V57 M164 47 H172 M164 57 H172" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(176, 56, `s ${both(s.s)}`, grey, "start")}
+      <path d="M30 20 V84 M26 20 H34 M26 84 H34" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(46, 79, `b ${both(s.b)}`, grey, "start")}
+      ${lbl(276, 33, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(276, 79, `t ${tLabel}`, grey, "end")}
+      ${lbl(161, 10, "ground planes, above and below", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, zd = zDiffAt(s.w);
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
+    const td = 33.356 * Math.sqrt(s.er) * per;
+    const ws = s.w / s.s;
+    let cu;
+    if (!(s.t > 0)) cu = "none entered";
+    else if (!(h1() > 0)) cu = warn("too thick for this gap");
+    else { const zc = copperDiff(), d = (zc / zd - 1) * 100; cu = warn(`${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(0)} %)`); }
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω, paper-thin</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, ${len(s.s)} apart</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Differential impedance, paper-thin</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(zd)}</span></div>
+          <div class="result-sub" data-res="sub">odd mode ${ohm(zd / 2)}, each trace in the pair</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${row("With the copper, estimated", cu, "cu")}
+          ${row("w/s, IPC's range", ws >= 0.35 ? `${Number(ws.toPrecision(3))}, 0.35 or more` : warn(`${Number(ws.toPrecision(3))}, below 0.35`), "range")}
+          ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number(zDiffAt(state.si.w).toPrecision(4))));
+  }
+  function settle() { if (state.target > 0 && geomOk()) { const w = wFor(state.target); if (w > 0) state.si.w = w; } }
+
+  function refresh() {
+    settle();
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  const example = (si, extra, target) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    settle();
+    paint();
+  };
+  useExamples([
+    { title: "100 Ω, planes 0.8 mm apart", note: "0.2 mm between the traces, FR-4: 0.134 mm paper-thin; 1 oz brings it to 85 Ω.",
+      apply: example({ s: 0.2e-3, b: 0.8e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 100) },
+    { title: "0.15 mm traces, 0.15 mm apart", note: "Planes 0.6 mm apart: 80 Ω paper-thin, 67.8 Ω with 1 oz (a field solver: 68.0 Ω).",
+      apply: example({ w: 0.15e-3, s: 0.15e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+    { title: "Wide traces close together", note: "0.3 mm traces 0.1 mm apart: 39.2 Ω, 35.4 Ω with 1 oz.",
+      apply: example({ w: 0.3e-3, s: 0.1e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+    { title: "Narrow traces, flagged", note: "0.05 mm traces 0.2 mm apart: w/s 0.25, below IPC's 0.35.",
+      apply: example({ w: 0.05e-3, s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="bs-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A pair of traces stacked between two planes")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Between them, s", 2)}${lf("b", "Planes apart, b", 3)}</div>
+      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${field("z", "Differential impedance", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["R = √(k (kb − s) / (b − ks))", "A = ln((1+R)/(1−R)),  B = ln((k+R)/(k−R))", "w/b = (A − (s/b) B) / π,  solved for k", "Zo = 295.9/√εr × (s/b) / tanh⁻¹(k)", "Zdiff = 2 Zo"],
+        "A broadside pair: two traces one above the other on two inner layers, s apart, centred between two ground planes b apart, carrying a signal as two equal and opposite voltages. Zdiff is what the driver sees between the two traces; Zo, the odd-mode impedance, is each trace's half. IPC-2141A's formula is for paper-thin traces: given w, s and b, k is found from the first line, then Zo. IPC prints 293.9; 295.9 (η0π/4) is the constant that matches a field solver. Real copper lowers Zdiff a lot here, 6 to 25 % for 1 oz: the row below estimates it. Type a width to get Zdiff, or the Zdiff you need to get the width."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "s" || key === "b") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("bs-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("bs-mat").onchange = (e) => {
       state.mat = e.target.value;
       const er = MS_MATERIALS[state.mat][1];
       if (er) state.si.er = er;
