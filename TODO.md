@@ -407,7 +407,7 @@ Then:
 - [x] Embedded microstrip impedance — built as Embedded microstrip, IPC-2141A §4.2.3 [4-7] on Wadell's Z0, 2026-11-04
 - [x] Differential microstrip impedance — built as Differential microstrip, AN-905 coupling on Wadell's Z0, 2026-11-03
 - [x] Stripline impedance — built, Wheeler 1978 via Hafner et al. 2014 (table I reproduced), 2026-11-03
-- [ ] Dual stripline impedance
+- [x] Dual stripline impedance — built as Dual stripline, IPC-2141A §4.2.5 corrected (checked with a field solver), 2026-11-05
 - [ ] Coplanar waveguide impedance
 - [ ] Via impedance (R, L, C)
 - [ ] Crosstalk calculator

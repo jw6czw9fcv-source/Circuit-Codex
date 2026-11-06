@@ -363,6 +363,12 @@ const FORMULAS = [
   },
 
   {
+    tool: "Dual stripline",
+    domain: "pcb",
+    formulas: ["Zair = 2 Z1 Z2 / (Z1 + Z2)", "Z0 = (Zair − ΔZ) / √εr"],
+    note: "Z1, Z2: centred striplines in air with planes 2h1 + t and 2h2 + t apart; ΔZ IPC-2141A's offset term [4-18], its [4-17] corrected.",
+  },
+  {
     tool: "Embedded microstrip",
     domain: "pcb",
     formulas: ["k = e^(−2b/h1),   b = H2 − h1", "Z0,emb = Z0 / √(k + (εr / εr,eff)(1 − k))"],

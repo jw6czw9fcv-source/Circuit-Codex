@@ -119,6 +119,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Embedded microstrip](#embedded-microstrip)
 - Impedance → [Differential microstrip](#diff-microstrip)
 - Impedance → [Stripline impedance](#stripline)
+- Impedance → [Dual stripline](#dual-stripline)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -11717,6 +11718,131 @@ width for an impedance is found by halving the range of widths.
 - the copper's own picker (1 oz is 34.8 µm);
 - copper as thick as half the spacing is refused;
 - the length pickers move together.
+
+[↑ Index](#index)
+
+---
+
+<a id="dual-stripline"></a>
+## Dual stripline
+
+`calc: dual-stripline` · PCB & interconnect › Impedance
+(formerly Dual stripline impedance)
+
+### What it computes
+
+The impedance of a trace between two ground planes but nearer one of them
+(the dual, offset or asymmetric stripline, as on a board with two signal
+layers between the same pair of planes), or the width that gives an
+impedance:
+
+- **Inputs:** the trace width w, the dielectric under it h1 and over it
+  h2, the copper's thickness t (its own picker), the material and εr.
+- **Width and impedance are two live boxes:** type a width and the
+  impedance box shows Z0; type the impedance you need and the width box
+  shows the width that gives it.
+- **The big result:** Z0, with the spacing between the planes and how far
+  the trace is off centre; or the width for the impedance typed.
+- **Below it:**
+  - the impedance the same trace would have centred between the same
+    planes, and how much higher that is;
+  - the size of IPC-2141A's offset correction;
+  - the delay per length, the signal seeing the full εr;
+  - the capacitance and inductance per length.
+- **Units:** mm or mil for the three lengths, moving together; oz, µm or
+  mil for the copper.
+- **Drawing:** the two planes, the trace drawn nearer the closer one, h1,
+  h2, t and εr, lengths in mm and mil. The trace is green when its width
+  is the answer.
+- **Remembered:** the length unit and the copper unit.
+
+Examples: a 0.2 mm trace 0.2 and 0.4 mm from the planes, the width for
+50 Ω on those layers, a centred trace (Stripline impedance's case), and a
+narrow trace close to one plane.
+
+### Terms
+
+- **Dual stripline:** a stripline whose trace is not centred: h1 ≠ h2,
+  as each trace is when two signal layers share the same planes.
+- **h1, h2, B:** the dielectric between the trace and the lower and the
+  upper plane; B = h1 + h2 + t is the spacing between the planes.
+- **Z0, εr, C0, L0, oz:** as in Microstrip impedance and Stripline
+  impedance.
+
+### Source
+
+- **IPC-2141A, "Design Guide for High-Speed Controlled Impedance Circuit
+  Boards", March 2004, §4.2.5, figure 4-3(d)** (read, Pierre's scanned
+  copy), citing its reference 2:
+  - [4-17] Z0,AS = 1/εr × [Z0,SS(εr = 1, b = h1 + h2 + t) − ΔZ0,air];
+  - [4-18] ΔZ0,air = 0.0325π Z0,air² (0.5 − ½ (2h1 + t)/(h1 + h2 + t))^2.2
+    ((t + w)/(h1 + h2 + t))^2.9;
+  - [4-19] Z0,air = 2 Z0,SS(εr = 1, b = h1) Z0,SS(εr = 1, b = h2) /
+    (Z0,SS(εr = 1, b = h1) + Z0,SS(εr = 1, b = h2)), Z0,SS its symmetric
+    stripline [4-9];
+  - h1 from the trace to the lower plane, h2 to the upper one.
+- **Not read:** IPC-2141A's reference 2 (presumably Wadell's handbook),
+  where the formula comes from.
+
+### Why the formulas are these
+
+    Z(b): Stripline impedance's Z0 in air, planes b apart
+    Zair = 2 Z(2h1 + t) Z(2h2 + t) / (Z(2h1 + t) + Z(2h2 + t))
+    B = h1 + h2 + t
+    ΔZ = 0.0325π Zair² |½ − ½ (2h1 + t)/B|^2.2 ((t + w)/B)^2.9
+    Z0 = (Zair − ΔZ) / √εr
+
+A centred stripline is two halves in parallel, the trace's field going
+up to one plane and down to the other, each half twice the line's Z0. Off
+centre, each half belongs to a centred stripline with that side's spacing:
+2h1 + t below, 2h2 + t above. The two in parallel give Zair; the halves
+are not quite independent, and IPC's ΔZ corrects for that. In one
+dielectric the impedance scales as 1/√εr. The width for an impedance is
+found by halving the range of widths.
+
+**Why the printed formula is corrected.** As printed, [4-17]–[4-19] do
+not give a stripline's impedance:
+- 1/εr: a uniform dielectric divides the impedance in air by √εr; with
+  1/εr, a centred FR-4 stripline would come out at half its value;
+- its first term, a centred stripline the full B apart, carries no offset
+  at all, while ΔZ is only a fraction of an ohm: off centre it reads 6 to
+  40 % high. It is Zair, computed in [4-19] only to feed ΔZ, that belongs
+  there;
+- Z0,SS(b = h1): a stripline whose planes are h1 apart; the half-line
+  argument needs planes 2h1 + t apart (h1 on each side of the trace).
+
+The reading the tool uses was checked against a finite-difference field
+solver written for this (Laplace's equation over the cross-section, the
+capacitance from the field's energy, refined three times and
+extrapolated; tools/fd_stripline.py). The solver reproduces Cohn's exact
+centred zero-thickness stripline to 0.1 % (59.44 Ω against 59.47 Ω,
+w/b = 1/3, εr 4.3) and
+Wheeler's formula for a centred 1 oz trace to 0.1 % (51.76 Ω against
+51.79 Ω). It also gives the same Z0 with h1 and h2 swapped, so the tool
+takes the offset term's (½ − …) as a magnitude, either plane the near one.
+
+### Assumptions and limits
+
+- **Accuracy:** within 0.3 % of the field solver for h2 = 2 h1, and about
+  5 % high for a narrow trace with h2 = 5 h1 (53.3 Ω against 50.8 Ω);
+  the board maker's stack-up calculation decides.
+- **One dielectric:** core and prepreg of different εr are averaged by the
+  user.
+- **One trace:** traces on the other signal layer are left out.
+- **No losses.**
+
+### How it was checked
+
+6 cases, the field-solver values at 35 µm copper:
+- 0.2 mm trace 0.2 and 0.4 mm from the planes, FR-4, 1 oz: 50.0 Ω
+  (solver 49.84 Ω), 53.4 Ω centred, correction 0.52 Ω, 1.38 pF/cm and
+  3.46 nH/cm;
+- 50 Ω on those layers: 0.2 mm;
+- centred, planes 0.6 mm apart: 51.8 Ω, Stripline impedance's value, no
+  correction;
+- 0.1 mm trace 0.1 and 0.5 mm from the planes: 53.3 Ω (solver 50.77 Ω);
+- h1 and h2 swapped: the same impedance;
+- the three length pickers move together.
 
 [↑ Index](#index)
 
