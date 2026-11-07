@@ -365,8 +365,8 @@ const FORMULAS = [
   {
     tool: "Asymmetric stripline",
     domain: "pcb",
-    formulas: ["Zair = 2 Z1 Z2 / (Z1 + Z2)", "Z0 = (Zair − ΔZ) / √εr"],
-    note: "Z1, Z2: centred striplines in air with planes 2h1 + t and 2h2 + t apart; ΔZ IPC-2141A's offset term [4-18], its [4-17] corrected.",
+    formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Z0 = η0 / (√εr × S)"],
+    note: "A field solver. For comparison, Wadell's formulas: Robrish's (±2 % for 0.2 < c/b < 0.8) and Hogan's, which IPC-2141A reprints.",
   },
   {
     tool: "Edge-coupled stripline",

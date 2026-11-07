@@ -1154,6 +1154,89 @@ const FS = (() => {
   };
 })();
 
+// A tool's link to the field solver. The formula estimate shows at once; the
+// solver's answer replaces it a moment after typing stops (0.25 s), or at
+// once for an example or a unit change. A typed impedance becomes a width:
+// the estimate's width first, corrected by the solver's ratio to the
+// estimate, then by the secant on ln w, to 0.1 % (inside the three figures
+// shown), usually two solves. Answers for an older state of the screen, or
+// for another screen, are dropped.
+// spec: { kind, modes (the first one sets the impedance), factor (that
+// mode's z × factor = the tool's impedance), params(w, mode) (lengths in
+// mm), estimate(w), estimateWidth(z), width(), setWidth(w), target(),
+// problem(), show() }. link.sol = { w, res: [an answer per mode] } or null.
+function solverLink(spec) {
+  const seq = SCREEN_SEQ;
+  let gen = 0, timer = null;
+  const link = { sol: null, error: "" };
+  const live = (my) => my === gen && seq === SCREEN_SEQ;
+  // What the solver already knows for the inputs on screen. With an
+  // impedance typed, the width on screen is the estimate's until the search
+  // ends, and an answer known for it is only the search's first step: the
+  // search runs again, from its known steps, in no time.
+  link.recall = () => {
+    if (spec.target() !== null) { link.sol = null; return; }
+    const w = spec.width();
+    const first = !spec.problem() && FS.known(spec.kind, spec.params(w, spec.modes[0]));
+    link.sol = first ? { w, res: spec.modes.map((m, i) => (i === 0 ? first : FS.known(spec.kind, spec.params(w, m)) || null)) } : null;
+  };
+  link.complete = () => !!link.sol && link.sol.res.every(Boolean);
+  link.waiting = () => !link.sol && !link.error && !FS.unavailable;
+  link.schedule = (now) => {
+    gen++;
+    FS.supersede();
+    if (timer) { clearTimeout(timer); timer = null; FS.hold(false); }
+    link.error = "";
+    if (spec.problem() || link.complete()) return;
+    const my = gen;
+    FS.hold(true);
+    timer = setTimeout(() => { timer = null; FS.hold(false); if (seq === SCREEN_SEQ) run(my); }, now ? 0 : 250);
+  };
+  async function run(my) {
+    try {
+      let w = spec.width();
+      if (spec.target() !== null) {
+        w = await solveWidth(spec.target(), my);
+        if (!live(my)) return;
+        spec.setWidth(w);
+      }
+      const res = spec.modes.map(() => null);
+      for (let i = 0; i < spec.modes.length; i++) {
+        res[i] = await FS.solve(spec.kind, spec.params(w, spec.modes[i]));
+        if (!live(my)) return;
+        link.sol = { w, res: res.slice() };
+        spec.show();
+      }
+    } catch (e) {
+      if (!live(my) || e.message === "superseded") return;
+      link.error = e.message;
+      spec.show();
+    }
+  }
+  async function solveWidth(T, my) {
+    const zAt = async (w) => spec.factor * (await FS.solve(spec.kind, spec.params(w, spec.modes[0]))).z;
+    let w0 = spec.estimateWidth(T), z0 = await zAt(w0);
+    if (!live(my) || Math.abs(z0 / T - 1) < 1e-3) return w0;
+    let w1 = spec.estimateWidth(T * spec.estimate(w0) / z0);
+    if (!(w1 > 0)) w1 = w0 * (z0 > T ? 1.1 : 0.9);
+    let z1 = await zAt(w1);
+    for (let i = 0; i < 4 && live(my) && Math.abs(z1 / T - 1) >= 1e-3 && z1 !== z0; i++) {
+      const w2 = Math.exp(Math.log(w1) + (Math.log(T) - Math.log(z1)) * (Math.log(w1) - Math.log(w0)) / (Math.log(z1) - Math.log(z0)));
+      w0 = w1; z0 = z1; w1 = w2;
+      z1 = await zAt(w1);
+    }
+    return w1;
+  }
+  return link;
+}
+
+// Who answered: the solver, still working, or (solver unavailable) the formula.
+function solverBadge(link) {
+  return link.sol ? `<span class="badge-calc" data-res="by">${ICONS.bolt2}Field solver</span>`
+    : link.waiting() ? `<span class="badge-calc badge-wait" data-res="by">Solving…</span>`
+    : `<span class="badge-calc" data-res="by">${ICONS.bolt2}Formula</span>`;
+}
+
 // ---------- Ohm's law ----------
 // Any two of voltage, current, resistance and power give the other two: the
 // six pairs of the Ohm's-law wheel. Values are held in SI (V, A, Ω, W) and
@@ -13885,27 +13968,32 @@ function renderStripline(domain, tool, favId) {
 
 // ---------- Asymmetric stripline ----------
 // A trace between two ground planes but nearer one of them: the asymmetric
-// (or offset) stripline, IPC-2141A's name (first built as Dual stripline;
-// Pierre renamed it 2026-11-05, as "dual stripline" is the name used for a
-// stack-up with two signal layers between the same planes, whose other
-// layer this tool leaves out). IPC-2141A (March 2004, §4.2.5, figure
-// 4-3(d), Pierre's copy) [4-17]–[4-19]: Z0,AS = 1/εr × [Z0,SS(εr = 1, b =
-// h1 + h2 + t) − ΔZ0,air], ΔZ0,air = 0.0325π Z0,air² (0.5 − ½ (2h1 + t)/(h1 +
-// h2 + t))^2.2 ((t + w)/(h1 + h2 + t))^2.9, Z0,air = 2 Z0,SS(b = h1) Z0,SS(b =
-// h2) / (Z0,SS(b = h1) + Z0,SS(b = h2)), h1 and h2 from the trace to the
-// lower and upper planes. Printed so it is up to 40 % off (and 1/εr is not
-// even right for a centred trace); checked against a finite-difference
-// field solver written for this (validated against Cohn's exact zero-
-// thickness stripline and Wheeler's formula, 51.76 against 51.79 Ω), the
-// reading that holds is Z0 = (Z0,air − ΔZ0,air)/√εr, Z0,SS(b = 2h1 + t) and
-// Z0,SS(b = 2h2 + t): each side a symmetric stripline whose half it is, the
-// two halves in parallel, then IPC's offset correction. Within 0.3 % of the
-// solver for h2 = 2 h1, 5 % for h2 = 5 h1. Z0,SS is Wheeler's, as in
-// Stripline; the correction's (0.5 − …) is taken as a magnitude, so
-// either plane can be the near one (the solver gives the same Z0 swapped).
+// (or offset, off-centre) stripline, IPC-2141A's name (first built as Dual
+// stripline; Pierre renamed it 2026-11-05, as "dual stripline" is the
+// stack-up with two signal layers between the same planes, whose other layer
+// this tool leaves out). The big result is the field solver's (FS,
+// js/fieldsolver.js stripline with h1), since 2026-11-07. For comparison,
+// the two published closed forms Wadell gives (Transmission Line Design
+// Handbook, 1991, §3.6.3, Pierre's copy):
+// - Robrish's, extending Cohn's (3.6.3.1–3.6.3.13): for w/(b − t) < 0.35 a
+//   round wire of diameter d0 (3.6.3.4), Z0 = η0/(2π√εr) cosh⁻¹(sin(π c/b)
+//   coth(π d0/2b)), c the strip's centre above the lower plane; wider,
+//   parallel plates and fringing (3.6.3.6–3.6.3.10). ±2 % against numerical
+//   solutions for 0.2 < c/b < 0.8, w > t, t/b < 0.2. Against the solver:
+//   1.5 to 2.9 % low.
+// - Hogan's (3.6.3.21–3.6.3.23), which IPC-2141A [4-17]–[4-19] reprints with
+//   1/εr for 1/√εr (its one misprint there): Z0 = (Z0,ctr(1, w, b, t) −
+//   ΔZ0,air)/√εr, Z0,air = 2 Z1 Z2/(Z1 + Z2), Z1 = Z0,ctr(1, w, h1, t),
+//   ΔZ0,air = (0.26π/8) Z0,air² (0.5 − (h1 + t/2)/b)^2.2 ((t + w)/b)^2.9;
+//   Z0,ctr Wheeler's centred stripline in air, as Stripline computes it (with
+//   η0/4π; Wadell's 3.6.2.1 prints η0/2π). Barely below the centred value:
+//   7 to 33 % high off centre.
+// The estimate shown while the solver works is the app's earlier formula:
+// the two halves (planes 2h1 + t and 2h2 + t apart) in parallel, minus
+// Hogan's term; −6 to +5 % against the solver.
 function renderDualStripline(domain, tool, favId) {
   const C = "dual-stripline";
-  const OZ = TRACE_OZ_MIL * 25.4e-6;
+  const OZ = TRACE_OZ_MIL * 25.4e-6, ETA = 376.730313668;
   const state = {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
@@ -13915,7 +14003,8 @@ function renderDualStripline(domain, tool, favId) {
   };
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
-  // Wheeler's symmetric stripline in air, planes b apart.
+  const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+  // Wheeler's centred stripline in air, planes b apart.
   const zSS = (w, b, t) => {
     const h = (b - t) / 2, m = 6 / (3 + t / h);
     const wp = t > 0 ? w + t / Math.PI * Math.log(Math.E / Math.sqrt((t / (4 * h + t)) ** 2 + ((1 / (4 * Math.PI)) / (w / t + 1.1)) ** m)) : w;
@@ -13923,24 +14012,50 @@ function renderDualStripline(domain, tool, favId) {
     return 30 * Math.log(1 + 0.5 * x * (x + Math.sqrt(x * x + 6.27)));
   };
   const B = () => state.si.h1 + state.si.h2 + state.si.t;
-  // The two halves in parallel, and IPC's offset correction, both in air.
-  const parts = (w) => {
-    const { h1, h2, t } = state.si, b = B();
-    const za = zSS(w, 2 * h1 + t, t), zb = zSS(w, 2 * h2 + t, t);
-    const zAir = 2 * za * zb / (za + zb);
-    const dz = 0.0325 * Math.PI * zAir ** 2 * Math.abs(0.5 - 0.5 * (2 * h1 + t) / b) ** 2.2 * ((t + w) / b) ** 2.9;
-    return { zAir, dz };
+  const hogTerm = (w, zAir) => {
+    const { h1, t } = state.si, b = B();
+    return 0.26 * Math.PI / 8 * zAir ** 2 * Math.abs(0.5 - (h1 + t / 2) / b) ** 2.2 * ((t + w) / b) ** 2.9;
   };
-  const zAt = (w) => { const { zAir, dz } = parts(w); return (zAir - dz) / Math.sqrt(state.si.er); };
-  const zCentred = () => zSS(state.si.w, B(), state.si.t) / Math.sqrt(state.si.er);
-  const geomOk = () => { const s = state.si; return s.h1 > 0 && s.h2 > 0 && s.t >= 0 && s.er >= 1; };
-  const wFor = (z) => {
+  // The estimate (see the header).
+  const estimate = (w) => {
+    const { h1, h2, t, er } = state.si;
+    const za = zSS(w, 2 * h1 + t, t), zb = zSS(w, 2 * h2 + t, t), zAir = 2 * za * zb / (za + zb);
+    return (zAir - hogTerm(w, zAir)) / Math.sqrt(er);
+  };
+  // Hogan's, as Wadell publishes it; NaN where a side is thinner than the copper.
+  const hogan = (w) => {
+    const { h1, h2, t, er } = state.si;
+    if (!(h1 > t && h2 > t)) return NaN;
+    const za = zSS(w, h1, t), zb = zSS(w, h2, t), zAir = 2 * za * zb / (za + zb);
+    return (zSS(w, B(), t) - hogTerm(w, zAir)) / Math.sqrt(er);
+  };
+  // Robrish's (Wadell 3.6.3.1–3.6.3.13); its ±2 % range.
+  const robrish = (w) => {
+    const { h1, t, er } = state.si, b = B(), c = h1 + t / 2;
+    if (w / (b - t) < 0.35) {
+      const [a, e] = w >= t ? [w, t] : [t, w], x = e / a;
+      const d0 = a * (0.5008 + 1.0235 * x - 1.023 * x * x + 1.1564 * x ** 3 - 0.4749 * x ** 4);
+      return ETA / (2 * Math.PI * Math.sqrt(er)) * Math.acosh(Math.sin(Math.PI * c / b) / Math.tanh(Math.PI * d0 / (2 * b)));
+    }
+    const beta = 1 - t / b, gam = c / b - t / (2 * b), g = gam * (beta - gam);
+    let wb = w / b;
+    if (w / (b - t) < t / b) {
+      const a = Math.PI * w / (2 * b);
+      wb = w / b + (1 - t / b) ** 8 * (ellipRatio(Math.tanh(a), 1 / Math.cosh(a)) - 2 / Math.PI * Math.LN2 - w / b);
+    }
+    const F = (u) => (1 - 2 * u) * ((1 - u) * Math.log(1 - u) - (u > 0 ? u * Math.log(u) : 0));
+    const cf = (2 * Math.log(1 / g) + (F(t / b) - F(c / b)) / g) / Math.PI;
+    return ETA / Math.sqrt(er) / (wb / gam + wb / (beta - gam) + 2 * cf);
+  };
+  const robrishInRange = (w) => { const { h1, t } = state.si, b = B(), c = (h1 + t / 2) / b; return c > 0.2 && c < 0.8 && w > t && t / b < 0.2; };
+  const estimateWidth = (z) => {
     const b = B();
     let lo = b * 1e-4, hi = b * 100;
-    if (!(z < zAt(lo) && z > zAt(hi))) return NaN;
-    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (zAt(mid) > z) lo = mid; else hi = mid; }
+    if (!(z < estimate(lo) && z > estimate(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (estimate(mid) > z) lo = mid; else hi = mid; }
     return Math.sqrt(lo * hi);
   };
+  const mm = (v) => +(v * 1e3).toPrecision(10);
 
   function problem() {
     const s = state.si;
@@ -13950,12 +14065,20 @@ function renderDualStripline(domain, tool, favId) {
     if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
     if (state.target !== null) {
       if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
-      if (!(wFor(state.target) > 0)) return "No width between 0.0001 and 100 times the spacing gives that impedance.";
+      if (!(estimateWidth(state.target) > 0)) return "No width between 0.0001 and 100 times the spacing gives that impedance.";
     }
     if (!(s.w > 0)) return "Enter the trace width.";
-    if (!(zAt(s.w) > 0)) return "The trace is too wide for this formula next to such a close plane.";
     return "";
   }
+
+  const link = solverLink({
+    kind: "stripline", modes: [undefined], factor: 1,
+    params: (w) => { const s = state.si; return { w: mm(w), t: mm(s.t), b: mm(B()), er: s.er, h1: mm(s.h1) }; },
+    estimate, estimateWidth,
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const zNow = () => (link.sol ? link.sol.res[0].z : estimate(state.si.w));
 
   // The board in cross-section: two planes, the trace drawn nearer the
   // closer one. It is green when its width is the answer.
@@ -13965,8 +14088,8 @@ function renderDualStripline(domain, tool, favId) {
     const tone = state.target !== null ? calc : part;
     const s = state.si, ok = !problem();
     const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
-    const mm = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
-    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mm(v)}` : `${mm(v)} · ${mil(v)}`);
+    const mmL = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mmL(v)}` : `${mmL(v)} · ${mil(v)}`);
     const tLabel = state.lUnit === "mil" ? `${mil(s.t)} · ${Number((s.t * 1e6).toPrecision(3))} µm` : `${Number((s.t * 1e6).toPrecision(3))} µm · ${mil(s.t)}`;
     // Trace near the lower plane (h1 ≤ h2) or near the upper one.
     const low = !(s.h1 > s.h2);
@@ -13991,28 +14114,30 @@ function renderDualStripline(domain, tool, favId) {
   function resultHTML() {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-    const s = state.si, z = zAt(s.w), { dz } = parts(s.w), zc = zCentred();
+    const s = state.si, z = zNow();
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
-    const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
     const td = 33.356 * Math.sqrt(s.er) * per;
-    const d = (zc / z - 1) * 100;
+    const vs = (v) => { const d = (v / z - 1) * 100; return `${ohm(v)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const off = Math.abs(s.h2 - s.h1) / 2;
+    const zr = robrish(s.w), zh = hogan(s.w), zc = zSS(s.w, B(), s.t) / Math.sqrt(s.er);
     const main = state.target !== null
       ? `<div class="result-field">
-          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
           <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, planes ${len(B())} apart</div>
         </div>`
       : `<div class="result-field">
-          <div class="result-head"><span class="label">Characteristic impedance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Characteristic impedance</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${ohm(z)}</span></div>
           <div class="result-sub" data-res="sub">planes ${len(B())} apart, the trace ${len(off)} off centre</div>
         </div>`;
     return `${main}
         <div class="field notation-box">
-          ${row("Centred between the same planes", `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`, "centred")}
-          ${row("IPC's offset correction", dz > 0 ? `−${Number((dz / Math.sqrt(s.er)).toPrecision(2))} Ω` : "none, the trace is centred", "dz")}
+          ${row("Robrish's formula (Wadell)", zr > 0 ? (robrishInRange(s.w) ? vs(zr) : warn(`${vs(zr)}, outside its ±2 % range`)) : warn("outside its range"), "robrish")}
+          ${row("Hogan's formula (IPC-2141A)", zh > 0 ? vs(zh) : warn("outside its range"), "hogan")}
+          ${row("Centred between the same planes", vs(zc), "centred")}
           ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
         </div>`;
@@ -14022,15 +14147,22 @@ function renderDualStripline(domain, tool, favId) {
     const err = problem();
     const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
     set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
-    set("z", err ? "" : fmt(Number(zAt(state.si.w).toPrecision(4))));
+    set("z", err ? "" : fmt(Number(zNow().toPrecision(4))));
   }
-  function settle() { if (state.target > 0 && geomOk()) { const w = wFor(state.target); if (w > 0) state.si.w = w; } }
-
-  function refresh() {
-    settle();
+  // A typed impedance sets the width, by the estimate at once and by the
+  // solver when it answers.
+  function settle() { if (state.target > 0 && !problem()) { const w = estimateWidth(state.target); if (w > 0) state.si.w = w; } }
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
     syncBoxes();
+  }
+  function refresh() {
+    settle();
+    link.recall();
+    show();
+    link.schedule(false);
   }
 
   const example = (si, extra, target) => () => {
@@ -14038,24 +14170,24 @@ function renderDualStripline(domain, tool, favId) {
     Object.assign(state.si, si);
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
-    settle();
     paint();
   };
   const hC = (0.6e-3 - OZ) / 2;
   useExamples([
-    { title: "0.2 mm trace, 0.2 and 0.4 mm away", note: "FR-4, 1 oz: 50.0 Ω; a field solver gives 49.8 Ω.",
+    { title: "0.2 mm trace, 0.2 and 0.4 mm away", note: "FR-4, 1 oz: 49.9 Ω; Robrish's formula reads 49 Ω, Hogan's 53.2 Ω.",
       apply: example({ w: 0.2e-3, h1: 0.2e-3, h2: 0.4e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
-    { title: "50 Ω on the same layers", note: "0.2 mm under the trace, 0.4 mm over it: a 0.2 mm trace.",
+    { title: "50 Ω on the same layers", note: "0.2 mm under the trace, 0.4 mm over it: a 0.199 mm trace.",
       apply: example({ h1: 0.2e-3, h2: 0.4e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 50) },
     { title: "Centred: a plain stripline", note: "h1 = h2, planes 0.6 mm apart: 51.8 Ω, as in Stripline.",
       apply: example({ w: 0.2e-3, h1: hC, h2: hC, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
-    { title: "Close to one plane", note: "0.1 mm trace, 0.1 and 0.5 mm away: 53.3 Ω, 5 % over a field solver's 50.8 Ω.",
+    { title: "Close to one plane", note: "0.1 mm trace, 0.1 and 0.5 mm away: 50.8 Ω, where Hogan's formula reads 33 % high.",
       apply: example({ w: 0.1e-3, h1: 0.1e-3, h2: 0.5e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
   ]);
 
   function paint() {
     const s = state.si;
     settle();
+    link.recall();
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const field = (key, label, unitHTML, value) => `
         <div class="field">
@@ -14078,8 +14210,8 @@ function renderDualStripline(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["Z(b): stripline Z0 in air, planes b apart", "Z1 = Z(2h1 + t),   Z2 = Z(2h2 + t)", "Zair = 2 Z1 Z2 / (Z1 + Z2)", "a = ½ − (h1 + t/2) / B,   B = h1 + h2 + t", "ΔZ = 0.0325π Zair² |a|^2.2 ((t + w)/B)^2.9", "Z0 = (Zair − ΔZ) / √εr"],
-        "An asymmetric (or offset) stripline is a trace between two ground planes but nearer one of them, as each trace is on a board with two signal layers between the same planes (traces on the other layer are left out). h1 is the dielectric under the trace, h2 over it, t the copper. Its characteristic impedance Z0 is the ratio of voltage to current a fast signal sees along it. Each side of the trace acts as half of a centred stripline with that side's spacing; the two halves in parallel give Zair, and IPC-2141A's term ΔZ corrects for the offset. The nearer plane pulls Z0 below a centred trace's. All the field runs in the dielectric, so the signal sees the full εr, which sets the delay per length. Type a width to get the impedance, or the impedance you need to get the width."
+        ["∇·(ε ∇φ) = 0 between the trace and planes", "S = C / ε0 = Σ ε (Δφ)² over the grid", "Z0 = η0 / (√εr × S),   η0 = 376.73 Ω", "Td = 33.36 √εr ps/cm,  C0 = Td/Z0,  L0 = Z0 Td"],
+        "An asymmetric (or offset) stripline is a trace between two ground planes but nearer one of them, as each trace is on a board with two signal layers between the same planes (traces on the other layer are left out). h1 is the dielectric under the trace, h2 over it, t the copper. The impedance is computed by the app's field solver: the potential is found on a fine grid over the cross-section and the capacitance per length follows from the field's energy (see Edge-coupled embedded's manual section). The nearer plane pulls Z0 below a centred trace's. Wadell's two published formulas are shown for comparison, as other calculators let you choose them: Robrish's (±2 % in its range) and Hogan's, which IPC-2141A reprints. All the field runs in the dielectric, so the signal sees the full εr, which sets the delay. Type a width to get the impedance, or the impedance you need to get the width."
       )}
       ${calcFooter("")}
     `;
@@ -14112,6 +14244,7 @@ function renderDualStripline(domain, tool, favId) {
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
     syncBoxes();
+    link.schedule(true);
   }
 
   paint();
@@ -14833,10 +14966,6 @@ function renderEmbeddedPair(domain, tool, favId) {
     // it, the gap kept.
     target: null,
   };
-  // The solver's answers for what is on screen: { w, odd, even }. seq is
-  // this screen's number (see render()).
-  let sol = null, solError = "", gen = 0, timer = null;
-  const seq = SCREEN_SEQ;
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
@@ -14881,63 +15010,14 @@ function renderEmbeddedPair(domain, tool, favId) {
     return "";
   }
 
-  // What the solver already knows for the inputs on screen.
-  function recall() {
-    const w = state.si.w, odd = !problem() && FS.known("microstrip", params(w, "odd"));
-    sol = odd ? { w, odd, even: FS.known("microstrip", params(w, "even")) || null } : null;
-  }
-
-  // Asked for once typing pauses, at once otherwise.
-  function schedule(now) {
-    gen++;
-    FS.supersede();
-    if (timer) { clearTimeout(timer); timer = null; FS.hold(false); }
-    solError = "";
-    if (problem() || (sol && sol.even)) return;
-    const my = gen;
-    FS.hold(true);
-    timer = setTimeout(() => { timer = null; FS.hold(false); if (seq === SCREEN_SEQ) run(my); }, now ? 0 : 250);
-  }
-  async function run(my) {
-    const live = () => my === gen && seq === SCREEN_SEQ;
-    try {
-      let w = state.si.w;
-      if (state.target !== null) {
-        w = await solveWidth(state.target, live);
-        if (!live()) return;
-        state.si.w = w;
-      }
-      const odd = await FS.solve("microstrip", params(w, "odd"));
-      if (!live()) return;
-      sol = { w, odd, even: null };
-      show();
-      const even = await FS.solve("microstrip", params(w, "even"));
-      if (!live()) return;
-      sol.even = even;
-      show();
-    } catch (e) {
-      if (!live() || e.message === "superseded") return;
-      solError = e.message;
-      show();
-    }
-  }
-  // The width for a Zdiff: the formula's first, corrected by the solver's
-  // ratio to the formula, then by the secant on ln w, to 0.1 % in Zdiff
-  // (well inside the three figures shown): usually two solves.
-  async function solveWidth(T, live) {
-    const zAt = async (w) => 2 * (await FS.solve("microstrip", params(w, "odd"))).z;
-    let w0 = estWidth(T), z0 = await zAt(w0);
-    if (!live() || Math.abs(z0 / T - 1) < 1e-3) return w0;
-    let w1 = estWidth(T * estDiff(w0) / z0);
-    if (!(w1 > 0)) w1 = w0 * (z0 > T ? 1.1 : 0.9);
-    let z1 = await zAt(w1);
-    for (let i = 0; i < 4 && live() && Math.abs(z1 / T - 1) >= 1e-3 && z1 !== z0; i++) {
-      const w2 = Math.exp(Math.log(w1) + (Math.log(T) - Math.log(z1)) * (Math.log(w1) - Math.log(w0)) / (Math.log(z1) - Math.log(z0)));
-      w0 = w1; z0 = z1; w1 = w2;
-      z1 = await zAt(w1);
-    }
-    return w1;
-  }
+  // The solver: the odd mode sets Zdiff (× 2), the even mode follows.
+  const link = solverLink({
+    kind: "microstrip", modes: ["odd", "even"], factor: 2, params,
+    estimate: estDiff, estimateWidth: estWidth,
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const odd = () => (link.sol ? link.sol.res[0] : null), even = () => (link.sol ? link.sol.res[1] : null);
 
   // The pair in cross-section: the plane, the dielectric under the traces,
   // the cover over them up to H2; green when the width is the answer.
@@ -14972,15 +15052,12 @@ function renderEmbeddedPair(domain, tool, favId) {
   function resultHTML() {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-    const s = state.si, est = estDiff(s.w), zd = sol ? 2 * sol.odd.z : est;
+    const s = state.si, est = estDiff(s.w), sol = odd(), zd = sol ? 2 * sol.z : est;
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
-    const waiting = !sol && !solError && !FS.unavailable;
-    const badge = sol ? `<span class="badge-calc" data-res="by">${ICONS.bolt2}Field solver</span>`
-      : waiting ? `<span class="badge-calc badge-wait" data-res="by">Solving…</span>`
-      : `<span class="badge-calc" data-res="by">${ICONS.bolt2}Formula</span>`;
-    const later = sol ? "" : waiting ? "…" : "unavailable";
+    const badge = solverBadge(link);
+    const later = sol ? "" : link.waiting() ? "…" : "unavailable";
     const cover = s.h2 - s.h1;
     const coverText = cover <= 0 ? "no cover: a surface pair"
       : cover < s.t ? warn(`a cover of ${len(cover)}, thinner than the copper`)
@@ -14999,10 +15076,10 @@ function renderEmbeddedPair(domain, tool, favId) {
     const d = sol ? (est / zd - 1) * 100 : 0;
     return `${main}
         <div class="field notation-box">
-          ${row("Odd mode, effective εr", sol ? `${ohm(sol.odd.z)}, ${Number(sol.odd.eeff.toPrecision(3))}` : later, "odd")}
-          ${row("Even mode, common mode", sol && sol.even ? `${ohm(sol.even.z)}, ${ohm(sol.even.z / 2)}` : later || "…", "even")}
+          ${row("Odd mode, effective εr", sol ? `${ohm(sol.z)}, ${Number(sol.eeff.toPrecision(3))}` : later, "odd")}
+          ${row("Even mode, common mode", even() ? `${ohm(even().z)}, ${ohm(even().z / 2)}` : later || "…", "even")}
           ${row("Formula estimate, for comparison", sol ? `${ohm(est)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : ohm(est), "est")}
-          ${row("Delay, odd mode", sol ? `${Number((33.356 * Math.sqrt(sol.odd.eeff) * per).toPrecision(3))} ps/${perU}` : later, "td")}
+          ${row("Delay, odd mode", sol ? `${Number((33.356 * Math.sqrt(sol.eeff) * per).toPrecision(3))} ps/${perU}` : later, "td")}
         </div>`;
   }
 
@@ -15010,23 +15087,23 @@ function renderEmbeddedPair(domain, tool, favId) {
     const err = problem();
     const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
     set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
-    set("z", err ? "" : fmt(Number((sol ? 2 * sol.odd.z : estDiff(state.si.w)).toPrecision(4))));
+    set("z", err ? "" : fmt(Number((odd() ? 2 * odd().z : estDiff(state.si.w)).toPrecision(4))));
   }
   // A typed impedance sets the width, by the formula at once and by the
   // solver when it answers.
   function settle() { if (state.target > 0 && !problem()) { const w = estWidth(state.target); if (w > 0) state.si.w = w; } }
 
   function show() {
-    if (seq !== SCREEN_SEQ) return;
+    if (!app.querySelector(".diagram-box")) return;
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
     syncBoxes();
   }
   function refresh(now) {
     settle();
-    recall();
+    link.recall();
     show();
-    schedule(now);
+    link.schedule(now);
   }
 
   const example = (si, extra, target) => () => {
@@ -15050,7 +15127,7 @@ function renderEmbeddedPair(domain, tool, favId) {
   function paint() {
     const s = state.si;
     settle();
-    recall();
+    link.recall();
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const field = (key, label, unitHTML, value) => `
         <div class="field">
@@ -15108,7 +15185,7 @@ function renderEmbeddedPair(domain, tool, favId) {
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
     syncBoxes();
-    schedule(true);
+    link.schedule(true);
   }
 
   paint();
