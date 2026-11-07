@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!-- Field solver bench: runs js/fieldsolver.js on reference cross-sections,
+     compares with exact or published values, and times each case. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field solver bench</title>
+<style>
+  body { margin: 0; padding: 12px; background: #0B0D10; color: #ddd; font: 13px/1.45 monospace; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { border-bottom: 1px solid #222; padding: 4px 6px; text-align: right; }
+  td:first-child, th:first-child { text-align: left; }
+  .bad { color: #E0A85E; } .ok { color: #5DCAA5; }
+</style>
+</head>
+<body>
+<div id="status">running…</div>
+<table id="out"><tr><th>case</th><th>Z (Ω)</th><th>reference</th><th>diff</th><th>nodes</th><th>CG iters</th><th>ms</th></tr></table>
+<pre id="report"></pre>
+<script src="../js/fieldsolver.js"></script>
+<script>
+// References: Cohn's exact zero-thickness stripline (30π K/K' with 120π
+// replaced by η0 = 376.73, i.e. ×0.999308), Polar's boundary-element
+// microstrip table (Burkhardt, Gregg, Staniforth, IPC 1999), and
+// tools/fd_lines.py values for the others.
+const ETAFIX = 376.730313668 / (120 * Math.PI);
+const CASES = [
+  ["stripline w 0.2 b 0.6, t 0 (Cohn)", "stripline", { w: 0.2, t: 0, b: 0.6, er: 4.3 }, 59.46853 * ETAFIX],
+  ["stripline pair odd w 0.2 s 0.2 b 0.6, t 0 (Cohn)", "stripline", { w: 0.2, t: 0, b: 0.6, er: 4.3, s: 0.2, mode: "odd" }, 50.86780 * ETAFIX],
+  ["stripline pair odd w 0.1 s 0.05 b 0.6, t 0 (Cohn)", "stripline", { w: 0.1, t: 0, b: 0.6, er: 4.3, s: 0.05, mode: "odd" }, 46.74750 * ETAFIX],
+  ["microstrip 1.5 on 0.794, εr 4.2 (Polar)", "microstrip", { w: 1.5, t: 0.035, h: 0.794, er: 4.2 }, 50.63],
+  ["microstrip 0.45 on 0.794, εr 4.2 (Polar)", "microstrip", { w: 0.45, t: 0.035, h: 0.794, er: 4.2 }, 89.63],
+  ["microstrip 3.3 on 0.794, εr 4.2 (Polar)", "microstrip", { w: 3.3, t: 0.035, h: 0.794, er: 4.2 }, 30.09],
+  ["asymmetric stripline w 0.2, 0.2 / 0.4, 35 µm (fd)", "stripline", { w: 0.2, t: 0.035, b: 0.635, er: 4.3, h1: 0.2 }, 49.84],
+  ["broadside odd w 0.15 s 0.15 b 0.6, 1 oz (fd)", "broadside", { w: 0.15, t: 0.0348, s: 0.15, b: 0.6, er: 4.3 }, 34.01],
+  ["embedded pair odd .15/.15 on 0.2, cover 0.1 (fd)", "microstrip", { w: 0.15, t: 0.0348, h: 0.2, er: 4.3, s: 0.15, mode: "odd", H2: 0.3 }, 46.646],
+];
+(async () => {
+  const out = document.getElementById("out"), rows = [];
+  let total = 0;
+  for (const [name, kind, params, ref] of CASES) {
+    await new Promise((r) => setTimeout(r, 20));
+    const res = FieldSolver.solve(kind, params);
+    total += res.ms;
+    const d = (res.z / ref - 1) * 100;
+    rows.push({ name, z: res.z, ref, d, nodes: res.nodes, iters: res.iters, ms: Math.round(res.ms) });
+    out.insertAdjacentHTML("beforeend", `<tr><td>${name}</td><td>${res.z.toFixed(3)}</td><td>${ref.toFixed(3)}</td><td class="${Math.abs(d) < 0.1 ? "ok" : "bad"}">${d >= 0 ? "+" : ""}${d.toFixed(3)} %</td><td>${res.nodes}</td><td>${res.iters}</td><td>${Math.round(res.ms)}</td></tr>`);
+  }
+  document.getElementById("status").textContent = `done, ${Math.round(total)} ms in all`;
+  document.getElementById("report").textContent = "REPORT" + JSON.stringify(rows) + "END";
+})();
+</script>
+</body>
+</html>
