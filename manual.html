@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=d1552321f6" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=37f0d46103" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -9815,7 +9815,7 @@ in parallel, minus Hogan's term; it is within 0.3 % in the first case but
 <section class="tool" id="diff-stripline" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Impedance</div>
   <h2>Edge-coupled stripline</h2>
-  <figure class="shot"><img src="manual/img/diff-stripline.jpg?h=da58a5202f" loading="lazy" alt="Edge-coupled stripline as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/diff-stripline.jpg?h=42a015960f" loading="lazy" alt="Edge-coupled stripline as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Edge-coupled stripline)</p>
 <h3>What it computes</h3>
 <p>The differential impedance of two edge-coupled traces centred between two
@@ -9829,12 +9829,18 @@ that gives it at a gap:</p>
   and the impedance box shows Zdiff; type the Zdiff you need (90 Ω for
   USB, 100 Ω for Ethernet or LVDS) and the width box shows the width at
   your gap.</li>
-<li><strong>The big result:</strong> Zdiff, with each trace's impedance alone and the
-  coupling (odd mode over one trace alone); or the width for the Zdiff
-  typed.</li>
+<li><strong>The big result:</strong> Zdiff from the field solver (as in Edge-coupled
+  embedded), with each trace's impedance alone and the coupling (odd mode
+  over one trace alone); or the width for the Zdiff typed. For the moment
+  the solver takes, the badge reads "Solving…" and IPC-2141A's value
+  stands in.</li>
 <li><strong>Below it:</strong></li>
 <li>the odd-mode impedance, each trace's share of the pair, Zdiff / 2;</li>
-<li>one trace alone, by Wheeler's formula as in Stripline;</li>
+<li>the even-mode and common-mode impedance, as in Edge-coupled
+    microstrip;</li>
+<li>one trace alone, from the solver as in Stripline;</li>
+<li>Zdiff by IPC-2141A's form, the big result until 2026-11-07, and its
+    difference from the solver's;</li>
 <li>which of IPC-2141A's two forms applies, by s/t;</li>
 <li>the delay per length, the signal seeing the full εr.</li>
 <li><strong>Units:</strong> mm or mil for the three lengths, moving together; oz, µm or
@@ -9882,9 +9888,24 @@ longer couples.</p>
   7, 8); their table 1, a surface microstrip computed by their
   boundary-element solver: 30.09, 50.63 and 89.63 Ω for 3.3, 1.5 and
   0.45 mm on 0.794 mm, εr 4.2, 35 µm copper.</li>
+<li><strong>Brian C. Wadell, "Transmission Line Design Handbook", Artech House,
+  1991, §4.6.5, pages 234–235</strong> (read, Pierre's scanned copy): its C′f(t/b)
+  has 1/(1 − t/b) − 1 = t/(b − t) as the second coefficient, and its odd
+  mode's fringing term C′f,o = C′f(0, s/b) + εt/s (4.6.5.9): two of the
+  three corrections below.</li>
+<li><strong>The field solver:</strong> js/fieldsolver.js, checked against Cohn's exact
+  zero-thickness pair to 0.005 % (Edge-coupled embedded's section);
+  tools/fd_lines.py's app_stripline, a separate implementation, gives the
+  values below.</li>
 <li><strong>Not read:</strong> Cohn's papers themselves, and IPC's references 2 and 7.</li>
 </ul>
 <h3>Why the formulas are these</h3>
+<p>The solver, the big result, solved three times, all in one dielectric:</p>
+<pre><code>odd mode: the traces at +1 V and −1 V,  Zodd = η0 / (√εr × S_air)
+Zdiff = 2 Zodd,   even mode: both at +1 V,  common mode = Zeven / 2
+one trace alone, as in Stripline
+</code></pre>
+<p>IPC-2141A's form, the comparison:</p>
 <pre><code>In air:   Z0, Zo,0 = 30π K(k)/K(k'), Cohn's paper-thin strip alone and in the pair
           Z(t): Wheeler's strip alone, with its copper
           ΔY = 1/Zo,0 − 1/Z0
@@ -9914,32 +9935,68 @@ arithmetic-geometric mean, K(k) = π / (2 agm(1, k')).</p>
   zero, where [4-45] says C'f(0) = 2 ln 2 (in units of ε0 εr, over π). With
   t/(b − t), as in IPC's own θ [4-16] (b²/(b − t)² − 1 = (2bt − t²)/
   (b − t)²), it does.</p>
-<p><strong>How it was checked.</strong> tools/fd_lines.py, a finite-difference field
-solver on a graded grid (fine at the copper, three refinements,
-extrapolated), reproduces Cohn's exact zero-thickness values to 0.1 %
-(59.42 against 59.47 Ω alone, 50.82 against 50.87 Ω odd mode; w 0.2 mm,
-s 0.2 mm, b 0.6 mm, εr 4.3) and Polar's microstrip table to 0.3 %
-(30.01, 50.54, 89.54 Ω). Against it, the tool's Zdiff is 1 to 3.5 % high
-for 1 oz copper: 3.4 % at 0.2 mm gaps (s/t 5.7, [4-42]), 1.0 % at 0.1 mm
-([4-43]), 0.0 % with the traces 2 mm apart.</p>
+<p><strong>How IPC-2141A's form compares with the solver</strong> (1 oz copper, planes
+0.6 mm apart, εr 4.3):</p>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Solver Zdiff</th>
+<th>IPC-2141A</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>100 Ω: 0.125 mm, 0.2 mm gap ([4-42])</td>
+<td>100.00 Ω</td>
+<td>+3.6 %</td>
+</tr>
+<tr>
+<td>90 Ω: 0.175 mm, 0.2 mm gap ([4-42])</td>
+<td>90.00 Ω</td>
+<td>+2.9 %</td>
+</tr>
+<tr>
+<td>0.15 mm, 0.2 mm gap, the default ([4-42])</td>
+<td>94.60 Ω</td>
+<td>+3.2 %</td>
+</tr>
+<tr>
+<td>0.15 mm, 0.1 mm gap ([4-43])</td>
+<td>76.82 Ω</td>
+<td>+1.0 %</td>
+</tr>
+<tr>
+<td>0.15 mm, 2 mm apart</td>
+<td>116.03 Ω</td>
+<td>+0.0 %</td>
+</tr>
+</tbody>
+</table>
+<p>Corrected, the form is 1 to 3.6 % high with 1 oz copper; it was the big
+result until 2026-11-07, when the solver took over. At 100 Ω the
+difference is in the width: IPC-2141A's 0.14 mm gives 96.7 Ω, the
+solver's 0.125 mm gives 100 Ω.</p>
 <h3>Assumptions and limits</h3>
 <ul>
-<li><strong>Accuracy:</strong> 1 to 3.5 % high against the field solver for 1 oz copper;
-  §4.4 itself warns that the balanced-line formulas "exist in various
-  forms, some of which are not in agreement". The board maker's stack-up
-  calculation decides.</li>
+<li><strong>Quasi-static field solution:</strong> the traces rectangles, no losses; the
+  board maker's stack-up calculation decides. For the formula, §4.4
+  itself warns that the balanced-line formulas "exist in various forms,
+  some of which are not in agreement".</li>
 <li><strong>Centred between the planes, equal traces, one dielectric, no losses.</strong></li>
-<li><strong>The jump at s/t = 5:</strong> IPC's two forms differ there by about 2 %.</li>
+<li><strong>The jump at s/t = 5:</strong> IPC's two forms differ there by about 2 %; the
+  solver has no such jump.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>6 cases (the field-solver values from tools/fd_lines.py):
-- 100 Ω, planes 0.6 mm apart, FR-4, 1 oz, 0.2 mm gap: 0.14 mm traces,
-  59.5 Ω alone, [4-42] (solver 96.7 Ω for those traces);
-- 90 Ω, same planes and gap: 0.189 mm (solver 87.6 Ω);
-- 0.15 mm traces 0.1 mm apart: 77.6 Ω by [4-43], coupling 0.669 (solver
-  76.8 Ω);
-- 2 mm apart: 116 Ω, twice one trace's 58 Ω (solver 116.0 Ω);
-- the default pair: 97.6 Ω (solver 94.6 Ω), 69.2 ps/cm;
+<p>6 cases, the expected values from tools/fd_lines.py's app_stripline:
+- 100 Ω, planes 0.6 mm apart, FR-4, 1 oz, 0.2 mm gap: 0.125 mm traces
+  (0.12513), 61.8 Ω alone, [4-42];
+- 90 Ω, same planes and gap: 0.175 mm (0.17450);
+- 0.15 mm traces 0.1 mm apart: 76.8 Ω (76.815), coupling 0.662, IPC's
+  [4-43] 77.6 Ω (+1.0 %); even mode 74.5 Ω, common mode 37.2 Ω;
+- 2 mm apart: 116 Ω (116.03), twice one trace's 58 Ω;
+- the default pair: 94.6 Ω (94.596), IPC-2141A 97.6 Ω (+3.2 %),
+  69.2 ps/cm;
 - the three length pickers move together.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/pcb%3A1%3A6/diff-stripline">Open the tool</a></p>
 </section>

@@ -14301,7 +14301,11 @@ function renderDualStripline(domain, tool, favId) {
 // ---------- Edge-coupled stripline ----------
 // Two edge-coupled traces centred between two ground planes (first named
 // Differential stripline; Pierre renamed it 2026-11-05, Broadside-coupled stripline
-// being a differential stripline too). IPC-2141A
+// being a differential stripline too). The big result is the field
+// solver's (FS stripline, odd mode: Zdiff = 2 Zodd) since 2026-11-07, with
+// one trace alone and the even mode solved too. IPC-2141A's form below, the
+// big result before, is the comparison and the width search's estimate:
+// +0.0 to +3.6 % of the solver in the examples. IPC-2141A
 // (March 2004, §4.4.2, figure 4-6(b), Pierre's copy) [4-42]–[4-45], citing
 // its references 2 and 7, the odd-mode impedance of thick strips from the
 // zero-thickness ones: for s/t ≥ 5, 1/Z0,o = 1/Z0(w, t) + (C'f(t)/C'f(0))
@@ -14366,6 +14370,21 @@ function renderDiffStripline(domain, tool, favId) {
     return Math.sqrt(lo * hi);
   };
 
+  // Three solves: the pair's odd mode (Zdiff), one trace alone, the even mode.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const link = solverLink({
+    kind: "stripline", modes: ["odd", "single", "even"], factor: 2,
+    params: (w, mode) => {
+      const q = state.si, p = { w: mm(w), t: mm(q.t), b: mm(q.b), er: q.er };
+      return mode === "single" ? p : Object.assign(p, { s: mm(q.s), mode });
+    },
+    estimate: zDiffAt, estimateWidth: wFor,
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const got = (i) => (link.sol && link.sol.res[i]) || null;
+  const zNow = () => (got(0) ? 2 * got(0).z : zDiffAt(state.si.w));
+
   function problem() {
     const s = state.si;
     if (!(s.b > 0)) return "Enter the spacing between the planes.";
@@ -14412,27 +14431,30 @@ function renderDiffStripline(domain, tool, favId) {
   function resultHTML() {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-    const s = state.si, zo = zOdd(s.w), z1 = zSingle();
+    const s = state.si, zd = zNow(), zo = zd / 2, z1 = got(1) ? got(1).z : zSingle(), even = got(2);
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const cmp = (zc) => { const d = (zc / zd - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
     const td = 33.356 * Math.sqrt(s.er) * per;
     const st = s.t > 0 ? `s/t ${Number((s.s / s.t).toPrecision(3))}` : "no copper thickness";
     const main = state.target !== null
       ? `<div class="result-field">
-          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
           <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, ${len(s.s)} apart</div>
         </div>`
       : `<div class="result-field">
-          <div class="result-head"><span class="label">Differential impedance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
-          <div class="result-value"><span class="num" data-res="big">${ohm(2 * zo)}</span></div>
+          <div class="result-head"><span class="label">Differential impedance</span>${solverBadge(link)}</div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(zd)}</span></div>
           <div class="result-sub" data-res="sub">each trace ${ohm(z1)} alone, coupling ${Number((zo / z1).toPrecision(3))}</div>
         </div>`;
     return `${main}
         <div class="field notation-box">
           ${row("Odd mode, each trace in the pair", ohm(zo), "odd")}
+          ${row("Even mode, common mode", even ? `${ohm(even.z)}, ${ohm(even.z / 2)}` : "…", "even")}
           ${row("Single trace, alone", ohm(z1), "single")}
+          ${row("IPC-2141A, for comparison", cmp(zDiffAt(s.w)), "ipc")}
           ${row("IPC-2141A's form", `${st}: ${wideGap() ? "[4-42], s/t ≥ 5" : "[4-43], s/t < 5"}`, "form")}
           ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
         </div>`;
@@ -14442,15 +14464,21 @@ function renderDiffStripline(domain, tool, favId) {
     const err = problem();
     const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
     set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
-    set("z", err ? "" : fmt(Number(zDiffAt(state.si.w).toPrecision(4))));
+    set("z", err ? "" : fmt(Number(zNow().toPrecision(4))));
   }
   function settle() { if (state.target > 0 && geomOk()) { const w = wFor(state.target); if (w > 0) state.si.w = w; } }
 
-  function refresh() {
-    settle();
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
     syncBoxes();
+  }
+  function refresh() {
+    settle();
+    link.recall();
+    show();
+    link.schedule(false);
   }
 
   const example = (si, extra, target) => () => {
@@ -14458,15 +14486,14 @@ function renderDiffStripline(domain, tool, favId) {
     Object.assign(state.si, si);
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
-    settle();
     paint();
   };
   useExamples([
-    { title: "Ethernet or LVDS, 100 Ω", note: "Planes 0.6 mm apart, FR-4, 1 oz, 0.2 mm gap: 0.14 mm traces.",
+    { title: "Ethernet or LVDS, 100 Ω", note: "Planes 0.6 mm apart, FR-4, 1 oz, 0.2 mm gap: 0.125 mm traces.",
       apply: example({ s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 100) },
-    { title: "USB, 90 Ω", note: "The same planes and gap: 0.189 mm traces.",
+    { title: "USB, 90 Ω", note: "The same planes and gap: 0.175 mm traces.",
       apply: example({ s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 90) },
-    { title: "A close pair, 0.1 mm gap", note: "0.15 mm traces: 77.6 Ω, IPC's narrow-gap form; a field solver gives 76.8 Ω.",
+    { title: "A close pair, 0.1 mm gap", note: "0.15 mm traces: 76.8 Ω; IPC's narrow-gap form gives 77.6 Ω.",
       apply: example({ w: 0.15e-3, s: 0.1e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
     { title: "Far apart: no coupling", note: "A 2 mm gap: 116 Ω, twice one trace's 58 Ω.",
       apply: example({ w: 0.15e-3, s: 2e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
@@ -14483,6 +14510,7 @@ function renderDiffStripline(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    link.recall();
     const matSel = `<select id="dsl-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A side-by-side pair between two planes")}
@@ -14497,8 +14525,8 @@ function renderDiffStripline(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["In air: ΔY = 1/Zo,0 − 1/Z0", "s/t ≥ 5: 1/Zo = 1/Z(t) + (Cf(t)/Cf(0)) ΔY", "s/t < 5: 1/Zo = 1/Z(t) + ΔY − (2/η0) ΔC", "ΔC = Cf(t) − Cf(0) − t/s", "Zdiff = 2 Zo / √εr"],
-        "A differential pair on an inner layer: two traces side by side, centred between two ground planes b apart, carrying a signal as two equal and opposite voltages. Its differential impedance Zdiff is what the driver sees between the traces; USB uses 90 Ω, Ethernet and LVDS 100 Ω. The odd-mode impedance Zo is each trace's share, half of Zdiff. IPC-2141A builds it from the exact impedances of paper-thin strips (Cohn's: Z0 one strip alone, Zo,0 one of a pair) and Z(t), one strip alone with its copper t, with Cf the fringing capacitance at a strip's edge; under s/t of 5 the copper walls facing each other across the gap add their own capacitance, t/s. Air is worked first, then divided by √εr. Type a width to get Zdiff, or the Zdiff you need to get the width at your gap."
+        ["∇·(ε ∇φ) = 0, the traces at +1 V and −1 V", "S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / (√εr × S),   Zdiff = 2 Zodd", "even mode: both at +1 V; common mode Zeven / 2"],
+        "A differential pair on an inner layer: two traces side by side, centred between two ground planes b apart, carrying a signal as two equal and opposite voltages. Its differential impedance Zdiff is what the driver sees between the traces; USB uses 90 Ω, Ethernet and LVDS 100 Ω. The odd-mode impedance Zodd is each trace's share, half of Zdiff; the even mode, both traces driven alike, gives the common-mode impedance Zeven / 2. The app's field solver computes all three (see Edge-coupled embedded's manual section). IPC-2141A's form, shown for comparison, builds Zodd from Cohn's exact impedances of paper-thin strips and the fringing capacitance at a strip's edge, with the copper walls' own t/s under s/t of 5 (three misprints corrected, see the manual). Type a width to get Zdiff, or the Zdiff you need to get the width at your gap."
       )}
       ${calcFooter("")}
     `;
@@ -14531,6 +14559,7 @@ function renderDiffStripline(domain, tool, favId) {
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
     syncBoxes();
+    link.schedule(true);
   }
 
   paint();

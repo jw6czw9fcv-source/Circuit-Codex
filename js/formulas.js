@@ -372,7 +372,7 @@ const FORMULAS = [
     tool: "Edge-coupled stripline",
     domain: "pcb",
     formulas: ["1/Zo = 1/Z(t) + (Cf(t)/Cf(0)) (1/Zo,0 − 1/Z0)", "Zdiff = 2 Zo / √εr"],
-    note: "In air, for s/t ≥ 5 (IPC-2141A [4-42], sign corrected); Z0, Zo,0 Cohn's paper-thin strip alone and in the pair, Cf the edge fringing [4-44].",
+    note: "The tool's big result is a field solver; this IPC-2141A form ([4-42], s/t ≥ 5, sign corrected) is 1 to 3.6 % high against it. In air; Z0, Zo,0 Cohn's paper-thin strip alone and in the pair, Cf the edge fringing [4-44].",
   },
   {
     tool: "Broadside-coupled stripline",
