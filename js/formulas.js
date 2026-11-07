@@ -390,7 +390,7 @@ const FORMULAS = [
     tool: "Embedded microstrip",
     domain: "pcb",
     formulas: ["k = e^(−2b/h1),   b = H2 − h1", "Z0,emb = Z0 / √(k + (εr / εr,eff)(1 − k))"],
-    note: "Z0 and εr,eff are the uncovered microstrip's, h1 the dielectric under the trace, H2 the plane to the top of the cover (IPC-2141A [4-7], [4-8]).",
+    note: "The tool's big result is a field solver; this IPC-2141A blend ([4-7], [4-8]) is within −1.1 to +1.3 % of it. Z0 and εr,eff are the uncovered microstrip's, h1 the dielectric under the trace, H2 the plane to the top of the cover.",
   },
   {
     tool: "Edge-coupled microstrip",

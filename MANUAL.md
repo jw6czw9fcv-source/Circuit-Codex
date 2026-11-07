@@ -12240,14 +12240,19 @@ the width that gives an impedance under that cover:
 - **Width and impedance are two live boxes:** type a width and the
   impedance box shows the covered Z0; type the impedance you need and the
   width box shows the width that gives it covered.
-- **The big result:** the covered Z0, with the uncovered one and how much
+- **The big result:** the covered Z0 from the field solver (as in
+  Edge-coupled embedded), with the uncovered one, solved too, and how much
   the cover takes off; or the width, with the Z0 it would have uncovered.
+  For the moment the solver takes, the badge reads "Solving…" and
+  IPC-2141A's value stands in.
 - **Below it:**
+  - IPC-2141A's formula, the big result until 2026-11-07, and how far it
+    is from the solver's;
   - the cover b = H2 − h1 and how much of it is over the copper's top,
     flagged when it is thinner than the copper;
   - the deep limit, the impedance once the cover is thick enough that all
     the field is in the dielectric;
-  - the effective εr uncovered and covered;
+  - the effective εr uncovered and covered, from the solver;
   - the delay per length, covered.
 - **Units:** mm or mil for the lengths, moving together; oz for the copper.
 - **Drawing:** the ground plane, the dielectric with the trace on h1, the
@@ -12284,9 +12289,27 @@ the trace.
   εr,eff are its surface microstrip's [4-4]–[4-6].
 - **IPC-2141A errata** (read, a Wayback Machine copy): writes [4-7]'s
   exponent with h1, the dielectric under the trace, as the tool does.
-- **Uncovered Z0 and εeff:** Wadell's equations, as in Microstrip (IPC-2141A's [4-6] εeff is the same; for its [4-4] see there).
+- **Uncovered Z0 and εeff in the formula:** Wadell's equations, as in
+  Microstrip (IPC-2141A's [4-6] εeff is the same; for its [4-4] see
+  there).
+- **The field solver:** js/fieldsolver.js, as in Microstrip, with the
+  cover from the board up to H2 and air above it; tools/fd_lines.py's
+  app_microstrip, a separate implementation, gives the values below.
 
 ### Why the formulas are these
+
+The solver, the big result, solved twice, with the cover and without:
+
+    ∇·(ε ∇φ) = 0, the board and the cover up to H2, air above
+    S = C / ε0 = Σ ε (Δφ)², once with the dielectric, once in air (S_air)
+    Z0 = η0 / √(S × S_air),   εeff = S / S_air,   Td = 33.36 √εeff ps/cm
+    deep limit = η0 / (√εr × S_air) = Z0 √(εeff / εr)
+
+The deep limit needs no third solve: with dielectric all round, the
+capacitance is εr times the one in air, which the covered solve already
+has.
+
+IPC-2141A's formula, the comparison:
 
     b = H2 − h1,   k = e^(−2b/h1)
     Z0,emb = Z0 / √(k + (εr / εeff)(1 − k))
@@ -12297,8 +12320,8 @@ Uncovered, part of the field runs in the air over the trace and the line
 sees εeff. A cover puts dielectric where that air was: the line sees more
 of εr, its capacitance rises and Z0 falls. The exponential blends the two
 cases, k = 1 with no cover, k → 0 under a cover a few h1 thick. With
-b = 0 the formula gives the surface microstrip back. As in Microstrip, the width for an impedance is found by halving the range of
-widths.
+b = 0 the formula gives the surface microstrip back. The width for an
+impedance starts from the formula's, then the solver's answer corrects it.
 
 ### Assumptions and limits
 
@@ -12307,36 +12330,44 @@ widths.
 - **No plane above the cover.**
 - **Uniform cover:** real solder mask is thinner over the copper's edges
   and thicker between traces.
-- **Closed-form approximation:** the board maker's stack-up calculation
-  decides.
-- **No losses.**
+- **Quasi-static field solution:** the trace a rectangle, no losses; the
+  board maker's stack-up calculation decides.
 
-**Checked against a field solver.** tools/fd_lines.py, with the board,
-the cover and the air above (as in Edge-coupled microstrip), for 1 oz
-copper on FR-4:
-- 0.36 mm on 0.2 mm, uncovered: Wadell 50.0 Ω, solver 49.9 Ω;
-- under 10, 20 and 30 µm of mask over the copper: 47.3, 46.9 and 46.5 Ω,
-  solver 47.4, 47.1 and 46.8 Ω (−0.3 to −0.5 %);
-- dielectric only beside the trace, up to its top: 47.8 Ω, solver 47.9 Ω;
-- 0.1 and 0.2 mm of cover over the trace: 45.6 and 44.2 Ω, solver 46.0 and
-  44.6 Ω (−0.9 %);
-- 1 mm of cover, the deep limit: 43.5 Ω, solver 42.8 Ω (+1.6 %);
-- 0.15 mm on 0.1 mm under 20 µm of mask: 48.3 Ω, solver 48.4 Ω;
-- 3 mm on 1.6 mm, filled to the copper's top: 50.3 Ω, solver 50.2 Ω.
+**How IPC-2141A's formula compares with the solver** (1 oz copper,
+FR-4):
 
-So [4-7] on Wadell's Z0 is within −0.9 to +1.6 % of the solver: it stays
-the big result.
+| Case | Solver | IPC-2141A [4-7] |
+|---|---|---|
+| 0.36 mm on 0.2 mm, 10 µm of mask over the copper | 47.52 Ω | −0.44 % |
+| the same, 20 µm of mask | 47.17 Ω | −0.57 % |
+| the same, 30 µm of mask | 46.87 Ω | −0.70 % |
+| dielectric only beside the trace, up to its top | 47.96 Ω | −0.37 % |
+| cover b 0.1 mm (H2 0.3 mm) | 46.05 Ω | −1.07 % |
+| cover b 0.2 mm (H2 0.4 mm) | 44.70 Ω | −1.13 % |
+| cover b 1 mm (H2 1.2 mm) | 42.88 Ω | +1.33 % |
+| 0.15 mm on 0.1 mm, 20 µm of mask | 48.45 Ω | −0.39 % |
+| 3 mm on 1.6 mm, filled to the copper's top | 50.26 Ω | +0.06 % |
+
+The formula stays within −1.1 to +1.3 % for the impedance; its deep limit
+misses more, 43.45 Ω against the solver's 42.63 Ω for the 0.36 mm trace
+(+1.9 %) and 46.1 Ω against 44.5 Ω for 0.15 mm on 0.1 mm (+3.7 %), since
+Wadell's εeff, on which it rests, leaves out the copper's thickness.
 
 ### How it was checked
 
-5 cases, the expected values computed independently from [4-7] and
-Wadell's equations:
-- 0.36 mm on 0.2 mm of FR-4 under 20 µm of mask: 46.9 Ω (50.0 Ω
-  uncovered, −6.2 %), εeff 3.25 → 3.69, 64.1 ps/cm;
-- 50 Ω under that mask: 0.319 mm;
-- no cover, 3 mm on 1.6 mm: 50.6 Ω, Microstrip's value;
-- 0.2 mm of prepreg over the 0.36 mm trace: 44.2 Ω, deep limit 43.5 Ω;
-- the default: 46.9 Ω.
+5 cases, the expected values from tools/fd_lines.py's app_microstrip:
+- 0.36 mm on 0.2 mm of FR-4 under 20 µm of mask: 47.2 Ω (47.168; 50.0 Ω
+  uncovered, the cover takes 5.6 %), IPC-2141A 46.9 Ω (−0.6 %), εeff
+  3.13 → 3.51, 62.5 ps/cm;
+- 50 Ω under that mask: 0.321 mm (0.32116);
+- no cover, 3 mm on 1.6 mm: 50.7 Ω, Microstrip's value;
+- 0.2 mm of prepreg over the 0.36 mm trace: 44.7 Ω (44.696), deep limit
+  42.6 Ω, IPC-2141A 44.2 Ω (−1.1 %);
+- the default: 47.2 Ω (47.162).
+
+Until 2026-11-07 [4-7] was the big result, being within 1.6 % of
+fd_lines' first embedded() check; Pierre chose the field solver for every
+impedance tool (the most accurate value first).
 
 [↑ Index](#index)
 

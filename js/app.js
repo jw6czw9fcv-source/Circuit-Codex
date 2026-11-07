@@ -15241,7 +15241,11 @@ function renderEmbeddedPair(domain, tool, favId) {
 
 // ---------- Embedded microstrip ----------
 // A microstrip covered by more dielectric: solder mask, or prepreg on an
-// inner layer. IPC-2141A (March 2004, §4.2.3, Pierre's copy) [4-7]:
+// inner layer. The big result is the field solver's (FS microstrip with H2,
+// the cover then air above) since 2026-11-07, solved twice: covered and bare.
+// The deep limit is the covered solve's η0 / (√εr S_air). IPC-2141A's blend
+// stays as the comparison: −1.1 to −0.1 % of the solver in the examples.
+// IPC-2141A (March 2004, §4.2.3, Pierre's copy) [4-7]:
 // Z0,embedded = Z0,surf / √(e^(−2b/h) + (εr/εr,eff)(1 − e^(−2b/h))), with
 // b = h2 − h1 [4-8], figure 4-3(b) drawing h1 from the plane to the trace
 // and h2 from the plane to the top of the cover; its errata writes h1 for h.
@@ -15289,6 +15293,22 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
     return "";
   }
 
+  // Two solves: "cov" with the cover up to H2, "bare" without it.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const link = solverLink({
+    kind: "microstrip", modes: ["cov", "bare"], factor: 1,
+    params: (w, mode) => {
+      const s = state.si, p = { w: mm(w), t: mm(t()), h: mm(s.h1), er: s.er };
+      if (mode === "cov" && s.h2 > s.h1) p.H2 = mm(s.h2);
+      return p;
+    },
+    estimate: zAt, estimateWidth: solve,
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const got = (i) => (link.sol && link.sol.res[i]) || null;
+  const zNow = () => (got(0) ? got(0).z : zAt(state.si.w));
+
   // The board in cross-section: the trace on its dielectric, the cover over
   // it, the ground plane under; green when the width is the answer.
   function diagram() {
@@ -15318,30 +15338,35 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
   function resultHTML() {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-    const s = state.si, z = zAt(s.w), zs = zSurf(s.w), ee = eEff(s.w);
+    const s = state.si, z = zNow();
+    const zs = got(1) ? got(1).z : zSurf(s.w), ee = got(1) ? got(1).eeff : eEff(s.w);
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const cmp = (zc) => { const d = (zc / z - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
-    // The covered line's effective εr, from the same blend.
-    const eCov = ee * air() + s.er * (1 - air());
+    // The covered line's effective εr: the solver's, else the same blend.
+    const eCov = got(0) ? got(0).eeff : eEff(s.w) * air() + s.er * (1 - air());
+    // All the field in the dielectric: η0 / (√εr S_air) = Z0 √(εeff / εr).
+    const deep = got(0) ? z * Math.sqrt(eCov / s.er) : zSurf(s.w) * Math.sqrt(eEff(s.w) / s.er);
     const td = 33.356 * Math.sqrt(eCov) * per;
     const cover = s.h2 - s.h1;
     const main = state.target !== null
       ? `<div class="result-field">
-          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω, covered</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω, covered</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
           <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}; uncovered it would be ${ohm(zs)}</div>
         </div>`
       : `<div class="result-field">
-          <div class="result-head"><span class="label">Characteristic impedance, covered</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Characteristic impedance, covered</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${ohm(z)}</span></div>
           <div class="result-sub" data-res="sub">${ohm(zs)} uncovered: the cover takes ${Number(((1 - z / zs) * 100).toPrecision(2))} %</div>
         </div>`;
     return `${main}
         <div class="field notation-box">
+          ${row("IPC-2141A, for comparison", cmp(zAt(s.w)), "ipc")}
           ${row("Cover b", cover > t() ? `${len(cover)}, ${len(cover - t())} over the top` : cover <= 0 ? "none: a surface microstrip" : warn(`${len(cover)}, thinner than the copper`), "cover")}
-          ${row("Buried deep, it would be", ohm(zs * Math.sqrt(ee / s.er)), "deep")}
+          ${row("Buried deep, it would be", ohm(deep), "deep")}
           ${row("Effective εr, uncovered and covered", `${Number(ee.toPrecision(3))}, ${Number(eCov.toPrecision(3))}`, "eeff")}
           ${row("Delay, covered", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
         </div>`;
@@ -15351,15 +15376,21 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
     const err = problem();
     const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
     set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
-    set("z", err ? "" : fmt(Number(zAt(state.si.w).toPrecision(4))));
+    set("z", err ? "" : fmt(Number(zNow().toPrecision(4))));
   }
   function settle() { if (state.target > 0 && geomOk()) { const w = solve(state.target); if (w > 0) state.si.w = w; } }
 
-  function refresh() {
-    settle();
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
     syncBoxes();
+  }
+  function refresh() {
+    settle();
+    link.recall();
+    show();
+    link.schedule(false);
   }
 
   const example = (si, extra, target) => () => {
@@ -15367,18 +15398,17 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
     Object.assign(state.si, si);
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
-    settle();
     paint();
   };
   const OZ = TRACE_OZ_MIL * 25.4e-6;
   useExamples([
-    { title: "Solder mask on a 50 Ω trace", note: "0.36 mm on 0.2 mm of FR-4, 20 µm of mask over the copper: 50 Ω becomes 46.9 Ω.",
+    { title: "Solder mask on a 50 Ω trace", note: "0.36 mm on 0.2 mm of FR-4, 20 µm of mask over the copper: 50 Ω becomes 47.2 Ω.",
       apply: example({ w: 0.36e-3, h1: 0.2e-3, h2: 0.2e-3 + OZ + 20e-6, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
-    { title: "50 Ω under solder mask", note: "The same layer and mask: 0.319 mm wide gives 50 Ω covered.",
+    { title: "50 Ω under solder mask", note: "The same layer and mask: 0.321 mm wide gives 50 Ω covered.",
       apply: example({ h1: 0.2e-3, h2: 0.2e-3 + OZ + 20e-6, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
-    { title: "No cover: the surface microstrip", note: "H2 equal to h1: Wadell's 50.6 Ω for 3 mm on 1.6 mm, as in Microstrip.",
+    { title: "No cover: the surface microstrip", note: "H2 equal to h1: 50.7 Ω for 3 mm on 1.6 mm, as in Microstrip.",
       apply: example({ w: 3e-3, h1: 1.6e-3, h2: 1.6e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
-    { title: "Buried under 0.2 mm of prepreg", note: "A thick cover: the 0.36 mm trace drops to 44.2 Ω, near its deep limit of 43.5 Ω.",
+    { title: "Buried under 0.2 mm of prepreg", note: "A thick cover: the 0.36 mm trace drops to 44.7 Ω, near its deep limit of 42.6 Ω.",
       apply: example({ w: 0.36e-3, h1: 0.2e-3, h2: 0.4e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
   ]);
 
@@ -15393,6 +15423,7 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    link.recall();
     const ozSel = `<select id="em-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
     const matSel = `<select id="em-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     app.innerHTML = `
@@ -15408,8 +15439,8 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["b = H2 − h1,   k = e^(−2b / h1)", "Z0 = Z0,surf / √(k + (εr / εr,eff)(1 − k))", "Z0,surf, εr,eff: Microstrip's"],
-        "An embedded microstrip is a trace with dielectric on top of it as well as under it: solder mask on an outer layer, or prepreg on an inner one with no plane above. The field that ran in the air above a bare microstrip now runs partly in the cover, so the signal sees more dielectric and the impedance falls, a little under thin solder mask, more under a thick cover, down to the limit where the trace is buried deep. h1 is the dielectric under the trace, H2 the height of the cover's top above the plane, b their difference. The formula is IPC-2141A's (§4.2.3); Z0,surf and εr,eff are the bare microstrip's. Type a width to get the impedance, or the impedance you need to get the width."
+        ["∇·(ε ∇φ) = 0, the cover up to H2, air above", "S = C / ε0 = Σ ε (Δφ)², with the board and in air", "Z0 = η0 / √(S × S_air),   εeff = S / S_air", "deep limit = η0 / (√εr × S_air)"],
+        "An embedded microstrip is a trace with dielectric on top of it as well as under it: solder mask on an outer layer, or prepreg on an inner one with no plane above. The field that ran in the air above a bare microstrip now runs partly in the cover, so the signal sees more dielectric and the impedance falls, a little under thin solder mask, more under a thick cover, down to the limit where the trace is buried deep. h1 is the dielectric under the trace, H2 the height of the cover's top above the plane, b their difference. The app's field solver computes the line covered and bare (see Edge-coupled embedded's manual section); IPC-2141A's formula (§4.2.3), Z0,surf / √(k + (εr/εr,eff)(1 − k)) with k = e^(−2b/h1), is shown for comparison. Type a width to get the impedance, or the impedance you need to get the width."
       )}
       ${calcFooter("")}
     `;
@@ -15442,6 +15473,7 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
     // The three length pickers move together.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     syncBoxes();
+    link.schedule(true);
   }
 
   paint();
