@@ -342,7 +342,7 @@ function render() {
   if (parts[0] === "search") return renderSearch();
   if (parts[0] === "favorites") return renderFavorites();
   if (parts[0] === "settings") return renderSettings();
-  if (parts[0] === "domain" && parts[1]) return renderDomain(parts[1]);
+  if (parts[0] === "domain" && parts[1]) return renderDomain(parts[1], parts[2]);
   if (parts[0] === "task" && parts[1]) return renderTask(parts[1]);
   if (parts[0] === "tool" && parts[1] !== undefined) return renderTool(parts[1], parts[2]);
 
@@ -489,7 +489,23 @@ function renderTask(id) {
   app.querySelectorAll("[data-route]").forEach((b) => { b.onclick = () => { location.hash = b.dataset.route; }; });
 }
 
-function renderDomain(domainId) {
+// A section can point to one that lives in another domain (seeAlso in
+// data.js): RF › Transmission lines sends to PCB › Impedance, where the PCB
+// trace lines are. /domain/<id>/<section> opens a domain at that section.
+function seeAlsoHTML(sec) {
+  return (sec.seeAlso || []).map((s) => {
+    const td = DOMAINS.find((x) => x.id === s.domain);
+    const ti = td ? td.sections.findIndex((x) => x.title === s.section) : -1;
+    if (ti < 0) return "";
+    const n = td.sections[ti].tools.filter((t) => t.calc).length;
+    return `<button class="tool-row see-also" onclick="location.hash='/domain/${td.id}/${ti}'">
+            <span><span class="see-also-tag">See also${n ? `, ${n} tool${n > 1 ? "s" : ""}` : ""}</span>${td.title} › ${s.section}</span>
+            <span class="chev">${ICONS.chevronRight}</span>
+          </button>`;
+  }).join("");
+}
+
+function renderDomain(domainId, sectionIdx) {
   const d = DOMAINS.find(x => x.id === domainId);
   if (!d) return renderHome();
   app.innerHTML = `
@@ -505,7 +521,7 @@ function renderDomain(domainId) {
       const built = sec.tools.map((t, ti) => ({ t, ti })).filter(({ t }) => t.calc);
       const coming = sec.tools.length - built.length;
       return `
-      <div class="section-label" style="color:${d.color}">${sec.title}</div>
+      <div class="section-label" id="sec-${si}" style="color:${d.color}">${sec.title}</div>
       <div class="tool-list">
         ${built.map(({ t, ti }) => {
           const key = `${d.id}:${si}:${ti}`;
@@ -514,12 +530,20 @@ function renderDomain(domainId) {
             <span class="chev">${ICONS.chevronRight}</span>
           </button>`;
         }).join("")}
+        ${seeAlsoHTML(sec)}
         ${coming ? `<div class="coming-row">${built.length ? `${coming} more coming` : `${coming} tool${coming > 1 ? "s" : ""} coming`}</div>` : ""}
       </div>`;
     }).join("")}
     <div style="height:8px"></div>
     ${tabbarHTML(domainId === "tools" ? "tools" : "home")}
   `;
+  // Opened at a section: bring its heading near the top, leaving the title
+  // bar's own top inset (the iPhone's status bar area) clear above it.
+  const target = sectionIdx !== undefined && app.querySelector(`#sec-${parseInt(sectionIdx, 10)}`);
+  if (target) {
+    const inset = parseFloat(getComputedStyle(app.querySelector(".topbar")).paddingTop) || 0;
+    window.scrollTo(0, Math.max(0, target.getBoundingClientRect().top + window.scrollY - inset - 8));
+  }
 }
 
 function findTool(key) {
