@@ -11438,12 +11438,16 @@ plane, or the width that gives an impedance, on one screen:
 - **Width and impedance are two live boxes:** type a width and the
   impedance box shows Z0; type the impedance you need and the width box
   shows the width that gives it (shown again when you leave the box).
-- **The big result:** Z0 by Wadell's equations, or the width for the
-  impedance typed, with the width in the other unit and w/h.
+- **The big result:** Z0 from the field solver (as in Edge-coupled
+  embedded), or the width for the impedance typed, with the width in the
+  other unit and w/h. For the moment the solver takes, the badge reads
+  "Solving…" and Wadell's value stands in.
 - **Below it:**
-  - the older, simpler IPC-2141 formula's Z0 for the same trace, and how far it
-    is from Wadell's; flagged when w > 2h, outside its range;
-  - the effective dielectric constant;
+  - Wadell's equations' Z0, the big result until 2026-11-07, and how far it
+    is from the solver's;
+  - the older, simpler IPC-2141 formula's Z0, and how far it is; flagged
+    when w > 2h, outside its range;
+  - the effective dielectric constant, from the solver;
   - the delay per length, per cm in mm and per inch in mil;
   - the capacitance and inductance per length.
 - **Units:** mm or mil, the width's and the thickness's pickers moving
@@ -11491,6 +11495,17 @@ and on the 0.2 mm prepreg of a four-layer board.
     1)/2 × (1 + 12h/w)^−0.5 if w > h;
   - slide 25 ranks IPC-2141 lowest in accuracy, Wadell's equations
     moderate, field solvers high.
+- **Brian C. Wadell, "Transmission Line Design Handbook", Artech House,
+  1991, §3.5.1, pages 93–95** (read, Pierre's scanned copy): the slide's
+  equations, Wheeler's Z0 with Schneider's εeff as improved by Hammerstad
+  and Bekkadal, as Bogatin recommends after comparing them with
+  measurements. Wadell writes the factor η0 / (2√2 π √(εr + 1)), where
+  the slide has 60 / √(2εr + 2): the same with η0 taken as 120π, 0.07 %
+  above η0 = 376.73 Ω; the tool keeps the slide's 60. The thickness
+  correction is Wheeler's, "the most accurate" by Owens and Potok's
+  comparison; "Error in Z0 is less than 2% for any εr, w"; the εeff
+  equations are "accurate to within 1%" for εr ≤ 16 and 0.05 ≤ w/h ≤ 20,
+  for a paper-thin trace (the copper's thickness is not in them).
 - **National Semiconductor AN-905, "Transmission Line RAPIDESIGNER
   Operation and Applications Guide", James A. Mears, May 1996, TI
   SNLA035** (read, appendix A rendered): the same formula as IPC-2141,
@@ -11518,11 +11533,23 @@ and on the 0.2 mm prepreg of a four-layer board.
   MT-094 quotes from IPC-2141A, is in neither the 2004 text nor its errata;
   AN-905 (1996) already uses it, so it is presumably the first IPC-2141's
   (not read). The tool shows it as the "older IPC formula".
-- **Not read:** IPC-2141 (1996) itself, and Wadell's "Transmission Line
-  Design Handbook" (1991): the formulas are taken from Peterson's slide,
-  AN-905 and MT-094.
+- **The field solver:** js/fieldsolver.js, checked against Polar's
+  boundary-element microstrip table to 0.02 % (Edge-coupled embedded's
+  section); tools/fd_lines.py, a separate implementation, gives the values
+  in every case below.
+- **Not read:** IPC-2141 (1996) itself, and the papers Wadell draws on
+  (Wheeler's, Schneider's, Hammerstad and Bekkadal's).
 
 ### Why the formulas are these
+
+The solver, the big result:
+
+    ∇·(ε ∇φ) = 0 between the trace (1 V) and the plane (0 V)
+    S = C / ε0 = Σ ε (Δφ)², once with the board, once in air (S_air)
+    Z0 = η0 / √(S × S_air),   εeff = S / S_air
+    Td = 33.36 √εeff ps/cm,   C0 = Td / Z0,   L0 = Z0 × Td
+
+Wadell's equations, the first comparison:
 
     d = √((t/h)² + (1/π / (w/t + 1.1))²)
     w' = w + (1 + 1/εr)/2 × t/π × ln(4e / d)
@@ -11541,17 +11568,31 @@ with Td = √(L0 C0) gives C0 and L0. The width for an impedance has no
 closed form here: Z0 falls steadily as the width grows, so the tool halves
 the range of widths until it lands on it.
 
-**How the two compare.** Within w ≤ 2h they differ by about 0.5 to 5 %:
-AN-905's 25 mil example is 62.4 Ω by Wadell, 62.7 Ω by IPC-2141; 50 Ω on
-0.2 mm FR-4 needs 0.36 mm by Wadell, where IPC-2141 gives that trace
-47.7 Ω. Beyond 2h they part: 4 mm on 1.6 mm is 42.3 Ω by Wadell, 6.7 %
-more than IPC-2141's.
+**How the formulas compare with the solver** (1 oz copper):
+
+| Case | Solver | Wadell | IPC-2141 | εeff, solver (Wadell) |
+|---|---|---|---|---|
+| 25 mil on 20 mil, εr 4.3 | 62.27 Ω | +0.20 % | +0.70 % | 3.08 (3.16) |
+| 1.27 mm on 1.02 mm, εr 4.3 | 63.20 Ω | +0.11 % | +1.31 % | 3.11 (3.16) |
+| 3.07 mm on 1.6 mm, εr 4.3 | 50.00 Ω | −0.12 % | −2.00 % | 3.24 (3.26) |
+| 0.36 mm on 0.2 mm, εr 4.3 | 50.00 Ω | +0.10 % | −4.54 % | 3.13 (3.25) |
+| 4 mm on 1.6 mm, εr 4.3 | 42.43 Ω | −0.28 % | −6.95 % | 3.32 (3.34) |
+| 20 mil on 10 mil, εr 4.0 | 48.93 Ω | −0.02 % | −5.49 % | 2.99 (3.07) |
+
+Wadell's equations stay within 0.3 % of the solver for the impedance. The
+older IPC formula is within 2 % on the thick boards, but 4.5 to 5.5 % low
+on thin dielectric (0.2 mm, 10 mil) and 7 % low beyond w = 2h. Wadell's
+effective εr leaves out the copper's thickness, whose sides put more of
+the field in the air: it reads 0.35 to 3.7 % high with 1 oz copper, while
+for a paper-thin trace it is within 0.2 % of the solver's (four of the
+cases computed again at t = 0). The delay the tool gives therefore comes
+from the solver's εeff.
 
 ### Assumptions and limits
 
-- **Closed-form equations:** a 2D field solver is more accurate (Peterson,
-  slide 25); the tool is for design and checking, the board maker's
-  stack-up calculation decides.
+- **Quasi-static field solution:** dispersion, losses and copper roughness
+  are left out; the trace is a rectangle. The board maker's stack-up
+  calculation decides.
 - **One dielectric, no solder mask:** a solder mask over the trace lowers
   Z0 by a few ohms; that is [Embedded microstrip](#embedded-microstrip)'s
   case.
@@ -11562,26 +11603,28 @@ more than IPC-2141's.
 
 ### How it was checked
 
-10 cases, the expected values computed independently from the slide's
-equations:
-- AN-905's 25 mil on 20 mil, εr 4.3, 1 oz: 62.4 Ω (IPC-2141 62.7 Ω,
-  +0.5 %; its slide rule 63 Ω), 151 ps/in;
-- the same in metric, 1.27 mm on 1.02 mm: 63.3 Ω (IPC-2141 64 Ω; its slide
-  rule 64 Ω), εeff 3.16;
-- 93 Ω on 30 mil, εr 3.8, ½ oz: 18 mil (its slide rule's 18 mil);
-- 50 Ω on 1.6 mm FR-4: 3.06 mm, where IPC-2141 gives 49.1 Ω;
-- 50 Ω on 0.2 mm: 0.36 mm, IPC-2141 4.7 % low;
-- 75 Ω at εr 3.8: 0.742 pF/cm and 4.18 nH/cm, the material becoming
+10 cases, the expected values from tools/fd_lines.py's app_microstrip:
+- AN-905's 25 mil on 20 mil, εr 4.3, 1 oz: 62.3 Ω (62.27); Wadell 62.4 Ω
+  (+0.2 %), IPC-2141 62.7 Ω (+0.7 %), its slide rule 63 Ω; 149 ps/in;
+- the same in metric, 1.27 mm on 1.02 mm: 63.2 Ω (IPC-2141 64 Ω, its slide
+  rule 64 Ω), εeff 3.11;
+- 93 Ω on 30 mil, εr 3.8, ½ oz: 17.9 mil (17.906; its slide rule's
+  18 mil);
+- 50 Ω on 1.6 mm FR-4: 3.07 mm (3.070), where IPC-2141 gives 49.0 Ω;
+- 50 Ω on 0.2 mm: 0.36 mm (0.3595), IPC-2141 4.5 % low;
+- 75 Ω at εr 3.8: 0.739 pF/cm and 4.16 nH/cm, the material becoming
   custom;
 - beyond w = 2h the IPC-2141 comparison is flagged (4 mm on 1.6 mm,
-  42.3 Ω);
+  42.4 Ω);
 - the length pickers move together;
 - PTFE sets εr to 2.4;
-- MT-094's 20 mil on 10 mil at εr 4.0: 48.9 Ω by Wadell, its IPC-2141A
+- MT-094's 20 mil on 10 mil at εr 4.0: 48.9 Ω (48.93), its IPC-2141A
   eq. 3 46.2 Ω (its "about 46 Ω").
 
 The first version used AN-905's (IPC-2141's) formula; Pierre chose
-Wadell's equations once his copy of Peterson's slides showed both.
+Wadell's equations once his copy of Peterson's slides showed both; since
+2026-11-07 the big result is the field solver's (Pierre: the most accurate
+value first).
 
 [↑ Index](#index)
 
@@ -11604,15 +11647,19 @@ two ground planes, or the width that gives an impedance, on one screen:
 - **Width and impedance are two live boxes:** type a width and the
   impedance box shows Z0; type the impedance you need and the width box
   shows the width that gives it.
-- **The big result:** Z0 by Wheeler's formula, or the width for the
-  impedance typed, with w/b and the dielectric on each side, h = (b − t)/2.
+- **The big result:** Z0 from the field solver (as in Edge-coupled
+  embedded), or the width for the impedance typed, with w/b and the
+  dielectric on each side, h = (b − t)/2. For the moment the solver takes,
+  the badge reads "Solving…" and Wheeler's value stands in.
 - **Below it:**
+  - Wheeler's formula, the big result until 2026-11-07, and how far it is
+    from the solver's;
   - IPC-2141A's simpler formula set: its wide-strip formula for w/b of
     0.35 and over, its narrow-strip one below; the narrow one's limits
     (t/b ≤ 0.25, t/w ≤ 0.11) are named when the trace is outside them, as
     1 oz copper on a 0.2 mm trace is;
   - AN-905's formula (MT-094's eq. 7), flagged outside b − t > 2w and
-    b > 4t; both with their difference from Wheeler's;
+    b > 4t; each with its difference from the solver's;
   - the delay per length, the signal seeing the full εr;
   - the capacitance and inductance per length.
 - **Units:** mm or mil for the width and the spacing, moving together;
@@ -11681,22 +11728,62 @@ Examples: the two stripline resonators of Hafner et al. (their table I),
     gives ohms in a dielectric, and the tool uses it;
   - the 60 ln(1.9B/(0.8W + T)) formula MT-094 attributes to IPC-2141A is
     not in the 2004 text; the tool labels it AN-905's.
-- **Not read:** Wheeler's 1978 paper and Wadell's handbook themselves.
+- **Brian C. Wadell, "Transmission Line Design Handbook", Artech House,
+  1991, §3.6.2 "Centered Stripline, Triplate or Sandwich Line", pages
+  126–127** (read, Pierre's scanned copy): Wheeler's formula with the same
+  w′ as Hafner et al.'s, "stated error … less than 1.5%", and the side
+  walls negligible beyond 1.5 b (the solver's are 5 b away). Two things
+  in its printing:
+  - its factor η0 / (2π √εr) is twice Hafner et al.'s 30/√εr = η0 / (4π
+    √εr) with η0 = 120π: the 60 that IPC-2141A [4-9] and slide 24 carry;
+  - its b must be read as b − t, twice the dielectric between the trace
+    and each plane (its eq. 3.6.2.2, "2.0 h = b"): read that way its
+    three b terms are Hafner et al.'s exactly; read as the spacing between
+    the planes, as its figure 3.6.2.1 draws b, Z0 comes out 3 to 4 % above
+    the solver with 1 oz copper on 0.6 mm (+3.0 % at the default trace,
+    +4.1 % at 35 Ω).
+- **The field solver:** js/fieldsolver.js, checked against Cohn's exact
+  zero-thickness stripline to 0.005 % (Edge-coupled embedded's section);
+  tools/fd_lines.py's app_stripline, a separate implementation, gives the
+  values below.
+- **Not read:** Wheeler's 1978 paper itself.
 
 ### Why the formulas are these
+
+The solver, the big result, as in Microstrip but all in one dielectric:
+
+    S_air = C_air / ε0, the trace at 1 V, both planes at 0 V
+    Z0 = η0 / (√εr × S_air)
+    Td = 33.36 √εr ps/cm,   C0 = Td / Z0,   L0 = Z0 × Td
+
+Wheeler's formula, the first comparison:
 
     h = (b − t) / 2,   m = 6 / (3 + t/h)
     d = √((t/(4h + t))² + (1/4π / (w/t + 1.1))^m)
     w' = w + t/π × ln(e / d)
     x = 16h / (π w'),   y = x (x + √(x² + 6.27)) / 2
     Z0 = 30 / √εr × ln(1 + y)
-    Td = 33.36 √εr ps/cm,   C0 = Td / Z0,   L0 = Z0 × Td
 
 Wheeler's formula fits the exact solution for a zero-thickness strip
 between two planes, and replaces the real strip by a slightly wider one of
 zero thickness, w', to account for its copper. All the field is in the
-dielectric, so the wave travels at c / √εr. As for the microstrip, the
-width for an impedance is found by halving the range of widths.
+dielectric, so the wave travels at c / √εr. The width for an impedance
+starts from Wheeler's, then the solver's answer corrects it.
+
+**How the formulas compare with the solver:**
+
+| Case | Solver | Wheeler | IPC-2141A | AN-905 |
+|---|---|---|---|---|
+| Hafner et al.'s 155 µm, 1 µm thick, h 430 µm, εr 10 | 50.05 Ω | +0.00 % | −0.2 % | −2.5 % |
+| 0.2 mm, 1 oz, b 0.6 mm, εr 4.3 | 51.82 Ω | +0.00 % | out of range | −1.3 % |
+| 0.217 mm, 1 oz, b 0.6 mm, εr 4.3 | 50.00 Ω | −0.00 % | −0.6 % | −1.7 % |
+| 0.683 mm, 1 oz, b 0.6 mm, εr 2.4 | 35.00 Ω | −0.34 % | −0.05 % | −25 %, out of range |
+
+Wheeler's formula is within 0.01 % of the solver in the first three
+cases, and 0.3 % low for the strip wider than the spacing, where
+IPC-2141A's wide-strip formula does better. For the single stripline the
+solver mostly confirms Wheeler's formula; it is the same engine as for
+the stripline pairs, where the formulas part further.
 
 ### Assumptions and limits
 
@@ -11704,21 +11791,25 @@ width for an impedance is found by halving the range of widths.
   off-centre trace is Asymmetric stripline's case.
 - **One dielectric:** core and prepreg of different εr are averaged by
   the user.
-- **Closed-form approximation:** a field solver, or the board maker's
-  stack-up calculation, decides.
-- **No losses.**
+- **Quasi-static field solution:** the trace a rectangle, the planes
+  wide (the solver's side walls 5 b away), no losses; the board maker's
+  stack-up calculation decides.
 
 ### How it was checked
 
-8 cases:
-- Hafner et al.'s two resonators: 50.06 Ω and 49.79 Ω, as their table I;
-  IPC-2141A's narrow-strip formula 49.9 Ω for the first;
-- 50 Ω between planes 0.6 mm apart, FR-4, 1 oz: 0.217 mm, IPC-2141A's
-  wide-strip formula −0.6 %, AN-905 −1.7 %;
+9 cases, the expected values from tools/fd_lines.py's app_stripline:
+- Hafner et al.'s two resonators: 50.05 Ω (50.054; their table I's
+  Wheeler value 50.06) and 49.79 Ω (49.792); IPC-2141A's narrow-strip
+  formula 49.9 Ω for the first;
+- 50 Ω between planes 0.6 mm apart, FR-4, 1 oz: 0.217 mm (0.21735),
+  IPC-2141A's wide-strip formula −0.6 %, AN-905 −1.7 %;
 - 35 Ω at εr 2.4: 1.48 pF/cm and 1.81 nH/cm (AN-905's 1.47 and 1.8),
   51.7 ps/cm;
-- the default 0.2 mm trace between planes 0.6 mm apart: 51.8 Ω, AN-905
-  51.1 Ω, outside IPC-2141A's narrow-strip limit (t/w 0.17);
+- the same 35 Ω, a strip wider than the spacing: 0.683 mm (0.68273),
+  Wheeler's formula 0.3 % low;
+- the default 0.2 mm trace between planes 0.6 mm apart: 51.8 Ω (51.819),
+  Wheeler +0.0 %, AN-905 51.1 Ω, outside IPC-2141A's narrow-strip limit
+  (t/w 0.17);
 - the copper's own picker (1 oz is 34.8 µm);
 - copper as thick as half the spacing is refused;
 - the length pickers move together.
