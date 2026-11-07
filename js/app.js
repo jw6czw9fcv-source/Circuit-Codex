@@ -1064,7 +1064,7 @@ function wireCalc(favId, repaint, onPill) {
 // ---------- Field solver (client) ----------
 // js/fieldsolver.js finds a line's impedance from its cross-section by
 // solving Laplace's equation on a grid (its header and the manual's
-// Embedded pair section say how, and how it was checked). It runs in a Web
+// Buried differential pair section say how, and how it was checked). It runs in a Web
 // Worker, so typing never waits for it: a tool shows its formula estimate at
 // once and the solver's value when it arrives, about 0.03 to 0.35 s later on
 // an iPhone 15 Pro Max. One solve runs at a time; FS.supersede() drops the
@@ -14805,7 +14805,8 @@ function renderDiffMicrostrip(domain, tool, favId) {
   paint();
 }
 
-// ---------- Embedded pair ----------
+// ---------- Buried differential pair ----------
+// (calc embedded-pair; Pierre named it, 2026-11-06)
 // A differential pair buried in the board: two edge-coupled traces on h1 of
 // dielectric over a ground plane, covered by the same dielectric up to H2
 // above the plane (Saturn PCB Toolkit's "Edge Cpld Embed"; H1/H2 as IPC-2141A
@@ -15059,7 +15060,7 @@ function renderEmbeddedPair(domain, tool, favId) {
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
     const matSel = `<select id="ep-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     app.innerHTML = `
-      ${calcHeader(tool, favId, "A differential pair buried in the board")}
+      ${calcHeader(tool, favId, "Edge-coupled, under prepreg or solder mask")}
 
       <div class="diagram-box">${diagram()}</div>
 

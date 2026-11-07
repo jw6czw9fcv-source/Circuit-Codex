@@ -381,7 +381,7 @@ const FORMULAS = [
     note: "k from w/b (IPC-2141A [4-46]–[4-48], paper-thin, constant corrected); ΔY the copper's edges, from two half-striplines in parallel.",
   },
   {
-    tool: "Embedded pair",
+    tool: "Buried differential pair",
     domain: "pcb",
     formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  Zdiff = 2 Zodd"],
     note: "A field solver: Laplace's equation for the potential φ on a grid over the cross-section, odd mode (traces at ±1 V); the common mode is Zeven / 2.",

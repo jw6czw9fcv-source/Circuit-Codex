@@ -118,7 +118,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Microstrip impedance](#microstrip)
 - Impedance → [Embedded microstrip](#embedded-microstrip)
 - Impedance → [Differential microstrip](#diff-microstrip)
-- Impedance → [Embedded pair](#embedded-pair)
+- Impedance → [Buried differential pair](#embedded-pair)
 - Impedance → [Stripline impedance](#stripline)
 - Impedance → [Asymmetric stripline](#dual-stripline)
 - Impedance → [Edge-coupled stripline](#diff-stripline)
@@ -12390,7 +12390,7 @@ widths, the spacing kept.
 ---
 
 <a id="embedded-pair"></a>
-## Embedded pair
+## Buried differential pair
 
 `calc: embedded-pair` · PCB & interconnect › Impedance
 
