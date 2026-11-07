@@ -152,6 +152,22 @@ def embedded(w, t, h1, H2, er, level, er_cover=None):
     return ETA0 / (2 * math.sqrt(S * Sa)), S / Sa
 
 
+def embedded_pair(w, t, s, h1, H2, er, mode, level):
+    """Edge-coupled pair on h1 of substrate, covered by the same dielectric
+    up to H2 above the plane (H2 = h1: uncovered), air above to a far lid.
+    x = 0 the gap's centre: 0 V for the odd mode, a mirror for the even."""
+    x0, x1 = s / 2, s / 2 + w; X = x1 + 20 * h1; top = max(20 * h1, H2 + 10 * h1)
+    ys = sorted(set([0, h1, h1 + t, H2, top]))
+    h0, hm = _h(min(h1, w, s, (H2 - h1) if H2 > h1 else h1))
+    g = Grid([0, x0, x1, X], ys, h0, max(hm, h1), level)
+    g.row(0); g.row(top); g.col(X)
+    if mode == "odd": g.col(0)
+    g.layer(0, max(h1, H2), er)
+    g.box(x0, x1, h1, h1 + t)
+    S, Sa = g.S(), g.S(air=True)
+    return ETA0 / math.sqrt(S * Sa), S / Sa
+
+
 def cohn_single(w, b, er):
     k = 1 / math.cosh(math.pi * w / (2 * b)); kp = math.tanh(math.pi * w / (2 * b))
     return 30 * math.pi / math.sqrt(er) * ellipk(k * k) / ellipk(kp * kp)
