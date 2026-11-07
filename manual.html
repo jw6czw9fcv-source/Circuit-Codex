@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=37f0d46103" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=a5a5fd19d5" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -10003,7 +10003,7 @@ solver's 0.125 mm gives 100 Ω.</p>
 <section class="tool" id="broadside-stripline" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Impedance</div>
   <h2>Broadside-coupled stripline</h2>
-  <figure class="shot"><img src="manual/img/broadside-stripline.jpg?h=53a49cce6f" loading="lazy" alt="Broadside-coupled stripline as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/broadside-stripline.jpg?h=5edd16f44a" loading="lazy" alt="Broadside-coupled stripline as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Broadside stripline)</p>
 <h3>What it computes</h3>
 <p>The differential impedance of two traces one above the other on two inner
@@ -10015,10 +10015,15 @@ the trace width that gives it:</p>
   picker), the material and εr.</li>
 <li><strong>Width and differential impedance are two live boxes,</strong> as in
   Edge-coupled stripline.</li>
-<li><strong>The big result:</strong> Zdiff with the copper (the tool's method, within
-  1.5 % of a field solver), with the odd-mode impedance; or the width for
-  the Zdiff typed.</li>
+<li><strong>The big result:</strong> Zdiff from the field solver (as in Edge-coupled
+  embedded), with the odd-mode impedance; or the width for the Zdiff
+  typed. For the moment the solver takes, the badge reads "Solving…" and
+  the copper method's value stands in.</li>
 <li><strong>Below it:</strong></li>
+<li>the even-mode and common-mode impedance, as in Edge-coupled
+    microstrip;</li>
+<li>Zdiff by the tool's copper method, the big result until 2026-11-07,
+    and its difference from the solver's;</li>
 <li>IPC-2141A's paper-thin Zdiff, and how much higher it reads;</li>
 <li>w/s against IPC's range, 0.35 or more, flagged below;</li>
 <li>the delay per length, the signal seeing the full εr.</li>
@@ -10039,7 +10044,8 @@ apart, wide traces close together, and narrow traces flagged, all with
 <li><strong>Paper-thin:</strong> copper of zero thickness. Here the traces face each
   other with their full width, so their thickness matters more than for a
   side-by-side pair.</li>
-<li><strong>Odd mode, Zdiff:</strong> as in Edge-coupled microstrip.</li>
+<li><strong>Odd mode, even mode, common mode, Zdiff:</strong> as in Edge-coupled
+  microstrip.</li>
 </ul>
 <h3>Source</h3>
 <ul>
@@ -10050,9 +10056,24 @@ apart, wide traces close together, and narrow traces flagged, all with
   (s/b) ln((k + R)/(k − R))] [4-47], R = √(k(kb − s)/(b − ks)) [4-48];
   "nearly exact for w/s ≥ 0.35, and is more accurate for substrates with
   large values of εr". No copper thickness.</li>
+<li><strong>The field solver:</strong> js/fieldsolver.js, as in Edge-coupled embedded,
+  on the lower half of the cross-section: the mid-plane between the
+  traces at 0 V for the odd mode, a mirror for the even mode;
+  tools/fd_lines.py's app_broadside, a separate implementation with the
+  same settings, gives the values below.</li>
 <li><strong>Not read:</strong> IPC's references 2, 8 and 9.</li>
 </ul>
 <h3>Why the formulas are these</h3>
+<p>The solver, the big result, solved twice on the lower half:</p>
+<pre><code>odd mode: the mid-plane at 0 V,  Zodd = η0 / (√εr × S_air),  Zdiff = 2 Zodd
+even mode: the mid-plane a mirror (both traces at +1 V),  common mode = Zeven / 2
+</code></pre>
+<p>The even mode was checked against its limit: as the traces close up,
+two paper-thin strips in contact are one strip, each carrying half its
+charge, so Zeven tends to twice Cohn's single stripline: 4.1, 2.4, 1.3,
+0.8 and 0.45 % under it for gaps of 8, 4, 2, 1 and 0.5 µm (0.15 mm strips,
+planes 0.6 mm apart), the gap's own thickness closing as it shrinks.</p>
+<p>IPC-2141A's paper-thin formula, a comparison:</p>
 <pre><code>R = √(k (kb − s) / (b − ks))
 w/b = (ln((1+R)/(1−R)) − (s/b) ln((k+R)/(k−R))) / π,  solved for k
 Zo = 295.9/√εr × (s/b) / tanh⁻¹(k),   Zdiff = 2 Zo
@@ -10069,10 +10090,10 @@ geometry tried: its shape is exact, and the constant that matches is
 solver for paper-thin traces at w/s ≥ 0.35 (80.0 against 79.97 Ω for
 0.15 mm traces 0.15 mm apart, planes 0.6 mm apart), 1.2 % low at w/s
 0.25.</p>
-<p><strong>The copper, the big result.</strong> 1 oz copper lowers Zdiff by 6 to 25 %
-against the solver: each trace's outer face moves 35 µm closer to its
-plane, and its edges add fringing. So the big result (Pierre, the most
-accurate value first) allows for it, by the tool's method, not IPC's:</p>
+<p><strong>The copper method.</strong> 1 oz copper lowers Zdiff by 6 to 25 % against the
+solver: each trace's outer face moves 35 µm closer to its plane, and its
+edges add fringing. From 2026-11-05 to 2026-11-07 the big result allowed
+for it by the tool's own method, not IPC's, now a comparison row:</p>
 <pre><code>h1 = (b − s)/2 − t,  the copper's outer face to its plane
 Zpar(t) = halves in parallel: Z(2h1 + t) ∥ Z(s + t), Wheeler's striplines, ×2 / √εr
 1/Zo,cu = 1/Zo,thin(planes b − 2t apart) + 1/Zpar(t) − 1/Zpar(0)
@@ -10083,23 +10104,64 @@ two half-striplines of Asymmetric stripline (without its offset term, which
 fails this close to a plane). Against the solver, for w 0.1 to 0.5 mm,
 s 0.1 to 0.2 mm, b 0.4 to 0.8 mm, εr 4.3: −1.4 to −0.1 % for ½, 1 and
 2 oz.</p>
+<p><strong>How the formulas compare with the solver</strong> (1 oz copper, εr 4.3):</p>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Solver Zdiff</th>
+<th>Copper method</th>
+<th>IPC paper-thin</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>100 Ω: 0.0917 mm, s 0.2 mm, b 0.8 mm</td>
+<td>100.00 Ω</td>
+<td>−0.32 %</td>
+<td>+20.4 %</td>
+</tr>
+<tr>
+<td>0.15 mm, s 0.15 mm, b 0.6 mm</td>
+<td>68.04 Ω</td>
+<td>−0.43 %</td>
+<td>+17.5 %</td>
+</tr>
+<tr>
+<td>0.3 mm, s 0.1 mm, b 0.6 mm</td>
+<td>35.62 Ω</td>
+<td>−0.61 %</td>
+<td>+10.2 %</td>
+</tr>
+<tr>
+<td>0.05 mm, s 0.2 mm, b 0.6 mm (w/s 0.25)</td>
+<td>114.45 Ω</td>
+<td>−1.03 %</td>
+<td>+29.3 %</td>
+</tr>
+</tbody>
+</table>
 <h3>Assumptions and limits</h3>
 <ul>
+<li><strong>Quasi-static field solution:</strong> the traces rectangles, no losses; the
+  board maker's stack-up calculation decides.</li>
 <li><strong>The copper method is the tool's,</strong> checked against the solver over
-  the range above only; with no copper entered, the big result is IPC's.</li>
+  the range above only.</li>
 <li><strong>Centred pair, equal traces, one dielectric:</strong> core and prepreg are
   averaged by the user.</li>
-<li><strong>No losses.</strong></li>
 </ul>
 <h3>How it was checked</h3>
-<p>7 cases (field-solver values from tools/fd_lines.py):
-- 100 Ω with 1 oz, planes 0.8 mm apart, 0.2 mm between: 0.0909 mm
-  traces (solver 100.3 Ω for them); paper-thin they would read 121 Ω;
-- 0.15 mm traces 0.15 mm apart, planes 0.6 mm, 1 oz: 67.8 Ω (solver
-  68.0 Ω), odd mode 33.9 Ω; paper-thin 80 Ω (solver 79.97 Ω); 69.2 ps/cm;
-- 0.3 mm traces 0.1 mm apart: 35.4 Ω (solver 35.6 Ω), paper-thin 39.2 Ω;
-- 0.05 mm traces 0.2 mm apart: 113 Ω (solver 114.4 Ω), w/s 0.25 flagged;
-- no copper: IPC's paper-thin value, 80 Ω;
+<p>7 cases, the expected values from tools/fd_lines.py's app_broadside:
+- 100 Ω with 1 oz, planes 0.8 mm apart, 0.2 mm between: 0.0917 mm
+  traces (0.09173); paper-thin they would read 120 Ω (+20.4 %);
+- 0.15 mm traces 0.15 mm apart, planes 0.6 mm, 1 oz: 68 Ω (68.044), odd
+  mode 34 Ω, even mode 73.9 Ω, common mode 36.9 Ω; copper method 67.8 Ω
+  (−0.4 %), paper-thin 80 Ω (+17.5 %); 69.2 ps/cm;
+- 0.3 mm traces 0.1 mm apart: 35.6 Ω (35.615), copper method −0.6 %,
+  paper-thin 39.2 Ω;
+- 0.05 mm traces 0.2 mm apart: 114 Ω (114.45), copper method −1.0 %, w/s
+  0.25 flagged;
+- no copper: 80 Ω, IPC's paper-thin formula (with 295.9) within 0.01 %;
 - copper reaching the planes is refused;
 - traces as far apart as the planes are refused.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/pcb%3A1%3A7/broadside-stripline">Open the tool</a></p>

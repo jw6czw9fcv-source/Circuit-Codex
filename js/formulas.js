@@ -378,7 +378,7 @@ const FORMULAS = [
     tool: "Broadside-coupled stripline",
     domain: "pcb",
     formulas: ["Zo,thin = 295.9/√εr × (s/b) / tanh⁻¹(k)", "1/Zo = 1/Zo,thin(b − 2t) + ΔY,  Zdiff = 2 Zo"],
-    note: "k from w/b (IPC-2141A [4-46]–[4-48], paper-thin, constant corrected); ΔY the copper's edges, from two half-striplines in parallel.",
+    note: "The tool's big result is a field solver; this copper method is within −1.0 to −0.3 % of it in the examples. k from w/b (IPC-2141A [4-46]–[4-48], paper-thin, constant corrected); ΔY the copper's edges, from two half-striplines in parallel.",
   },
   {
     tool: "Edge-coupled embedded",

@@ -12155,10 +12155,15 @@ the trace width that gives it:
   picker), the material and εr.
 - **Width and differential impedance are two live boxes,** as in
   Edge-coupled stripline.
-- **The big result:** Zdiff with the copper (the tool's method, within
-  1.5 % of a field solver), with the odd-mode impedance; or the width for
-  the Zdiff typed.
+- **The big result:** Zdiff from the field solver (as in Edge-coupled
+  embedded), with the odd-mode impedance; or the width for the Zdiff
+  typed. For the moment the solver takes, the badge reads "Solving…" and
+  the copper method's value stands in.
 - **Below it:**
+  - the even-mode and common-mode impedance, as in Edge-coupled
+    microstrip;
+  - Zdiff by the tool's copper method, the big result until 2026-11-07,
+    and its difference from the solver's;
   - IPC-2141A's paper-thin Zdiff, and how much higher it reads;
   - w/s against IPC's range, 0.35 or more, flagged below;
   - the delay per length, the signal seeing the full εr.
@@ -12180,7 +12185,8 @@ apart, wide traces close together, and narrow traces flagged, all with
 - **Paper-thin:** copper of zero thickness. Here the traces face each
   other with their full width, so their thickness matters more than for a
   side-by-side pair.
-- **Odd mode, Zdiff:** as in Edge-coupled microstrip.
+- **Odd mode, even mode, common mode, Zdiff:** as in Edge-coupled
+  microstrip.
 
 ### Source
 
@@ -12191,9 +12197,27 @@ apart, wide traces close together, and narrow traces flagged, all with
   (s/b) ln((k + R)/(k − R))] [4-47], R = √(k(kb − s)/(b − ks)) [4-48];
   "nearly exact for w/s ≥ 0.35, and is more accurate for substrates with
   large values of εr". No copper thickness.
+- **The field solver:** js/fieldsolver.js, as in Edge-coupled embedded,
+  on the lower half of the cross-section: the mid-plane between the
+  traces at 0 V for the odd mode, a mirror for the even mode;
+  tools/fd_lines.py's app_broadside, a separate implementation with the
+  same settings, gives the values below.
 - **Not read:** IPC's references 2, 8 and 9.
 
 ### Why the formulas are these
+
+The solver, the big result, solved twice on the lower half:
+
+    odd mode: the mid-plane at 0 V,  Zodd = η0 / (√εr × S_air),  Zdiff = 2 Zodd
+    even mode: the mid-plane a mirror (both traces at +1 V),  common mode = Zeven / 2
+
+The even mode was checked against its limit: as the traces close up,
+two paper-thin strips in contact are one strip, each carrying half its
+charge, so Zeven tends to twice Cohn's single stripline: 4.1, 2.4, 1.3,
+0.8 and 0.45 % under it for gaps of 8, 4, 2, 1 and 0.5 µm (0.15 mm strips,
+planes 0.6 mm apart), the gap's own thickness closing as it shrinks.
+
+IPC-2141A's paper-thin formula, a comparison:
 
     R = √(k (kb − s) / (b − ks))
     w/b = (ln((1+R)/(1−R)) − (s/b) ln((k+R)/(k−R))) / π,  solved for k
@@ -12213,10 +12237,10 @@ solver for paper-thin traces at w/s ≥ 0.35 (80.0 against 79.97 Ω for
 0.15 mm traces 0.15 mm apart, planes 0.6 mm apart), 1.2 % low at w/s
 0.25.
 
-**The copper, the big result.** 1 oz copper lowers Zdiff by 6 to 25 %
-against the solver: each trace's outer face moves 35 µm closer to its
-plane, and its edges add fringing. So the big result (Pierre, the most
-accurate value first) allows for it, by the tool's method, not IPC's:
+**The copper method.** 1 oz copper lowers Zdiff by 6 to 25 % against the
+solver: each trace's outer face moves 35 µm closer to its plane, and its
+edges add fringing. From 2026-11-05 to 2026-11-07 the big result allowed
+for it by the tool's own method, not IPC's, now a comparison row:
 
     h1 = (b − s)/2 − t,  the copper's outer face to its plane
     Zpar(t) = halves in parallel: Z(2h1 + t) ∥ Z(s + t), Wheeler's striplines, ×2 / √εr
@@ -12229,24 +12253,37 @@ fails this close to a plane). Against the solver, for w 0.1 to 0.5 mm,
 s 0.1 to 0.2 mm, b 0.4 to 0.8 mm, εr 4.3: −1.4 to −0.1 % for ½, 1 and
 2 oz.
 
+**How the formulas compare with the solver** (1 oz copper, εr 4.3):
+
+| Case | Solver Zdiff | Copper method | IPC paper-thin |
+|---|---|---|---|
+| 100 Ω: 0.0917 mm, s 0.2 mm, b 0.8 mm | 100.00 Ω | −0.32 % | +20.4 % |
+| 0.15 mm, s 0.15 mm, b 0.6 mm | 68.04 Ω | −0.43 % | +17.5 % |
+| 0.3 mm, s 0.1 mm, b 0.6 mm | 35.62 Ω | −0.61 % | +10.2 % |
+| 0.05 mm, s 0.2 mm, b 0.6 mm (w/s 0.25) | 114.45 Ω | −1.03 % | +29.3 % |
+
 ### Assumptions and limits
 
+- **Quasi-static field solution:** the traces rectangles, no losses; the
+  board maker's stack-up calculation decides.
 - **The copper method is the tool's,** checked against the solver over
-  the range above only; with no copper entered, the big result is IPC's.
+  the range above only.
 - **Centred pair, equal traces, one dielectric:** core and prepreg are
   averaged by the user.
-- **No losses.**
 
 ### How it was checked
 
-7 cases (field-solver values from tools/fd_lines.py):
-- 100 Ω with 1 oz, planes 0.8 mm apart, 0.2 mm between: 0.0909 mm
-  traces (solver 100.3 Ω for them); paper-thin they would read 121 Ω;
-- 0.15 mm traces 0.15 mm apart, planes 0.6 mm, 1 oz: 67.8 Ω (solver
-  68.0 Ω), odd mode 33.9 Ω; paper-thin 80 Ω (solver 79.97 Ω); 69.2 ps/cm;
-- 0.3 mm traces 0.1 mm apart: 35.4 Ω (solver 35.6 Ω), paper-thin 39.2 Ω;
-- 0.05 mm traces 0.2 mm apart: 113 Ω (solver 114.4 Ω), w/s 0.25 flagged;
-- no copper: IPC's paper-thin value, 80 Ω;
+7 cases, the expected values from tools/fd_lines.py's app_broadside:
+- 100 Ω with 1 oz, planes 0.8 mm apart, 0.2 mm between: 0.0917 mm
+  traces (0.09173); paper-thin they would read 120 Ω (+20.4 %);
+- 0.15 mm traces 0.15 mm apart, planes 0.6 mm, 1 oz: 68 Ω (68.044), odd
+  mode 34 Ω, even mode 73.9 Ω, common mode 36.9 Ω; copper method 67.8 Ω
+  (−0.4 %), paper-thin 80 Ω (+17.5 %); 69.2 ps/cm;
+- 0.3 mm traces 0.1 mm apart: 35.6 Ω (35.615), copper method −0.6 %,
+  paper-thin 39.2 Ω;
+- 0.05 mm traces 0.2 mm apart: 114 Ω (114.45), copper method −1.0 %, w/s
+  0.25 flagged;
+- no copper: 80 Ω, IPC's paper-thin formula (with 295.9) within 0.01 %;
 - copper reaching the planes is refused;
 - traces as far apart as the planes are refused.
 

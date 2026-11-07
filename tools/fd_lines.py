@@ -217,6 +217,20 @@ def app_stripline(w, t, b, er, s=None, mode=None, h1=None, level=None):
     return ETA0 / (math.sqrt(er) * (2 if single else 1) * g.S(air=True))
 
 
+def app_broadside(w, t, s, b, er, mode=None, level=None):
+    """As fieldsolver.js broadside(): the odd mode (mid-plane at 0 V), or
+    mode "even" (mid-plane a mirror). One trace's impedance."""
+    if level is None:
+        return fit2([app_broadside(w, t, s, b, er, mode, L) for L in (0, 1, 2)])
+    X = w / 2 + 5 * b; ya, yb = b / 2 - s / 2 - t, b / 2 - s / 2
+    m = min(b / 2, w, s, ya)
+    g = Grid([0, w / 2, X], [0, ya, yb, b / 2] if t > 0 else [0, yb, b / 2], m / 20, b / 4, level, 1.25)
+    g.row(0); g.col(X)
+    if mode != "even": g.row(b / 2)
+    g.box(0, w / 2, ya, yb)
+    return ETA0 / (math.sqrt(er) * 2 * g.S(air=True))
+
+
 def cohn_single(w, b, er):
     k = 1 / math.cosh(math.pi * w / (2 * b)); kp = math.tanh(math.pi * w / (2 * b))
     return 30 * math.pi / math.sqrt(er) * ellipk(k * k) / ellipk(kp * kp)

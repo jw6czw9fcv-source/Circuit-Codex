@@ -14567,7 +14567,11 @@ function renderDiffStripline(domain, tool, favId) {
 
 // ---------- Broadside-coupled stripline (formerly Broadside stripline) ----------
 // Two traces one above the other, between two ground planes, carrying a
-// differential signal. IPC-2141A (March 2004, §4.4.3, figure 4-6(c),
+// differential signal. The big result is the field solver's (FS broadside:
+// odd mode, the mid-plane at 0 V; even mode, a mirror) since 2026-11-07;
+// the copper method below, the big result before, is the first comparison
+// and the width search's estimate: −1.0 to −0.3 % of the solver in the
+// examples. IPC-2141A (March 2004, §4.4.3, figure 4-6(c),
 // Pierre's copy) [4-46]–[4-48], citing its references 2, 8 and 9, for
 // paper-thin strips: Z0,o = 293.9/√εr × (s/b) / tanh⁻¹(k), k solving w/b =
 // (1/π)(ln((1 + R)/(1 − R)) − (s/b) ln((k + R)/(k − R))), R = √(k(kb − s)/
@@ -14628,6 +14632,22 @@ function renderBroadsideStripline(domain, tool, favId) {
     return Math.sqrt(lo * hi);
   };
 
+  // Two solves: the odd mode (Zdiff) and the even mode.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const link = solverLink({
+    kind: "broadside", modes: ["odd", "even"], factor: 2,
+    params: (w, mode) => {
+      const q = state.si, p = { w: mm(w), t: mm(q.t), s: mm(q.s), b: mm(q.b), er: q.er };
+      if (mode === "even") p.mode = "even";
+      return p;
+    },
+    estimate: zDiffAt, estimateWidth: wFor,
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const got = (i) => (link.sol && link.sol.res[i]) || null;
+  const zNow = () => (got(0) ? 2 * got(0).z : zDiffAt(state.si.w));
+
   function problem() {
     const s = state.si;
     if (!(s.b > 0)) return "Enter the spacing between the planes.";
@@ -14674,29 +14694,30 @@ function renderBroadsideStripline(domain, tool, favId) {
   function resultHTML() {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-    const s = state.si, zd = zDiffAt(s.w);
+    const s = state.si, zd = zNow(), even = got(1);
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const cmp = (zc) => { const d = (zc / zd - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
     const td = 33.356 * Math.sqrt(s.er) * per;
     const ws = s.w / s.s;
-    const zt = thinDiffAt(s.w), d = (zt / zd - 1) * 100;
-    const thin = s.t > 0 ? `${ohm(zt)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(0)} %)` : "the same, no copper entered";
     const main = state.target !== null
       ? `<div class="result-field">
-          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
           <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, ${len(s.s)} apart</div>
         </div>`
       : `<div class="result-field">
-          <div class="result-head"><span class="label">Differential impedance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Differential impedance</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${ohm(zd)}</span></div>
           <div class="result-sub" data-res="sub">odd mode ${ohm(zd / 2)}, each trace in the pair</div>
         </div>`;
     return `${main}
         <div class="field notation-box">
-          ${row("Paper-thin, IPC's formula", thin, "thin")}
+          ${row("Even mode, common mode", even ? `${ohm(even.z)}, ${ohm(even.z / 2)}` : "…", "even")}
+          ${row("Copper method, for comparison", cmp(zDiffAt(s.w)), "copper")}
+          ${row("Paper-thin, IPC's formula", cmp(thinDiffAt(s.w)), "thin")}
           ${row("w/s, IPC's range", ws >= 0.35 ? `${Number(ws.toPrecision(3))}, 0.35 or more` : warn(`${Number(ws.toPrecision(3))}, below 0.35`), "range")}
           ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
         </div>`;
@@ -14706,15 +14727,21 @@ function renderBroadsideStripline(domain, tool, favId) {
     const err = problem();
     const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
     set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
-    set("z", err ? "" : fmt(Number(zDiffAt(state.si.w).toPrecision(4))));
+    set("z", err ? "" : fmt(Number(zNow().toPrecision(4))));
   }
   function settle() { if (state.target > 0 && geomOk()) { const w = wFor(state.target); if (w > 0) state.si.w = w; } }
 
-  function refresh() {
-    settle();
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
     syncBoxes();
+  }
+  function refresh() {
+    settle();
+    link.recall();
+    show();
+    link.schedule(false);
   }
 
   const example = (si, extra, target) => () => {
@@ -14722,15 +14749,14 @@ function renderBroadsideStripline(domain, tool, favId) {
     Object.assign(state.si, si);
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
-    settle();
     paint();
   };
   useExamples([
-    { title: "100 Ω, planes 0.8 mm apart", note: "0.2 mm between the traces, FR-4, 1 oz: 0.091 mm traces; a field solver gives 100.3 Ω.",
+    { title: "100 Ω, planes 0.8 mm apart", note: "0.2 mm between the traces, FR-4, 1 oz: 0.0917 mm traces; paper-thin they would read 120 Ω.",
       apply: example({ s: 0.2e-3, b: 0.8e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 100) },
-    { title: "0.15 mm traces, 0.15 mm apart", note: "Planes 0.6 mm apart, 1 oz: 67.8 Ω (a field solver: 68.0 Ω); paper-thin 80 Ω.",
+    { title: "0.15 mm traces, 0.15 mm apart", note: "Planes 0.6 mm apart, 1 oz: 68 Ω; paper-thin 80 Ω.",
       apply: example({ w: 0.15e-3, s: 0.15e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
-    { title: "Wide traces close together", note: "0.3 mm traces 0.1 mm apart: 35.4 Ω with 1 oz (solver 35.6 Ω).",
+    { title: "Wide traces close together", note: "0.3 mm traces 0.1 mm apart: 35.6 Ω with 1 oz; paper-thin 39.2 Ω.",
       apply: example({ w: 0.3e-3, s: 0.1e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
     { title: "Narrow traces, flagged", note: "0.05 mm traces 0.2 mm apart: w/s 0.25, below IPC's 0.35.",
       apply: example({ w: 0.05e-3, s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
@@ -14747,6 +14773,7 @@ function renderBroadsideStripline(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    link.recall();
     const matSel = `<select id="bs-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A pair of traces stacked between two planes")}
@@ -14761,8 +14788,8 @@ function renderBroadsideStripline(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["Paper-thin, planes b apart (IPC):", "R = √(k (kb − s) / (b − ks))", "A = ln((1+R)/(1−R)),  B = ln((k+R)/(k−R))", "w/b = (A − (s/b) B) / π,  solved for k", "Zo,thin = 295.9/√εr × (s/b) / tanh⁻¹(k)", "With copper t: 1/Zo = 1/Zo,thin(b − 2t) + ΔY", "Zdiff = 2 Zo"],
-        "A broadside pair: two traces one above the other on two inner layers, s apart, centred between two ground planes b apart, carrying a signal as two equal and opposite voltages. Zdiff is what the driver sees between the two traces; Zo, the odd-mode impedance, is each trace's half. IPC-2141A's formula is for paper-thin traces: given w, s and b, k is found, then Zo,thin; IPC prints 293.9, but 295.9 (η0π/4) is the constant that matches a field solver. Real copper lowers Zdiff a lot here, 6 to 25 % for 1 oz, so the big result allows for it: the paper-thin pair with the planes 2t closer, plus ΔY, the admittance the copper's edges add (worked out in the manual). It is within 1.5 % of a field solver for ½ to 2 oz. Type a width to get Zdiff, or the Zdiff you need to get the width."
+        ["Odd mode: the mid-plane at 0 V", "S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / (√εr × S),   Zdiff = 2 Zodd", "even mode: the mid-plane a mirror; common mode Zeven / 2", "IPC, paper-thin: Zo = 295.9/√εr × (s/b) / tanh⁻¹(k)"],
+        "A broadside pair: two traces one above the other on two inner layers, s apart, centred between two ground planes b apart, carrying a signal as two equal and opposite voltages. Zdiff is what the driver sees between the two traces; Zodd, the odd-mode impedance, is each trace's half. By symmetry the mid-plane between the traces is at 0 V in the odd mode, so the app's field solver needs only the lower half (see Edge-coupled embedded's manual section); in the even mode, both traces driven alike, it is a mirror, and the common-mode impedance is Zeven / 2. IPC-2141A's formula is for paper-thin traces (k found from w, s and b; IPC prints 293.9, but 295.9, η0π/4, is the constant that matches the solver); real copper lowers Zdiff a lot here, 6 to 25 % for 1 oz. The copper method, the paper-thin pair with the planes 2t closer plus the admittance the copper's edges add (in the manual), is shown for comparison. Type a width to get Zdiff, or the Zdiff you need to get the width."
       )}
       ${calcFooter("")}
     `;
@@ -14795,6 +14822,7 @@ function renderBroadsideStripline(domain, tool, favId) {
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
     syncBoxes();
+    link.schedule(true);
   }
 
   paint();

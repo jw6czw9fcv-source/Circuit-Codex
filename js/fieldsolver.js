@@ -246,13 +246,14 @@
   }
 
   // Two traces one above the other, s apart face to face, centred between
-  // planes b apart: the odd mode, the mid-plane at 0 V.
-  function broadside({ w, t, s, b, er }) {
+  // planes b apart: the odd mode with the mid-plane at 0 V, or (mode
+  // "even", both traces at +1 V) the mid-plane a free edge, a mirror.
+  function broadside({ w, t, s, b, er, mode }) {
     const X = w / 2 + 5 * b, ya = b / 2 - s / 2 - t, yb = b / 2 - s / 2;
     const m = Math.min(b / 2, w, s, ya);
     return {
       xb: [0, w / 2, X], yb: t > 0 ? [0, ya, yb, b / 2] : [0, yb, b / 2], h0: m / 20, hmax: b / 4, grow: 1.25,
-      rows: [0, b / 2], cols: [X], signals: [[0, w / 2, ya, yb]], er, layered: false, factor: 2,
+      rows: mode === "even" ? [0] : [0, b / 2], cols: [X], signals: [[0, w / 2, ya, yb]], er, layered: false, factor: 2,
     };
   }
 
