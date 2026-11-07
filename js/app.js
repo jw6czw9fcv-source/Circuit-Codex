@@ -334,7 +334,13 @@ const ICONS = {
 };
 
 // ---------- Router ----------
+// Every screen drawn gets a new number. Work that finishes later (the field
+// solver's answers) checks it and does not write into a screen that has
+// since replaced the one that asked.
+let SCREEN_SEQ = 0;
 function render() {
+  SCREEN_SEQ++;
+  FS.supersede();
   const hash = location.hash.replace("#", "") || "/home";
   const parts = hash.split("/").filter(Boolean);
 
@@ -611,6 +617,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "diff-stripline") return renderDiffStripline(domain, tool, favId);
   if (calcId === "broadside-stripline") return renderBroadsideStripline(domain, tool, favId);
   if (calcId === "diff-microstrip") return renderDiffMicrostrip(domain, tool, favId);
+  if (calcId === "embedded-pair") return renderEmbeddedPair(domain, tool, favId);
   if (calcId === "embedded-microstrip") return renderEmbeddedMicrostrip(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -1053,6 +1060,99 @@ function wireCalc(favId, repaint, onPill) {
     app.querySelectorAll(".pill").forEach(btn => { btn.onclick = () => onPill(btn.dataset.pill); });
   }
 }
+
+// ---------- Field solver (client) ----------
+// js/fieldsolver.js finds a line's impedance from its cross-section by
+// solving Laplace's equation on a grid (its header and the manual's
+// Embedded pair section say how, and how it was checked). It runs in a Web
+// Worker, so typing never waits for it: a tool shows its formula estimate at
+// once and the solver's value when it arrives, about 0.03 to 0.35 s later on
+// an iPhone 15 Pro Max. One solve runs at a time; FS.supersede() drops the
+// requests still queued for an older state of the screen. Answers are kept
+// by their inputs. window.__fsBusy counts the solves waiting, queued or
+// running, and tools/check.html waits for it to reach zero.
+const FS_QUERY = (((document.querySelector('script[src*="js/app.js"]') || {}).src || "").split("?")[1]) || "";
+// Headless Chrome's virtual time (tools/check.html, the manual's screenshots)
+// does not wait for a worker's answer: there the solver runs on the page,
+// asked for by ?fs=page in the address or by __fsSync.
+const FS_PAGE = new URLSearchParams(location.search).get("fs") === "page";
+const FS = (() => {
+  let worker = null, failed = false, running = null, gen = 0, holds = 0, engine = null;
+  const queue = [], cache = new Map();
+  const count = () => { window.__fsBusy = queue.length + (running ? 1 : 0) + holds; };
+  const keyOf = (kind, p) => kind + JSON.stringify(Object.keys(p).sort().map((k) => [k, typeof p[k] === "number" ? +p[k].toPrecision(10) : p[k]]));
+  const fail = () => {
+    failed = true;
+    const all = (running ? [running] : []).concat(queue.splice(0));
+    running = null;
+    all.forEach((j) => j.reject(new Error("field solver unavailable")));
+    count();
+  };
+  function start() {
+    if (worker || failed) return;
+    try {
+      worker = new Worker(`js/fieldsolver.js${FS_QUERY ? `?${FS_QUERY}` : ""}`);
+      worker.onmessage = (e) => {
+        const job = running;
+        running = null;
+        if (job) {
+          if (e.data.error) job.reject(new Error(e.data.error));
+          else { cache.set(job.key, e.data.result); job.resolve(e.data.result); }
+        }
+        pump();
+      };
+      worker.onerror = (e) => { if (e.preventDefault) e.preventDefault(); fail(); };
+    } catch (_) { fail(); }
+  }
+  // The solver on the page itself, loaded once.
+  function onPage() {
+    if (window.FieldSolver) return Promise.resolve(window.FieldSolver);
+    if (!engine) {
+      engine = new Promise((resolve, reject) => {
+        const el = document.createElement("script");
+        el.src = `js/fieldsolver.js${FS_QUERY ? `?${FS_QUERY}` : ""}`;
+        el.onload = () => resolve(window.FieldSolver);
+        el.onerror = () => reject(new Error("field solver unavailable"));
+        document.head.appendChild(el);
+      });
+    }
+    return engine;
+  }
+  function pump() {
+    if (!running && queue.length && worker) {
+      running = queue.shift();
+      worker.postMessage({ id: 0, kind: running.kind, params: running.params });
+    }
+    count();
+  }
+  return {
+    // A promise of { z, eeff, … } for a cross-section (lengths in mm).
+    solve(kind, params) {
+      const key = keyOf(kind, params);
+      if (cache.has(key)) return Promise.resolve(cache.get(key));
+      if (FS_PAGE || window.__fsSync) {
+        holds++;
+        count();
+        return onPage().then((E) => { const r = E.solve(kind, params); cache.set(key, r); return r; })
+          .finally(() => { holds--; count(); });
+      }
+      start();
+      if (failed) return Promise.reject(new Error("field solver unavailable"));
+      return new Promise((resolve, reject) => { queue.push({ key, kind, params, gen, resolve, reject }); pump(); });
+    },
+    // The answer already known for these inputs, or undefined.
+    known(kind, params) { return cache.get(keyOf(kind, params)); },
+    // The screen changed: what was queued for its old state is dropped.
+    supersede() {
+      gen++;
+      for (let i = queue.length - 1; i >= 0; i--) if (queue[i].gen < gen) { queue[i].reject(new Error("superseded")); queue.splice(i, 1); }
+      count();
+    },
+    // A solve about to be asked for (a tool waiting for typing to pause).
+    hold(on) { holds = Math.max(0, holds + (on ? 1 : -1)); count(); },
+    get unavailable() { return failed; },
+  };
+})();
 
 // ---------- Ohm's law ----------
 // Any two of voltage, current, resistance and power give the other two: the
@@ -14700,6 +14800,313 @@ function renderDiffMicrostrip(domain, tool, favId) {
     // The three length pickers move together.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- Embedded pair ----------
+// A differential pair buried in the board: two edge-coupled traces on h1 of
+// dielectric over a ground plane, covered by the same dielectric up to H2
+// above the plane (Saturn PCB Toolkit's "Edge Cpld Embed"; H1/H2 as IPC-2141A
+// figure 4-3(b) draws them for one trace). No published formula covers it:
+// IPC-2141A has the bare pair (§4.4.1) and the covered single trace (§4.2.3),
+// Wadell's 4.5.3 is a pair under a metal lid. The big result is the field
+// solver's (js/fieldsolver.js, through FS): the odd mode gives Zdiff = 2
+// Zodd, the even mode the common mode, Zeven / 2. The estimate shown at once,
+// and kept for comparison: IPC-2141A's pair formula as Differential
+// microstrip uses it (copper allowed for), for the bare pair in the board and
+// in air, blended as [4-7] blends one trace (εeff = εeff,bare k + εr (1 − k),
+// k = e^(−2b/h1), b = H2 − h1, with εeff,bare = (Zair / Zbare)²): within
+// −2.0 to +4.2 % of the solver for 1 oz copper (tools/fd_lines.py, 2026-11-05).
+function renderEmbeddedPair(domain, tool, favId) {
+  const C = "embedded-pair";
+  const OZ = TRACE_OZ_MIL * 25.4e-6;
+  const state = {
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    mat: "fr4",
+    si: { w: 0.15e-3, s: 0.15e-3, h1: 0.2e-3, h2: 0.3e-3, t: OZ, er: 4.3 },
+    // A differential impedance typed in its box: the width is set to give
+    // it, the gap kept.
+    target: null,
+  };
+  // The solver's answers for what is on screen: { w, odd, even }. seq is
+  // this screen's number (see render()).
+  let sol = null, solError = "", gen = 0, timer = null;
+  const seq = SCREEN_SEQ;
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+
+  // The formula estimate (see the header).
+  const kCover = () => Math.exp(-2 * (state.si.h2 - state.si.h1) / state.si.h1);
+  const estOdd = (w) => {
+    const { s, h1, t, er } = state.si;
+    const zb = ipcCoupledMicrostripOdd(w, s, h1, t, er), za = ipcCoupledMicrostripOdd(w, s, h1, t, 1);
+    if (!(zb > 0 && za > 0)) return NaN;
+    const k = kCover();
+    return za / Math.sqrt((za / zb) ** 2 * k + er * (1 - k));
+  };
+  const estDiff = (w) => 2 * estOdd(w);
+  const estWidth = (z) => {
+    let lo = state.si.h1 * 1e-3, hi = state.si.h1 * 50;
+    if (!(z < estDiff(lo) && z > estDiff(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (estDiff(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
+
+  // The solver works in mm.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const params = (w, mode) => {
+    const s = state.si;
+    return { w: mm(w), t: mm(s.t), h: mm(s.h1), er: s.er, s: mm(s.s), mode, H2: mm(s.h2) };
+  };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.h1 > 0)) return "Enter h1, the dielectric under the traces.";
+    if (!(s.h2 >= s.h1)) return "H2, to the top of the cover, cannot be below h1.";
+    if (!(s.s > 0)) return "Enter the gap between the traces.";
+    if (!(s.t >= 0)) return "Enter the copper's thickness, zero or more.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(estWidth(state.target) > 0)) return "No trace width gives that impedance here.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    if (!(estOdd(s.w) > 0)) return "The gap is too small for this copper: its thickness closes it.";
+    return "";
+  }
+
+  // What the solver already knows for the inputs on screen.
+  function recall() {
+    const w = state.si.w, odd = !problem() && FS.known("microstrip", params(w, "odd"));
+    sol = odd ? { w, odd, even: FS.known("microstrip", params(w, "even")) || null } : null;
+  }
+
+  // Asked for once typing pauses, at once otherwise.
+  function schedule(now) {
+    gen++;
+    FS.supersede();
+    if (timer) { clearTimeout(timer); timer = null; FS.hold(false); }
+    solError = "";
+    if (problem() || (sol && sol.even)) return;
+    const my = gen;
+    FS.hold(true);
+    timer = setTimeout(() => { timer = null; FS.hold(false); if (seq === SCREEN_SEQ) run(my); }, now ? 0 : 250);
+  }
+  async function run(my) {
+    const live = () => my === gen && seq === SCREEN_SEQ;
+    try {
+      let w = state.si.w;
+      if (state.target !== null) {
+        w = await solveWidth(state.target, live);
+        if (!live()) return;
+        state.si.w = w;
+      }
+      const odd = await FS.solve("microstrip", params(w, "odd"));
+      if (!live()) return;
+      sol = { w, odd, even: null };
+      show();
+      const even = await FS.solve("microstrip", params(w, "even"));
+      if (!live()) return;
+      sol.even = even;
+      show();
+    } catch (e) {
+      if (!live() || e.message === "superseded") return;
+      solError = e.message;
+      show();
+    }
+  }
+  // The width for a Zdiff: the formula's first, corrected by the solver's
+  // ratio to the formula, then by the secant on ln w, to 0.1 % in Zdiff
+  // (well inside the three figures shown): usually two solves.
+  async function solveWidth(T, live) {
+    const zAt = async (w) => 2 * (await FS.solve("microstrip", params(w, "odd"))).z;
+    let w0 = estWidth(T), z0 = await zAt(w0);
+    if (!live() || Math.abs(z0 / T - 1) < 1e-3) return w0;
+    let w1 = estWidth(T * estDiff(w0) / z0);
+    if (!(w1 > 0)) w1 = w0 * (z0 > T ? 1.1 : 0.9);
+    let z1 = await zAt(w1);
+    for (let i = 0; i < 4 && live() && Math.abs(z1 / T - 1) >= 1e-3 && z1 !== z0; i++) {
+      const w2 = Math.exp(Math.log(w1) + (Math.log(T) - Math.log(z1)) * (Math.log(w1) - Math.log(w0)) / (Math.log(z1) - Math.log(z0)));
+      w0 = w1; z0 = z1; w1 = w2;
+      z1 = await zAt(w1);
+    }
+    return w1;
+  }
+
+  // The pair in cross-section: the plane, the dielectric under the traces,
+  // the cover over them up to H2; green when the width is the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mmL = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mmL(v)}` : `${mmL(v)} · ${mil(v)}`);
+    const tLabel = state.lUnit === "mil" ? `${mil(s.t)} · ${Number((s.t * 1e6).toPrecision(3))} µm` : `${Number((s.t * 1e6).toPrecision(3))} µm · ${mil(s.t)}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="27" width="242" height="65" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M40 66 H282" stroke="${wire}" stroke-width="1" stroke-dasharray="4 3"/>
+      <rect x="40" y="92" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <rect x="101" y="58" width="44" height="8" fill="${tone}"/><rect x="177" y="58" width="44" height="8" fill="${tone}"/>
+      <path d="M101 44 V52 M145 44 V52 M101 48 H145" stroke="${tone}" stroke-width="1.2"/>
+      <path d="M177 44 V52 M145 48 H177" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(123, 40, ok ? `w ${both(s.w)}` : "w", tone)}
+      ${lbl(183, 52, `s ${both(s.s)}`, grey, "start")}
+      <path d="M30 66 V92 M26 66 H34 M26 92 H34" stroke="${wire}" stroke-width="1.2"/>
+      <path d="M18 27 V92 M14 27 H22" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(14, 21, `H2 ${both(s.h2)}`, grey, "start")}
+      ${lbl(276, 21, `t ${tLabel}`, grey, "end")}
+      ${lbl(46, 84, `h1 ${both(s.h1)}`, grey, "start")}
+      ${lbl(276, 84, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(161, 110, "ground plane", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, est = estDiff(s.w), zd = sol ? 2 * sol.odd.z : est;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
+    const waiting = !sol && !solError && !FS.unavailable;
+    const badge = sol ? `<span class="badge-calc" data-res="by">${ICONS.bolt2}Field solver</span>`
+      : waiting ? `<span class="badge-calc badge-wait" data-res="by">Solving…</span>`
+      : `<span class="badge-calc" data-res="by">${ICONS.bolt2}Formula</span>`;
+    const later = sol ? "" : waiting ? "…" : "unavailable";
+    const cover = s.h2 - s.h1;
+    const coverText = cover <= 0 ? "no cover: a surface pair"
+      : cover < s.t ? warn(`a cover of ${len(cover)}, thinner than the copper`)
+      : `under ${len(cover - s.t)} of cover`;
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span>${badge}</div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, ${len(s.s)} apart, ${coverText}</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Differential impedance</span>${badge}</div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(zd)}</span></div>
+          <div class="result-sub" data-res="sub">${coverText}</div>
+        </div>`;
+    const d = sol ? (est / zd - 1) * 100 : 0;
+    return `${main}
+        <div class="field notation-box">
+          ${row("Odd mode, effective εr", sol ? `${ohm(sol.odd.z)}, ${Number(sol.odd.eeff.toPrecision(3))}` : later, "odd")}
+          ${row("Even mode, common mode", sol && sol.even ? `${ohm(sol.even.z)}, ${ohm(sol.even.z / 2)}` : later || "…", "even")}
+          ${row("Formula estimate, for comparison", sol ? `${ohm(est)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : ohm(est), "est")}
+          ${row("Delay, odd mode", sol ? `${Number((33.356 * Math.sqrt(sol.odd.eeff) * per).toPrecision(3))} ps/${perU}` : later, "td")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number((sol ? 2 * sol.odd.z : estDiff(state.si.w)).toPrecision(4))));
+  }
+  // A typed impedance sets the width, by the formula at once and by the
+  // solver when it answers.
+  function settle() { if (state.target > 0 && !problem()) { const w = estWidth(state.target); if (w > 0) state.si.w = w; } }
+
+  function show() {
+    if (seq !== SCREEN_SEQ) return;
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+  function refresh(now) {
+    settle();
+    recall();
+    show();
+    schedule(now);
+  }
+
+  const example = (si, extra, target) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    paint();
+  };
+  useExamples([
+    { title: "100 Ω under prepreg", note: "0.1 mm of prepreg over 1 oz traces on 0.2 mm, 0.2 mm apart: 0.146 mm wide.",
+      apply: example({ s: 0.2e-3, h1: 0.2e-3, h2: 0.2e-3 + OZ + 0.1e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 100) },
+    { title: "Under solder mask only", note: "0.15 mm traces 0.15 mm apart on 0.2 mm, 20 µm over the copper: 99 Ω.",
+      apply: example({ w: 0.15e-3, s: 0.15e-3, h1: 0.2e-3, h2: 0.2e-3 + OZ + 20e-6, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+    { title: "No cover: a surface pair", note: "H2 = h1, the same pair bare: 114 Ω, where Differential microstrip's formula reads 117 Ω.",
+      apply: example({ w: 0.15e-3, s: 0.15e-3, h1: 0.2e-3, h2: 0.2e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+    { title: "Buried deep", note: "1 mm of dielectric over the same pair: 86.8 Ω, close to its lower limit.",
+      apply: example({ w: 0.15e-3, s: 0.15e-3, h1: 0.2e-3, h2: 1.2e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    recall();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="ep-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A differential pair buried in the board")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Gap, s", 2)}${lf("h1", "Under them, h1", 3)}</div>
+      <div class="field-pair">${lf("h2", "To the top, H2", 4)}${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div></div>
+      <div class="field-pair">${field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Differential impedance", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["∇·(ε ∇φ) = 0 between traces and plane", "S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  εeff = S / S_air", "Zdiff = 2 Zodd,  Zcommon = Zeven / 2"],
+        "A differential pair buried in the board: two traces side by side on h1 of dielectric over a ground plane, covered by the same dielectric up to H2 above the plane, with no plane on top. No published formula covers it, so the app computes it: it lays the cross-section on a grid of points, finds the electric potential at each one, and takes the capacitance per length from the field's energy, once with the dielectric and once with air; the impedance follows. That is a field solver, the method of professional tools, here within 0.05 % of exact results. Zdiff, what the driver sees between the traces, is twice the odd-mode impedance (opposite voltages); the common-mode impedance is half the even mode (equal voltages). The estimate from IPC-2141A's formulas shows at once and stays for comparison. Type a width to get Zdiff, or the Zdiff you need to get the width at your gap."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "s" || key === "h1" || key === "h2") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("ep-mat"); if (ms) ms.value = m; }
+        }
+        refresh(false);
+      };
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("ep-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // The four length pickers move together; the copper has its own.
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    syncBoxes();
+    schedule(true);
   }
 
   paint();

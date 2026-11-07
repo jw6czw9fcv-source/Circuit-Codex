@@ -16,6 +16,7 @@ const ASSETS = [
   `./js/formulas.js?v=${V}`,
   `./js/manual-index.js?v=${V}`,
   `./js/app.js?v=${V}`,
+  `./js/fieldsolver.js?v=${V}`,
   "./manual.html",
   "./manifest.json",
   "./icons/icon-192.png",

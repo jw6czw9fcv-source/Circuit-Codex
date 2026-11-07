@@ -166,7 +166,7 @@ const DOMAINS = [
       {
         title: "Impedance",
         tools: [
-          { name: "Microstrip impedance", calc: "microstrip" }, { name: "Embedded microstrip", was: "Embedded microstrip impedance", calc: "embedded-microstrip" }, { name: "Differential microstrip", was: "Differential microstrip impedance", calc: "diff-microstrip" },
+          { name: "Microstrip impedance", calc: "microstrip" }, { name: "Embedded microstrip", was: "Embedded microstrip impedance", calc: "embedded-microstrip" }, { name: "Differential microstrip", was: "Differential microstrip impedance", calc: "diff-microstrip" }, { name: "Embedded pair", calc: "embedded-pair" },
           { name: "Stripline impedance", calc: "stripline" }, { name: "Asymmetric stripline", was: "Dual stripline impedance", calc: "dual-stripline" }, { name: "Edge-coupled stripline", was: "Differential stripline", calc: "diff-stripline" }, { name: "Broadside stripline", calc: "broadside-stripline" }, { name: "Coplanar waveguide impedance" },
           { name: "Effective dielectric constant (Er effective)" }, { name: "Signal propagation delay" }, { name: "Crosstalk calculator" },
           { name: "Laminate material reference (Dk/Df) — IPC-4101" },
@@ -322,6 +322,7 @@ const TOOL_KEYWORDS = {
   "physical-constants": "constants physics codata speed of light elementary charge planck boltzmann permittivity permeability epsilon mu impedance free space faraday electron mass electronvolt thermal voltage bandgap stefan",
   "antenna-length": "antenna length dipole monopole quarter wave half wave vertical ground plane whip long wire end fed cut trim ham radio cb end effect correction factor 468 234",
   "embedded-microstrip": "embedded buried covered microstrip transmission line impedance solder mask prepreg cover dielectric controlled impedance pcb trace ipc-2141a",
+  "embedded-pair": "embedded buried differential pair edge coupled embedded microstrip covered prepreg solder mask zdiff odd even common mode impedance field solver transmission line controlled impedance pcb inner layer usb ethernet lvds 90 100 ohm",
   "diff-microstrip": "differential microstrip transmission line impedance pair zdiff odd mode edge coupled usb 90 ohm ethernet lvds 100 ohm hdmi pcie controlled impedance pcb trace spacing an-905",
   "broadside-stripline": "broadside coupled stripline transmission line differential pair stacked traces two layers zdiff odd mode impedance between planes controlled impedance pcb ipc-2141a",
   "diff-stripline": "differential stripline transmission line edge coupled pair impedance zdiff odd mode inner layer between planes usb 90 ohm ethernet lvds 100 ohm controlled impedance pcb ipc-2141a cohn",
@@ -410,6 +411,7 @@ const RELATED = {
   "constant-current": ["linear-regulator", "led-series-resistor", "heat-sink"],
   "antenna-length": ["wavelength"],
   "embedded-microstrip": ["microstrip", "stripline", "diff-microstrip"],
+  "embedded-pair": ["diff-microstrip", "embedded-microstrip", "diff-stripline"],
   "diff-microstrip": ["microstrip", "stripline", "trace-width"],
   "broadside-stripline": ["diff-stripline", "dual-stripline", "stripline"],
   "diff-stripline": ["stripline", "diff-microstrip", "dual-stripline"],

@@ -42,8 +42,8 @@ def axis(breaks, h0, hmax, level, grow=1.25):
 
 
 class Grid:
-    def __init__(self, xbreaks, ybreaks, h0, hmax, level):
-        self.x = axis(xbreaks, h0, hmax, level); self.y = axis(ybreaks, h0, hmax, level)
+    def __init__(self, xbreaks, ybreaks, h0, hmax, level, grow=1.25):
+        self.x = axis(xbreaks, h0, hmax, level, grow); self.y = axis(ybreaks, h0, hmax, level, grow)
         self.nx, self.ny = len(self.x) - 1, len(self.y) - 1
         self.eps = np.ones((self.ny, self.nx))
         self.fixed = np.zeros((self.ny + 1, self.nx + 1), bool)
@@ -166,6 +166,54 @@ def embedded_pair(w, t, s, h1, H2, er, mode, level):
     g.box(x0, x1, h1, h1 + t)
     S, Sa = g.S(), g.S(air=True)
     return ETA0 / math.sqrt(S * Sa), S / Sa
+
+
+# ---- The app's settings (js/fieldsolver.js), for cross-checking it ----
+# Found 2026-11-06: levels 0-2 with the two-term (h + h^2) fit match Cohn's
+# exact stripline within 0.005 % (Cohn's 30 pi assumes eta0 = 120 pi, which is
+# 0.069 % high); a microstrip's air needs its grounded box at 80 h (20 h read
+# 0.1-0.3 % low), with cells allowed to grow to 10 h out there. Base step: the
+# smallest dimension / 20, floored at a quarter of the main one.
+
+def fit2(zs):
+    R1, R2 = 2 * zs[1] - zs[0], 2 * zs[2] - zs[1]
+    return (4 * R2 - R1) / 3
+
+
+def app_microstrip(w, t, h, er, s=None, mode=None, H2=None, level=None):
+    """As fieldsolver.js microstrip(): returns (Z, eeff), extrapolated
+    over levels 0-2 unless one level is asked for."""
+    if level is None:
+        res = [app_microstrip(w, t, h, er, s, mode, H2, L) for L in (0, 1, 2)]
+        return fit2([r[0] for r in res]), fit2([r[1] for r in res])
+    single = not (s and s > 0); top = 80 * h
+    cover = H2 if (H2 and H2 > h) else h
+    x0 = 0 if single else s / 2; x1 = x0 + (w / 2 if single else w); X = x1 + 80 * h
+    base = min(h, w, h if single else s)
+    m = max(min(base, cover - h if cover > h else h), base / 4)
+    g = Grid([0, x0, x1, X], sorted(set([0, h, h + t, cover, top])), m / 20, 10 * h, level, 1.3)
+    g.row(0); g.row(top); g.col(X)
+    if not single and mode == "odd": g.col(0)
+    g.layer(0, cover, er)
+    g.box(x0, x1, h, h + t)
+    S, Sa = g.S(), g.S(air=True)
+    return ETA0 / ((2 if single else 1) * math.sqrt(S * Sa)), S / Sa
+
+
+def app_stripline(w, t, b, er, s=None, mode=None, h1=None, level=None):
+    """As fieldsolver.js stripline()."""
+    if level is None:
+        return fit2([app_stripline(w, t, b, er, s, mode, h1, L) for L in (0, 1, 2)])
+    single = not (s and s > 0)
+    y0 = h1 if h1 is not None else (b - t) / 2; y1 = y0 + t
+    x0 = 0 if single else s / 2; x1 = x0 + (w / 2 if single else w); X = x1 + 5 * b
+    base = min(b, w, b if single else s)
+    m = max(min(base, y0, b - y1), base / 4)
+    g = Grid([0, x0, x1, X], [0, y0, y1, b] if t > 0 else [0, y0, b], m / 20, b / 4, level, 1.25)
+    g.row(0); g.row(b); g.col(X)
+    if not single and mode == "odd": g.col(0)
+    g.box(x0, x1, y0, y1)
+    return ETA0 / (math.sqrt(er) * (2 if single else 1) * g.S(air=True))
 
 
 def cohn_single(w, b, er):

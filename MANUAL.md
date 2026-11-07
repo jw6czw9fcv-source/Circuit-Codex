@@ -118,6 +118,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Microstrip impedance](#microstrip)
 - Impedance → [Embedded microstrip](#embedded-microstrip)
 - Impedance → [Differential microstrip](#diff-microstrip)
+- Impedance → [Embedded pair](#embedded-pair)
 - Impedance → [Stripline impedance](#stripline)
 - Impedance → [Asymmetric stripline](#dual-stripline)
 - Impedance → [Edge-coupled stripline](#diff-stripline)
@@ -12383,5 +12384,165 @@ widths, the spacing kept.
 - a spacing beyond 3 h is flagged;
 - a gap the copper closes is refused;
 - the three length pickers move together.
+
+[↑ Index](#index)
+
+---
+
+<a id="embedded-pair"></a>
+## Embedded pair
+
+`calc: embedded-pair` · PCB & interconnect › Impedance
+
+### What it computes
+
+The differential impedance of two edge-coupled traces buried in the board:
+on h1 of dielectric over a ground plane, covered by the same dielectric up
+to H2 above the plane, with no plane on top (Saturn PCB Toolkit's "Edge
+Cpld Embed"); or the trace width that gives a differential impedance at a
+gap. It is the first tool computed by the app's field solver (below):
+
+- **Inputs:** each trace's width w, the gap s, the dielectric under the
+  traces h1, the height of the cover's top above the plane H2, the
+  copper's thickness t (its own picker), the material and εr.
+- **Width and differential impedance are two live boxes:** type a width
+  and the impedance box shows Zdiff; type the Zdiff you need and the width
+  box shows the width that gives it at your gap.
+- **The big result:** Zdiff from the field solver, with the cover over the
+  copper; or the width for the Zdiff typed. For the moment the solver
+  takes, the badge reads "Solving…" and the formula estimate stands in.
+- **Below it:**
+  - the odd-mode impedance and its effective εr;
+  - the even-mode impedance and the common-mode impedance, half of it;
+  - the formula estimate (below), and how far it is from the solver;
+  - the delay per length in the odd mode.
+- **Units:** mm or mil for the four lengths, moving together; oz, µm or
+  mil for the copper.
+- **Drawing:** the plane, the dielectric under the traces, the cover over
+  them up to H2, w and s as a chain dimension, h1, H2, t and εr, in mm and
+  mil. The traces are green when their width is the answer.
+- **Remembered:** the length unit and the copper unit.
+
+Examples: 100 Ω under 0.1 mm of prepreg, the default pair under solder
+mask only, the same pair bare (no cover), and buried under 1 mm.
+
+### Terms
+
+- **Embedded (buried) pair:** a differential pair with dielectric over it
+  as well as under it, and no plane above (a plane above makes it a
+  stripline).
+- **Odd mode:** the two traces at equal and opposite voltages, as a
+  differential signal drives them. Zdiff = 2 Zodd.
+- **Even mode:** both traces at the same voltage, as noise picked up by
+  both drives them. The common-mode impedance, the two traces in parallel
+  against the plane, is Zeven / 2.
+- **Effective εr (εeff):** the permittivity the signal sees, between that
+  of the air and that of the board, since part of the field runs in each;
+  under a thick cover it reaches εr.
+- **Field solver:** a program that finds the impedance from the cross-
+  section itself, by solving for the electric field, rather than from a
+  formula fitted to some shapes.
+- **h1, H2, εr, oz:** as in Embedded microstrip.
+
+### The field solver
+
+The app lays the cross-section on a grid of points, finer near the copper's
+edges, where the field changes fastest, and coarser far away. Each trace is
+held at 1 V (−1 V for the second trace in the odd mode, so the plane
+midway between them is at 0 V), the plane at 0 V, and the potential at
+every other point is found so that each one balances its neighbours
+(Laplace's equation). The energy of that field gives the capacitance per
+length, once with the dielectric and once with air everywhere; the two
+give the impedance and the effective εr:
+
+    ∇·(ε ∇φ) = 0
+    S = C / ε0 = Σ over the grid's edges of ε (Δφ)²
+    Z0 = η0 / √(S × S_air),   εeff = S / S_air,   η0 = 376.73 Ω
+
+Each case is solved on three grids, every cell halved from one to the
+next, and the three results are extrapolated to an infinitely fine grid
+(Z = (4R2 − R1)/3, R1 = 2Z1 − Z0, R2 = 2Z2 − Z1). The air above the board
+is closed by a grounded box 80 h1 away; nearer, at 20 h1, it read 0.1 to
+0.3 % low. The equations are solved by conjugate gradients with a modified
+incomplete-Cholesky preconditioner, in a background thread (a Web Worker),
+so typing never waits: about 0.1 s per solve on an iPhone 15 Pro Max, and
+a width for a typed Zdiff in two or three solves.
+
+**How the solver was checked:**
+- **Cohn's exact stripline** (zero thickness, centred between two planes;
+  the single strip and the odd mode of a pair, as Burkhardt et al. quote
+  them): within 0.005 %. Cohn's 30π takes η0 as 120π, which is 0.069 %
+  high; with that taken out the solver agrees to the third decimal.
+- **Polar Instruments' boundary-element table** (Burkhardt et al., table 1:
+  1.5, 0.45 and 3.3 mm on 0.794 mm, εr 4.2, 35 µm copper): 50.635, 89.648
+  and 30.090 Ω against 50.63, 89.63 and 30.09 Ω, within 0.02 %.
+- **tools/fd_lines.py,** a separate implementation in Python (a direct
+  sparse solver, scipy), with the same grids: it gives the app's values in
+  every case below.
+- **tools/fs_bench.html** runs nine reference cases in the browser and
+  times them: 1.16 s in all on Pierre's iPhone 15 Pro Max, before the
+  solver was made three times faster.
+
+### Source
+
+- **No published formula** for this structure was found: IPC-2141A
+  (March 2004) has the bare pair (§4.4.1) and one covered trace (§4.2.3);
+  Wadell's "Transmission Line Design Handbook" (1991), §4.5.3, is a pair
+  under a metal lid with air between; a web search found calculators that
+  name the structure without giving their equations. Saturn PCB Toolkit
+  lists it; its online help does not say how it computes it (read).
+- **A. J. Burkhardt, C. S. Gregg and J. A. Staniforth, "Calculation of PCB
+  Track Impedance", Polar Instruments, IPC Printed Circuits Expo 1999**
+  (read): Cohn's exact expressions (their equations 4–8) and their table 1,
+  computed by their boundary-element method and checked against 1500
+  measured boards; the numerical principle, the capacitance found from the
+  potential.
+- **The estimate:** IPC-2141A §4.4.1 [4-24]–[4-41] and §4.2.3 [4-7], as in
+  Differential microstrip and Embedded microstrip.
+
+### Why the formulas are these
+
+The estimate shown at once, and kept for comparison: the bare pair's odd
+mode by IPC-2141A's pair formula with the copper allowed for, as
+Differential microstrip computes it, once in the board (Zbare) and once in
+air (Zair), then IPC-2141A [4-7]'s cover blend applied to the odd mode's
+effective εr:
+
+    k = e^(−2b/h1),   b = H2 − h1
+    εbare = (Zair / Zbare)²
+    Zodd ≈ Zair / √(εbare k + εr (1 − k))
+
+It gives the bare pair with no cover and the right limit under a deep
+one; in between it reads 1 to 4 % high in the examples. No formula of it
+is needed for the answer, which is the solver's.
+
+### Assumptions and limits
+
+- **Quasi-static:** the field solved is the one at low frequency; the
+  frequency dependence (dispersion), the losses and copper roughness are
+  left out.
+- **Rectangular traces of equal width;** an etched trace's trapezoid is not
+  modelled. The cover has the board's εr.
+- **One plane, nothing else nearby:** the next pair or a plane above would
+  change the answer; the grounded box is 80 h1 away.
+- **The model is exact to about 0.05 %; a real board is not:** εr's
+  tolerance, the etching and the copper's thickness move the impedance
+  more. The board maker's stack-up calculation decides.
+
+### How it was checked
+
+8 cases, the expected values from tools/fd_lines.py's app_microstrip:
+- the default pair, 0.15 mm traces 0.15 mm apart on 0.2 mm, H2 0.3 mm:
+  93.3 Ω (93.30), odd mode 46.7 Ω with εeff 3.72, even mode 84.1 Ω,
+  common mode 42.1 Ω, estimate 95.9 Ω (+2.7 %), 64.3 ps/cm;
+- 100 Ω typed: 0.115 mm traces (0.1154), odd mode 50 Ω, common mode
+  46.3 Ω;
+- 100 Ω under 0.1 mm of prepreg, 0.2 mm gap: 0.146 mm (0.14596);
+- under 20 µm of solder mask only: 99 Ω (98.99), estimate +2.7 %;
+- no cover: 114 Ω (114.40), where Differential microstrip's formula reads
+  117 Ω;
+- under 1 mm: 86.8 Ω (86.76), εeff 4.3;
+- H2 below h1 is refused;
+- the four length pickers move together.
 
 [↑ Index](#index)

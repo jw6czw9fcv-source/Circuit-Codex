@@ -203,6 +203,8 @@ html, body {
   font-size: 16.5px;
 }
 .tool-row .chev { color: var(--text-muted); font-size: 16px; }
+/* A result still being worked out (the field solver). */
+.badge-calc.badge-wait { opacity: 0.65; }
 /* A link to a section in another domain (seeAlso in data.js). */
 .tool-row.see-also .see-also-tag { display: block; color: var(--text-muted); font-size: 13px; margin-bottom: 2px; }
 /* Settings: a row can be a link (the manual) or plain text (the version). */

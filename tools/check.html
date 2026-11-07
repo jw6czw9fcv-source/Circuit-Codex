@@ -69,6 +69,12 @@ async function play(doc, steps) {
   }
 }
 
+// The field solver answers a moment after the screen changes (js/app.js
+// counts what it still has to do in __fsBusy): results are read once it is done.
+async function fsIdle(win) {
+  for (let i = 0; i < 1200 && (win.__fsBusy || 0) > 0; i++) await wait(25);
+}
+
 function matches(actual, expected) {
   if (expected.startsWith("/")) return new RegExp(expected.slice(1, -1)).test(actual);
   return actual === expected;
@@ -247,6 +253,7 @@ async function checkTool(t) {
       win.location.hash = `#/tool/${encodeURIComponent(t.route)}/${t.calc}`;
       await wait(80);
       await play(doc, c.do || []);
+      await fsIdle(win);
       for (let [sel, expected] of c.expect) {
         const el = doc.querySelector(sel);
         // A field or picker is read by its value; "options:" compares a
@@ -282,6 +289,10 @@ async function main() {
   win.console.error = (...a) => { (win.__errors || []).push(a.join(" ")); origError.apply(win.console, a); };
   // Chrome is started with a fresh profile each run, so no service worker
   // from an earlier session can answer with an old app.
+
+  // Under virtual time a Web Worker's answer would come after the page has
+  // moved on, so the field solver runs on the page here (js/app.js FS).
+  win.__fsSync = true;
 
   const report = [];
   for (const t of tools()) report.push(await checkTool(t));
