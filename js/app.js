@@ -1064,7 +1064,7 @@ function wireCalc(favId, repaint, onPill) {
 // ---------- Field solver (client) ----------
 // js/fieldsolver.js finds a line's impedance from its cross-section by
 // solving Laplace's equation on a grid (its header and the manual's
-// Buried differential pair section say how, and how it was checked). It runs in a Web
+// Edge-coupled embedded section say how, and how it was checked). It runs in a Web
 // Worker, so typing never waits for it: a tool shows its formula estimate at
 // once and the solver's value when it arrives, about 0.03 to 0.35 s later on
 // an iPhone 15 Pro Max. One solve runs at a time; FS.supersede() drops the
@@ -13376,7 +13376,7 @@ function renderFlyback(domain, tool, favId) {
   paint();
 }
 
-// ---------- Microstrip impedance ----------
+// ---------- Microstrip (formerly Microstrip impedance) ----------
 // A trace over a ground plane, by Wadell's equations as Z. Peterson's "High
 // Speed Design Basics" (Altium, May 2022, slide 23) gives them, "highly
 // accurate": Z0 = 60 / √(2εr + 2) × ln(1 + 4h/w' × ((14 + 8/εr)/11 × 4h/w'
@@ -13638,7 +13638,7 @@ function renderMicrostrip(domain, tool, favId) {
   paint();
 }
 
-// ---------- Stripline impedance ----------
+// ---------- Stripline (formerly Stripline impedance) ----------
 // A trace centred between two ground planes, by Wheeler's 1978 formula (IEEE
 // MTT-26, 866) as D. Hafner, M. Dressel and M. Scheffler give it ("Surface-
 // resistance measurements using superconducting stripline resonators", Rev.
@@ -13901,7 +13901,7 @@ function renderStripline(domain, tool, favId) {
 // Z0,SS(b = 2h2 + t): each side a symmetric stripline whose half it is, the
 // two halves in parallel, then IPC's offset correction. Within 0.3 % of the
 // solver for h2 = 2 h1, 5 % for h2 = 5 h1. Z0,SS is Wheeler's, as in
-// Stripline impedance; the correction's (0.5 − …) is taken as a magnitude, so
+// Stripline; the correction's (0.5 − …) is taken as a magnitude, so
 // either plane can be the near one (the solver gives the same Z0 swapped).
 function renderDualStripline(domain, tool, favId) {
   const C = "dual-stripline";
@@ -14047,7 +14047,7 @@ function renderDualStripline(domain, tool, favId) {
       apply: example({ w: 0.2e-3, h1: 0.2e-3, h2: 0.4e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
     { title: "50 Ω on the same layers", note: "0.2 mm under the trace, 0.4 mm over it: a 0.2 mm trace.",
       apply: example({ h1: 0.2e-3, h2: 0.4e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 50) },
-    { title: "Centred: a plain stripline", note: "h1 = h2, planes 0.6 mm apart: 51.8 Ω, as Stripline impedance.",
+    { title: "Centred: a plain stripline", note: "h1 = h2, planes 0.6 mm apart: 51.8 Ω, as in Stripline.",
       apply: example({ w: 0.2e-3, h1: hC, h2: hC, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
     { title: "Close to one plane", note: "0.1 mm trace, 0.1 and 0.5 mm away: 53.3 Ω, 5 % over a field solver's 50.8 Ω.",
       apply: example({ w: 0.1e-3, h1: 0.1e-3, h2: 0.5e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
@@ -14119,7 +14119,7 @@ function renderDualStripline(domain, tool, favId) {
 
 // ---------- Edge-coupled stripline ----------
 // Two edge-coupled traces centred between two ground planes (first named
-// Differential stripline; Pierre renamed it 2026-11-05, Broadside stripline
+// Differential stripline; Pierre renamed it 2026-11-05, Broadside-coupled stripline
 // being a differential stripline too). IPC-2141A
 // (March 2004, §4.4.2, figure 4-6(b), Pierre's copy) [4-42]–[4-45], citing
 // its references 2 and 7, the odd-mode impedance of thick strips from the
@@ -14133,7 +14133,7 @@ function renderDualStripline(domain, tool, favId) {
 // [4-44] has (2b − t)/(b − t) for t/(b − t), diverging at t = 0 where [4-45]
 // is finite (IPC's own θ [4-16] has t/(b − t)). IPC's ε is the dielectric's;
 // the tool works in air and divides by √εr at the end. Z0(w, t) is
-// Wheeler's, as in Stripline impedance; the zero-thickness Z0(w, 0) and
+// Wheeler's, as in Stripline; the zero-thickness Z0(w, 0) and
 // Z0,o(w, 0, s) are Cohn's exact ones (as Polar's Burkhardt, Gregg and
 // Staniforth quote them, IPC 1999), 30π K(k)/K(k'), k = sech(πw/2b), and
 // k_o = tanh(πw/2b)/tanh(π(w + s)/2b), K by the arithmetic-geometric mean.
@@ -14355,7 +14355,7 @@ function renderDiffStripline(domain, tool, favId) {
   paint();
 }
 
-// ---------- Broadside stripline ----------
+// ---------- Broadside-coupled stripline (formerly Broadside stripline) ----------
 // Two traces one above the other, between two ground planes, carrying a
 // differential signal. IPC-2141A (March 2004, §4.4.3, figure 4-6(c),
 // Pierre's copy) [4-46]–[4-48], citing its references 2, 8 and 9, for
@@ -14590,7 +14590,7 @@ function renderBroadsideStripline(domain, tool, favId) {
   paint();
 }
 
-// ---------- Differential microstrip impedance ----------
+// ---------- Edge-coupled microstrip (formerly Differential microstrip) ----------
 // Two edge-coupled traces on an outer layer over a ground plane. The big
 // result is IPC-2141A's pair formula (ipcCoupledMicrostripOdd, copper
 // allowed for), the closest to the field solver: −0.4 to +2.8 % for 1 oz
@@ -14767,7 +14767,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
 
       ${formulaSection(
         ["u = w'/h,  g = (s − (w' − w))/h", "εeff,o, Q1 … Q10 from u, g, εr", "Zo = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff Q10)", "Zdiff = 2 Zo"],
-        "A differential pair carries a signal as two equal and opposite voltages on two traces side by side. Its differential impedance Zdiff is what the driver sees between the two traces; a line driven and ended in it carries the signal without reflections. USB uses 90 Ω, Ethernet and LVDS 100 Ω. Each trace alone has its impedance Z0; brought closer, the two couple and Zdiff falls below 2 Z0. Zo, the odd-mode impedance, is each trace's share. This is IPC-2141A's pair formula, ten fitted terms in u and g (all in the manual), for paper-thin traces: the copper is allowed for by widening each trace to w' (as in Microstrip impedance) and narrowing the gap as much. Against a field solver it is within 3 % for 1 oz; AN-905's simpler factor, 2 Z0 (1 − 0.48 e^(−0.96 s/h)), is shown for comparison. Type a width to get Zdiff, or the Zdiff you need to get the width at your spacing."
+        "A differential pair carries a signal as two equal and opposite voltages on two traces side by side. Its differential impedance Zdiff is what the driver sees between the two traces; a line driven and ended in it carries the signal without reflections. USB uses 90 Ω, Ethernet and LVDS 100 Ω. Each trace alone has its impedance Z0; brought closer, the two couple and Zdiff falls below 2 Z0. Zo, the odd-mode impedance, is each trace's share. This is IPC-2141A's pair formula, ten fitted terms in u and g (all in the manual), for paper-thin traces: the copper is allowed for by widening each trace to w' (as in Microstrip) and narrowing the gap as much. Against a field solver it is within 3 % for 1 oz; AN-905's simpler factor, 2 Z0 (1 − 0.48 e^(−0.96 s/h)), is shown for comparison. Type a width to get Zdiff, or the Zdiff you need to get the width at your spacing."
       )}
       ${calcFooter("")}
     `;
@@ -14805,8 +14805,9 @@ function renderDiffMicrostrip(domain, tool, favId) {
   paint();
 }
 
-// ---------- Buried differential pair ----------
-// (calc embedded-pair; Pierre named it, 2026-11-06)
+// ---------- Edge-coupled embedded ----------
+// (calc embedded-pair; built as Embedded pair, then Buried differential pair;
+// the industry names, Pierre, 2026-11-06)
 // A differential pair buried in the board: two edge-coupled traces on h1 of
 // dielectric over a ground plane, covered by the same dielectric up to H2
 // above the plane (Saturn PCB Toolkit's "Edge Cpld Embed"; H1/H2 as IPC-2141A
@@ -15040,7 +15041,7 @@ function renderEmbeddedPair(domain, tool, favId) {
       apply: example({ s: 0.2e-3, h1: 0.2e-3, h2: 0.2e-3 + OZ + 0.1e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }, 100) },
     { title: "Under solder mask only", note: "0.15 mm traces 0.15 mm apart on 0.2 mm, 20 µm over the copper: 99 Ω.",
       apply: example({ w: 0.15e-3, s: 0.15e-3, h1: 0.2e-3, h2: 0.2e-3 + OZ + 20e-6, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
-    { title: "No cover: a surface pair", note: "H2 = h1, the same pair bare: 114 Ω, where Differential microstrip's formula reads 117 Ω.",
+    { title: "No cover: a surface pair", note: "H2 = h1, the same pair bare: 114 Ω, where Edge-coupled microstrip's formula reads 117 Ω.",
       apply: example({ w: 0.15e-3, s: 0.15e-3, h1: 0.2e-3, h2: 0.2e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
     { title: "Buried deep", note: "1 mm of dielectric over the same pair: 86.8 Ω, close to its lower limit.",
       apply: example({ w: 0.15e-3, s: 0.15e-3, h1: 0.2e-3, h2: 1.2e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
@@ -15120,7 +15121,7 @@ function renderEmbeddedPair(domain, tool, favId) {
 // b = h2 − h1 [4-8], figure 4-3(b) drawing h1 from the plane to the trace
 // and h2 from the plane to the top of the cover; its errata writes h1 for h.
 // No cover, the surface microstrip; a thick one, Z0,surf × √(εr,eff/εr),
-// the field all in the dielectric. Z0,surf is Microstrip impedance's
+// the field all in the dielectric. Z0,surf is Microstrip's
 // (Wadell's equations), εr,eff IPC-2141A's [4-6], the same as Wadell's.
 // The covered line's effective εr follows from the same expression,
 // εr,eff e^(−2b/h1) + εr (1 − e^(−2b/h1)).
@@ -15250,7 +15251,7 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
       apply: example({ w: 0.36e-3, h1: 0.2e-3, h2: 0.2e-3 + OZ + 20e-6, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
     { title: "50 Ω under solder mask", note: "The same layer and mask: 0.319 mm wide gives 50 Ω covered.",
       apply: example({ h1: 0.2e-3, h2: 0.2e-3 + OZ + 20e-6, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
-    { title: "No cover: the surface microstrip", note: "H2 equal to h1: Wadell's 50.6 Ω for 3 mm on 1.6 mm, as in Microstrip impedance.",
+    { title: "No cover: the surface microstrip", note: "H2 equal to h1: Wadell's 50.6 Ω for 3 mm on 1.6 mm, as in Microstrip.",
       apply: example({ w: 3e-3, h1: 1.6e-3, h2: 1.6e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
     { title: "Buried under 0.2 mm of prepreg", note: "A thick cover: the 0.36 mm trace drops to 44.2 Ω, near its deep limit of 43.5 Ω.",
       apply: example({ w: 0.36e-3, h1: 0.2e-3, h2: 0.4e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }) },
@@ -15282,7 +15283,7 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["b = H2 − h1,   k = e^(−2b / h1)", "Z0 = Z0,surf / √(k + (εr / εr,eff)(1 − k))", "Z0,surf, εr,eff: Microstrip impedance's"],
+        ["b = H2 − h1,   k = e^(−2b / h1)", "Z0 = Z0,surf / √(k + (εr / εr,eff)(1 − k))", "Z0,surf, εr,eff: Microstrip's"],
         "An embedded microstrip is a trace with dielectric on top of it as well as under it: solder mask on an outer layer, or prepreg on an inner one with no plane above. The field that ran in the air above a bare microstrip now runs partly in the cover, so the signal sees more dielectric and the impedance falls, a little under thin solder mask, more under a thick cover, down to the limit where the trace is buried deep. h1 is the dielectric under the trace, H2 the height of the cover's top above the plane, b their difference. The formula is IPC-2141A's (§4.2.3); Z0,surf and εr,eff are the bare microstrip's. Type a width to get the impedance, or the impedance you need to get the width."
       )}
       ${calcFooter("")}

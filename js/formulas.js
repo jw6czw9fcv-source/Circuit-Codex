@@ -375,13 +375,13 @@ const FORMULAS = [
     note: "In air, for s/t ≥ 5 (IPC-2141A [4-42], sign corrected); Z0, Zo,0 Cohn's paper-thin strip alone and in the pair, Cf the edge fringing [4-44].",
   },
   {
-    tool: "Broadside stripline",
+    tool: "Broadside-coupled stripline",
     domain: "pcb",
     formulas: ["Zo,thin = 295.9/√εr × (s/b) / tanh⁻¹(k)", "1/Zo = 1/Zo,thin(b − 2t) + ΔY,  Zdiff = 2 Zo"],
     note: "k from w/b (IPC-2141A [4-46]–[4-48], paper-thin, constant corrected); ΔY the copper's edges, from two half-striplines in parallel.",
   },
   {
-    tool: "Buried differential pair",
+    tool: "Edge-coupled embedded",
     domain: "pcb",
     formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  Zdiff = 2 Zodd"],
     note: "A field solver: Laplace's equation for the potential φ on a grid over the cross-section, odd mode (traces at ±1 V); the common mode is Zeven / 2.",
@@ -393,19 +393,19 @@ const FORMULAS = [
     note: "Z0 and εr,eff are the uncovered microstrip's, h1 the dielectric under the trace, H2 the plane to the top of the cover (IPC-2141A [4-7], [4-8]).",
   },
   {
-    tool: "Differential microstrip",
+    tool: "Edge-coupled microstrip",
     domain: "pcb",
     formulas: ["Zo = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff Q10)", "Zdiff = 2 Zo"],
     note: "IPC-2141A [4-24]–[4-41], Q10 and εeff,o fitted in w/h and s/h; copper by widening w to w'. AN-905's 2 Z0 (1 − 0.48 e^(−0.96 s/h)) is the simpler estimate.",
   },
   {
-    tool: "Stripline impedance",
+    tool: "Stripline",
     domain: "pcb",
     formulas: ["x = 16h / (π w'),   y = x (x + √(x² + 6.27)) / 2", "Z0 = 30 / √εr × ln(1 + y)", "Td = 33.36 √εr ps/cm"],
     note: "Wheeler (1978): h the dielectric on each side of the strip, w' its width corrected for the copper's thickness (Hafner et al. 2014).",
   },
   {
-    tool: "Microstrip impedance",
+    tool: "Microstrip",
     domain: "pcb",
     formulas: ["x = 4h / w',   a = (14 + 8/εr) / 11", "b = √(a² x² + π² (1 + 1/εr) / 2)", "Z0 = 60 / √(2εr + 2) × ln(1 + x (a x + b))"],
     note: "Wadell's equations; w' is the width w corrected for the copper's thickness t, h the dielectric to the ground plane. The older IPC formula, 87/√(εr + 1.41) × ln(5.98h / (0.8w + t)), holds for w ≤ 2h.",

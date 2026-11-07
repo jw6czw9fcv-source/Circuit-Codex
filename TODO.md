@@ -410,7 +410,7 @@ Then:
 - [x] Dual stripline impedance — built as Dual stripline, renamed Asymmetric stripline (IPC-2141A's name) 2026-11-05, IPC-2141A §4.2.5 corrected (checked with a field solver), 2026-11-05
 - [x] Edge-coupled stripline — built as Differential stripline, renamed 2026-11-05, IPC-2141A §4.4.2 with 3 misprints corrected, checked with tools/fd_lines.py, 2026-11-05
 - [x] Broadside-coupled stripline — built as Broadside stripline, IPC-2141A §4.4.3 paper-thin (constant 295.9) + copper estimate within 1.5 % of fd_lines.py, 2026-11-05
-- [x] Buried differential pair (edge-coupled pair buried in the board, Saturn's "Edge Cpld Embed") — built 2026-11-06, the first tool on the in-app field solver (js/fieldsolver.js)
+- [x] Edge-coupled embedded (edge-coupled pair buried in the board, Saturn's "Edge Cpld Embed") — built 2026-11-06, the first tool on the in-app field solver (js/fieldsolver.js)
 - [ ] Coplanar waveguide impedance
 - [ ] Via impedance (R, L, C)
 - [ ] Crosstalk calculator

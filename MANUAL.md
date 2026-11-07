@@ -115,14 +115,14 @@ will key on, since that is the id the app already holds for each tool.
 
 - Trace current & resistance → [Trace width](#trace-width)
 - Trace current & resistance → [Via current capacity](#via-current)
-- Impedance → [Microstrip impedance](#microstrip)
+- Impedance → [Microstrip](#microstrip)
 - Impedance → [Embedded microstrip](#embedded-microstrip)
-- Impedance → [Differential microstrip](#diff-microstrip)
-- Impedance → [Buried differential pair](#embedded-pair)
-- Impedance → [Stripline impedance](#stripline)
+- Impedance → [Edge-coupled microstrip](#diff-microstrip)
+- Impedance → [Edge-coupled embedded](#embedded-pair)
+- Impedance → [Stripline](#stripline)
 - Impedance → [Asymmetric stripline](#dual-stripline)
 - Impedance → [Edge-coupled stripline](#diff-stripline)
-- Impedance → [Broadside stripline](#broadside-stripline)
+- Impedance → [Broadside-coupled stripline](#broadside-stripline)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -11422,9 +11422,10 @@ input, so with 4 : 1 it shows 3.11 A of peak current where he gives
 ---
 
 <a id="microstrip"></a>
-## Microstrip impedance
+## Microstrip
 
 `calc: microstrip` · PCB & interconnect › Impedance
+(formerly Microstrip impedance)
 
 ### What it computes
 
@@ -11587,9 +11588,10 @@ Wadell's equations once his copy of Peterson's slides showed both.
 ---
 
 <a id="stripline"></a>
-## Stripline impedance
+## Stripline
 
 `calc: stripline` · PCB & interconnect › Impedance
+(formerly Stripline impedance)
 
 ### What it computes
 
@@ -11630,8 +11632,7 @@ Examples: the two stripline resonators of Hafner et al. (their table I),
   below, the dielectric filling the space between.
 - **b, h:** b is the spacing between the planes; h = (b − t)/2 is the
   dielectric between the trace and each plane.
-- **Characteristic impedance (Z0), εr, C0, L0, oz:** as in Microstrip
-  impedance.
+- **Characteristic impedance (Z0), εr, C0, L0, oz:** as in Microstrip.
 - **Delay:** all the field runs in the dielectric, so a stripline is slower
   than a microstrip on the same material: Td depends on εr only.
 
@@ -11760,7 +11761,7 @@ impedance:
 - **Remembered:** the length unit and the copper unit.
 
 Examples: a 0.2 mm trace 0.2 and 0.4 mm from the planes, the width for
-50 Ω on those layers, a centred trace (Stripline impedance's case), and a
+50 Ω on those layers, a centred trace (Stripline's case), and a
 narrow trace close to one plane.
 
 ### Terms
@@ -11774,8 +11775,7 @@ narrow trace close to one plane.
   stack-up, not for one offset trace.
 - **h1, h2, B:** the dielectric between the trace and the lower and the
   upper plane; B = h1 + h2 + t is the spacing between the planes.
-- **Z0, εr, C0, L0, oz:** as in Microstrip impedance and Stripline
-  impedance.
+- **Z0, εr, C0, L0, oz:** as in Microstrip and Stripline.
 
 ### Source
 
@@ -11794,7 +11794,7 @@ narrow trace close to one plane.
 
 ### Why the formulas are these
 
-    Z(b): Stripline impedance's Z0 in air, planes b apart
+    Z(b): Stripline's Z0 in air, planes b apart
     Zair = 2 Z(2h1 + t) Z(2h2 + t) / (Z(2h1 + t) + Z(2h2 + t))
     B = h1 + h2 + t
     ΔZ = 0.0325π Zair² |½ − ½ (2h1 + t)/B|^2.2 ((t + w)/B)^2.9
@@ -11846,7 +11846,7 @@ takes the offset term's (½ − …) as a magnitude, either plane the near one.
   (solver 49.84 Ω), 53.4 Ω centred, correction 0.52 Ω, 1.38 pF/cm and
   3.46 nH/cm;
 - 50 Ω on those layers: 0.2 mm;
-- centred, planes 0.6 mm apart: 51.8 Ω, Stripline impedance's value, no
+- centred, planes 0.6 mm apart: 51.8 Ω, Stripline's value, no
   correction;
 - 0.1 mm trace 0.1 and 0.5 mm from the planes: 53.3 Ω (solver 50.77 Ω);
 - h1 and h2 swapped: the same impedance;
@@ -11880,7 +11880,7 @@ that gives it at a gap:
   typed.
 - **Below it:**
   - the odd-mode impedance, each trace's share of the pair, Zdiff / 2;
-  - one trace alone, by Wheeler's formula as in Stripline impedance;
+  - one trace alone, by Wheeler's formula as in Stripline;
   - which of IPC-2141A's two forms applies, by s/t;
   - the delay per length, the signal seeing the full εr.
 - **Units:** mm or mil for the three lengths, moving together; oz, µm or
@@ -11897,7 +11897,7 @@ longer couples.
 ### Terms
 
 - **Differential pair, differential impedance (Zdiff), odd mode,
-  coupling:** as in Differential microstrip.
+  coupling:** as in Edge-coupled microstrip.
 - **Edge-coupled:** side by side on the same layer; a pair one above the
   other is broadside-coupled.
 - **Fringing capacitance (Cf):** the capacitance from a strip's edge to the
@@ -11905,7 +11905,7 @@ longer couples.
   more.
 - **Paper-thin strip:** a strip of zero thickness, for which Cohn found the
   impedance exactly; the thick strip is worked out from it.
-- **b, t, εr, oz:** as in Stripline impedance.
+- **b, t, εr, oz:** as in Stripline.
 
 ### Source
 
@@ -11999,9 +11999,10 @@ for 1 oz copper: 3.4 % at 0.2 mm gaps (s/t 5.7, [4-42]), 1.0 % at 0.1 mm
 ---
 
 <a id="broadside-stripline"></a>
-## Broadside stripline
+## Broadside-coupled stripline
 
 `calc: broadside-stripline` · PCB & interconnect › Impedance
+(formerly Broadside stripline)
 
 ### What it computes
 
@@ -12039,7 +12040,7 @@ apart, wide traces close together, and narrow traces flagged, all with
 - **Paper-thin:** copper of zero thickness. Here the traces face each
   other with their full width, so their thickness matters more than for a
   side-by-side pair.
-- **Odd mode, Zdiff:** as in Differential microstrip.
+- **Odd mode, Zdiff:** as in Edge-coupled microstrip.
 
 ### Source
 
@@ -12163,7 +12164,7 @@ the trace.
   over the copper comes from the board maker.
 - **Deep limit:** under a thick enough cover, the trace sees εr all round;
   Z0 falls to the uncovered value × √(εeff / εr) and goes no lower.
-- **Z0, εr, εeff, oz:** as in Microstrip impedance.
+- **Z0, εr, εeff, oz:** as in Microstrip.
 
 ### Source
 
@@ -12175,8 +12176,7 @@ the trace.
   εr,eff are its surface microstrip's [4-4]–[4-6].
 - **IPC-2141A errata** (read, a Wayback Machine copy): writes [4-7]'s
   exponent with h1, the dielectric under the trace, as the tool does.
-- **Uncovered Z0 and εeff:** Wadell's equations, as in Microstrip
-  impedance (IPC-2141A's [4-6] εeff is the same; for its [4-4] see there).
+- **Uncovered Z0 and εeff:** Wadell's equations, as in Microstrip (IPC-2141A's [4-6] εeff is the same; for its [4-4] see there).
 
 ### Why the formulas are these
 
@@ -12189,8 +12189,7 @@ Uncovered, part of the field runs in the air over the trace and the line
 sees εeff. A cover puts dielectric where that air was: the line sees more
 of εr, its capacitance rises and Z0 falls. The exponential blends the two
 cases, k = 1 with no cover, k → 0 under a cover a few h1 thick. With
-b = 0 the formula gives the surface microstrip back. As in Microstrip
-impedance, the width for an impedance is found by halving the range of
+b = 0 the formula gives the surface microstrip back. As in Microstrip, the width for an impedance is found by halving the range of
 widths.
 
 ### Assumptions and limits
@@ -12205,7 +12204,7 @@ widths.
 - **No losses.**
 
 **Checked against a field solver.** tools/fd_lines.py, with the board,
-the cover and the air above (as in Differential microstrip), for 1 oz
+the cover and the air above (as in Edge-coupled microstrip), for 1 oz
 copper on FR-4:
 - 0.36 mm on 0.2 mm, uncovered: Wadell 50.0 Ω, solver 49.9 Ω;
 - under 10, 20 and 30 µm of mask over the copper: 47.3, 46.9 and 46.5 Ω,
@@ -12227,7 +12226,7 @@ Wadell's equations:
 - 0.36 mm on 0.2 mm of FR-4 under 20 µm of mask: 46.9 Ω (50.0 Ω
   uncovered, −6.2 %), εeff 3.25 → 3.69, 64.1 ps/cm;
 - 50 Ω under that mask: 0.319 mm;
-- no cover, 3 mm on 1.6 mm: 50.6 Ω, Microstrip impedance's value;
+- no cover, 3 mm on 1.6 mm: 50.6 Ω, Microstrip's value;
 - 0.2 mm of prepreg over the 0.36 mm trace: 44.2 Ω, deep limit 43.5 Ω;
 - the default: 46.9 Ω.
 
@@ -12236,10 +12235,10 @@ Wadell's equations:
 ---
 
 <a id="diff-microstrip"></a>
-## Differential microstrip
+## Edge-coupled microstrip
 
 `calc: diff-microstrip` · PCB & interconnect › Impedance
-(formerly Differential microstrip impedance)
+(formerly Differential microstrip impedance, then Differential microstrip)
 
 ### What it computes
 
@@ -12258,7 +12257,7 @@ over a ground plane, or the trace width that gives it at a spacing:
   width for the Zdiff typed.
 - **Below it:**
   - the odd-mode impedance, each trace's share of the pair, Zdiff / 2;
-  - one trace alone, by Wadell's equations as in Microstrip impedance;
+  - one trace alone, by Wadell's equations as in Microstrip;
   - Zdiff by AN-905's simpler factor, and the difference;
   - s/h against AN-905's range, 0.2 to 3, flagged outside.
 - **Units:** mm or mil, the three length pickers moving together.
@@ -12282,7 +12281,7 @@ LVDS's 100 Ω on a 0.2 mm layer.
 - **Coupling:** brought close, each trace's field reaches the other; Zdiff
   falls below twice one trace's impedance.
 - **Edge-coupled:** side by side on the same layer (AN-905's only case).
-- **Z0, εr, oz:** as in Microstrip impedance.
+- **Z0, εr, oz:** as in Microstrip.
 
 ### Source
 
@@ -12297,7 +12296,7 @@ LVDS's 100 Ω on a 0.2 mm layer.
   factor 0.702, 105 Ω.
 - **Single-trace Z0:** Wadell's equations and IPC-2141's formula, both from
   Z. Peterson's "High Speed Design Basics" (Altium, 2022, slide 23), as in
-  Microstrip impedance.
+  Microstrip.
 - **IPC-2141A, March 2004, §4.4.1** (read, Pierre's scanned copy): its
   edge-coupled surface microstrip is not AN-905's exponential: [4-24]–[4-41]
   give the odd-mode impedance Z0,o = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff
@@ -12353,8 +12352,7 @@ Far apart, the two traces are independent and the pair is two lines in
 series: Zdiff = 2 Z0. Brought closer, their mutual capacitance and
 inductance lower it. IPC's terms fit that fall for paper-thin traces,
 through the odd mode's own effective εr and the coupling term Q10; the
-copper's thickness makes each trace act wider (w', as in Microstrip
-impedance) and so the gap narrower. AN-905 fits the fall with a single
+copper's thickness makes each trace act wider (w', as in Microstrip) and so the gap narrower. AN-905 fits the fall with a single
 exponential in s/h. The width for a Zdiff is found by halving the range of
 widths, the spacing kept.
 
@@ -12390,7 +12388,7 @@ widths, the spacing kept.
 ---
 
 <a id="embedded-pair"></a>
-## Buried differential pair
+## Edge-coupled embedded
 
 `calc: embedded-pair` · PCB & interconnect › Impedance
 
@@ -12498,13 +12496,13 @@ a width for a typed Zdiff in two or three solves.
   measured boards; the numerical principle, the capacitance found from the
   potential.
 - **The estimate:** IPC-2141A §4.4.1 [4-24]–[4-41] and §4.2.3 [4-7], as in
-  Differential microstrip and Embedded microstrip.
+  Edge-coupled microstrip and Embedded microstrip.
 
 ### Why the formulas are these
 
 The estimate shown at once, and kept for comparison: the bare pair's odd
 mode by IPC-2141A's pair formula with the copper allowed for, as
-Differential microstrip computes it, once in the board (Zbare) and once in
+Edge-coupled microstrip computes it, once in the board (Zbare) and once in
 air (Zair), then IPC-2141A [4-7]'s cover blend applied to the odd mode's
 effective εr:
 
@@ -12539,7 +12537,7 @@ is needed for the answer, which is the solver's.
   46.3 Ω;
 - 100 Ω under 0.1 mm of prepreg, 0.2 mm gap: 0.146 mm (0.14596);
 - under 20 µm of solder mask only: 99 Ω (98.99), estimate +2.7 %;
-- no cover: 114 Ω (114.40), where Differential microstrip's formula reads
+- no cover: 114 Ω (114.40), where Edge-coupled microstrip's formula reads
   117 Ω;
 - under 1 mm: 86.8 Ω (86.76), εeff 4.3;
 - H2 below h1 is refused;
