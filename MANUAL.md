@@ -12390,14 +12390,19 @@ over a ground plane, or the trace width that gives it at a spacing:
   and the impedance box shows Zdiff; type the Zdiff you need (90 Ω for
   USB, 100 Ω for Ethernet or LVDS) and the width box shows the width at
   your spacing.
-- **The big result:** Zdiff by IPC-2141A's pair formula, the copper allowed
-  for (the closest to a field solver, within 3 % for 1 oz), with each
-  trace's impedance alone and the coupling (Zdiff over twice that); or the
-  width for the Zdiff typed.
+- **The big result:** Zdiff from the field solver (as in Edge-coupled
+  embedded), with each trace's impedance alone and the coupling (Zdiff
+  over twice that); or the width for the Zdiff typed. For the moment the
+  solver takes, the badge reads "Solving…" and IPC-2141A's value stands
+  in.
 - **Below it:**
   - the odd-mode impedance, each trace's share of the pair, Zdiff / 2;
-  - one trace alone, by Wadell's equations as in Microstrip;
-  - Zdiff by AN-905's simpler factor, and the difference;
+  - the even-mode impedance, both traces driven alike, and the
+    common-mode impedance, half of it;
+  - one trace alone, from the solver as in Microstrip;
+  - Zdiff by IPC-2141A's pair formula, the big result from 2026-11-05 to
+    2026-11-07, and by AN-905's simpler factor, each with its difference
+    from the solver's;
   - s/h against AN-905's range, 0.2 to 3, flagged outside.
 - **Units:** mm or mil, the three length pickers moving together.
 - **Drawing:** the pair on the dielectric over the ground plane, w and s
@@ -12417,6 +12422,9 @@ LVDS's 100 Ω on a 0.2 mm layer.
   between the two traces.
 - **Odd-mode impedance:** the impedance of one trace while the other
   carries the opposite signal, half of Zdiff.
+- **Even-mode and common-mode impedance:** the impedance of one trace
+  while the other carries the same signal; the two in parallel, half of
+  it, is what a common-mode signal (noise on both) sees.
 - **Coupling:** brought close, each trace's field reaches the other; Zdiff
   falls below twice one trace's impedance.
 - **Edge-coupled:** side by side on the same layer (AN-905's only case).
@@ -12433,17 +12441,21 @@ LVDS's 100 Ω on a 0.2 mm layer.
   dimensions"; its examples: two 75 Ω microstrips 0.10 cm apart on a
   0.076 cm substrate, factor 0.86, 128 Ω; 10 mils apart on 20 mils,
   factor 0.702, 105 Ω.
-- **Single-trace Z0:** Wadell's equations and IPC-2141's formula, both from
-  Z. Peterson's "High Speed Design Basics" (Altium, 2022, slide 23), as in
+- **Single-trace Z0 in the formulas:** Wadell's equations, as in
   Microstrip.
+- **The field solver:** js/fieldsolver.js, as in Microstrip, the pair
+  solved with the traces at +1 V and −1 V (odd mode) and both at +1 V
+  (even mode); tools/fd_lines.py's app_microstrip, a separate
+  implementation, gives the values below.
 - **IPC-2141A, March 2004, §4.4.1** (read, Pierre's scanned copy): its
   edge-coupled surface microstrip is not AN-905's exponential: [4-24]–[4-41]
   give the odd-mode impedance Z0,o = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff
   Q10), with εeff,o and ten fitted terms Q1 to Q10 in u = w/h and g = s/h,
   citing its references 2 and 6. §4.4 warns that the balanced-line formulas
-  "exist in various forms, some of which are not in agreement". It is the
-  big result since 2026-11-05 (Pierre: the most accurate value first);
-  AN-905's factor, the first version's, is shown for comparison.
+  "exist in various forms, some of which are not in agreement". It was the
+  big result from 2026-11-05 (Pierre: the most accurate value first) until
+  the field solver took over on 2026-11-07; AN-905's factor, the first
+  version's, is shown for comparison too.
 
 **IPC-2141A's pair formula, and how it was checked.** Its terms
 [4-25]–[4-41] are, in full:
@@ -12470,16 +12482,31 @@ of εr 4.3). Its terms carry no copper thickness, and with 1 oz copper it
 reads 2 to 18 % high. The tool widens each trace to Wadell's w' and
 narrows the gap by as much: then it is within −0.4 to +2.8 % of the
 solver, where AN-905's factor is within −2.1 to +11.1 % (worst for a
-0.05 mm gap). For the tool's examples the solver falls between the two:
-- AN-905's 75 Ω traces 1 mm apart on 0.76 mm: AN-905 129.6 Ω, IPC
-  132.4 Ω, solver 131.7 Ω;
-- 10 mil apart on 20 mil: 105.5, 108.0, 106.9 Ω;
-- the USB width it gives, 0.326 mm 0.2 mm apart on 0.2 mm: IPC 90.0 Ω,
-  AN-905 86.3 Ω, solver 88.5 Ω;
-- the 100 Ω width, 0.261 mm: 100.0, 96.8, 98.1 Ω;
-- the default pair, 0.15 mm 0.15 mm apart: 117.3, 116.3, 114.4 Ω.
+0.05 mm gap).
+
+**How the formulas compare with the solver** (1 oz copper, εr 4.3):
+
+| Case | Solver Zdiff | IPC-2141A | AN-905 |
+|---|---|---|---|
+| AN-905's 75 Ω traces 1 mm apart on 0.76 mm | 131.72 Ω | +0.51 % | −1.58 % |
+| 10 mil apart on 20 mil | 106.88 Ω | +1.01 % | −1.34 % |
+| USB: 0.315 mm, 0.2 mm apart on 0.2 mm | 90.00 Ω | +1.69 % | −2.38 % |
+| 100 Ω: 0.251 mm, 0.2 mm apart on 0.2 mm | 100.00 Ω | +1.94 % | −1.16 % |
+| the default, 0.15 mm, 0.15 mm apart on 0.2 mm | 114.40 Ω | +2.54 % | +1.66 % |
+
+For USB, IPC-2141A's 0.326 mm would give 88.5 Ω, 1.6 % under the 90 Ω
+wanted; the solver's width is 0.315 mm.
 
 ### Why the formulas are these
+
+The solver, the big result, solved three times:
+
+    odd mode: the traces at +1 V and −1 V,  Zodd = η0 / √(S × S_air)
+    Zdiff = 2 Zodd
+    even mode: both at +1 V,  common mode = Zeven / 2
+    one trace alone, as in Microstrip
+
+IPC-2141A's pair formula, the first comparison:
 
     w' = w + (1 + 1/εr)/2 × t/π × ln(4e / √((t/h)² + (1/π / (w/t + 1.1))²))
     u = w'/h,   g = (s − (w' − w))/h
@@ -12492,13 +12519,13 @@ series: Zdiff = 2 Z0. Brought closer, their mutual capacitance and
 inductance lower it. IPC's terms fit that fall for paper-thin traces,
 through the odd mode's own effective εr and the coupling term Q10; the
 copper's thickness makes each trace act wider (w', as in Microstrip) and so the gap narrower. AN-905 fits the fall with a single
-exponential in s/h. The width for a Zdiff is found by halving the range of
-widths, the spacing kept.
+exponential in s/h. The width for a Zdiff starts from IPC-2141A's, the
+spacing kept, then the solver's answer corrects it.
 
 ### Assumptions and limits
 
-- **Within 3 % of the solver for 1 oz:** the board maker's calculation
-  decides for a controlled-impedance board.
+- **Quasi-static field solution:** the traces rectangles, no losses; the
+  board maker's calculation decides for a controlled-impedance board.
 - **Equal traces, edge-coupled, no solder mask.**
 - **IPC's pair formula with copper:** the w' widening and narrower gap are
   the tool's, checked against the field solver, not IPC's.
@@ -12509,15 +12536,17 @@ widths, the spacing kept.
 
 ### How it was checked
 
-8 cases (field-solver values from tools/fd_lines.py):
-- AN-905's 75 Ω traces 1 mm apart on 0.76 mm: 132 Ω (132.4; solver
-  131.7 Ω), coupling 0.883; AN-905 130 Ω (−2.1 %; its slide rule 128 Ω);
-- 10 mil apart on 20 mil: 108 Ω (solver 106.9 Ω), 54 Ω odd mode; AN-905
-  105 Ω (−2.3 %), s/h 0.5;
-- USB 90 Ω on 0.2 mm, 0.2 mm apart: 0.326 mm, 52.8 Ω alone; AN-905
-  86.3 Ω (−4.1 %);
-- 100 Ω on the same layer: 0.261 mm, 50 Ω odd mode;
-- the default pair: 117 Ω (solver 114.4 Ω); AN-905 116 Ω (−0.9 %);
+8 cases, the expected values from tools/fd_lines.py's app_microstrip:
+- AN-905's 75 Ω traces (75 Ω by Wadell's equations, 74.8 Ω by the
+  solver) 1 mm apart on 0.76 mm: 132 Ω (131.72), coupling 0.881; IPC-2141A
+  132 Ω (+0.5 %), AN-905 130 Ω (−1.6 %; its slide rule 128 Ω); even mode
+  83.3 Ω, common mode 41.6 Ω;
+- 10 mil apart on 20 mil: 107 Ω (106.88), 53.4 Ω odd mode; IPC-2141A
+  108 Ω (+1.0 %), AN-905 105 Ω (−1.3 %), s/h 0.5;
+- USB 90 Ω on 0.2 mm, 0.2 mm apart: 0.315 mm (0.31510), 53.7 Ω alone;
+- 100 Ω on the same layer: 0.251 mm (0.25055), 50 Ω odd mode;
+- the default pair: 114 Ω (114.40); IPC-2141A 117 Ω (+2.5 %), AN-905
+  116 Ω (+1.7 %); common mode 45.8 Ω;
 - a spacing beyond 3 h is flagged;
 - a gap the copper closes is refused;
 - the three length pickers move together.

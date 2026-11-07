@@ -14773,9 +14773,11 @@ function renderBroadsideStripline(domain, tool, favId) {
 
 // ---------- Edge-coupled microstrip (formerly Differential microstrip) ----------
 // Two edge-coupled traces on an outer layer over a ground plane. The big
-// result is IPC-2141A's pair formula (ipcCoupledMicrostripOdd, copper
-// allowed for), the closest to the field solver: −0.4 to +2.8 % for 1 oz
-// (Pierre, 2026-11-05: the most accurate value first). For comparison,
+// result is the field solver's (FS microstrip, odd mode: Zdiff = 2 Zodd)
+// since 2026-11-07, with the single trace alone and the even mode solved
+// too. IPC-2141A's pair formula (ipcCoupledMicrostripOdd, copper allowed
+// for), the big result before, is the first comparison and the estimate the
+// width search starts from: +0.5 to +2.5 % in the examples. Also,
 // National's AN-905 (TI SNLA035, appendix A): Zdiff ≅ 2 Z0 (1 − 0.48
 // e^(−0.96 s/h)), "derived from empirical data … errors of up to ±10%", its
 // slide rule limited to 0.20 ≤ s/h ≤ 3.0, Z0 one trace's impedance by
@@ -14799,8 +14801,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
   // AN-905's coupling factor, now the comparison.
   const k = () => 1 - 0.48 * Math.exp(-0.96 * state.si.s / state.si.h);
   const zSingle = (w) => wadellMicrostripZ(w, state.si.h, t(), state.si.er);
-  // The big result: IPC-2141A's pair formula with the copper allowed for,
-  // the closest to the field solver (−0.4 to +2.8 % for 1 oz).
+  // IPC-2141A's pair formula with the copper allowed for: the estimate.
   const zDiffAt = (w) => 2 * ipcCoupledMicrostripOdd(w, state.si.s, state.si.h, t(), state.si.er);
   // The width for an impedance, by halving the bracket as in Microstrip
   // impedance; NaN outside.
@@ -14824,6 +14825,21 @@ function renderDiffMicrostrip(domain, tool, favId) {
     if (!(zDiffAt(s.w) > 0)) return "The gap is too small for this copper: its thickness closes it.";
     return "";
   }
+
+  // Three solves: the pair's odd mode (Zdiff), one trace alone, the even mode.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const link = solverLink({
+    kind: "microstrip", modes: ["odd", "single", "even"], factor: 2,
+    params: (w, mode) => {
+      const q = state.si, p = { w: mm(w), t: mm(t()), h: mm(q.h), er: q.er };
+      return mode === "single" ? p : Object.assign(p, { s: mm(q.s), mode });
+    },
+    estimate: zDiffAt, estimateWidth: (z) => solve(zDiffAt, z),
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const got = (i) => (link.sol && link.sol.res[i]) || null;
+  const zNow = () => (got(0) ? 2 * got(0).z : zDiffAt(state.si.w));
 
   // The pair in cross-section on the dielectric over the ground plane,
   // green when the width is the answer.
@@ -14853,28 +14869,30 @@ function renderDiffMicrostrip(domain, tool, favId) {
   function resultHTML() {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
-    const s = state.si, z1 = zSingle(s.w), zd = zDiffAt(s.w);
+    const s = state.si, zd = zNow(), z1 = got(1) ? got(1).z : zSingle(s.w), even = got(2);
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const ratio = s.s / s.h;
-    const za = 2 * z1 * k(), d = (za / zd - 1) * 100;
     const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
-    const anText = `${ohm(za)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`;
+    const cmp = (zc) => { const d = (zc / zd - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
+    const anText = cmp(2 * zSingle(s.w) * k());
     const main = state.target !== null
       ? `<div class="result-field">
-          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
           <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, ${len(s.s)} apart</div>
         </div>`
       : `<div class="result-field">
-          <div class="result-head"><span class="label">Differential impedance</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Differential impedance</span>${solverBadge(link)}</div>
           <div class="result-value"><span class="num" data-res="big">${ohm(zd)}</span></div>
           <div class="result-sub" data-res="sub">each trace ${ohm(z1)} alone, coupling ${Number((zd / (2 * z1)).toPrecision(3))}</div>
         </div>`;
     return `${main}
         <div class="field notation-box">
           ${row("Odd mode, each trace in the pair", ohm(zd / 2), "odd")}
+          ${row("Even mode, common mode", even ? `${ohm(even.z)}, ${ohm(even.z / 2)}` : "…", "even")}
           ${row("Single trace, alone", ohm(z1), "single")}
+          ${row("IPC-2141A, for comparison", cmp(zDiffAt(s.w)), "ipc")}
           ${row("AN-905, for comparison", anText, "an")}
           ${row("s/h, AN-905's range", ratio >= 0.2 && ratio <= 3 ? `${Number(ratio.toPrecision(3))}, within 0.2 to 3 (±10 %)` : warn(`${Number(ratio.toPrecision(3))}, outside 0.2 to 3`), "range")}
         </div>`;
@@ -14884,18 +14902,24 @@ function renderDiffMicrostrip(domain, tool, favId) {
     const err = problem();
     const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
     set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
-    set("z", err ? "" : fmt(Number(zDiffAt(state.si.w).toPrecision(4))));
+    set("z", err ? "" : fmt(Number(zNow().toPrecision(4))));
   }
   function settle() {
     const s = state.si;
     if (state.target > 0 && s.h > 0 && s.s > 0 && s.er >= 1) { const w = solve(zDiffAt, state.target); if (w > 0) s.w = w; }
   }
 
-  function refresh() {
-    settle();
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
     syncBoxes();
+  }
+  function refresh() {
+    settle();
+    link.recall();
+    show();
+    link.schedule(false);
   }
 
   // single: a width giving that Z0 for one trace, as AN-905's examples
@@ -14906,18 +14930,17 @@ function renderDiffMicrostrip(domain, tool, favId) {
     if (single) state.si.w = solve(zSingle, single);
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
-    settle();
     paint();
   };
   const MIL = 25.4e-6;
   useExamples([
-    { title: "AN-905: 75 Ω traces 1 mm apart", note: "On 0.76 mm of εr 4.3: 132 Ω; a field solver 131.7 Ω, AN-905's slide rule 128 Ω.",
+    { title: "AN-905: 75 Ω traces 1 mm apart", note: "75 Ω each (Wadell's), on 0.76 mm of εr 4.3: 132 Ω; its slide rule 128 Ω.",
       apply: example({ s: 1e-3, h: 0.76e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, null, 75) },
-    { title: "AN-905: 10 mil apart on 20 mil", note: "Two 75 Ω traces: 108 Ω; a field solver 106.9 Ω, AN-905 105 Ω.",
+    { title: "AN-905: 10 mil apart on 20 mil", note: "Two 75 Ω traces (Wadell's): 107 Ω; AN-905's factor 105 Ω, IPC-2141A's 108 Ω.",
       apply: example({ s: 10 * MIL, h: 20 * MIL, er: 4.3 }, { lUnit: "mil", oz: 1 }, null, 75) },
-    { title: "USB, 90 Ω on a 0.2 mm layer", note: "FR-4, 1 oz, 0.2 mm apart: each trace 0.326 mm wide.",
+    { title: "USB, 90 Ω on a 0.2 mm layer", note: "FR-4, 1 oz, 0.2 mm apart: each trace 0.315 mm wide.",
       apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 90) },
-    { title: "Ethernet or LVDS, 100 Ω", note: "The same layer and spacing: 0.261 mm traces, 50 Ω each in the pair.",
+    { title: "Ethernet or LVDS, 100 Ω", note: "The same layer and spacing: 0.251 mm traces, 50 Ω each in the pair.",
       apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 100) },
   ]);
 
@@ -14932,6 +14955,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    link.recall();
     const ozSel = `<select id="dm-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
     const matSel = `<select id="dm-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     app.innerHTML = `
@@ -14947,8 +14971,8 @@ function renderDiffMicrostrip(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["u = w'/h,  g = (s − (w' − w))/h", "εeff,o, Q1 … Q10 from u, g, εr", "Zo = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff Q10)", "Zdiff = 2 Zo"],
-        "A differential pair carries a signal as two equal and opposite voltages on two traces side by side. Its differential impedance Zdiff is what the driver sees between the two traces; a line driven and ended in it carries the signal without reflections. USB uses 90 Ω, Ethernet and LVDS 100 Ω. Each trace alone has its impedance Z0; brought closer, the two couple and Zdiff falls below 2 Z0. Zo, the odd-mode impedance, is each trace's share. This is IPC-2141A's pair formula, ten fitted terms in u and g (all in the manual), for paper-thin traces: the copper is allowed for by widening each trace to w' (as in Microstrip) and narrowing the gap as much. Against a field solver it is within 3 % for 1 oz; AN-905's simpler factor, 2 Z0 (1 − 0.48 e^(−0.96 s/h)), is shown for comparison. Type a width to get Zdiff, or the Zdiff you need to get the width at your spacing."
+        ["∇·(ε ∇φ) = 0, the traces at +1 V and −1 V", "S = C / ε0 = Σ ε (Δφ)², with the board and in air", "Zodd = η0 / √(S × S_air),   Zdiff = 2 Zodd", "even mode: both at +1 V; common mode Zeven / 2"],
+        "A differential pair carries a signal as two equal and opposite voltages on two traces side by side. Its differential impedance Zdiff is what the driver sees between the two traces; a line driven and ended in it carries the signal without reflections. USB uses 90 Ω, Ethernet and LVDS 100 Ω. Each trace alone has its impedance Z0; brought closer, the two couple and Zdiff falls below 2 Z0. Zodd, the odd-mode impedance, is each trace's share; the even mode, both traces driven alike, gives the common-mode impedance Zeven / 2. The app's field solver computes all three (see Edge-coupled embedded's manual section). IPC-2141A's pair formula, ten fitted terms with the copper allowed for, and AN-905's simpler factor, 2 Z0 (1 − 0.48 e^(−0.96 s/h)), are shown for comparison. Type a width to get Zdiff, or the Zdiff you need to get the width at your spacing."
       )}
       ${calcFooter("")}
     `;
@@ -14981,6 +15005,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
     // The three length pickers move together.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     syncBoxes();
+    link.schedule(true);
   }
 
   paint();

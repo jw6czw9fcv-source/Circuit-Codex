@@ -396,7 +396,7 @@ const FORMULAS = [
     tool: "Edge-coupled microstrip",
     domain: "pcb",
     formulas: ["Zo = Z0 √(εeff/εeff,o) / (1 − Z0/η0 √εeff Q10)", "Zdiff = 2 Zo"],
-    note: "IPC-2141A [4-24]–[4-41], Q10 and εeff,o fitted in w/h and s/h; copper by widening w to w'. AN-905's 2 Z0 (1 − 0.48 e^(−0.96 s/h)) is the simpler estimate.",
+    note: "The tool's big result is a field solver; this IPC-2141A pair formula ([4-24]–[4-41], copper by widening w to w') is within +0.5 to +2.5 % of it in the examples. AN-905's 2 Z0 (1 − 0.48 e^(−0.96 s/h)) is the simpler estimate.",
   },
   {
     tool: "Stripline",
