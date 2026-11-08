@@ -64,6 +64,10 @@ class Grid:
         mid = (self.y[:-1] + self.y[1:]) / 2
         self.eps[(mid > y0) & (mid < y1), :] = er
 
+    def block(self, x0, x1, y0, y1, er):
+        my = (self.y[:-1] + self.y[1:]) / 2; mx = (self.x[:-1] + self.x[1:]) / 2
+        self.eps[np.ix_((my > y0) & (my < y1), (mx > x0) & (mx < x1))] = er
+
     def S(self, air=False):
         eps = np.ones_like(self.eps) if air else self.eps
         ny, nx = eps.shape; dx, dy = np.diff(self.x), np.diff(self.y)
@@ -181,21 +185,29 @@ def fit2(zs):
     return (4 * R2 - R1) / 3
 
 
-def app_microstrip(w, t, h, er, s=None, mode=None, H2=None, level=None):
+def app_microstrip(w, t, h, er, s=None, mode=None, H2=None, level=None, mask=None):
     """As fieldsolver.js microstrip(): returns (Z, eeff), extrapolated
-    over levels 0-2 unless one level is asked for."""
+    over levels 0-2 unless one level is asked for. mask = (c1, c2, er_mask):
+    a solder mask c1 thick on the board, c2 over the trace's top and sides."""
     if level is None:
-        res = [app_microstrip(w, t, h, er, s, mode, H2, L) for L in (0, 1, 2)]
+        res = [app_microstrip(w, t, h, er, s, mode, H2, L, mask) for L in (0, 1, 2)]
         return fit2([r[0] for r in res]), fit2([r[1] for r in res])
     single = not (s and s > 0); top = 80 * h
-    cover = H2 if (H2 and H2 > h) else h
+    cover = h if mask else (H2 if (H2 and H2 > h) else h)
     x0 = 0 if single else s / 2; x1 = x0 + (w / 2 if single else w); X = x1 + 80 * h
     base = min(h, w, h if single else s)
     m = max(min(base, cover - h if cover > h else h), base / 4)
-    g = Grid([0, x0, x1, X], sorted(set([0, h, h + t, cover, top])), m / 20, 10 * h, level, 1.3)
+    xb, yb = [0, x0, x1, X], [0, h, h + t, cover, top]
+    if mask:
+        c1, c2, erm = mask; wl = 0 if single else max(0, x0 - c2); wr = x1 + c2
+        xb += [wl, wr]; yb += [h + c1, h + t + c2]
+        m = max(min(m, c1 or m, c2 or m), base / 4)
+    g = Grid(sorted(set(xb)), sorted(set(yb)), m / 20, 10 * h, level, 1.3)
     g.row(0); g.row(top); g.col(X)
     if not single and mode == "odd": g.col(0)
     g.layer(0, cover, er)
+    if mask:
+        g.block(0, X, h, h + c1, erm); g.block(wl, wr, h, h + t + c2, erm)
     g.box(x0, x1, h, h + t)
     S, Sa = g.S(), g.S(air=True)
     return ETA0 / ((2 if single else 1) * math.sqrt(S * Sa)), S / Sa

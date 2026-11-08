@@ -11460,11 +11460,14 @@ plane, or the width that gives an impedance, on one screen:
   the dielectric with its h and εr, the ground plane; w, h and t in both
   mm and mil (Pierre), the unit in use first. The trace is green when its
   width is the answer.
-- **Remembered:** the unit and the copper weight.
+- **Solder mask (pill):** "No mask" (the default) or "Solder mask", with
+  the mask on the board, on the copper and its εr; see Solder mask below.
+- **Remembered:** the unit, the copper weight, the mask pill and its unit.
 
 Examples: AN-905's three slide-rule examples (25 mil on 20 mil, the same in
 metric, the width for 93 Ω on 30 mil), 50 Ω on a 1.6 mm two-layer board
-and on the 0.2 mm prepreg of a four-layer board.
+and on the 0.2 mm prepreg of a four-layer board, and the same under solder
+mask (the examples without one set "No mask").
 
 ### Terms
 
@@ -11592,14 +11595,38 @@ for a paper-thin trace it is within 0.2 % of the solver's (four of the
 cases computed again at t = 0). The delay the tool gives therefore comes
 from the solver's εeff.
 
+### Solder mask
+
+The "Solder mask" pill coats the board and the trace with a solder mask of
+its own εr, as on almost every outer layer: c1 thick on the bare board,
+c2 over the copper's top and sides (a conformal coat; mask thins over
+copper, so c2 is usually less than c1), each with its own picker (µm or
+mil, moving together). The solver puts the mask's εr in those cells and
+solves as before; a second solve without the mask gives the row "Without
+the mask"; the formula rows, which know no mask, say "no mask".
+
+- **Defaults:** Sanwa Chemical's SPSR-950 C-20 LPI mask (Florida CirTech
+  technical bulletin, revision 072511, read): "a dried thickness of 15-20
+  microns"; dielectric constant at 1 MHz 2.8 as received and 3.5 after
+  96 hours at 55 °C and 95 % RH. The tool takes 20 µm on the board, 15 µm
+  over the copper and εr 3.5, the sheet's damp value; the sheet gives one
+  thickness only, so enter the board maker's c1 and c2 for a real board.
+  (Taiyo's PSR-4000 sheet, the most common mask, could not be opened.)
+- **Checked:** a mask of εr 1 gives the bare trace's impedance (49.955
+  against 49.963 Ω, 0.36 mm on 0.2 mm, 1 oz); a mask of the board's εr,
+  c1 = c2 + t, makes a uniform cover and gives Embedded microstrip's
+  solver value to 0.001 % (46.865 Ω, cover to h + 64.8 µm).
+- **What it does:** on 0.36 mm over 0.2 mm FR-4 the default mask lowers Z0
+  2.7 %, so 50 Ω needs 0.342 mm instead of 0.36; on 3 mm over 1.6 mm,
+  0.5 %. A pair is hit harder (Edge-coupled microstrip).
+
 ### Assumptions and limits
 
 - **Quasi-static field solution:** dispersion, losses and copper roughness
   are left out; the trace is a rectangle. The board maker's stack-up
   calculation decides.
-- **One dielectric, no solder mask:** a solder mask over the trace lowers
-  Z0 by a few ohms; that is [Embedded microstrip](#embedded-microstrip)'s
-  case.
+- **The mask's shape:** a uniform coat c1 on the board and c2 around the
+  trace; real mask is thicker in the corners at the trace's foot.
 - **εr changes with frequency and between laminates:** FR-4's 4.3 is a
   nominal figure; use the maker's value at your frequency.
 - **No losses:** the copper's resistance and the dielectric's loss are
@@ -11607,7 +11634,7 @@ from the solver's εeff.
 
 ### How it was checked
 
-10 cases, the expected values from tools/fd_lines.py's app_microstrip:
+13 cases, the expected values from tools/fd_lines.py's app_microstrip:
 - AN-905's 25 mil on 20 mil, εr 4.3, 1 oz: 62.3 Ω (62.27); Wadell 62.4 Ω
   (+0.2 %), IPC-2141 62.7 Ω (+0.7 %), its slide rule 63 Ω; 149 ps/in;
 - the same in metric, 1.27 mm on 1.02 mm: 63.2 Ω (IPC-2141 64 Ω, its slide
@@ -11623,7 +11650,11 @@ from the solver's εeff.
 - the length pickers move together;
 - PTFE sets εr to 2.4;
 - MT-094's 20 mil on 10 mil at εr 4.0: 48.9 Ω (48.93), its IPC-2141A
-  eq. 3 46.2 Ω (its "about 46 Ω").
+  eq. 3 46.2 Ω (its "about 46 Ω");
+- 50 Ω under the default mask on 0.2 mm, 1 oz: 0.342 mm (0.34169), 51.4 Ω
+  without the mask (+2.8 %);
+- the default trace under the mask: 50.4 Ω (50.421), 50.7 Ω without it;
+- a mask εr under 1 is refused.
 
 The first version used AN-905's (IPC-2141's) formula; Pierre chose
 Wadell's equations once his copy of Peterson's slides showed both; since
@@ -12783,7 +12814,9 @@ over a ground plane, or the trace width that gives it at a spacing:
 - **Drawing:** the pair on the dielectric over the ground plane, w and s
   as a chain dimension, h and εr, in mm and mil. The traces are green when
   their width is the answer.
-- **Remembered:** the unit and the copper weight.
+- **Solder mask (pill):** as in Microstrip; with it, a fourth solve, the
+  pair without the mask, and the formula rows say "no mask".
+- **Remembered:** the unit, the copper weight, the mask pill and its unit.
 
 Examples: AN-905's two slide-rule examples, USB's 90 Ω and Ethernet's or
 LVDS's 100 Ω on a 0.2 mm layer.
@@ -12897,11 +12930,20 @@ copper's thickness makes each trace act wider (w', as in Microstrip) and so the 
 exponential in s/h. The width for a Zdiff starts from IPC-2141A's, the
 spacing kept, then the solver's answer corrects it.
 
+### Solder mask
+
+As in Microstrip (its section has the mask's model, defaults and source).
+On a pair the mask fills part of the gap between the traces, where the
+odd mode's field is strongest, so it lowers Zdiff more than one trace's
+Z0: 0.15 mm traces 0.15 mm apart on 0.2 mm FR-4 read 114.4 Ω bare and
+107.0 Ω under the default mask (−6.5 %); USB's 90 Ω on 0.2 mm, 0.2 mm
+apart, needs 0.287 mm under the mask instead of 0.315 mm.
+
 ### Assumptions and limits
 
 - **Quasi-static field solution:** the traces rectangles, no losses; the
   board maker's calculation decides for a controlled-impedance board.
-- **Equal traces, edge-coupled, no solder mask.**
+- **Equal traces, edge-coupled;** the mask, when used, a uniform coat.
 - **IPC's pair formula with copper:** the w' widening and narrower gap are
   the tool's, checked against the field solver, not IPC's.
 - **AN-905's row:** its factor was fitted with AN-905's own Z0 (the older
@@ -12911,7 +12953,7 @@ spacing kept, then the solver's answer corrects it.
 
 ### How it was checked
 
-8 cases, the expected values from tools/fd_lines.py's app_microstrip:
+10 cases, the expected values from tools/fd_lines.py's app_microstrip:
 - AN-905's 75 Ω traces (75 Ω by Wadell's equations, 74.8 Ω by the
   solver) 1 mm apart on 0.76 mm: 132 Ω (131.72), coupling 0.881; IPC-2141A
   132 Ω (+0.5 %), AN-905 130 Ω (−1.6 %; its slide rule 128 Ω); even mode
@@ -12922,6 +12964,10 @@ spacing kept, then the solver's answer corrects it.
 - 100 Ω on the same layer: 0.251 mm (0.25055), 50 Ω odd mode;
 - the default pair: 114 Ω (114.40); IPC-2141A 117 Ω (+2.5 %), AN-905
   116 Ω (+1.7 %); common mode 45.8 Ω;
+- USB 90 Ω under the default mask: 0.287 mm (0.28684), 94.1 Ω without
+  it (+4.5 %);
+- the default pair under the mask: 107 Ω (106.958), 114 Ω without it
+  (+7.0 %), IPC-2141A (no mask) 117 Ω;
 - a spacing beyond 3 h is flagged;
 - a gap the copper closes is refused;
 - the three length pickers move together.

@@ -13562,17 +13562,33 @@ function ipcCoupledMicrostripOdd(w, s, h, t, er) {
 }
 const MS_MATERIALS = { fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4], custom: ["Custom", null] };
 
+// A solder mask over a surface trace (Microstrip, Edge-coupled microstrip):
+// c1 thick on the bare board, c2 over the copper's top and sides, its own
+// εr (a conformal coat). Defaults from Sanwa's SPSR-950 C-20 LPI
+// sheet (Florida CirTech, rev. 072511, read): "a dried thickness of 15-20
+// microns", εr 2.8 as received and 3.5 after 96 h at 55 °C, 95 % RH, at
+// 1 MHz; the tool takes 20 µm on the board, 15 µm over the copper, εr 3.5.
+const MASK_MODES = { none: "No mask", mask: "Solder mask" };
+const MASK_UNITS = { "µm": 1e-6, mil: 25.4e-6 };
+const MASK_DEFAULT = { c1: 20e-6, c2: 15e-6, erm: 3.5 };
+const maskProblem = (s) => (!(s.c1 >= 0) || !(s.c2 >= 0) ? "Enter the mask's thicknesses, zero or more." : !(s.erm >= 1) ? "Enter the mask's dielectric constant, 1 or more." : "");
+// The mask in the solver's terms (mm), or nothing.
+const maskParam = (on, s) => (on ? { mask: { c1: +(s.c1 * 1e3).toPrecision(10), c2: +(s.c2 * 1e3).toPrecision(10), er: s.erm } } : {});
+
 function renderMicrostrip(domain, tool, favId) {
   const C = "microstrip";
   const state = {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     oz: pref(C, "oz", 1, TRACE_OZ),
+    mask: pref(C, "mask", "none", Object.keys(MASK_MODES)),
+    mUnit: pref(C, "mUnit", "µm", Object.keys(MASK_UNITS)),
     mat: "fr4",
-    si: { w: 3e-3, h: 1.6e-3, er: 4.3 },
+    si: { w: 3e-3, h: 1.6e-3, er: 4.3, ...MASK_DEFAULT },
     // An impedance typed in its box: the width is set to give it.
     target: null,
   };
   const t = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
+  const masked = () => state.mask === "mask";
   // Wadell's Z0 at a width.
   const zAt = (w) => wadellMicrostripZ(w, state.si.h, t(), state.si.er);
   const zIpc = () => ipcMicrostripZ(state.si.w, state.si.h, t(), state.si.er);
@@ -13596,6 +13612,7 @@ function renderMicrostrip(domain, tool, favId) {
     const s = state.si;
     if (!(s.h > 0)) return "Enter the dielectric's thickness.";
     if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (masked() && maskProblem(s)) return maskProblem(s);
     if (state.target !== null) {
       if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
       if (!(wFor(state.target) > 0)) return "No width between 0.0001 and 100 times the dielectric gives that impedance.";
@@ -13607,8 +13624,9 @@ function renderMicrostrip(domain, tool, favId) {
 
   const mm = (v) => +(v * 1e3).toPrecision(10);
   const link = solverLink({
-    kind: "microstrip", modes: [undefined], factor: 1,
-    params: (w) => ({ w: mm(w), t: mm(t()), h: mm(state.si.h), er: state.si.er }),
+    // With a mask, a second solve without it, for comparison.
+    kind: "microstrip", modes: [undefined, "bare"], factor: 1,
+    params: (w, mode) => ({ w: mm(w), t: mm(t()), h: mm(state.si.h), er: state.si.er, ...maskParam(masked() && mode !== "bare", state.si) }),
     estimate: zAt, estimateWidth: wFor,
     width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
     problem, show,
@@ -13627,17 +13645,20 @@ function renderMicrostrip(domain, tool, favId) {
     const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
     const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${Number((v * 1e3).toPrecision(3))} mm` : `${Number((v * 1e3).toPrecision(3))} mm · ${mil(v)}`);
     const tLabel = state.lUnit === "mil" ? `${mil(t())} · ${Math.round(t() * 1e6)} µm` : `${Math.round(t() * 1e6)} µm · ${mil(t())}`;
+    // The mask: a dashed line over the board and around the trace.
+    const maskPath = masked() ? `<path d="M40 49 H112 V41 H178 V49 H250" stroke="${grey}" stroke-width="1.2" stroke-dasharray="3 2"/>` : "";
     return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
       <rect x="40" y="52" width="210" height="38" stroke="${wire}" stroke-width="1.4"/>
+      ${maskPath}
       <rect x="40" y="90" width="210" height="6" fill="${part}" fill-opacity="0.8"/>
       <rect x="115" y="44" width="60" height="8" fill="${tone}"/>
       <path d="M115 28 V40 M175 28 V40 M115 33 H175" stroke="${tone}" stroke-width="1.2"/>
       ${lbl(145, 24, ok ? `w ${both(s.w)}` : "w", tone)}
       <path d="M30 52 V90 M26 52 H34 M26 90 H34" stroke="${wire}" stroke-width="1.2"/>
       ${lbl(48, 75, `h ${both(s.h)}`, grey, "start")}
-      ${lbl(181, 48, `t ${tLabel}`, grey, "start")}
+      ${lbl(181, masked() ? 38 : 48, `t ${tLabel}`, grey, "start")}
       ${lbl(242, 75, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
-      ${lbl(145, 108, "ground plane", part)}
+      ${lbl(145, 108, masked() ? `ground plane · mask εr ${Number(s.erm.toPrecision(3))}` : "ground plane", part)}
     </svg>`;
   }
 
@@ -13654,6 +13675,7 @@ function renderMicrostrip(domain, tool, favId) {
     const ratio = s.w / s.h;
     const cmp = (zc) => { const d = (zc / z - 1) * 100; return zc > 0 ? `${Number(zc.toPrecision(3))} Ω (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : "none"; };
     const ipcText = cmp(zIpc());
+    const bare = link.sol && link.sol.res[1];
     const main = state.target !== null
       ? `<div class="result-field">
           <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω</span>${solverBadge(link)}</div>
@@ -13667,8 +13689,9 @@ function renderMicrostrip(domain, tool, favId) {
         </div>`;
     return `${main}
         <div class="field notation-box">
-          ${row("Wadell's equations, for comparison", cmp(zAt(s.w)), "wadell")}
-          ${row("Older IPC formula, for comparison", ratio <= 2 ? ipcText : warn(`${ipcText}, outside its w ≤ 2h`), "ipc")}
+          ${masked() ? row("Without the mask", bare ? cmp(bare.z) : "…", "bare") : ""}
+          ${row(masked() ? "Wadell's equations, no mask" : "Wadell's equations, for comparison", cmp(zAt(s.w)), "wadell")}
+          ${row(masked() ? "Older IPC formula, no mask" : "Older IPC formula, for comparison", ratio <= 2 ? ipcText : warn(`${ipcText}, outside its w ≤ 2h`), "ipc")}
           ${row("Effective εr", Number(ee.toPrecision(3)), "eeff")}
           ${row("Delay", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
@@ -13698,8 +13721,8 @@ function renderMicrostrip(domain, tool, favId) {
   }
 
   const example = (si, extra, target) => () => {
-    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
-    Object.assign(state.si, si);
+    Object.assign(state, { mat: "custom", target: target ?? null, mask: "none" }, extra);
+    Object.assign(state.si, MASK_DEFAULT, si);
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
     paint();
@@ -13716,6 +13739,8 @@ function renderMicrostrip(domain, tool, favId) {
       apply: example({ h: 1.6e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
     { title: "50 Ω on a 0.2 mm layer", note: "The thin prepreg of a four-layer board, εr 4.3, 1 oz: 0.36 mm; IPC-2141 says 47.7 Ω.",
       apply: example({ h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
+    { title: "50 Ω under solder mask", note: "The same layer under LPI mask (20 µm, 15 µm on the copper, εr 3.5): 0.342 mm.",
+      apply: example({ h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1, mask: "mask", mUnit: "µm" }, 50) },
   ]);
 
   function paint() {
@@ -13734,10 +13759,13 @@ function renderMicrostrip(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "The impedance of a PCB trace over a ground plane")}
 
+      ${pillRow(Object.entries(MASK_MODES), state.mask, domain.bg)}
+
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${field("w", "Trace width", sel('data-lunit="1"', MS_LEN_UNITS, state.lUnit), fmt(s.w / MS_LEN_UNITS[state.lUnit]))}${field("h", "Dielectric, h", sel('data-lunit="2"', MS_LEN_UNITS, state.lUnit), fmt(s.h / MS_LEN_UNITS[state.lUnit]))}<div class="field"><label>Copper</label>${ozSel}</div></div>
       <div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Impedance", fixed("Ω"), "")}</div>
+      ${masked() ? `<div class="field-pair">${field("c1", "Mask on board", sel('data-munit="1"', MASK_UNITS, state.mUnit), fmt(s.c1 / MASK_UNITS[state.mUnit]))}${field("c2", "Mask on copper", sel('data-munit="2"', MASK_UNITS, state.mUnit), fmt(s.c2 / MASK_UNITS[state.mUnit]))}${field("erm", "Mask εr", fixed(""), fmt(s.erm))}</div>` : ""}
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -13758,6 +13786,8 @@ function renderMicrostrip(domain, tool, favId) {
         if (key === "z") state.target = v;
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "h") state.si.h = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "c1" || key === "c2") state.si[key] = v * MASK_UNITS[state.mUnit];
+        else if (key === "erm") state.si.erm = v;
         else if (key === "er") {
           state.si.er = v;
           const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
@@ -13775,8 +13805,12 @@ function renderMicrostrip(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The two length pickers move together.
+    // The two length pickers move together; the mask's two have their own.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelectorAll("select[data-munit]").forEach((el) => { el.onchange = (e) => { state.mUnit = e.target.value; setPref(C, "mUnit", state.mUnit); paint(); }; });
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mask = btn.dataset.pill; setPref(C, "mask", state.mask); paint(); };
+    });
     syncBoxes();
     link.schedule(true);
   }
@@ -15414,13 +15448,16 @@ function renderDiffMicrostrip(domain, tool, favId) {
   const state = {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     oz: pref(C, "oz", 1, TRACE_OZ),
+    mask: pref(C, "mask", "none", Object.keys(MASK_MODES)),
+    mUnit: pref(C, "mUnit", "µm", Object.keys(MASK_UNITS)),
     mat: "fr4",
-    si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, er: 4.3 },
+    si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, er: 4.3, ...MASK_DEFAULT },
     // A differential impedance typed in its box: the width is set to give
     // it, the spacing kept.
     target: null,
   };
   const t = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
+  const masked = () => state.mask === "mask";
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   // AN-905's coupling factor, now the comparison.
@@ -15442,6 +15479,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
     if (!(s.h > 0)) return "Enter the dielectric's thickness.";
     if (!(s.s > 0)) return "Enter the spacing between the traces.";
     if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (masked() && maskProblem(s)) return maskProblem(s);
     if (state.target !== null) {
       if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
       if (!(solve(zDiffAt, state.target) > 0)) return "No width between 0.0001 and 100 times the dielectric gives that impedance.";
@@ -15451,13 +15489,14 @@ function renderDiffMicrostrip(domain, tool, favId) {
     return "";
   }
 
-  // Three solves: the pair's odd mode (Zdiff), one trace alone, the even mode.
+  // Three solves: the pair's odd mode (Zdiff), one trace alone, the even
+  // mode; with a mask, a fourth: the odd mode without it.
   const mm = (v) => +(v * 1e3).toPrecision(10);
   const link = solverLink({
-    kind: "microstrip", modes: ["odd", "single", "even"], factor: 2,
+    kind: "microstrip", modes: ["odd", "single", "even", "bare"], factor: 2,
     params: (w, mode) => {
-      const q = state.si, p = { w: mm(w), t: mm(t()), h: mm(q.h), er: q.er };
-      return mode === "single" ? p : Object.assign(p, { s: mm(q.s), mode });
+      const q = state.si, p = { w: mm(w), t: mm(t()), h: mm(q.h), er: q.er, ...maskParam(masked() && mode !== "bare", q) };
+      return mode === "single" ? p : Object.assign(p, { s: mm(q.s), mode: mode === "bare" ? "odd" : mode });
     },
     estimate: zDiffAt, estimateWidth: (z) => solve(zDiffAt, z),
     width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
@@ -15476,18 +15515,21 @@ function renderDiffMicrostrip(domain, tool, favId) {
     const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
     const mm = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
     const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mm(v)}` : `${mm(v)} · ${mil(v)}`);
+    // The mask: a dashed line over the board and around the traces.
+    const maskPath = masked() ? `<path d="M40 53 H98 V45 H148 V53 H174 V45 H224 V53 H282" stroke="${grey}" stroke-width="1.2" stroke-dasharray="3 2"/>` : "";
     return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
       <rect x="40" y="56" width="242" height="34" stroke="${wire}" stroke-width="1.4"/>
+      ${maskPath}
       <rect x="40" y="90" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
       <rect x="101" y="48" width="44" height="8" fill="${tone}"/><rect x="177" y="48" width="44" height="8" fill="${tone}"/>
       <path d="M101 35 V45 M145 35 V45 M101 40 H145" stroke="${tone}" stroke-width="1.2"/>
       <path d="M177 35 V45 M145 40 H177" stroke="${wire}" stroke-width="1.2"/>
       ${lbl(123, 30, ok ? `w ${both(s.w)}` : "w", tone)}
-      ${lbl(183, 44, `s ${both(s.s)}`, grey, "start")}
+      ${lbl(183, masked() ? 34 : 44, `s ${both(s.s)}`, grey, "start")}
       <path d="M30 56 V90 M26 56 H34 M26 90 H34" stroke="${wire}" stroke-width="1.2"/>
       ${lbl(46, 77, `h ${both(s.h)}`, grey, "start")}
       ${lbl(276, 77, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
-      ${lbl(161, 108, "ground plane", part)}
+      ${lbl(161, 108, masked() ? `ground plane · mask εr ${Number(s.erm.toPrecision(3))}` : "ground plane", part)}
     </svg>`;
   }
 
@@ -15501,6 +15543,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
     const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
     const cmp = (zc) => { const d = (zc / zd - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const anText = cmp(2 * zSingle(s.w) * k());
+    const bare = got(3);
     const main = state.target !== null
       ? `<div class="result-field">
           <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span>${solverBadge(link)}</div>
@@ -15517,8 +15560,9 @@ function renderDiffMicrostrip(domain, tool, favId) {
           ${row("Odd mode, each trace in the pair", ohm(zd / 2), "odd")}
           ${row("Even mode, common mode", even ? `${ohm(even.z)}, ${ohm(even.z / 2)}` : "…", "even")}
           ${row("Single trace, alone", ohm(z1), "single")}
-          ${row("IPC-2141A, for comparison", cmp(zDiffAt(s.w)), "ipc")}
-          ${row("AN-905, for comparison", anText, "an")}
+          ${masked() ? row("Without the mask", bare ? cmp(2 * bare.z) : "…", "bare") : ""}
+          ${row(masked() ? "IPC-2141A, no mask" : "IPC-2141A, for comparison", cmp(zDiffAt(s.w)), "ipc")}
+          ${row(masked() ? "AN-905, no mask" : "AN-905, for comparison", anText, "an")}
           ${row("s/h, AN-905's range", ratio >= 0.2 && ratio <= 3 ? `${Number(ratio.toPrecision(3))}, within 0.2 to 3 (±10 %)` : warn(`${Number(ratio.toPrecision(3))}, outside 0.2 to 3`), "range")}
         </div>`;
   }
@@ -15550,8 +15594,8 @@ function renderDiffMicrostrip(domain, tool, favId) {
   // single: a width giving that Z0 for one trace, as AN-905's examples
   // start from the trace's impedance.
   const example = (si, extra, target, single) => () => {
-    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
-    Object.assign(state.si, si);
+    Object.assign(state, { mat: "custom", target: target ?? null, mask: "none" }, extra);
+    Object.assign(state.si, MASK_DEFAULT, si);
     if (single) state.si.w = solve(zSingle, single);
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
@@ -15567,6 +15611,8 @@ function renderDiffMicrostrip(domain, tool, favId) {
       apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 90) },
     { title: "Ethernet or LVDS, 100 Ω", note: "The same layer and spacing: 0.251 mm traces, 50 Ω each in the pair.",
       apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 100) },
+    { title: "USB, 90 Ω under solder mask", note: "The same layer under LPI mask (20 µm, 15 µm on the copper, εr 3.5): 0.287 mm.",
+      apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1, mask: "mask", mUnit: "µm" }, 90) },
   ]);
 
   function paint() {
@@ -15586,10 +15632,13 @@ function renderDiffMicrostrip(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "The impedance of a pair of traces over a ground plane")}
 
+      ${pillRow(Object.entries(MASK_MODES), state.mask, domain.bg)}
+
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Spacing, s", 2)}${lf("h", "Dielectric, h", 3)}</div>
       <div class="field-pair"><div class="field"><label>Copper</label>${ozSel}</div><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
+      ${masked() ? `<div class="field-pair">${field("c1", "Mask on board", sel('data-munit="1"', MASK_UNITS, state.mUnit), fmt(s.c1 / MASK_UNITS[state.mUnit]))}${field("c2", "Mask on copper", sel('data-munit="2"', MASK_UNITS, state.mUnit), fmt(s.c2 / MASK_UNITS[state.mUnit]))}${field("erm", "Mask εr", fixed(""), fmt(s.erm))}</div>` : ""}
       <div class="field-pair">${field("z", "Differential impedance", fixed("Ω"), "")}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
@@ -15611,6 +15660,8 @@ function renderDiffMicrostrip(domain, tool, favId) {
         if (key === "z") state.target = v;
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "s" || key === "h") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "c1" || key === "c2") state.si[key] = v * MASK_UNITS[state.mUnit];
+        else if (key === "erm") state.si.erm = v;
         else if (key === "er") {
           state.si.er = v;
           const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
@@ -15627,8 +15678,12 @@ function renderDiffMicrostrip(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The three length pickers move together.
+    // The three length pickers move together; the mask's two have their own.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelectorAll("select[data-munit]").forEach((el) => { el.onchange = (e) => { state.mUnit = e.target.value; setPref(C, "mUnit", state.mUnit); paint(); }; });
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mask = btn.dataset.pill; setPref(C, "mask", state.mask); paint(); };
+    });
     syncBoxes();
     link.schedule(true);
   }

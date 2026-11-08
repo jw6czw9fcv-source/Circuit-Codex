@@ -59,6 +59,14 @@
         if (yc > y0 && yc < y1) for (let i = 0; i < nx; i++) eps[j * nx + i] = er;
       }
     }
+    // Rectangles of dielectric over the layers (a solder mask's coat).
+    for (const [x0, x1, y0, y1, er] of spec.blocks || []) {
+      for (let j = 0; j < ny; j++) {
+        const yc = (ys[j] + ys[j + 1]) / 2;
+        if (!(yc > y0 && yc < y1)) continue;
+        for (let i = 0; i < nx; i++) { const xc = (xs[i] + xs[i + 1]) / 2; if (xc > x0 && xc < x1) eps[j * nx + i] = er; }
+      }
+    }
     for (const y of spec.rows || []) { const j = indexOf(ys, y); for (let i = 0; i < nx1; i++) { fixed[j * nx1 + i] = 1; val[j * nx1 + i] = 0; } }
     for (const x of spec.cols || []) { const i = indexOf(xs, x); for (let j = 0; j < ny1; j++) { fixed[j * nx1 + i] = 1; val[j * nx1 + i] = 0; } }
     const box = ([x0, x1, y0, y1], v) => {
@@ -260,16 +268,26 @@
   // On h of substrate over a plane, air above (a far grounded box, 80 h): a
   // single trace or an edge-coupled pair, optionally covered by the same
   // dielectric up to H2 above the plane.
-  function microstrip({ w, t, h, er, s, mode, H2 }) {
+  // mask {c1, c2, er}: a solder mask's coat, c1 thick on the bare board and
+  // c2 over the trace's top and sides, its own εr (a conformal coat); it
+  // replaces a cover H2.
+  function microstrip({ w, t, h, er, s, mode, H2, mask }) {
     const single = !(s > 0), top = 80 * h;
-    const cover = H2 > h ? H2 : h;
+    const cover = mask ? h : H2 > h ? H2 : h;
     const x0 = single ? 0 : s / 2, x1 = x0 + (single ? w / 2 : w), X = x1 + 80 * h;
     const base = Math.min(h, w, single ? h : s);
-    const m = Math.max(Math.min(base, cover > h ? cover - h : h), base / 4);
+    let m = Math.max(Math.min(base, cover > h ? cover - h : h), base / 4);
+    const xb = [0, x0, x1, X], yb = [0, h, h + t, cover, top], blocks = [];
+    if (mask) {
+      const { c1, c2 } = mask, wl = single ? 0 : Math.max(0, x0 - c2), wr = x1 + c2;
+      xb.push(wl, wr); yb.push(h + c1, h + t + c2);
+      blocks.push([0, X, h, h + c1, mask.er], [wl, wr, h, h + t + c2, mask.er]);
+      m = Math.max(Math.min(m, c1 || m, c2 || m), base / 4);
+    }
     return {
-      xb: [0, x0, x1, X], yb: [0, h, h + t, cover, top], h0: m / 20, hmax: 10 * h, grow: 1.3,
+      xb, yb, h0: m / 20, hmax: 10 * h, grow: 1.3,
       rows: [0, top], cols: single || mode !== "odd" ? [X] : [X, 0], signals: [[x0, x1, h, h + t]],
-      layers: [[0, cover, er]], layered: true, factor: single ? 2 : 1,
+      layers: [[0, cover, er]], blocks, layered: true, factor: single ? 2 : 1,
     };
   }
 
