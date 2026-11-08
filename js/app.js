@@ -14133,8 +14133,8 @@ function renderDualStripline(domain, tool, favId) {
   // The dual-stripline formulas, the trace seen as one of two signal layers
   // between the planes: H the dielectric on the nearer plane's side, C the
   // room the other layer leaves on the far side, far side − t − H. The
-  // older one, as "Printed Circuit Board Design Techniques for EMC
-  // Compliance", 2nd ed., prints it (§4.2.4, eq. 4.10, Pierre's PDF p117)
+  // older one, as Montrose's "Printed Circuit Board Design Techniques for
+  // EMC Compliance", 2nd ed., prints it (§4.2.4, eq. 4.10, Pierre's PDF p117)
   // and other calculators still use it: 80/√εr ln(1.9(2H + T)/(0.8W + T))
   // (1 − H/(4(H + C + T))). IPC-2251's (4th working draft, February 2001,
   // as LearnEMC's calculator publishes it): the mean of two centred
