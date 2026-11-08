@@ -16749,7 +16749,7 @@ function renderCrosstalk(domain, tool, favId) {
     cUnit: pref(C, "cUnit", "mm", Object.keys(XT_LEN_UNITS)),
     rUnit: pref(C, "rUnit", "ps", Object.keys(XT_TR_UNITS)),
     mat: "fr4",
-    si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12 },
+    si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12, vs: 3.3 },
   };
   const micro = () => state.mode === "micro";
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
@@ -16757,6 +16757,8 @@ function renderCrosstalk(domain, tool, favId) {
   const cLen = (v, d = 3) => `${Number((v / XT_LEN_UNITS[state.cUnit]).toPrecision(d))} ${state.cUnit}`;
   const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
   const pct = (v) => `${v < 0 ? "−" : ""}${Number(Math.abs(v * 100).toPrecision(3))} %`;
+  // A voltage on the victim, the share times the aggressor's swing.
+  const volt = (v) => `${v < 0 ? "−" : ""}${siFormat(Math.abs(v), "V", 3)}`;
   const ps = (v) => (v >= 1e-9 ? `${Number((v * 1e9).toPrecision(3))} ns` : `${Number((v * 1e12).toPrecision(3))} ps`);
 
   function problem() {
@@ -16769,6 +16771,7 @@ function renderCrosstalk(domain, tool, favId) {
     if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
     if (!(s.len > 0)) return "Enter the length the traces run side by side.";
     if (!(s.tr > 0)) return "Enter the rise time.";
+    if (!(s.vs > 0)) return "Enter the aggressor's voltage swing.";
     return "";
   }
 
@@ -16797,7 +16800,7 @@ function renderCrosstalk(domain, tool, favId) {
       next: l / (4 * T) * (Lm / zeta + zeta * Cm) * Math.min(1, 2 * T / tr),
       fext: -l / (2 * tr) * (Lm / zeta - zeta * Cm),
       lsat: tr * v / 2, zeta, ze: e.z, zo: o.z, kl: Lm / L11, kc: Cm / C11,
-      skew: Math.abs(l / ve - l / vo),
+      skew: Math.abs(l / ve - l / vo), tdelay: T,
     };
   }
 
@@ -16851,13 +16854,14 @@ function renderCrosstalk(domain, tool, favId) {
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const wait = "…";
     const sat = k && s.len >= k.lsat;
-    const fext = !k ? wait : !micro() ? "0: both modes at one speed" : k.skew >= s.tr ? warn(`${pct(k.fext)}, an upper bound: the edges separate`) : pct(k.fext);
+    const fext = !k ? wait : !micro() ? "0: both modes at one speed" : k.skew >= s.tr ? warn(`${pct(k.fext)}, ${volt(k.fext * s.vs)}, an upper bound`) : `${pct(k.fext)}, ${volt(k.fext * s.vs)}`;
     return `<div class="result-field">
           <div class="result-head"><span class="label">Near-end crosstalk (NEXT)</span>${solverBadge(link())}</div>
           <div class="result-value"><span class="num" data-res="big">${k ? pct(k.next) : wait}</span></div>
           <div class="result-sub" data-res="sub">${k ? (sat ? `saturated: longer than ${cLen(k.lsat)}` : `below saturation, reached at ${cLen(k.lsat)}`) : "of the aggressor's step, on the victim"}</div>
         </div>
         <div class="field notation-box">
+          ${row("Near end, on the victim", k ? `${volt(k.next * s.vs)}, for ${ps(2 * k.tdelay)}` : wait, "vnext")}
           ${row("Far-end crosstalk (FEXT)", fext, "fext")}
           ${row("Even mode, odd mode", k ? `${ohm(k.ze)}, ${ohm(k.zo)}` : wait, "modes")}
           ${row("Each trace's impedance", k ? ohm(k.zeta) : wait, "zeta")}
@@ -16914,14 +16918,14 @@ function renderCrosstalk(domain, tool, favId) {
 
       <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Spacing, s", 2)}${micro() ? lf("h", "Dielectric, h", 3) : lf("b", "Planes apart, b", 3)}</div>
       <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
-      <div class="field-pair">${field("len", "Side by side for", sel('data-cunit="1"', XT_LEN_UNITS, state.cUnit), fmt(s.len / XT_LEN_UNITS[state.cUnit]))}${field("tr", "Rise time", sel('data-runit="1"', XT_TR_UNITS, state.rUnit), fmt(s.tr / XT_TR_UNITS[state.rUnit]))}</div>
+      <div class="field-pair">${field("len", "Side by side for", sel('data-cunit="1"', XT_LEN_UNITS, state.cUnit), fmt(s.len / XT_LEN_UNITS[state.cUnit]))}${field("tr", "Rise time", sel('data-runit="1"', XT_TR_UNITS, state.rUnit), fmt(s.tr / XT_TR_UNITS[state.rUnit]))}${field("vs", "Aggressor swing", fixed("V"), fmt(s.vs))}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
         ["NEXT = ¼ (Lm/L + Cm/C) × min(1, 2T/tr)", "FEXT = −(l / 2tr) (Lm/ζ − ζ Cm)", "T = l √(L C),   ζ = √(L / C)", "L, Lm, C, Cm from the even and odd modes"],
-        "Crosstalk is the signal one trace (the aggressor) induces on its neighbour (the victim) through their mutual capacitance Cm and mutual inductance Lm. At the victim's near end, next to the aggressor's driver, it appears as a plateau (NEXT) that grows with the coupled length until the round trip 2T reaches the rise time tr, then saturates; at the far end it appears as a short pulse (FEXT) that grows with the length and with faster edges. In a stripline both modes of the pair travel at one speed and the far-end terms cancel; in microstrip, where part of the field is in air, they do not, and FEXT is often the larger. The app's field solver computes the pair's even and odd modes, from which L, Lm, C and Cm follow; the coefficients are Shlepnev's (Signal Integrity Journal, 2025), for a step on matched lines without loss. Values are a share of the aggressor's step."
+        "Crosstalk is the signal one trace (the aggressor) induces on its neighbour (the victim) through their mutual capacitance Cm and mutual inductance Lm. At the victim's near end, next to the aggressor's driver, it appears as a plateau (NEXT) that grows with the coupled length until the round trip 2T reaches the rise time tr, then saturates; at the far end it appears as a short pulse (FEXT) that grows with the length and with faster edges. In a stripline both modes of the pair travel at one speed and the far-end terms cancel; in microstrip, where part of the field is in air, they do not, and FEXT is often the larger. The app's field solver computes the pair's even and odd modes, from which L, Lm, C and Cm follow; the coefficients are Shlepnev's (Signal Integrity Journal, 2025), for a step on matched lines without loss. They are a share of the aggressor's step; times its voltage swing on the line, they give the noise on the victim: a near-end plateau lasting the round trip 2T, a far-end pulse about as long as the rise time."
       )}
       ${calcFooter("")}
     `;
@@ -16939,6 +16943,7 @@ function renderCrosstalk(domain, tool, favId) {
         else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
         else if (key === "len") state.si.len = v * XT_LEN_UNITS[state.cUnit];
         else if (key === "tr") state.si.tr = v * XT_TR_UNITS[state.rUnit];
+        else if (key === "vs") state.si.vs = v;
         else if (key === "er") {
           state.si.er = v;
           const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";

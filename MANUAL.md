@@ -13474,13 +13474,17 @@ aggressor's step:
 - **Inputs:** each trace's width w, the spacing s between them, the
   dielectric h (microstrip) or the spacing between the planes b
   (stripline), the copper's thickness t, the material and εr, the length
-  the traces run side by side, and the aggressor's rise time.
+  the traces run side by side, the aggressor's rise time, and its voltage
+  swing on the line (3.3 V unless typed).
 - **The big result:** the near-end crosstalk (NEXT), with whether the
   coupled length saturates it and the saturation length.
 - **Below it:**
-  - the far-end crosstalk (FEXT), negative in microstrip (an inverted
-    pulse), zero in stripline; flagged as an upper bound when the even and
-    odd modes' edges arrive further apart than the rise time;
+  - the near-end noise on the victim, NEXT times the swing, and how long
+    the plateau lasts, the coupled length's round trip 2T;
+  - the far-end crosstalk (FEXT) and its voltage on the victim, negative
+    in microstrip (an inverted pulse about as long as the rise time), zero
+    in stripline; flagged as an upper bound when the even and odd modes'
+    edges arrive further apart than the rise time;
   - the pair's even- and odd-mode impedances, from the solver;
   - each trace's impedance with its neighbour present, ζ = √(L/C);
   - the coupling ratios Lm/L and Cm/C;
@@ -13512,6 +13516,10 @@ slow edge (below saturation), and a stripline pair (no FEXT).
   speed, as in a stripline.
 - **Even and odd modes:** the pair driven alike and driven opposite; any
   signal on one trace is half of each.
+- **Aggressor swing:** the voltage step the aggressor's driver puts on
+  the line: about the logic swing for a stiff CMOS driver, half the
+  open-circuit voltage for a driver matched to the line. The victim's
+  noise is the coefficient times it.
 - **Saturation length:** the coupled length whose round trip equals the
   rise time, tr × v / 2.
 - **3w rule:** a common rule of thumb, traces three widths apart to keep
@@ -13571,7 +13579,9 @@ against 11.52 %, 3.41 against 3.40 %).
 ### Assumptions and limits
 
 - **A step on matched, lossless lines:** the coefficients are the plateau
-  and the pulse a step gives; with losses, long lines or reflections the
+  and the pulse a step gives, the victim terminated in its impedance at
+  both ends; other terminations reflect the noise and change the
+  voltages; with losses, long lines or reflections the
   real waveform differs, and for short links the peak-to-peak crosstalk
   of a real signal can be up to twice the step's (Shlepnev).
 - **FEXT's growth:** it is linear in the length; once the even and odd
@@ -13583,13 +13593,16 @@ against 11.52 %, 3.41 against 3.40 %).
 
 ### How it was checked
 
-5 cases, the expected values from tools/fd_lines.py's modes and the
-formulas above:
+6 cases, the expected values from tools/fd_lines.py's modes and the
+formulas above, the swing 3.3 V unless said:
 - the default microstrip pair, 0.15 mm traces 0.15 mm apart on 0.2 mm
   FR-4, 1 oz, 50 mm side by side, 100 ps: NEXT 11.5 % (11.519), FEXT
   −16 % (−16.003), saturated beyond 8.73 mm, even and odd modes 91.6 and
   57.2 Ω, ζ 73.4 Ω, Lm/L 0.286 and Cm/C 0.175, the edges 32.9 ps apart;
-- the 3w rule, 0.45 mm apart: NEXT 3.4 % (3.397), FEXT −9.19 %;
+  380 mV at the near end for 573 ps, −528 mV at the far end;
+- the same with a 1.8 V aggressor: 207 mV and −288 mV;
+- the 3w rule, 0.45 mm apart: NEXT 3.4 % (3.397), 112 mV, FEXT −9.19 %,
+  −303 mV;
 - 10 mm at 1 ns: below saturation (reached at 87.3 mm), NEXT 1.32 %,
   FEXT −0.32 %;
 - the stripline pair: NEXT 8.9 % (8.915), FEXT 0;
