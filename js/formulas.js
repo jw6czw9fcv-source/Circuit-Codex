@@ -407,8 +407,8 @@ const FORMULAS = [
   {
     tool: "Crosstalk",
     domain: "pcb",
-    formulas: ["NEXT = ¼ (Lm/L + Cm/C) × min(1, 2T/tr)", "FEXT = −(l / 2tr) (Lm/ζ − ζ Cm)", "T = l √(L C),   ζ = √(L / C)"],
-    note: "Shlepnev's step coefficients (Signal Integrity Journal, 2025) for two equal traces; L, Lm, C, Cm per length from the pair's even and odd modes, by the field solver. In stripline FEXT is 0.",
+    formulas: ["NEXT = ¼ (Lm/L + Cm/C) × min(1, 2T/tr)", "FEXT = −(l / 2tr) (Lm/ζ − ζ Cm)", "T = l √(L C),   ζ = √(L / C)", "Sine: near = V_in,e − V_in,o", "far = V_end,e − V_end,o"],
+    note: "Shlepnev's step coefficients (Signal Integrity Journal, 2025) for two equal traces; L, Lm, C, Cm per length from the pair's even and odd modes, by the field solver. In stripline FEXT is 0. For a sine, each mode is solved as one line with R = ζ at both ends.",
   },
   {
     tool: "Edge-coupled embedded",

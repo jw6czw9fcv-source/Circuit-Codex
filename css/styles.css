@@ -323,6 +323,11 @@ div.tool-row { cursor: default; }
 /* One choice split over two rows of pills (PLL settings' seven chips, too
    many for one row at 375 px): the rows sit closer than two controls would. */
 .pill-stack .mode-pills:not(:last-child) { margin-bottom: 6px; }
+/* Two separate two-way choices on one line (Crosstalk's Microstrip/Stripline
+   and Step edge/Sine wave), each its own rounded group. */
+.pill-pair { display: flex; gap: 8px; margin: 0 16px 14px; }
+.pill-pair .mode-pills { flex: 1; margin: 0; }
+.pill-pair .pill { font-size: 14px; }
 
 /* Filter buttons — same look as .mode-pills/.pill (Ohm's law's VI/VR/IR
    toggle: one shared rounded container, active = domain-tinted background

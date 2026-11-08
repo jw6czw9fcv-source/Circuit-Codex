@@ -16847,7 +16847,22 @@ function renderDiffCoplanar(domain, tool, favId) {
 // time; FEXT grows with length and vanishes in stripline, where both modes
 // travel at one speed. tools/fd_lines.py with the same steps gives the
 // cases' values.
+//
+// "Sine wave" (Pierre, 2026-11-08): a sine on the aggressor instead of a
+// step. The pair splits exactly into its even and odd modes, each a single
+// line (Ze or Zo, its own speed) with a resistor R = ζ at both ends and half
+// the source; the victim is their difference. With Vg = 2 vs behind R on
+// the aggressor (vs on a matched line), per mode, θ = 2π f l / v:
+//   V_end = vs R / (2R cos θ + j sin θ (Z + R²/Z)),  V_in = V_end (cos θ + j (Z/R) sin θ)
+//   near = V_in,e − V_in,o,  far = V_end,e − V_end,o
+// Exact for lossless lines with every end in R, at any frequency and any
+// coupling. Checks: the near end peaks around the quarter wave, f = 1/(4T),
+// at twice the step's saturated NEXT (exactly in stripline: 0.17824 against
+// 2 × 0.08915); the far end, while small, is the step's FEXT times 2π f tr.
+// The scratchpad's xt_sine.py, on fd_lines.py's modes, gives the cases.
 const XT_MODES = { micro: "Microstrip", strip: "Stripline" };
+const XT_WAVES = { step: "Step edge", sine: "Sine wave" };
+const XT_F_UNITS = { MHz: 1e6, GHz: 1e9 };
 const XT_LEN_UNITS = { mm: 1e-3, cm: 1e-2, in: 0.0254 };
 const XT_TR_UNITS = { ps: 1e-12, ns: 1e-9 };
 
@@ -16860,10 +16875,15 @@ function renderCrosstalk(domain, tool, favId) {
     tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
     cUnit: pref(C, "cUnit", "mm", Object.keys(XT_LEN_UNITS)),
     rUnit: pref(C, "rUnit", "ps", Object.keys(XT_TR_UNITS)),
+    wave: pref(C, "wave", "step", Object.keys(XT_WAVES)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(XT_F_UNITS)),
     mat: "fr4",
-    si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12, vs: 3.3 },
+    si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12, vs: 3.3, f: 100e6 },
   };
   const micro = () => state.mode === "micro";
+  const sine = () => state.wave === "sine";
+  const db = (v) => (v > 0 ? `${20 * Math.log10(v) < 0 ? "−" : ""}${Math.abs(20 * Math.log10(v)).toFixed(1)} dB` : "");
+  const hz = (v) => siFormat(Number(v.toPrecision(3)), "Hz", 3);
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   const cLen = (v, d = 3) => `${Number((v / XT_LEN_UNITS[state.cUnit]).toPrecision(d))} ${state.cUnit}`;
@@ -16882,7 +16902,7 @@ function renderCrosstalk(domain, tool, favId) {
     if (!micro() && !(s.t < s.b / 2)) return "The copper must be thinner than half the spacing between the planes.";
     if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
     if (!(s.len > 0)) return "Enter the length the traces run side by side.";
-    if (!(s.tr > 0)) return "Enter the rise time.";
+    if (sine() ? !(s.f > 0) : !(s.tr > 0)) return sine() ? "Enter the frequency." : "Enter the rise time.";
     if (!(s.vs > 0)) return "Enter the aggressor's voltage swing.";
     return "";
   }
@@ -16908,17 +16928,66 @@ function renderCrosstalk(domain, tool, favId) {
     const Ce = 1 / (e.z * ve), Le = e.z / ve, Co = 1 / (o.z * vo), Lo = o.z / vo;
     const C11 = (Ce + Co) / 2, Cm = (Co - Ce) / 2, L11 = (Le + Lo) / 2, Lm = (Le - Lo) / 2;
     const zeta = Math.sqrt(L11 / C11), v = 1 / Math.sqrt(L11 * C11), T = l / v;
+    // The sine: the victim's near and far ends, a share of the aggressor's
+    // amplitude, at the frequency f (see the header).
+    const at = (f) => {
+      const end = (z, vm) => {
+        const th = 2 * Math.PI * f * l / vm, c = Math.cos(th), sn = Math.sin(th);
+        const dr = 2 * zeta * c, di = sn * (z + zeta * zeta / z), d2 = dr * dr + di * di;
+        const er = zeta * dr / d2, ei = -zeta * di / d2;   // V_end = R / (dr + j di)
+        const ar = c, ai = sn * z / zeta;                   // V_in = V_end (c + j (Z/R) s)
+        return [er * ar - ei * ai, er * ai + ei * ar, er, ei];
+      };
+      const E = end(e.z, ve), O = end(o.z, vo);
+      return { near: Math.hypot(E[0] - O[0], E[1] - O[1]), far: Math.hypot(E[2] - O[2], E[3] - O[3]) };
+    };
     return {
       next: l / (4 * T) * (Lm / zeta + zeta * Cm) * Math.min(1, 2 * T / tr),
       fext: -l / (2 * tr) * (Lm / zeta - zeta * Cm),
       lsat: tr * v / 2, zeta, ze: e.z, zo: o.z, kl: Lm / L11, kc: Cm / C11,
       skew: Math.abs(l / ve - l / vo), tdelay: T,
+      at, fq: 1 / (4 * T), ...at(state.si.f),
     };
+  }
+
+  // Sine wave: the noise at both ends against frequency, log scale, a few
+  // decades around the quarter wave and the chosen frequency; near end green,
+  // far end blue, the frequency marked.
+  function curve() {
+    const grey = "#8A9099", wire = "#5A6169", near = "#5DCAA5", far = "#8FC1F5";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    // Axes around 100 MHz while the frequency is missing.
+    const k = problem() ? null : coefficients(), ok = state.si.f > 0 && isFinite(state.si.f), f = ok ? state.si.f : 1e8;
+    const X0 = 40, X1 = 268, Y0 = 6, Y1 = 88;
+    const fq = k && k.fq > 0 && isFinite(k.fq) ? k.fq : f;
+    let d0 = Math.floor(Math.log10(Math.min(f, fq / 30))), d1 = Math.ceil(Math.log10(Math.max(f, fq * 3)));
+    if (!(d1 > d0)) d1 = d0 + 2;
+    const fx = (v) => X0 + (Math.log10(v) - d0) / (d1 - d0) * (X1 - X0);
+    const dbOf = (v) => 20 * Math.log10(Math.max(v, 1e-12));
+    const pts = k ? Array.from({ length: 241 }, (_, i) => { const v = 10 ** (d0 + (d1 - d0) * i / 240); return [v, k.at(v)]; }) : [];
+    const top = k ? Math.min(0, Math.ceil(Math.max(...pts.map(([, r]) => dbOf(r.near)), ...(micro() ? pts.map(([, r]) => dbOf(r.far)) : [-200])) / 20) * 20) : 0;
+    const bot = top - 80;
+    const fy = (d) => Y0 + (top - Math.max(bot, Math.min(top, d))) / (top - bot) * (Y1 - Y0);
+    const path = (key) => pts.map(([v, r], i) => `${i ? "L" : "M"}${fx(v).toFixed(1)} ${fy(dbOf(r[key])).toFixed(1)}`).join(" ");
+    const step = d1 - d0 > 4 ? 2 : 1;
+    let ticks = "";
+    for (let d = d0; d <= d1; d += step) ticks += `<path d="M${fx(10 ** d).toFixed(1)} ${Y0} V${Y1}" stroke="${wire}" stroke-width="0.6" stroke-dasharray="2 3"/>${lbl(fx(10 ** d).toFixed(1), 102, hz(10 ** d).replace(" ", "&#8202;"))}`;
+    for (let d = top; d >= bot; d -= 20) ticks += `<path d="M${X0} ${fy(d).toFixed(1)} H${X1}" stroke="${wire}" stroke-width="0.6" stroke-dasharray="2 3"/>${lbl(X0 - 4, fy(d) + 4, d === 0 ? "0 dB" : `−${-d}`, grey, "end")}`;
+    const xf = fx(f).toFixed(1);
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      ${ticks}
+      <rect x="${X0}" y="${Y0}" width="${X1 - X0}" height="${Y1 - Y0}" stroke="${wire}" stroke-width="1"/>
+      ${k ? `${micro() ? `<path d="${path("far")}" stroke="${far}" stroke-width="1.6"/>` : ""}<path d="${path("near")}" stroke="${near}" stroke-width="1.8"/>` : ""}
+      ${ok ? `<path d="M${xf} ${Y0} V${Y1}" stroke="${grey}" stroke-width="1.2"/>` : ""}
+      ${k ? `${micro() ? `<circle cx="${xf}" cy="${fy(dbOf(k.far)).toFixed(1)}" r="3" fill="${far}"/>` : ""}<circle cx="${xf}" cy="${fy(dbOf(k.near)).toFixed(1)}" r="3" fill="${near}"/>` : ""}
+      ${lbl(X0 + 6, Y0 + 13, "near end", near, "start")}${lbl(X0 + 6, Y0 + 27, micro() ? "far end" : "far end: none", far, "start")}
+    </svg>`;
   }
 
   // Two traces side by side, the aggressor blue and the victim green, over a
   // plane (microstrip) or between two (stripline).
   function diagram() {
+    if (sine()) return curve();
     const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
     const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
     const s = state.si;
@@ -16965,6 +17034,21 @@ function renderCrosstalk(domain, tool, favId) {
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const wait = "…";
+    if (sine()) {
+      const fs = !k ? wait : !micro() ? "0 V: the two couplings cancel" : `${volt(k.far * s.vs)} (${db(k.far)})`;
+      return `<div class="result-field">
+          <div class="result-head"><span class="label">Near-end noise on the victim</span>${solverBadge(link())}</div>
+          <div class="result-value"><span class="num" data-res="big">${k ? volt(k.near * s.vs) : wait}</span></div>
+          <div class="result-sub" data-res="sub">${k ? `${db(k.near)}, ${pct(k.near)} of the ${Number(s.vs.toPrecision(3))} V sine` : "the aggressor's sine, seen on the victim"}</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Far-end noise", fs, "far")}
+          ${row("Quarter wave at", k ? `${hz(k.fq)} (run ${Number((s.f * k.tdelay).toPrecision(3))} λ)` : wait, "fq")}
+          ${row("Even mode, odd mode", k ? `${ohm(k.ze)}, ${ohm(k.zo)}` : wait, "modes")}
+          ${row("Each trace's impedance", k ? ohm(k.zeta) : wait, "zeta")}
+          ${row("Lm/L, Cm/C", k ? `${Number(k.kl.toPrecision(3))}, ${Number(k.kc.toPrecision(3))}` : wait, "lc")}
+        </div>`;
+    }
     const sat = k && s.len >= k.lsat;
     const fext = !k ? wait : !micro() ? "0 V: the two couplings cancel" : k.skew >= s.tr ? warn(`${volt(k.fext * s.vs)} (${pct(k.fext)}), an upper bound`) : `${volt(k.fext * s.vs)} (${pct(k.fext)})`;
     return `<div class="result-field">
@@ -17001,11 +17085,13 @@ function renderCrosstalk(domain, tool, favId) {
   };
   useExamples([
     { title: "The 3w rule", note: "Microstrip, 0.15 mm traces 0.45 mm apart (3 w) on 0.2 mm, 50 mm at 100 ps: NEXT 3.4 %.",
-      apply: example({ w: 0.15e-3, s: 0.45e-3, h: 0.2e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12 }, { mode: "micro", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ps" }) },
+      apply: example({ w: 0.15e-3, s: 0.45e-3, h: 0.2e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12 }, { mode: "micro", wave: "step", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ps" }) },
     { title: "Short run, slow edge", note: "The default pair, 10 mm side by side, 1 ns rise: NEXT 1.3 %, FEXT −0.32 %.",
-      apply: example({ w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, t: OZ, er: 4.3, len: 10e-3, tr: 1e-9 }, { mode: "micro", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ns" }) },
+      apply: example({ w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, t: OZ, er: 4.3, len: 10e-3, tr: 1e-9 }, { mode: "micro", wave: "step", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ns" }) },
     { title: "Stripline: no far-end crosstalk", note: "0.15 mm traces 0.2 mm apart, planes 0.6 mm apart: NEXT 8.9 %, FEXT 0.",
-      apply: example({ w: 0.15e-3, s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12 }, { mode: "strip", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ps" }) },
+      apply: example({ w: 0.15e-3, s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12 }, { mode: "strip", wave: "step", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ps" }) },
+    { title: "A 100 MHz clock", note: "The default pair, 50 mm side by side, a 100 MHz sine: near end −27.7 dB, far end −40 dB.",
+      apply: example({ w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, t: OZ, er: 4.3, len: 50e-3, f: 100e6, vs: 3.3 }, { mode: "micro", wave: "sine", lUnit: "mm", tUnit: "oz", cUnit: "mm", fUnit: "MHz" }) },
   ]);
 
   function paint() {
@@ -17023,18 +17109,21 @@ function renderCrosstalk(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "Coupling between two traces side by side")}
 
-      ${pillRow(Object.entries(XT_MODES), state.mode, domain.bg)}
+      <div class="pill-pair">${pillRow(Object.entries(XT_MODES), state.mode, domain.bg)}${pillRow(Object.entries(XT_WAVES), state.wave, domain.bg)}</div>
 
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Spacing, s", 2)}${micro() ? lf("h", "Dielectric, h", 3) : lf("b", "Planes apart, b", 3)}</div>
       <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
-      <div class="field-pair">${field("len", "Side by side for", sel('data-cunit="1"', XT_LEN_UNITS, state.cUnit), fmt(s.len / XT_LEN_UNITS[state.cUnit]))}${field("tr", "Rise time", sel('data-runit="1"', XT_TR_UNITS, state.rUnit), fmt(s.tr / XT_TR_UNITS[state.rUnit]))}${field("vs", "Aggressor swing", fixed("V"), fmt(s.vs))}</div>
+      <div class="field-pair">${field("len", "Side by side for", sel('data-cunit="1"', XT_LEN_UNITS, state.cUnit), fmt(s.len / XT_LEN_UNITS[state.cUnit]))}${sine() ? field("f", "Frequency", sel('data-funit="1"', XT_F_UNITS, state.fUnit), fmt(s.f / XT_F_UNITS[state.fUnit])) : field("tr", "Rise time", sel('data-runit="1"', XT_TR_UNITS, state.rUnit), fmt(s.tr / XT_TR_UNITS[state.rUnit]))}${field("vs", "Aggressor swing", fixed("V"), fmt(s.vs))}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
 
-      ${formulaSection(
+      ${sine() ? formulaSection(
+        ["V_end = R / (2R cos θ + j K sin θ)", "V_in = V_end (cos θ + j (Z/R) sin θ)", "K = Z + R²/Z,   θ = 2π f l / v", "near = V_in,e − V_in,o", "far = V_end,e − V_end,o", "quarter wave: f = 1 / (4T)"],
+        "With a sine on the aggressor, the pair splits exactly into its two modes: the even mode (both traces at the same voltage) and the odd mode (opposite voltages), each an ordinary line with its own impedance Z and speed v, found by the app's field solver. Each mode is solved as one line of electrical length θ with a resistor R, the trace's impedance √(L/C), at both ends and half the source; the aggressor is the sum of the two modes, the victim their difference, at its near end (V_in) and far end (V_end). This holds for lossless lines with all four ends in R, at any frequency and coupling. The near-end noise grows with frequency up to the quarter wave, where the run is a quarter wavelength long (f = 1/(4T), T the delay along it), and peaks there at twice the step's near-end plateau; it then falls to a null at the half wave and repeats. The far-end noise grows with frequency in microstrip and is zero in stripline. The results are a share of the aggressor's amplitude, shown in volts for the swing entered and in dB (20 log of the share)."
+      ) : formulaSection(
         ["NEXT = ¼ (Lm/L + Cm/C) × min(1, 2T/tr)", "FEXT = −(l / 2tr) (Lm/ζ − ζ Cm)", "T = l √(L C),   ζ = √(L / C)", "L, Lm, C, Cm from the even and odd modes"],
         "Crosstalk is the signal one trace (the aggressor) induces on its neighbour (the victim) through their mutual capacitance Cm and mutual inductance Lm. At the victim's near end, next to the aggressor's driver, it appears as a plateau (NEXT) that grows with the coupled length until the round trip 2T reaches the rise time tr, then saturates; at the far end it appears as a short pulse (FEXT) that grows with the length and with faster edges. At the far end the capacitive and inductive couplings have opposite signs: in a stripline, one dielectric all round, they are equal (Lm/L = Cm/C) and cancel; in microstrip, where part of the field is in air, the capacitive one is weaker, they do not cancel, and FEXT is often the larger. The app's field solver computes the pair's even and odd modes, from which L, Lm, C and Cm follow; the coefficients are Shlepnev's (Signal Integrity Journal, 2025), for a step on matched lines without loss. They are a share of the aggressor's step; times its voltage swing on the line, they give the noise on the victim: a near-end plateau lasting the round trip 2T, a far-end pulse about as long as the rise time."
       )}
@@ -17044,7 +17133,12 @@ function renderCrosstalk(domain, tool, favId) {
     wireCalc(favId, paint);
 
     app.querySelectorAll(".pill").forEach((btn) => {
-      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+      btn.onclick = () => {
+        const v = btn.dataset.pill;
+        if (v in XT_WAVES) { state.wave = v; setPref(C, "wave", v); }
+        else { state.mode = v; setPref(C, "mode", v); }
+        paint();
+      };
     });
     app.querySelectorAll("input[data-key]").forEach((el) => {
       const key = el.dataset.key;
@@ -17054,6 +17148,7 @@ function renderCrosstalk(domain, tool, favId) {
         else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
         else if (key === "len") state.si.len = v * XT_LEN_UNITS[state.cUnit];
         else if (key === "tr") state.si.tr = v * XT_TR_UNITS[state.rUnit];
+        else if (key === "f") state.si.f = v * XT_F_UNITS[state.fUnit];
         else if (key === "vs") state.si.vs = v;
         else if (key === "er") {
           state.si.er = v;
@@ -17071,7 +17166,9 @@ function renderCrosstalk(domain, tool, favId) {
     };
     // Every length picker changes them all (wireLengthUnits).
     wireLengthUnits(C, state, paint);
-    app.querySelector("select[data-runit]").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
+    const ru = app.querySelector("select[data-runit]"), fu = app.querySelector("select[data-funit]");
+    if (ru) ru.onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
+    if (fu) fu.onchange = (e) => { state.fUnit = e.target.value; setPref(C, "fUnit", state.fUnit); paint(); };
     link().schedule(true);
   }
 

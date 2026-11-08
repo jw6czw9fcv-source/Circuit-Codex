@@ -13499,12 +13499,14 @@ grounds take 4 %; with none, they take 14 %.
 
 ### What it computes
 
-The crosstalk a step on one trace (the aggressor) induces on its neighbour
-(the victim), two equal traces side by side, as a share of the
-aggressor's step:
+The crosstalk a step or a sine on one trace (the aggressor) induces on
+its neighbour (the victim), two equal traces side by side, as a share of
+the aggressor's signal:
 
-- **Two pills:** Microstrip (the pair on an outer layer over a plane) and
-  Stripline (the pair centred between two planes).
+- **Two pairs of pills, side by side:** Microstrip (the pair on an outer
+  layer over a plane) or Stripline (the pair centred between two planes);
+  Step edge (a logic edge with a rise time, below) or Sine wave (a sine at
+  one frequency, see Sine wave).
 - **Inputs:** each trace's width w, the spacing s between them, the
   dielectric h (microstrip) or the spacing between the planes b
   (stripline), the copper's thickness t, the material and εr, the length
@@ -13529,14 +13531,70 @@ aggressor's step:
 - **Units:** mm or mil for the cross-section; oz, µm or mil for the
   copper; mm, cm or in for the coupled length: any of them switches the
   others, mil or in to imperial, mm, µm or cm to metric (oz stays oz);
-  ps or ns for the rise time.
+  ps or ns for the rise time; MHz or GHz for the sine's frequency.
 - **Drawing:** the aggressor (blue) and the victim (green) over the plane
   or between the planes, w and s as a chain dimension, h or b, εr, in mm
   and mil.
-- **Remembered:** the pill and the units.
+- **Remembered:** the pills and the units.
 
 Examples: the 3w rule (spacing three trace widths), a short run with a
-slow edge (below saturation), and a stripline pair (no FEXT).
+slow edge (below saturation), a stripline pair (no FEXT), and a 100 MHz
+clock (Sine wave).
+
+### Sine wave
+
+With "Sine wave" the rise time box becomes Frequency (MHz or GHz), and the
+tool gives the victim's noise for a sine on the aggressor:
+
+- **The big result:** the near-end noise in volts (the share times the
+  aggressor's swing; a peak-to-peak swing gives peak-to-peak noise), with
+  the share in dB, 20 log of it (−30 dB is 3.2 %), and in %.
+- **Below it:** the far-end noise in volts and dB ("0 V: the two
+  couplings cancel" in stripline); the quarter-wave frequency, where the
+  coupled run is a quarter wavelength long, with the run's length in
+  wavelengths at the chosen frequency; the even and odd modes, ζ, Lm/L
+  and Cm/C as for the step.
+- **Drawing:** in place of the cross-section, the near-end (green) and
+  far-end (blue) noise in dB against frequency, on a log scale over a few
+  decades around the quarter wave and the chosen frequency, which is
+  marked.
+
+How: the pair splits exactly into its even mode (both traces at the same
+voltage) and odd mode (opposite voltages), each an ordinary line with its
+own impedance Z and speed v from the field solver. Each end of each trace
+is taken to have a resistor R = ζ, the trace's impedance; the aggressor's
+source is 2 × the swing behind R, so a matched line carries the swing.
+Each mode is then one line of electrical length θ = 2π f l / v, with half
+the source and R at both ends; from the standard line equations
+(A = D = cos θ, B = j Z sin θ, C = j sin θ / Z):
+
+    V_end = swing × R / (2R cos θ + j sin θ (Z + R²/Z))
+    V_in  = V_end × (cos θ + j (Z/R) sin θ)
+    near = V_in,even − V_in,odd,   far = V_end,even − V_end,odd
+
+This is worked out here from those equations, not taken from a paper; it
+is exact for lossless lines with all four ends in R, at any frequency and
+any coupling, microstrip included.
+
+- **What it shows:** the near-end noise grows with frequency, 6 dB per
+  octave at first, peaks near the quarter wave at twice the step's
+  plateau, falls to a null at the half wave and repeats; Shlepnev's
+  remark that a real signal's crosstalk can reach twice the step's is
+  this peak. The far-end noise grows with frequency in microstrip and is
+  zero in stripline.
+- **Checked:** at the quarter wave (cos θ = 0) the near end is exactly
+  Ze²/(Ze² + R²) − Zo²/(Zo² + R²); in stripline, R² = Ze Zo, that is
+  (Ze − Zo)/(Ze + Zo) = Cm/C, twice the step's ¼ (Lm/L + Cm/C) = ½ Cm/C:
+  17.82 % against 2 × 8.915 %. At low frequency the far end is the step's
+  FEXT times 2π f tr: 16.00 % × 2π × 100 MHz × 100 ps = 1.005 %, against
+  1.004 %. The scratchpad script xt_sine.py, on tools/fd_lines.py's
+  modes, gives the values.
+
+| Sine, FR-4, 1 oz, 50 mm, 3.3 V | near end | far end |
+|---|---|---|
+| microstrip, 0.15 mm, s 0.15, h 0.2 mm, 100 MHz | 4.12 %, −27.7 dB | 1.00 %, −40.0 dB |
+| the same at 1 GHz | 22.5 %, −12.9 dB | 9.85 %, −20.1 dB |
+| stripline, 0.15 mm, s 0.2, b 0.6 mm, 711.28 MHz (quarter wave) | 17.8 %, −15.0 dB | 0 |
 
 ### Terms
 
@@ -13624,13 +13682,16 @@ against 11.52 %, 3.41 against 3.40 %).
 - **FEXT's growth:** it is linear in the length; once the even and odd
   edges reach the far end further apart than the rise time, the pulse
   stops growing, and the tool flags the value as an upper bound.
+- **The sine's terminations:** every end in R = ζ; a victim left open or
+  shorted at one end, or a driver of another impedance, changes the
+  standing waves and the voltages.
 - **Two equal traces, no other neighbours;** the cross-sections and their
   limits as in Edge-coupled microstrip and Edge-coupled stripline (no
   solder mask here).
 
 ### How it was checked
 
-6 cases, the expected values from tools/fd_lines.py's modes and the
+10 cases, the expected values from tools/fd_lines.py's modes and the
 formulas above, the swing 3.3 V unless said:
 - the default microstrip pair, 0.15 mm traces 0.15 mm apart on 0.2 mm
   FR-4, 1 oz, 50 mm side by side, 100 ps: NEXT 11.5 % (11.519), FEXT
@@ -13643,6 +13704,13 @@ formulas above, the swing 3.3 V unless said:
 - 10 mm at 1 ns: below saturation (reached at 87.3 mm), NEXT 1.32 %,
   FEXT −0.32 %;
 - the stripline pair: NEXT 8.9 % (8.915), FEXT 0;
-- a zero coupled length is refused.
+- a zero coupled length is refused;
+- sine, the 100 MHz clock example: 136 mV (4.12 %, −27.7 dB) at the near
+  end, 33.1 mV (−40.0 dB) at the far end, quarter wave at 873 MHz, the
+  run 0.0286 λ;
+- sine at 1 GHz: 744 mV (22.5 %, −12.9 dB), far end 325 mV (−20.1 dB);
+- sine on the stripline pair at its quarter wave, 711.28 MHz: 588 mV
+  (17.8 %, −15.0 dB), twice the step's 8.9 %, far end 0;
+- a zero frequency is refused.
 
 [↑ Index](#index)
