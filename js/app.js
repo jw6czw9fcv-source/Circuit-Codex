@@ -16854,15 +16854,14 @@ function renderCrosstalk(domain, tool, favId) {
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const wait = "…";
     const sat = k && s.len >= k.lsat;
-    const fext = !k ? wait : !micro() ? "0: the two couplings cancel" : k.skew >= s.tr ? warn(`${pct(k.fext)}, ${volt(k.fext * s.vs)}, an upper bound`) : `${pct(k.fext)}, ${volt(k.fext * s.vs)}`;
+    const fext = !k ? wait : !micro() ? "0 V: the two couplings cancel" : k.skew >= s.tr ? warn(`${volt(k.fext * s.vs)} (${pct(k.fext)}), an upper bound`) : `${volt(k.fext * s.vs)} (${pct(k.fext)})`;
     return `<div class="result-field">
-          <div class="result-head"><span class="label">Near-end crosstalk (NEXT)</span>${solverBadge(link())}</div>
-          <div class="result-value"><span class="num" data-res="big">${k ? pct(k.next) : wait}</span></div>
-          <div class="result-sub" data-res="sub">${k ? (sat ? `saturated: longer than ${cLen(k.lsat)}` : `below saturation, reached at ${cLen(k.lsat)}`) : "of the aggressor's step, on the victim"}</div>
+          <div class="result-head"><span class="label">Near-end noise on the victim (NEXT)</span>${solverBadge(link())}</div>
+          <div class="result-value"><span class="num" data-res="big">${k ? volt(k.next * s.vs) : wait}</span></div>
+          <div class="result-sub" data-res="sub">${k ? `${pct(k.next)} of the ${Number(s.vs.toPrecision(3))} V swing, for ${ps(2 * k.tdelay)}; ${sat ? `saturated beyond ${cLen(k.lsat)}` : `saturates at ${cLen(k.lsat)}`}` : "the aggressor's step, seen on the victim"}</div>
         </div>
         <div class="field notation-box">
-          ${row("Near end, on the victim", k ? `${volt(k.next * s.vs)}, for ${ps(2 * k.tdelay)}` : wait, "vnext")}
-          ${row("Far-end crosstalk (FEXT)", fext, "fext")}
+          ${row("Far-end noise (FEXT)", fext, "fext")}
           ${row("Even mode, odd mode", k ? `${ohm(k.ze)}, ${ohm(k.zo)}` : wait, "modes")}
           ${row("Each trace's impedance", k ? ohm(k.zeta) : wait, "zeta")}
           ${row("Lm/L, Cm/C", k ? `${Number(k.kl.toPrecision(3))}, ${Number(k.kc.toPrecision(3))}` : wait, "lc")}

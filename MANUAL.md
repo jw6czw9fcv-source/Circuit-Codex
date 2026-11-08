@@ -13476,14 +13476,15 @@ aggressor's step:
   (stripline), the copper's thickness t, the material and εr, the length
   the traces run side by side, the aggressor's rise time, and its voltage
   swing on the line (3.3 V unless typed).
-- **The big result:** the near-end crosstalk (NEXT), with whether the
-  coupled length saturates it and the saturation length.
+- **The big result:** the near-end noise on the victim (NEXT) in volts,
+  the coefficient times the aggressor's swing; below it the coefficient
+  in %, how long the plateau lasts (the round trip 2T), and whether the
+  coupled length saturates it.
 - **Below it:**
-  - the near-end noise on the victim, NEXT times the swing, and how long
-    the plateau lasts, the coupled length's round trip 2T;
-  - the far-end crosstalk (FEXT) and its voltage on the victim, negative
+  - the far-end noise (FEXT) on the victim in volts, with its share in %,
+    negative
     in microstrip (an inverted pulse about as long as the rise time), zero
-    in stripline, shown as "0: the two couplings cancel" (in one dielectric
+    in stripline, shown as "0 V: the two couplings cancel" (in one dielectric
     the capacitive and inductive parts are equal and opposite, Lm/L =
     Cm/C); flagged as an upper bound when the even and odd modes'
     edges arrive further apart than the rise time;
