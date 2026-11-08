@@ -11925,9 +11925,11 @@ trace, and a 0.43 mm trace well outside the dual formulas' range.
     give it within 1 % of a 2D field solver for 0.08 < W/H < 0.35 at εr 4,
     H 15 mil, C 10 mil, T 1.37 mil. It is the mean of two AN-905 striplines
     (Stripline's section), planes 2H and 2(H + C) apart.
-  - **The older IPC dual stripline formula**, as a book page Pierre sent
-    prints it (§4.2.4 "Dual or Asymmetric Stripline Topology", eq. 4.10;
-    the book's title not yet noted here): Z0 = (80/√εr) ln[1.9 (2H + T) /
+  - **The older IPC dual stripline formula**, as "Printed Circuit Board
+    Design Techniques for EMC Compliance — A Handbook for Designers", 2nd
+    edition, prints it (§4.2.4 "Dual or Asymmetric Stripline Topology",
+    eq. 4.10, page 117 of Pierre's PDF; that page read, the rest of the
+    book not): Z0 = (80/√εr) ln[1.9 (2H + T) /
     (0.8W + T)] [1 − H / (4 (H + D + T))], the same range, "approximate";
     the page adds that both layers should be routed at right angles to each
     other. Other calculators still use it: it reproduces one's 32.689 Ω for
