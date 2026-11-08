@@ -231,20 +231,24 @@ def app_broadside(w, t, s, b, er, mode=None, level=None):
     return ETA0 / (math.sqrt(er) * 2 * g.S(air=True))
 
 
-def app_coplanar(w, s, t, h, er, ground, level=None):
+def app_coplanar(w, s, t, h, er, ground, pair=None, mode=None, level=None):
     """As fieldsolver.js coplanar(): returns (Z, eeff). Coplanar grounds s
-    from the trace to the side wall, a plane under h (ground) or air."""
+    from the trace to the side wall, a plane under h (ground) or air; with
+    pair, an edge-coupled pair that far apart, odd or even mode."""
     if level is None:
-        res = [app_coplanar(w, s, t, h, er, ground, L) for L in (0, 1, 2)]
+        res = [app_coplanar(w, s, t, h, er, ground, pair, mode, L) for L in (0, 1, 2)]
         return fit2([r[0] for r in res]), fit2([r[1] for r in res])
-    b = w + 2 * s; x1, x2 = w / 2, w / 2 + s; X = x2 + 20 * b
+    single = not (pair and pair > 0)
+    x0 = 0 if single else pair / 2; x1 = x0 + (w / 2 if single else w); x2 = x1 + s; b = 2 * x2; X = x2 + 20 * b
     D = 0 if ground else 40 * b; y0 = D + h; y1 = y0 + t; top = y1 + 40 * b
-    m = max(min(w, s, h), max(w, s) / 1000)
-    g = Grid([0, x1, x2, X], sorted(set([0, D, y0, y1, top])), m / 20, 2 * max(b, h), level, 1.4)
+    base = min(w, s, h) if single else min(w, s, h, pair)
+    m = max(base, max(w, s) / 1000)
+    g = Grid(sorted(set([0, x0, x1, x2, X])), sorted(set([0, D, y0, y1, top])), m / 20, 2 * max(b, h), level, 1.4)
     g.row(0); g.row(top); g.col(X); g.layer(D, y0, er)
-    g.box(0, x1, y0, y1); g.box(x2, X, y0, y1, 0.0)
+    if not single and mode == "odd": g.col(0)
+    g.box(x0, x1, y0, y1); g.box(x2, X, y0, y1, 0.0)
     S, Sa = g.S(), g.S(air=True)
-    return ETA0 / (2 * math.sqrt(S * Sa)), S / Sa
+    return ETA0 / ((2 if single else 1) * math.sqrt(S * Sa)), S / Sa
 
 
 def cohn_single(w, b, er):

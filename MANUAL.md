@@ -126,6 +126,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Broadside-coupled stripline](#broadside-stripline)
 - Impedance → [Broadside-coupled, no plane](#paired-strips)
 - Impedance → [Coplanar waveguide](#coplanar)
+- Impedance → [Edge-coupled coplanar](#diff-coplanar)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -13263,5 +13264,128 @@ probe, 52.6 Ω where he designed for 50 Ω.
 - the copper's own picker (1 oz is 34.8 µm);
 - the three length pickers move together;
 - a zero gap is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="diff-coplanar"></a>
+## Edge-coupled coplanar
+
+`calc: diff-coplanar` · PCB & interconnect › Impedance
+
+### What it computes
+
+The differential impedance of an edge-coupled pair with ground copper
+beside it on the same layer (the differential or edge-coupled coplanar
+waveguide), with or without a ground plane under the board, or the trace
+width that gives it at given gaps:
+
+- **Two pills,** as in Coplanar waveguide: "Ground plane below" (the
+  edge-coupled CPWG, the default) and "No plane below".
+- **Inputs:** each trace's width w, the gap s between the two traces, the
+  gap g from each trace to its ground, the dielectric h, the copper's
+  thickness t (its own picker), the material and εr.
+- **Width and Zdiff are two live boxes;** a Zdiff typed sets the width,
+  the gaps kept.
+- **The big result:** Zdiff from the field solver, with the odd-mode
+  impedance; or the width for the Zdiff typed.
+- **Below it:**
+  - the even-mode and common-mode impedance;
+  - the same pair without the side grounds (moved 50 times the
+    cross-section away), the comparison: how much the grounds lower Zdiff;
+  - the odd mode's effective εr and the delay per length.
+- **Units:** mm or mil for the four lengths, moving together; oz, µm or
+  mil for the copper.
+- **Drawing:** the pair between its two grounds on the substrate, the
+  plane under it in the grounded mode, w, s and g, h, t and εr, in mm and
+  mil. The traces are green when their width is the answer.
+- **Remembered:** the mode, the length unit and the copper unit.
+
+Examples: USB's 90 Ω and 100 Ω with a plane below on a 0.2 mm layer, the
+grounds moved far away (Edge-coupled microstrip's case), and the default
+pair with no plane below.
+
+### Terms
+
+- **Edge-coupled coplanar waveguide:** a differential pair whose outer
+  edges each face a ground on the same layer, g away; with a plane below
+  as well, the side grounds are tied to it by rows of vias.
+- **Differential pair, Zdiff, odd mode, even mode, common mode:** as in
+  Edge-coupled microstrip.
+- **s, g:** s the gap between the two traces, g between each trace and its
+  ground. (Wadell writes s for the first and d for the second.)
+- **εr, εeff, t, oz:** as in Coplanar waveguide.
+
+### Source
+
+- **The field solver:** js/fieldsolver.js, its coplanar cross-section
+  extended to a pair (half the cross-section, the pair's centre line at
+  0 V for the odd mode, a mirror for the even); tools/fd_lines.py's
+  app_coplanar, a separate implementation with the same settings, gives
+  the values below. Checked against two limits: with the grounds 5 mm away
+  and a plane below it gives Edge-coupled microstrip's solver value to
+  0.003 % (114.401 against 114.397 Ω for 0.15 mm traces 0.15 mm apart on
+  0.2 mm); with the traces 3 mm apart the odd and even modes meet within
+  0.3 %. The single Coplanar waveguide is unchanged (49.219 Ω).
+- **Brian C. Wadell, "Transmission Line Design Handbook", Artech House,
+  1991, §4.4.2 "Edge-Coupled CPW" and §4.4.3 "Edge-Coupled CPWG", pages
+  194–198** (read, Pierre's scanned copy). Neither is usable as a
+  comparison: §4.4.3's odd and even impedances (4.4.3.1–4.4.3.12, after
+  Hanna) use K(β1)/K′(β1) and K(β1k1)/K′(β1k1) for the plane below, with
+  β1 and k1 defined nowhere on those pages; §4.4.2's (4.4.2.1–4.4.2.7)
+  needs incomplete elliptic integrals solved for k5 and k7 and "assume[s]
+  … that the substrate is infinitely thick". The tool shows no formula
+  rather than guess the missing terms.
+- **Not read:** Hanna's 1985 paper and the others Wadell cites.
+
+### Why the formulas are these
+
+The solver, three times:
+
+    odd mode: the traces at +1 V and −1 V, the grounds (and plane) at 0 V
+    Zodd = η0 / √(S × S_air),   Zdiff = 2 Zodd,   εeff = S / S_air
+    even mode: both traces at +1 V,  common mode = Zeven / 2
+    without the side grounds: the odd mode with g = 50 (w + s + h)
+
+The grounds beside the pair add capacitance to each trace and lower Zdiff,
+and keep the field, and so the crosstalk to other traces, close to the
+pair. A typed Zdiff sets the width: the search starts from a rough
+estimate (Wadell's single CPW or CPWG, as Coplanar waveguide computes it,
+with s/2 and g combined harmonically; −30 to +36 %) and the solver's
+answers correct it.
+
+| Case (1 oz, FR-4) | Zdiff | Without the side grounds |
+|---|---|---|
+| 0.15 mm, s 0.15, g 0.15 mm, h 0.2 mm, plane below | 109.82 Ω | 114.40 Ω, +4.2 % |
+| the same, no plane below | 118.82 Ω | 135.40 Ω, +14.0 % |
+
+With a plane below, the plane already holds most of the field and the side
+grounds take 4 %; with none, they take 14 %.
+
+### Assumptions and limits
+
+- **Wide side grounds,** tied to the plane in the grounded mode, as stitching
+  vias make them.
+- **Equal traces, the two gaps to ground equal.**
+- **Quasi-static field solution:** the traces and grounds rectangles, one
+  dielectric, no solder mask, no losses; the board maker's stack-up
+  calculation decides.
+
+### How it was checked
+
+8 cases, the expected values from tools/fd_lines.py's app_coplanar:
+- the default, plane below, 0.15 mm traces 0.15 mm apart, 0.15 mm to the
+  grounds, 0.2 mm FR-4, 1 oz: 110 Ω (109.823), odd mode 54.9 Ω, even mode
+  82.9 Ω, common mode 41.5 Ω, without the side grounds 114 Ω (+4.2 %),
+  εeff 2.41, 51.8 ps/cm;
+- USB 90 Ω: 0.254 mm (0.25427);
+- 100 Ω: 0.195 mm (0.19481);
+- the grounds 5 mm away: 114 Ω (114.401), the same without them;
+- no plane below: 119 Ω (118.819), common mode 65.9 Ω, without the side
+  grounds 135 Ω (+14.0 %);
+- the pill switches to no plane;
+- the four length pickers move together;
+- a zero gap to the ground is refused.
 
 [↑ Index](#index)

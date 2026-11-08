@@ -531,6 +531,7 @@ const TOOL_THUMBS = {
   "broadside-stripline": THUMB_PARTS.planes + thumbCu(17, 8.5, 12) + thumbCu(17, 14.5, 12),
   "paired-strips": '<rect x="4" y="10" width="38" height="6" fill="none" stroke="#5A6169" stroke-width="1.2"/>' + thumbCu(16, 7, 14) + thumbCu(16, 16, 14),
   "coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 10) + thumbCu(18, 8, 10) + thumbCu(32, 8, 10),
+  "diff-coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 8) + thumbCu(15, 8, 7) + thumbCu(24, 8, 7) + thumbCu(34, 8, 8),
 };
 // A tool's name in a list, its drawing first when it has one.
 // With a second line (crumb: the domain and section), the drawing sits
@@ -653,6 +654,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "embedded-pair") return renderEmbeddedPair(domain, tool, favId);
   if (calcId === "embedded-microstrip") return renderEmbeddedMicrostrip(domain, tool, favId);
   if (calcId === "coplanar") return renderCoplanar(domain, tool, favId);
+  if (calcId === "diff-coplanar") return renderDiffCoplanar(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -16399,6 +16401,247 @@ function renderCoplanar(domain, tool, favId) {
       paint();
     };
     // The three length pickers move together; the copper has its own.
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    syncBoxes();
+    link.schedule(true);
+  }
+
+  paint();
+}
+
+// ---------- Edge-coupled coplanar ----------
+// A differential pair with ground copper beside it on the same layer (the
+// differential or edge-coupled coplanar waveguide), with a ground plane
+// under the board (the "Ground plane below" pill, edge-coupled CPWG) or air
+// under it. The field solver (FS coplanar with pair, 2026-11-08) gives the
+// odd mode (Zdiff = 2 Zodd), the even mode, and the same pair without the
+// side grounds (they moved 50 times the cross-section away), the comparison.
+// Wadell's §4.4.2 and §4.4.3 (Pierre's copy, read) cover these structures,
+// but §4.4.3's β1 and k1 are not defined on its pages and §4.4.2 assumes an
+// infinitely thick substrate, so no formula is shown. The estimate the width
+// search starts from: Wadell's single CPW or CPWG (as Coplanar waveguide
+// computes them) with the gap s/2 to the pair's centre and g to the ground
+// combined harmonically; −30 to +36 %, the solver corrects it.
+function renderDiffCoplanar(domain, tool, favId) {
+  const C = "diff-coplanar";
+  const state = {
+    mode: pref(C, "mode", "ground", Object.keys(CPW_MODES)),
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    mat: "fr4",
+    si: { w: 0.15e-3, s: 0.15e-3, g: 0.15e-3, h: 0.2e-3, t: TRACE_OZ_MIL * 25.4e-6, er: 4.3 },
+    // A differential impedance typed in its box: the width is set to give
+    // it, the gaps kept.
+    target: null,
+  };
+  const grounded = () => state.mode === "ground";
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+  const estimate = (w) => {
+    const { s, g, t, h, er } = state.si, se = 2 * g * (s / 2) / (g + s / 2);
+    return 2 * (grounded() ? wadellGcpw(w, se, h, er).z : wadellCpw(w, se, t, h, er).z);
+  };
+  const estimateWidth = (z) => {
+    let lo = state.si.s * 1e-3, hi = state.si.s * 100;
+    if (!(z < estimate(lo) && z > estimate(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (estimate(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
+  const geomOk = () => { const s = state.si; return s.s > 0 && s.g > 0 && s.h > 0 && s.t >= 0 && s.er >= 1; };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.s > 0)) return "Enter the gap between the traces.";
+    if (!(s.g > 0)) return "Enter the gap to the ground beside the traces.";
+    if (!(s.h > 0)) return "Enter the dielectric's thickness.";
+    if (!(s.t >= 0)) return "Enter the copper's thickness, zero or more.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(estimateWidth(state.target) > 0)) return "No width between 0.001 and 100 times the gap gives that impedance.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    return "";
+  }
+
+  // Three solves: the odd mode (Zdiff), the even mode, and the odd mode with
+  // the side grounds moved far away.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const link = solverLink({
+    kind: "coplanar", modes: ["odd", "even", "bare"], factor: 2,
+    params: (w, mode) => {
+      const q = state.si, far = 50 * (w + q.s + q.h);
+      return { w: mm(w), s: mm(mode === "bare" ? far : q.g), t: mm(q.t), h: mm(q.h), er: q.er, ground: grounded(), pair: mm(q.s), mode: mode === "even" ? "even" : "odd" };
+    },
+    estimate, estimateWidth,
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const got = (i) => (link.sol && link.sol.res[i]) || null;
+  const zNow = () => (got(0) ? 2 * got(0).z : estimate(state.si.w));
+
+  // The pair between its two grounds on the substrate, the plane under it or
+  // not; green when the width is the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mmT = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mmT(v)}` : `${mmT(v)} · ${mil(v)}`);
+    const tLabel = state.lUnit === "mil" ? `${mil(s.t)} · ${Number((s.t * 1e6).toPrecision(3))} µm` : `${Number((s.t * 1e6).toPrecision(3))} µm · ${mil(s.t)}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="30" y="52" width="230" height="38" stroke="${wire}" stroke-width="1.4"/>
+      ${grounded() ? `<rect x="30" y="90" width="230" height="6" fill="${part}" fill-opacity="0.8"/>` : ""}
+      <rect x="30" y="44" width="50" height="8" fill="${part}"/><rect x="210" y="44" width="50" height="8" fill="${part}"/>
+      <rect x="100" y="44" width="36" height="8" fill="${tone}"/><rect x="154" y="44" width="36" height="8" fill="${tone}"/>
+      <path d="M100 32 V40 M136 32 V40 M100 36 H136" stroke="${tone}" stroke-width="1.2"/>
+      <path d="M154 32 V40 M136 36 H154" stroke="${wire}" stroke-width="1.2"/>
+      <path d="M190 32 V40 M210 32 V40 M190 36 H210" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(132, 27, ok ? `w ${both(s.w)}` : "w", tone, "end")}
+      ${lbl(140, 27, `s ${both(s.s)}`, grey, "start")}
+      ${lbl(288, 12, `g ${both(s.g)}`, grey, "end")}
+      <path d="M20 52 V90 M16 52 H24 M16 90 H24" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(36, 74, `h ${both(s.h)}`, grey, "start")}
+      ${lbl(254, 64, `t ${tLabel}`, grey, "end")}
+      ${lbl(254, 84, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(145, 108, grounded() ? "grounds beside, plane below" : "grounds beside, air below", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, zd = zNow(), even = got(1), bare = got(2);
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const cmp = (zc) => { const d = (zc / zd - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
+    const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
+    const ee = got(0) ? got(0).eeff : null;
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span>${solverBadge(link)}</div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, ${len(s.s)} apart</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Differential impedance</span>${solverBadge(link)}</div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(zd)}</span></div>
+          <div class="result-sub" data-res="sub">odd mode ${ohm(zd / 2)}, each trace in the pair</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${row("Even mode, common mode", even ? `${ohm(even.z)}, ${ohm(even.z / 2)}` : "…", "even")}
+          ${row("Without the side grounds", bare ? cmp(2 * bare.z) : "…", "bare")}
+          ${row("Effective εr, odd mode", ee ? Number(ee.toPrecision(3)) : "…", "eeff")}
+          ${row("Delay, odd mode", ee ? `${Number((33.356 * Math.sqrt(ee) * per).toPrecision(3))} ps/${perU}` : "…", "td")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number(zNow().toPrecision(4))));
+  }
+  function settle() { if (state.target > 0 && geomOk()) { const w = estimateWidth(state.target); if (w > 0) state.si.w = w; } }
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+  function refresh() {
+    settle();
+    link.recall();
+    show();
+    link.schedule(false);
+  }
+
+  const example = (si, extra, target) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    paint();
+  };
+  const OZ = TRACE_OZ_MIL * 25.4e-6;
+  useExamples([
+    { title: "USB, 90 Ω, plane below", note: "0.2 mm FR-4, 1 oz, 0.15 mm between the traces and to the grounds.",
+      apply: example({ s: 0.15e-3, g: 0.15e-3, t: OZ, h: 0.2e-3, er: 4.3 }, { mode: "ground", lUnit: "mm", tUnit: "oz" }, 90) },
+    { title: "100 Ω, plane below", note: "The same layer and gaps, for Ethernet or LVDS.",
+      apply: example({ s: 0.15e-3, g: 0.15e-3, t: OZ, h: 0.2e-3, er: 4.3 }, { mode: "ground", lUnit: "mm", tUnit: "oz" }, 100) },
+    { title: "Grounds far away", note: "0.15 mm traces with the grounds 5 mm off: Edge-coupled microstrip's 114 Ω.",
+      apply: example({ w: 0.15e-3, s: 0.15e-3, g: 5e-3, t: OZ, h: 0.2e-3, er: 4.3 }, { mode: "ground", lUnit: "mm", tUnit: "oz" }) },
+    { title: "No plane below", note: "The default pair with air under the 0.2 mm board.",
+      apply: example({ w: 0.15e-3, s: 0.15e-3, g: 0.15e-3, t: OZ, h: 0.2e-3, er: 4.3 }, { mode: "open", lUnit: "mm", tUnit: "oz" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    link.recall();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="dcpw-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A differential pair between grounds")}
+
+      ${pillRow(Object.entries(CPW_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Between, s", 2)}${lf("g", "To ground, g", 3)}</div>
+      <div class="field-pair">${lf("h", "Dielectric, h", 4)}${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div></div>
+      <div class="field-pair">${field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Differential impedance", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["∇·(ε ∇φ) = 0: traces ±1 V, grounds 0 V", "S = C / ε0 = Σ ε (Δφ)², with the board and in air", "Zodd = η0 / √(S × S_air),   Zdiff = 2 Zodd", "even mode: both at +1 V; common mode Zeven / 2"],
+        "An edge-coupled coplanar pair is a differential pair with ground copper beside it on the same layer, s between the two traces and g from each trace to its ground; with a ground plane under the board as well (edge-coupled CPWG), the side grounds are tied to it with rows of vias. The side grounds pull Zdiff down and keep the pair's field, and its crosstalk, close to it. Zdiff is what the driver sees between the traces; USB uses 90 Ω, Ethernet and LVDS 100 Ω; Zodd is each trace's share, the even mode gives the common-mode impedance. The app's field solver computes them (see Edge-coupled embedded's manual section), and the same pair without the side grounds for comparison. Wadell's handbook lists these structures, but its formulas are incomplete as printed, so none is shown. Type a width to get Zdiff, or the Zdiff you need to get the width at your gaps."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "s" || key === "g" || key === "h") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("dcpw-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("dcpw-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // The four length pickers move together; the copper has its own.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
     syncBoxes();

@@ -399,6 +399,12 @@ const FORMULAS = [
     note: "Wheeler's paper-thin formulas (Wadell §3.3.5; the narrow form's factor corrected from √εr). The tool's big result is a field solver: twice a microstrip on h/2; 1 oz copper lowers Zdiff 3 to 9 % below these.",
   },
   {
+    tool: "Edge-coupled coplanar",
+    domain: "pcb",
+    formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  Zdiff = 2 Zodd"],
+    note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
+  },
+  {
     tool: "Edge-coupled embedded",
     domain: "pcb",
     formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  Zdiff = 2 Zodd"],
