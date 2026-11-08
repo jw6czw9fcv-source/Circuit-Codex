@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=82d3e691f1" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=878aad4a49" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -9483,7 +9483,7 @@ is needed for the answer, which is the solver's.</p>
 <section class="tool" id="stripline" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Impedance</div>
   <h2>Stripline</h2>
-  <figure class="shot"><img src="manual/img/stripline.jpg?h=5b3d04f821" loading="lazy" alt="Stripline as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/stripline.jpg?h=a398e3540a" loading="lazy" alt="Stripline as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Stripline impedance)</p>
 <h3>What it computes</h3>
 <p>The characteristic impedance of a trace on an inner layer, centred between
@@ -9662,12 +9662,34 @@ cases, and 0.3 % low for the strip wider than the spacing, where
 IPC-2141A's wide-strip formula does better. For the single stripline the
 solver mostly confirms Wheeler's formula; it is the same engine as for
 the stripline pairs, where the formulas part further.</p>
+<h3>Core and prepreg</h3>
+<p>The "Core + prepreg" pill gives the stripline two dielectrics, as a real
+stack-up has: the core the trace is etched on, under it, and the prepreg
+pressed over it, which fills around the copper and up to the other plane
+(boxes "Core εr" and "Prepreg εr"; the material picker sets both). The
+solver takes the two layers (εr under the trace's bottom face, the
+prepreg's from there up) and gives the impedance and an effective εr,
+from which the delay; the comparison formulas, which know one εr, take
+the mean weighted by the dielectric's thickness on each side, as the
+manual used to ask the user to do by hand. With one εr (the default) the
+tool is as before.</p>
+<ul>
+<li><strong>Checked:</strong> a paper-thin trace centred between the planes has a field
+  symmetric about its plane, so its εeff is exactly the mean of the two:
+  core 3 and prepreg 5 give εeff 4.00000 and the same impedance as one εr
+  of 4 (61.617 Ω, 0.2 mm in 0.6 mm); two equal εr give the one-εr value.</li>
+<li><strong>What it does:</strong> the default 0.2 mm trace with 1 oz copper, core 3.8
+  and prepreg 4.6: 52.2 Ω and εeff 4.233, where the thickness-weighted
+  mean is 4.223: the prepreg around the copper's sides counts a little
+  more than its thickness.</li>
+</ul>
 <h3>Assumptions and limits</h3>
 <ul>
 <li><strong>Symmetric stripline:</strong> the trace centred between the planes; an
   off-centre trace is Asymmetric stripline's case.</li>
-<li><strong>One dielectric:</strong> core and prepreg of different εr are averaged by
-  the user.</li>
+<li><strong>One dielectric or core and prepreg:</strong> with the pill, two layers split
+  at the trace's bottom face (see Core and prepreg); more layers are
+  averaged by the user.</li>
 <li><strong>Quasi-static field solution:</strong> the trace a rectangle, the planes
   wide (the solver's side walls 5 b away), no losses; the board maker's
   stack-up calculation decides.</li>
@@ -9694,7 +9716,7 @@ the stripline pairs, where the formulas part further.</p>
 <section class="tool" id="dual-stripline" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Impedance</div>
   <h2>Asymmetric stripline</h2>
-  <figure class="shot"><img src="manual/img/dual-stripline.jpg?h=a82462a7a4" loading="lazy" alt="Asymmetric stripline as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/dual-stripline.jpg?h=494197bb0f" loading="lazy" alt="Asymmetric stripline as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Dual stripline impedance, then Dual stripline)</p>
 <h3>What it computes</h3>
 <p>The impedance of a trace between two ground planes but nearer one of them
@@ -9924,8 +9946,9 @@ in parallel, minus Hogan's term; it is within 0.3 % in the first case but
 <ul>
 <li><strong>Quasi-static, no losses:</strong> dispersion, losses and roughness are left
   out.</li>
-<li><strong>One dielectric:</strong> core and prepreg of different εr are averaged by the
-  user.</li>
+<li><strong>One dielectric or core and prepreg:</strong> with the pill, the core under
+  the trace (h1) and the prepreg from its bottom face up, as in
+  Stripline's Core and prepreg; more layers are averaged by the user.</li>
 <li><strong>One trace:</strong> traces on the other signal layer are left out.</li>
 <li><strong>Rectangular trace;</strong> the board maker's stack-up calculation decides.</li>
 </ul>
@@ -9951,7 +9974,7 @@ in parallel, minus Hogan's term; it is within 0.3 % in the first case but
 <section class="tool" id="diff-stripline" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Impedance</div>
   <h2>Edge-coupled stripline</h2>
-  <figure class="shot"><img src="manual/img/diff-stripline.jpg?h=42a015960f" loading="lazy" alt="Edge-coupled stripline as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/diff-stripline.jpg?h=66450fb6d4" loading="lazy" alt="Edge-coupled stripline as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Edge-coupled stripline)</p>
 <h3>What it computes</h3>
 <p>The differential impedance of two edge-coupled traces centred between two
@@ -10115,6 +10138,11 @@ arithmetic-geometric mean, K(k) = π / (2 agm(1, k')).</p>
 result until 2026-11-07, when the solver took over. At 100 Ω the
 difference is in the width: IPC-2141A's 0.14 mm gives 96.7 Ω, the
 solver's 0.125 mm gives 100 Ω.</p>
+<h3>Core and prepreg</h3>
+<p>As in Stripline: the "Core + prepreg" pill puts the core's εr under the
+traces and the prepreg's from their bottom faces up; the solver takes the
+two layers, the formulas the thickness-weighted mean. The default pair
+with core 3.8 and prepreg 4.6: 95.1 Ω (95.080), 68.8 ps/cm.</p>
 <h3>Assumptions and limits</h3>
 <ul>
 <li><strong>Quasi-static field solution:</strong> the traces rectangles, no losses; the
@@ -10141,7 +10169,7 @@ solver's 0.125 mm gives 100 Ω.</p>
 <section class="tool" id="asym-diff-stripline" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Impedance</div>
   <h2>Edge-coupled asym stripline</h2>
-  <figure class="shot"><img src="manual/img/asym-diff-stripline.jpg?h=70dfdcc27e" loading="lazy" alt="Edge-coupled asym stripline as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/asym-diff-stripline.jpg?h=e80177c591" loading="lazy" alt="Edge-coupled asym stripline as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The differential impedance of two edge-coupled traces between two ground
 planes but nearer one of them (the asymmetric, offset or off-centre
@@ -10265,7 +10293,8 @@ one half spills into the other, so it reads high:</p>
   pair changes its impedance; the tool takes the space between the planes
   as plain dielectric.</li>
 <li><strong>Quasi-static field solution:</strong> the traces rectangles, one dielectric
-  (core and prepreg averaged by the user), no losses; the board maker's
+  (or core and prepreg with the pill, as in Stripline), no losses; the
+  board maker's
   stack-up calculation decides.</li>
 </ul>
 <h3>How it was checked</h3>
@@ -10289,7 +10318,7 @@ one half spills into the other, so it reads high:</p>
 <section class="tool" id="broadside-stripline" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Impedance</div>
   <h2>Broadside-coupled stripline</h2>
-  <figure class="shot"><img src="manual/img/broadside-stripline.jpg?h=5edd16f44a" loading="lazy" alt="Broadside-coupled stripline as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/broadside-stripline.jpg?h=a184acc13a" loading="lazy" alt="Broadside-coupled stripline as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Broadside stripline)</p>
 <h3>What it computes</h3>
 <p>The differential impedance of two traces one above the other on two inner
@@ -10436,7 +10465,9 @@ s 0.1 to 0.2 mm, b 0.4 to 0.8 mm, εr 4.3: −1.4 to −0.1 % for ½, 1 and
 <li><strong>The copper method is the tool's,</strong> checked against the solver over
   the range above only.</li>
 <li><strong>Centred pair, equal traces, one dielectric:</strong> core and prepreg are
-  averaged by the user.</li>
+  averaged by the user, or core and prepreg with the pill (the core
+  between the traces, the prepreg outside, as in Stripline's Core and
+  prepreg).</li>
 </ul>
 <h3>How it was checked</h3>
 <p>7 cases, the expected values from tools/fd_lines.py's app_broadside:

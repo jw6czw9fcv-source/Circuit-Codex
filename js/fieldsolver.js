@@ -237,8 +237,10 @@
   // ---- Cross-sections (lengths in mm) ----
   // Between two planes b apart, one dielectric: a single trace (s absent) or
   // an edge-coupled pair (odd or even mode), its bottom h1 above the lower
-  // plane (centred when h1 is absent).
-  function stripline({ w, t, b, er, s, mode, h1 }) {
+  // plane (centred when h1 is absent). With er2, two dielectrics: er under
+  // the trace (the core it is etched on), er2 from the trace's bottom face
+  // up, around it and above it (the prepreg).
+  function stripline({ w, t, b, er, er2, s, mode, h1 }) {
     const single = !(s > 0);
     const y0 = h1 !== undefined ? h1 : (b - t) / 2, y1 = y0 + t;
     const x0 = single ? 0 : s / 2, x1 = x0 + (single ? w / 2 : w), X = x1 + 5 * b;
@@ -246,22 +248,27 @@
     // mistake (1 µm of dielectric) must not make the grid enormous.
     const base = Math.min(b, w, single ? b : s);
     const m = Math.max(Math.min(base, y0, b - y1), base / 4);
+    const two = er2 > 0 && er2 !== er;
     return {
       xb: [0, x0, x1, X], yb: t > 0 ? [0, y0, y1, b] : [0, y0, b], h0: m / 20, hmax: b / 4, grow: 1.25,
       rows: [0, b], cols: single || mode !== "odd" ? [X] : [X, 0], signals: [[x0, x1, y0, y1]],
-      er, layered: false, factor: single ? 2 : 1,
+      er, layers: two ? [[0, y0, er], [y0, b, er2]] : [], layered: two, factor: single ? 2 : 1,
     };
   }
 
   // Two traces one above the other, s apart face to face, centred between
   // planes b apart: the odd mode with the mid-plane at 0 V, or (mode
-  // "even", both traces at +1 V) the mid-plane a free edge, a mirror.
-  function broadside({ w, t, s, b, er, mode }) {
+  // "even", both traces at +1 V) the mid-plane a free edge, a mirror. With
+  // er2, two dielectrics: er between the traces (the core they are etched
+  // on), er2 outside them, around the copper (the prepreg).
+  function broadside({ w, t, s, b, er, er2, mode }) {
     const X = w / 2 + 5 * b, ya = b / 2 - s / 2 - t, yb = b / 2 - s / 2;
     const m = Math.min(b / 2, w, s, ya);
+    const two = er2 > 0 && er2 !== er;
     return {
       xb: [0, w / 2, X], yb: t > 0 ? [0, ya, yb, b / 2] : [0, yb, b / 2], h0: m / 20, hmax: b / 4, grow: 1.25,
-      rows: mode === "even" ? [0] : [0, b / 2], cols: [X], signals: [[0, w / 2, ya, yb]], er, layered: false, factor: 2,
+      rows: mode === "even" ? [0] : [0, b / 2], cols: [X], signals: [[0, w / 2, ya, yb]],
+      er, layers: two ? [[0, yb, er2], [yb, b / 2, er]] : [], layered: two, factor: 2,
     };
   }
 

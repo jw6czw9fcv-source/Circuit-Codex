@@ -13842,6 +13842,13 @@ function renderMicrostrip(domain, tool, favId) {
   paint();
 }
 
+// Core and prepreg εr in the stripline tools (Pierre, 2026-11-08): with
+// "Core + prepreg", εr under the trace (the core it is etched on; between
+// the traces in Broadside) and εr from the trace's bottom face out (the
+// prepreg) go to the solver as two layers; the formulas, which know one εr,
+// take the thickness-weighted mean, kept in state.si.er.
+const TWO_ER = { one: "One εr", two: "Core + prepreg" };
+
 // ---------- Stripline (formerly Stripline impedance) ----------
 // A trace centred between two ground planes. The big result is the field
 // solver's (FS, js/fieldsolver.js stripline) since 2026-11-07; Wheeler's
@@ -13879,11 +13886,19 @@ function renderStripline(domain, tool, favId) {
   const state = {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    two: pref(C, "two", "one", Object.keys(TWO_ER)),
     mat: "fr4",
     si: { w: 0.2e-3, b: 0.6e-3, t: TRACE_OZ_MIL * 25.4e-6, er: 4.3 },
     // An impedance typed in its box: the width is set to give it.
     target: null,
   };
+  state.si.erc = state.si.erp = state.si.er;
+  const twoOn = () => state.two === "two";
+  // The mean εr the formulas take, weighted by the dielectric's thickness
+  // on each side.
+  const syncEr = () => { if (twoOn()) { const s = state.si, [u, o] = [(s.b - s.t) / 2, (s.b + s.t) / 2]; s.er = (s.erc * u + s.erp * o) / (u + o); } };
+  const erParams = () => (twoOn() ? { er: state.si.erc, er2: state.si.erp } : {});
+  const erLabel = () => (twoOn() ? `εr ${Number(state.si.erc.toPrecision(3))} / ${Number(state.si.erp.toPrecision(3))}` : `εr ${Number(state.si.er.toPrecision(3))}`);
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   const hOf = () => (state.si.b - state.si.t) / 2;
@@ -13933,7 +13948,7 @@ function renderStripline(domain, tool, favId) {
 
   const link = solverLink({
     kind: "stripline", modes: [undefined], factor: 1,
-    params: (w) => { const s = state.si; return { w: mm(w), t: mm(s.t), b: mm(s.b), er: s.er }; },
+    params: (w) => { const s = state.si; return { w: mm(w), t: mm(s.t), b: mm(s.b), er: s.er, ...erParams() }; },
     estimate: zAt, estimateWidth: wFor,
     width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
     problem, show,
@@ -13962,7 +13977,7 @@ function renderStripline(domain, tool, favId) {
       <path d="M30 20 V84 M26 20 H34 M26 84 H34" stroke="${wire}" stroke-width="1.2"/>
       ${lbl(46, 33, `b ${both(s.b)}`, grey, "start")}
       ${lbl(276, 33, `t ${tLabel}`, grey, "end")}
-      ${lbl(46, 79, `εr ${Number(s.er.toPrecision(3))}`, grey, "start")}
+      ${lbl(46, 79, erLabel(), grey, "start")}
       ${lbl(161, 10, "ground planes, above and below", part)}
     </svg>`;
   }
@@ -13974,7 +13989,7 @@ function renderStripline(domain, tool, favId) {
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
-    const td = 33.356 * Math.sqrt(s.er) * per;
+    const td = 33.356 * Math.sqrt(twoOn() && link.sol && link.sol.res[0] ? link.sol.res[0].eeff : s.er) * per;
     const cmp = (zc) => { const d = (zc / z - 1) * 100; return zc > 0 ? `${Number(zc.toPrecision(3))} Ω (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : "none"; };
     // IPC-2141A's formula set 2: [4-15] for w/b ≥ 0.35, [4-12] below it
     // while t/b ≤ 0.25 and t/w ≤ 0.11.
@@ -13996,7 +14011,7 @@ function renderStripline(domain, tool, favId) {
           ${row("Wheeler's formula, for comparison", cmp(zAt(s.w)), "wheeler")}
           ${row("IPC-2141A, for comparison", ipcOk ? `${cmp(zIpc())}, wide strip` : narrowOk ? `${cmp(zNarrow())}, narrow strip` : warn(s.t / s.b > 0.25 ? "narrow strip, t/b over 0.25" : `narrow, t/w ${Number((s.t / s.w).toPrecision(2))} over 0.11`), "ipc")}
           ${row("AN-905 (MT-094), for comparison", anOk ? cmp(zAn()) : warn(`${cmp(zAn())}, out of range`), "an")}
-          ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+          ${row(twoOn() ? "Delay" : "Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
         </div>`;
   }
@@ -14020,6 +14035,7 @@ function renderStripline(domain, tool, favId) {
     syncBoxes();
   }
   function refresh() {
+    syncEr();
     settle();
     link.recall();
     show();
@@ -14028,7 +14044,9 @@ function renderStripline(domain, tool, favId) {
 
   const example = (si, extra, target) => () => {
     Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    if (!("two" in (extra || {}))) state.two = "one";
     Object.assign(state.si, si);
+    state.si.erc = state.si.erp = state.si.er;
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
     paint();
@@ -14047,6 +14065,7 @@ function renderStripline(domain, tool, favId) {
 
   function paint() {
     const s = state.si;
+    syncEr();
     settle();
     link.recall();
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
@@ -14060,10 +14079,12 @@ function renderStripline(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "The impedance of a PCB trace between two planes")}
 
+      ${pillRow(Object.entries(TWO_ER), state.two, domain.bg)}
+
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${field("w", "Trace width", sel('data-lunit="1"', MS_LEN_UNITS, state.lUnit), fmt(s.w / MS_LEN_UNITS[state.lUnit]))}${field("b", "Planes apart, b", sel('data-lunit="2"', MS_LEN_UNITS, state.lUnit), fmt(s.b / MS_LEN_UNITS[state.lUnit]))}${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}</div>
-      <div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Impedance", fixed("Ω"), "")}</div>
+      <div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${twoOn() ? `${field("erc", "Core εr", fixed(""), fmt(s.erc))}${field("erp", "Prepreg εr", fixed(""), fmt(s.erp))}</div><div class="field-pair">` : field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Impedance", fixed("Ω"), "")}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -14085,8 +14106,12 @@ function renderStripline(domain, tool, favId) {
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "b") state.si.b = v * MS_LEN_UNITS[state.lUnit];
         else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "erc" || key === "erp") {
+          state.si[key] = v;
+          if (state.mat !== "custom") { state.mat = "custom"; const ms = app.querySelector('select[id$="-mat"]'); if (ms) ms.value = "custom"; }
+        }
         else if (key === "er") {
-          state.si.er = v;
+          state.si.er = state.si.erc = state.si.erp = v;
           const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
           if (m !== state.mat) { state.mat = m; const ms = document.getElementById("sl-mat"); if (ms) ms.value = m; }
         }
@@ -14098,11 +14123,14 @@ function renderStripline(domain, tool, favId) {
     document.getElementById("sl-mat").onchange = (e) => {
       state.mat = e.target.value;
       const er = MS_MATERIALS[state.mat][1];
-      if (er) state.si.er = er;
+      if (er) state.si.er = state.si.erc = state.si.erp = er;
       paint();
     };
     // Every length picker changes them all (wireLengthUnits).
     wireLengthUnits(C, state, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.two = btn.dataset.pill; setPref(C, "two", state.two); if (!twoOn()) state.si.erc = state.si.erp = state.si.er; paint(); };
+    });
     syncBoxes();
     link.schedule(true);
   }
@@ -14141,10 +14169,18 @@ function renderDualStripline(domain, tool, favId) {
   const state = {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    two: pref(C, "two", "one", Object.keys(TWO_ER)),
     mat: "fr4",
     si: { w: 0.2e-3, h1: 0.2e-3, h2: 0.4e-3, t: OZ, er: 4.3 },
     target: null,
   };
+  state.si.erc = state.si.erp = state.si.er;
+  const twoOn = () => state.two === "two";
+  // The mean εr the formulas take, weighted by the dielectric's thickness
+  // on each side.
+  const syncEr = () => { if (twoOn()) { const s = state.si, [u, o] = [s.h1, s.h2 + s.t]; s.er = (s.erc * u + s.erp * o) / (u + o); } };
+  const erParams = () => (twoOn() ? { er: state.si.erc, er2: state.si.erp } : {});
+  const erLabel = () => (twoOn() ? `εr ${Number(state.si.erc.toPrecision(3))} / ${Number(state.si.erp.toPrecision(3))}` : `εr ${Number(state.si.er.toPrecision(3))}`);
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
@@ -14235,7 +14271,7 @@ function renderDualStripline(domain, tool, favId) {
 
   const link = solverLink({
     kind: "stripline", modes: [undefined], factor: 1,
-    params: (w) => { const s = state.si; return { w: mm(w), t: mm(s.t), b: mm(B()), er: s.er, h1: mm(s.h1) }; },
+    params: (w) => { const s = state.si; return { w: mm(w), t: mm(s.t), b: mm(B()), er: s.er, ...erParams(), h1: mm(s.h1) }; },
     estimate, estimateWidth,
     width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
     problem, show,
@@ -14268,7 +14304,7 @@ function renderDualStripline(domain, tool, favId) {
       ${lbl(46, h2y, `h2 ${both(s.h2)}`, grey, "start")}
       ${lbl(46, h1y, `h1 ${both(s.h1)}`, grey, "start")}
       ${lbl(276, h2y, `t ${tLabel}`, grey, "end")}
-      ${lbl(276, h1y, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(276, h1y, erLabel(), grey, "end")}
       ${lbl(161, 10, "ground planes, above and below", part)}
     </svg>`;
   }
@@ -14280,7 +14316,7 @@ function renderDualStripline(domain, tool, favId) {
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
-    const td = 33.356 * Math.sqrt(s.er) * per;
+    const td = 33.356 * Math.sqrt(twoOn() && link.sol && link.sol.res[0] ? link.sol.res[0].eeff : s.er) * per;
     const vs = (v) => { const d = (v / z - 1) * 100; return `${ohm(v)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const off = Math.abs(s.h2 - s.h1) / 2;
     const zr = robrish(s.w), zh = hogan(s.w), zc = zSS(s.w, B(), s.t) / Math.sqrt(s.er);
@@ -14305,7 +14341,7 @@ function renderDualStripline(domain, tool, favId) {
           ${row("IPC-2251 formula", dualRow(dual2251(s.w)), "ipc2251")}
           ${row("Older IPC formula", dualRow(dualOld(s.w)), "dualold")}
           ${row("Centred between the same planes", vs(zc), "centred")}
-          ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+          ${row(twoOn() ? "Delay" : "Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
         </div>`;
   }
@@ -14326,6 +14362,7 @@ function renderDualStripline(domain, tool, favId) {
     syncBoxes();
   }
   function refresh() {
+    syncEr();
     settle();
     link.recall();
     show();
@@ -14334,7 +14371,9 @@ function renderDualStripline(domain, tool, favId) {
 
   const example = (si, extra, target) => () => {
     Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    if (!("two" in (extra || {}))) state.two = "one";
     Object.assign(state.si, si);
+    state.si.erc = state.si.erp = state.si.er;
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
     paint();
@@ -14357,6 +14396,7 @@ function renderDualStripline(domain, tool, favId) {
 
   function paint() {
     const s = state.si;
+    syncEr();
     settle();
     link.recall();
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
@@ -14371,11 +14411,13 @@ function renderDualStripline(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "A PCB trace nearer one of its two planes")}
 
+      ${pillRow(Object.entries(TWO_ER), state.two, domain.bg)}
+
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${field("w", "Trace width", sel('data-lunit="1"', MS_LEN_UNITS, state.lUnit), lv("w"))}${field("h1", "Under it, h1", sel('data-lunit="2"', MS_LEN_UNITS, state.lUnit), lv("h1"))}${field("h2", "Over it, h2", sel('data-lunit="3"', MS_LEN_UNITS, state.lUnit), lv("h2"))}</div>
-      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
-      <div class="field-pair">${field("z", "Impedance", fixed("Ω"), "")}</div>
+      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${twoOn() ? field("erc", "Core εr", fixed(""), fmt(s.erc)) : field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${twoOn() ? field("erp", "Prepreg εr", fixed(""), fmt(s.erp)) : ""}${field("z", "Impedance", fixed("Ω"), "")}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -14397,8 +14439,12 @@ function renderDualStripline(domain, tool, favId) {
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "h1" || key === "h2") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
         else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "erc" || key === "erp") {
+          state.si[key] = v;
+          if (state.mat !== "custom") { state.mat = "custom"; const ms = app.querySelector('select[id$="-mat"]'); if (ms) ms.value = "custom"; }
+        }
         else if (key === "er") {
-          state.si.er = v;
+          state.si.er = state.si.erc = state.si.erp = v;
           const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
           if (m !== state.mat) { state.mat = m; const ms = document.getElementById("ds-mat"); if (ms) ms.value = m; }
         }
@@ -14409,10 +14455,13 @@ function renderDualStripline(domain, tool, favId) {
     document.getElementById("ds-mat").onchange = (e) => {
       state.mat = e.target.value;
       const er = MS_MATERIALS[state.mat][1];
-      if (er) state.si.er = er;
+      if (er) state.si.er = state.si.erc = state.si.erp = er;
       paint();
     };
     wireLengthUnits(C, state, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.two = btn.dataset.pill; setPref(C, "two", state.two); if (!twoOn()) state.si.erc = state.si.erp = state.si.er; paint(); };
+    });
     syncBoxes();
     link.schedule(true);
   }
@@ -14455,10 +14504,18 @@ function renderDiffStripline(domain, tool, favId) {
   const state = {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    two: pref(C, "two", "one", Object.keys(TWO_ER)),
     mat: "fr4",
     si: { w: 0.15e-3, s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3 },
     target: null,
   };
+  state.si.erc = state.si.erp = state.si.er;
+  const twoOn = () => state.two === "two";
+  // The mean εr the formulas take, weighted by the dielectric's thickness
+  // on each side.
+  const syncEr = () => { if (twoOn()) { const s = state.si, [u, o] = [(s.b - s.t) / 2, (s.b + s.t) / 2]; s.er = (s.erc * u + s.erp * o) / (u + o); } };
+  const erParams = () => (twoOn() ? { er: state.si.erc, er2: state.si.erp } : {});
+  const erLabel = () => (twoOn() ? `εr ${Number(state.si.erc.toPrecision(3))} / ${Number(state.si.erp.toPrecision(3))}` : `εr ${Number(state.si.er.toPrecision(3))}`);
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   // In air: Wheeler's thick strip, Cohn's zero-thickness single and odd mode.
@@ -14497,7 +14554,7 @@ function renderDiffStripline(domain, tool, favId) {
   const link = solverLink({
     kind: "stripline", modes: ["odd", "single", "even"], factor: 2,
     params: (w, mode) => {
-      const q = state.si, p = { w: mm(w), t: mm(q.t), b: mm(q.b), er: q.er };
+      const q = state.si, p = { w: mm(w), t: mm(q.t), b: mm(q.b), er: q.er, ...erParams() };
       return mode === "single" ? p : Object.assign(p, { s: mm(q.s), mode });
     },
     estimate: zDiffAt, estimateWidth: wFor,
@@ -14545,7 +14602,7 @@ function renderDiffStripline(domain, tool, favId) {
       <path d="M30 20 V84 M26 20 H34 M26 84 H34" stroke="${wire}" stroke-width="1.2"/>
       ${lbl(46, 79, `b ${both(s.b)}`, grey, "start")}
       ${lbl(276, 65, `t ${tLabel}`, grey, "end")}
-      ${lbl(276, 79, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(276, 79, erLabel(), grey, "end")}
       ${lbl(161, 10, "ground planes, above and below", part)}
     </svg>`;
   }
@@ -14558,7 +14615,7 @@ function renderDiffStripline(domain, tool, favId) {
     const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
     const cmp = (zc) => { const d = (zc / zd - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
-    const td = 33.356 * Math.sqrt(s.er) * per;
+    const td = 33.356 * Math.sqrt(twoOn() && link.sol && link.sol.res[0] ? link.sol.res[0].eeff : s.er) * per;
     const st = s.t > 0 ? `s/t ${Number((s.s / s.t).toPrecision(3))}` : "no copper thickness";
     const main = state.target !== null
       ? `<div class="result-field">
@@ -14578,7 +14635,7 @@ function renderDiffStripline(domain, tool, favId) {
           ${row("Single trace, alone", ohm(z1), "single")}
           ${row("IPC-2141A, for comparison", cmp(zDiffAt(s.w)), "ipc")}
           ${row("IPC-2141A's form", `${st}: ${wideGap() ? "[4-42], s/t ≥ 5" : "[4-43], s/t < 5"}`, "form")}
-          ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+          ${row(twoOn() ? "Delay" : "Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
         </div>`;
   }
 
@@ -14597,6 +14654,7 @@ function renderDiffStripline(domain, tool, favId) {
     syncBoxes();
   }
   function refresh() {
+    syncEr();
     settle();
     link.recall();
     show();
@@ -14605,7 +14663,9 @@ function renderDiffStripline(domain, tool, favId) {
 
   const example = (si, extra, target) => () => {
     Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    if (!("two" in (extra || {}))) state.two = "one";
     Object.assign(state.si, si);
+    state.si.erc = state.si.erp = state.si.er;
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
     paint();
@@ -14623,6 +14683,7 @@ function renderDiffStripline(domain, tool, favId) {
 
   function paint() {
     const s = state.si;
+    syncEr();
     settle();
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const field = (key, label, unitHTML, value) => `
@@ -14637,11 +14698,13 @@ function renderDiffStripline(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "A side-by-side pair between two planes")}
 
+      ${pillRow(Object.entries(TWO_ER), state.two, domain.bg)}
+
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Gap, s", 2)}${lf("b", "Planes apart, b", 3)}</div>
-      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
-      <div class="field-pair">${field("z", "Differential impedance", fixed("Ω"), "")}</div>
+      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${twoOn() ? field("erc", "Core εr", fixed(""), fmt(s.erc)) : field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${twoOn() ? field("erp", "Prepreg εr", fixed(""), fmt(s.erp)) : ""}${field("z", "Differential impedance", fixed("Ω"), "")}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -14663,8 +14726,12 @@ function renderDiffStripline(domain, tool, favId) {
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "s" || key === "b") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
         else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "erc" || key === "erp") {
+          state.si[key] = v;
+          if (state.mat !== "custom") { state.mat = "custom"; const ms = app.querySelector('select[id$="-mat"]'); if (ms) ms.value = "custom"; }
+        }
         else if (key === "er") {
-          state.si.er = v;
+          state.si.er = state.si.erc = state.si.erp = v;
           const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
           if (m !== state.mat) { state.mat = m; const ms = document.getElementById("dsl-mat"); if (ms) ms.value = m; }
         }
@@ -14675,10 +14742,13 @@ function renderDiffStripline(domain, tool, favId) {
     document.getElementById("dsl-mat").onchange = (e) => {
       state.mat = e.target.value;
       const er = MS_MATERIALS[state.mat][1];
-      if (er) state.si.er = er;
+      if (er) state.si.er = state.si.erc = state.si.erp = er;
       paint();
     };
     wireLengthUnits(C, state, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.two = btn.dataset.pill; setPref(C, "two", state.two); if (!twoOn()) state.si.erc = state.si.erp = state.si.er; paint(); };
+    });
     syncBoxes();
     link.schedule(true);
   }
@@ -14724,12 +14794,20 @@ function renderAsymDiffStripline(domain, tool, favId) {
   const state = {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    two: pref(C, "two", "one", Object.keys(TWO_ER)),
     mat: "fr4",
     si: { w: 0.15e-3, s: 0.2e-3, h1: 0.2e-3, h2: 0.4e-3, t: OZ, er: 4.3 },
     // A differential impedance typed in its box: the width is set to give
     // it, the gap kept.
     target: null,
   };
+  state.si.erc = state.si.erp = state.si.er;
+  const twoOn = () => state.two === "two";
+  // The mean εr the formulas take, weighted by the dielectric's thickness
+  // on each side.
+  const syncEr = () => { if (twoOn()) { const s = state.si, [u, o] = [s.h1, s.h2 + s.t]; s.er = (s.erc * u + s.erp * o) / (u + o); } };
+  const erParams = () => (twoOn() ? { er: state.si.erc, er2: state.si.erp } : {});
+  const erLabel = () => (twoOn() ? `εr ${Number(state.si.erc.toPrecision(3))} / ${Number(state.si.erp.toPrecision(3))}` : `εr ${Number(state.si.er.toPrecision(3))}`);
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
@@ -14768,7 +14846,7 @@ function renderAsymDiffStripline(domain, tool, favId) {
   const link = solverLink({
     kind: "stripline", modes: ["odd", "single", "even"], factor: 2,
     params: (w, mode) => {
-      const q = state.si, p = { w: mm(w), t: mm(q.t), b: mm(B()), er: q.er, h1: mm(q.h1) };
+      const q = state.si, p = { w: mm(w), t: mm(q.t), b: mm(B()), er: q.er, ...erParams(), h1: mm(q.h1) };
       return mode === "single" ? p : Object.assign(p, { s: mm(q.s), mode });
     },
     estimate, estimateWidth,
@@ -14808,7 +14886,7 @@ function renderAsymDiffStripline(domain, tool, favId) {
       ${lbl(46, upY, `h2 ${both(s.h2)}`, grey, "start")}
       ${lbl(46, dnY, `h1 ${both(s.h1)}`, grey, "start")}
       ${lbl(276, upY, `t ${tLabel}`, grey, "end")}
-      ${lbl(276, dnY, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(276, dnY, erLabel(), grey, "end")}
       ${lbl(161, 10, "ground planes, above and below", part)}
     </svg>`;
   }
@@ -14821,7 +14899,7 @@ function renderAsymDiffStripline(domain, tool, favId) {
     const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
     const cmp = (zc) => { const d = (zc / zd - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
-    const td = 33.356 * Math.sqrt(s.er) * per;
+    const td = 33.356 * Math.sqrt(twoOn() && link.sol && link.sol.res[0] ? link.sol.res[0].eeff : s.er) * per;
     const off = Math.abs(s.h2 - s.h1) / 2;
     const main = state.target !== null
       ? `<div class="result-field">
@@ -14840,7 +14918,7 @@ function renderAsymDiffStripline(domain, tool, favId) {
           ${row("Even mode, common mode", even ? `${ohm(even.z)}, ${ohm(even.z / 2)}` : "…", "even")}
           ${row("Single trace, alone", z1 > 0 ? `${ohm(z1)}, coupling ${Number((zo / z1).toPrecision(3))}` : "…", "single")}
           ${row("Estimate, for comparison", cmp(estimate(s.w)), "est")}
-          ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+          ${row(twoOn() ? "Delay" : "Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
         </div>`;
   }
 
@@ -14858,6 +14936,7 @@ function renderAsymDiffStripline(domain, tool, favId) {
     syncBoxes();
   }
   function refresh() {
+    syncEr();
     settle();
     link.recall();
     show();
@@ -14866,7 +14945,9 @@ function renderAsymDiffStripline(domain, tool, favId) {
 
   const example = (si, extra, target) => () => {
     Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    if (!("two" in (extra || {}))) state.two = "one";
     Object.assign(state.si, si);
+    state.si.erc = state.si.erp = state.si.er;
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
     paint();
@@ -14885,6 +14966,7 @@ function renderAsymDiffStripline(domain, tool, favId) {
 
   function paint() {
     const s = state.si;
+    syncEr();
     settle();
     link.recall();
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
@@ -14899,11 +14981,13 @@ function renderAsymDiffStripline(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "A side-by-side pair nearer one of two planes")}
 
+      ${pillRow(Object.entries(TWO_ER), state.two, domain.bg)}
+
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Gap, s", 2)}${lf("h1", "Under them, h1", 3)}</div>
       <div class="field-pair">${lf("h2", "Over them, h2", 4)}${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div></div>
-      <div class="field-pair">${field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Differential impedance", fixed("Ω"), "")}</div>
+      <div class="field-pair">${twoOn() ? field("erc", "Core εr", fixed(""), fmt(s.erc)) : field("er", "εr", fixed(""), fmt(s.er))}${twoOn() ? field("erp", "Prepreg εr", fixed(""), fmt(s.erp)) : ""}${field("z", "Differential impedance", fixed("Ω"), "")}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -14925,8 +15009,12 @@ function renderAsymDiffStripline(domain, tool, favId) {
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "s" || key === "h1" || key === "h2") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
         else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "erc" || key === "erp") {
+          state.si[key] = v;
+          if (state.mat !== "custom") { state.mat = "custom"; const ms = app.querySelector('select[id$="-mat"]'); if (ms) ms.value = "custom"; }
+        }
         else if (key === "er") {
-          state.si.er = v;
+          state.si.er = state.si.erc = state.si.erp = v;
           const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
           if (m !== state.mat) { state.mat = m; const ms = document.getElementById("ads-mat"); if (ms) ms.value = m; }
         }
@@ -14937,11 +15025,14 @@ function renderAsymDiffStripline(domain, tool, favId) {
     document.getElementById("ads-mat").onchange = (e) => {
       state.mat = e.target.value;
       const er = MS_MATERIALS[state.mat][1];
-      if (er) state.si.er = er;
+      if (er) state.si.er = state.si.erc = state.si.erp = er;
       paint();
     };
     // Every length picker changes them all (wireLengthUnits).
     wireLengthUnits(C, state, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.two = btn.dataset.pill; setPref(C, "two", state.two); if (!twoOn()) state.si.erc = state.si.erp = state.si.er; paint(); };
+    });
     syncBoxes();
     link.schedule(true);
   }
@@ -14976,10 +15067,18 @@ function renderBroadsideStripline(domain, tool, favId) {
   const state = {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    two: pref(C, "two", "one", Object.keys(TWO_ER)),
     mat: "fr4",
     si: { w: 0.15e-3, s: 0.15e-3, b: 0.6e-3, t: OZ, er: 4.3 },
     target: null,
   };
+  state.si.erc = state.si.erp = state.si.er;
+  const twoOn = () => state.two === "two";
+  // The mean εr the formulas take, weighted by the dielectric's thickness
+  // on each side.
+  const syncEr = () => { if (twoOn()) { const s = state.si, [u, o] = [s.s, s.b - s.s]; s.er = (s.erc * u + s.erp * o) / (u + o); } };
+  const erParams = () => (twoOn() ? { er: state.si.erc, er2: state.si.erp } : {});
+  const erLabel = () => (twoOn() ? `εr ${Number(state.si.erc.toPrecision(3))} / ${Number(state.si.erp.toPrecision(3))}` : `εr ${Number(state.si.er.toPrecision(3))}`);
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
   // IPC's paper-thin odd mode, planes b apart: k by halving (s/b, 1).
@@ -15021,7 +15120,7 @@ function renderBroadsideStripline(domain, tool, favId) {
   const link = solverLink({
     kind: "broadside", modes: ["odd", "even"], factor: 2,
     params: (w, mode) => {
-      const q = state.si, p = { w: mm(w), t: mm(q.t), s: mm(q.s), b: mm(q.b), er: q.er };
+      const q = state.si, p = { w: mm(w), t: mm(q.t), s: mm(q.s), b: mm(q.b), er: q.er, ...erParams() };
       if (mode === "even") p.mode = "even";
       return p;
     },
@@ -15069,7 +15168,7 @@ function renderBroadsideStripline(domain, tool, favId) {
       ${lbl(176, 56, `s ${both(s.s)}`, grey, "start")}
       <path d="M30 20 V84 M26 20 H34 M26 84 H34" stroke="${wire}" stroke-width="1.2"/>
       ${lbl(46, 79, `b ${both(s.b)}`, grey, "start")}
-      ${lbl(276, 33, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(276, 33, erLabel(), grey, "end")}
       ${lbl(276, 79, `t ${tLabel}`, grey, "end")}
       ${lbl(161, 10, "ground planes, above and below", part)}
     </svg>`;
@@ -15084,7 +15183,7 @@ function renderBroadsideStripline(domain, tool, favId) {
     const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
     const cmp = (zc) => { const d = (zc / zd - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
-    const td = 33.356 * Math.sqrt(s.er) * per;
+    const td = 33.356 * Math.sqrt(twoOn() && link.sol && link.sol.res[0] ? link.sol.res[0].eeff : s.er) * per;
     const ws = s.w / s.s;
     const main = state.target !== null
       ? `<div class="result-field">
@@ -15103,7 +15202,7 @@ function renderBroadsideStripline(domain, tool, favId) {
           ${row("Copper method, for comparison", cmp(zDiffAt(s.w)), "copper")}
           ${row("Paper-thin, IPC's formula", cmp(thinDiffAt(s.w)), "thin")}
           ${row("w/s, IPC's range", ws >= 0.35 ? `${Number(ws.toPrecision(3))}, 0.35 or more` : warn(`${Number(ws.toPrecision(3))}, below 0.35`), "range")}
-          ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+          ${row(twoOn() ? "Delay" : "Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
         </div>`;
   }
 
@@ -15122,6 +15221,7 @@ function renderBroadsideStripline(domain, tool, favId) {
     syncBoxes();
   }
   function refresh() {
+    syncEr();
     settle();
     link.recall();
     show();
@@ -15130,7 +15230,9 @@ function renderBroadsideStripline(domain, tool, favId) {
 
   const example = (si, extra, target) => () => {
     Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    if (!("two" in (extra || {}))) state.two = "one";
     Object.assign(state.si, si);
+    state.si.erc = state.si.erp = state.si.er;
     const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
     if (m) state.mat = m;
     paint();
@@ -15148,6 +15250,7 @@ function renderBroadsideStripline(domain, tool, favId) {
 
   function paint() {
     const s = state.si;
+    syncEr();
     settle();
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
     const field = (key, label, unitHTML, value) => `
@@ -15162,11 +15265,13 @@ function renderBroadsideStripline(domain, tool, favId) {
     app.innerHTML = `
       ${calcHeader(tool, favId, "A pair of traces stacked between two planes")}
 
+      ${pillRow(Object.entries(TWO_ER), state.two, domain.bg)}
+
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Between them, s", 2)}${lf("b", "Planes apart, b", 3)}</div>
-      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
-      <div class="field-pair">${field("z", "Differential impedance", fixed("Ω"), "")}</div>
+      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${twoOn() ? field("erc", "Core εr", fixed(""), fmt(s.erc)) : field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${twoOn() ? field("erp", "Prepreg εr", fixed(""), fmt(s.erp)) : ""}${field("z", "Differential impedance", fixed("Ω"), "")}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -15188,8 +15293,12 @@ function renderBroadsideStripline(domain, tool, favId) {
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "s" || key === "b") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
         else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "erc" || key === "erp") {
+          state.si[key] = v;
+          if (state.mat !== "custom") { state.mat = "custom"; const ms = app.querySelector('select[id$="-mat"]'); if (ms) ms.value = "custom"; }
+        }
         else if (key === "er") {
-          state.si.er = v;
+          state.si.er = state.si.erc = state.si.erp = v;
           const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
           if (m !== state.mat) { state.mat = m; const ms = document.getElementById("bs-mat"); if (ms) ms.value = m; }
         }
@@ -15200,10 +15309,13 @@ function renderBroadsideStripline(domain, tool, favId) {
     document.getElementById("bs-mat").onchange = (e) => {
       state.mat = e.target.value;
       const er = MS_MATERIALS[state.mat][1];
-      if (er) state.si.er = er;
+      if (er) state.si.er = state.si.erc = state.si.erp = er;
       paint();
     };
     wireLengthUnits(C, state, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.two = btn.dataset.pill; setPref(C, "two", state.two); if (!twoOn()) state.si.erc = state.si.erp = state.si.er; paint(); };
+    });
     syncBoxes();
     link.schedule(true);
   }

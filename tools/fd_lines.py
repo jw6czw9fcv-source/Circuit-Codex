@@ -213,9 +213,14 @@ def app_microstrip(w, t, h, er, s=None, mode=None, H2=None, level=None, mask=Non
     return ETA0 / ((2 if single else 1) * math.sqrt(S * Sa)), S / Sa
 
 
-def app_stripline(w, t, b, er, s=None, mode=None, h1=None, level=None):
-    """As fieldsolver.js stripline()."""
-    if level is None:
+def app_stripline(w, t, b, er, s=None, mode=None, h1=None, level=None, er2=None):
+    """As fieldsolver.js stripline(). With er2 (the prepreg from the trace's
+    bottom face up; er the core under it) returns (Z, eeff)."""
+    if er2 is not None and er2 != er:
+        if level is None:
+            res = [app_stripline(w, t, b, er, s, mode, h1, L, er2) for L in (0, 1, 2)]
+            return fit2([r[0] for r in res]), fit2([r[1] for r in res])
+    elif level is None:
         return fit2([app_stripline(w, t, b, er, s, mode, h1, L) for L in (0, 1, 2)])
     single = not (s and s > 0)
     y0 = h1 if h1 is not None else (b - t) / 2; y1 = y0 + t
@@ -226,13 +231,22 @@ def app_stripline(w, t, b, er, s=None, mode=None, h1=None, level=None):
     g.row(0); g.row(b); g.col(X)
     if not single and mode == "odd": g.col(0)
     g.box(x0, x1, y0, y1)
+    if er2 is not None and er2 != er:
+        g.layer(0, y0, er); g.layer(y0, b, er2)
+        S, Sa = g.S(), g.S(air=True)
+        return ETA0 / ((2 if single else 1) * math.sqrt(S * Sa)), S / Sa
     return ETA0 / (math.sqrt(er) * (2 if single else 1) * g.S(air=True))
 
 
-def app_broadside(w, t, s, b, er, mode=None, level=None):
+def app_broadside(w, t, s, b, er, mode=None, level=None, er2=None):
     """As fieldsolver.js broadside(): the odd mode (mid-plane at 0 V), or
-    mode "even" (mid-plane a mirror). One trace's impedance."""
-    if level is None:
+    mode "even" (mid-plane a mirror). One trace's impedance. With er2 (the
+    prepreg outside the traces; er the core between them) returns (Z, eeff)."""
+    if er2 is not None and er2 != er:
+        if level is None:
+            res = [app_broadside(w, t, s, b, er, mode, L, er2) for L in (0, 1, 2)]
+            return fit2([r[0] for r in res]), fit2([r[1] for r in res])
+    elif level is None:
         return fit2([app_broadside(w, t, s, b, er, mode, L) for L in (0, 1, 2)])
     X = w / 2 + 5 * b; ya, yb = b / 2 - s / 2 - t, b / 2 - s / 2
     m = min(b / 2, w, s, ya)
@@ -240,6 +254,10 @@ def app_broadside(w, t, s, b, er, mode=None, level=None):
     g.row(0); g.col(X)
     if mode != "even": g.row(b / 2)
     g.box(0, w / 2, ya, yb)
+    if er2 is not None and er2 != er:
+        g.layer(0, yb, er2); g.layer(yb, b / 2, er)
+        S, Sa = g.S(), g.S(air=True)
+        return ETA0 / (2 * math.sqrt(S * Sa)), S / Sa
     return ETA0 / (math.sqrt(er) * 2 * g.S(air=True))
 
 

@@ -1712,6 +1712,8 @@ const CHECK_CASES = {
       expect: [['[data-res="len"]', "46.72 ft"], ['[data-res="sub"]', "14.24 m; each leg 23.36 ft"]] },
   ],
   "broadside-stripline": [
+    { name: "core 3.8 between the traces, prepreg 4.6 outside: 69.4 ohm (69.362), 67.85 ps/cm", do: [["pill", 1], ["set", 'input[data-key="erc"]', "3.8"], ["set", 'input[data-key="erp"]', "4.6"]],
+      expect: [['[data-res="big"]', "69.4 Ω"], ['[data-res="td"]', "/^67.[89] ps.cm$/"]] },
     { name: "100 ohm with 1 oz, planes 0.8 mm apart, 0.2 mm between: field solver 0.0917 mm (fd_lines app_broadside 0.09173); paper-thin it would read 120 (+20.4 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="big"]', "/^0.091[678] mm$/"], ['[data-res="by"]', "Field solver"], ['[data-res="thin"]', "/^120 Ω ..20.[345] %.$/"]] },
     { name: "0.15 mm traces 0.15 mm apart, planes 0.6 mm, 1 oz: 68 ohm (68.044); copper method 67.8 (-0.4 %), paper-thin 80 (+17.5 %); even 73.9", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
@@ -1728,6 +1730,8 @@ const CHECK_CASES = {
       expect: [['[data-res="err"]', "The traces must be closer to each other than the planes are."]] },
   ],
   "asym-diff-stripline": [
+    { name: "core 3.8 under, prepreg 4.6 over, the default pair: 93.2 ohm (93.161), 68.6 ps/cm", do: [["pill", 1], ["set", 'input[data-key="erc"]', "3.8"], ["set", 'input[data-key="erp"]', "4.6"]],
+      expect: [['[data-res="big"]', "93.2 Ω"], ['[data-res="td"]', "68.6 ps/cm"]] },
     { name: "the default: 0.15 mm traces, 0.2 mm gap, 0.2 mm under and 0.4 mm over, FR-4, 1 oz: field solver 92.4 ohm (fd_lines app_stripline 92.386); halves estimate +3.7 %", do: [],
       expect: [['[data-res="big"]', "92.4 Ω"], ['[data-res="by"]', "Field solver"], ['input[data-key="z"]', "92.39"], ['[data-res="sub"]', "planes 0.635 mm apart, the pair 0.1 mm off centre"], ['[data-res="odd"]', "46.2 Ω"], ['[data-res="even"]', "65 Ω, 32.5 Ω"], ['[data-res="single"]', "56 Ω, coupling 0.825"], ['[data-res="est"]', "95.8 Ω (+3.7 %)"], ['[data-res="td"]', "69.2 ps/cm"]] },
     { name: "100 ohm on the same layers: 0.117 mm (0.11662)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -1760,6 +1764,8 @@ const CHECK_CASES = {
       expect: [['[data-res="err"]', "Enter the dielectric between the traces."]] },
   ],
   "diff-stripline": [
+    { name: "core 3.8, prepreg 4.6, the default pair: 95.1 ohm (95.080), odd mode 68.8 ps/cm", do: [["pill", 1], ["set", 'input[data-key="erc"]', "3.8"], ["set", 'input[data-key="erp"]', "4.6"]],
+      expect: [['[data-res="big"]', "95.1 Ω"], ['[data-res="td"]', "68.8 ps/cm"]] },
     { name: "100 ohm, planes 0.6 mm apart, 0.2 mm gap, FR-4, 1 oz: field solver 0.125 mm traces (fd_lines app_stripline 0.12513); IPC-2141A's 0.14 mm gave 96.7", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="big"]', "/^0.12[456] mm$/"], ['[data-res="by"]', "Field solver"], ['[data-res="odd"]', "50 Ω"], ['[data-res="single"]', "61.8 Ω"], ['[data-res="form"]', "/^s.t 5.75: .4-42., s.t ≥ 5$/"]] },
     { name: "90 ohm on the same planes and gap: 0.175 mm (0.17450)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
@@ -1774,6 +1780,8 @@ const CHECK_CASES = {
       expect: [['input[data-key="b"]', "23.62"], ['input[data-key="s"]', "7.874"]] },
   ],
   "dual-stripline": [
+    { name: "core 3.8 under (h1), prepreg 4.6 over: 50.7 ohm (50.662), 68.1 ps/cm", do: [["pill", 1], ["set", 'input[data-key="erc"]', "3.8"], ["set", 'input[data-key="erp"]', "4.6"]],
+      expect: [['[data-res="big"]', "50.7 Ω"], ['[data-res="td"]', "68.1 ps/cm"]] },
     { name: "dual stripline, LearnEMC's case (er 4, h 15 mil, c 10 mil, t 1.37 mil), 2 mil trace: solver 96.6 ohm (fd_lines 96.631); IPC-2251 draft formula 96.3 (-0.3 %), the older IPC dual formula 103 (+6.5 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="4"]']],
       expect: [['[data-res="big"]', "96.6 Ω"], ['[data-res="ipc2251"]', "96.3 Ω (−0.3 %)"], ['[data-res="dualold"]', "103 Ω (+6.5 %)"]] },
     { name: "dual stripline, a 0.4318 mm trace (W/(H-T) 1.83, outside both formulas' range): solver 38.3 ohm (38.269); IPC-2251 35.6 (-7.1 %), the older formula 32.689 (-14.6 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="5"]']],
@@ -1906,6 +1914,8 @@ const CHECK_CASES = {
       expect: [['select[data-lunit="1"]', "mil"], ['select[data-lunit="2"]', "mil"], ['input[data-key="h"]', "7.874"]] },
   ],
   "stripline": [
+    { name: "core 3.8 under the trace, prepreg 4.6 around and above, the default 0.2 mm trace: field solver 52.2 ohm (fd_lines app_stripline er2, 52.225), eeff 4.233, 68.6 ps/cm", do: [["pill", 1], ["set", 'input[data-key="erc"]', "3.8"], ["set", 'input[data-key="erp"]', "4.6"]],
+      expect: [['[data-res="big"]', "52.2 Ω"], ['[data-res="td"]', "68.6 ps/cm"]] },
     { name: "the copper's picker switches the lengths: mil on the copper turns the width and spacing to mil", do: [["set", 'select[data-tunit="1"]', "mil"]],
       expect: [['select[data-lunit="1"]', "mil"], ['select[data-lunit="2"]', "mil"], ['input[data-key="b"]', "23.62"]] },
     { name: "Hafner et al. table I: 155 um strip, 1 um thick, 430 um of er 10 each side: field solver 50.05 ohm (fd_lines 50.054), their Wheeler value 50.06", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],

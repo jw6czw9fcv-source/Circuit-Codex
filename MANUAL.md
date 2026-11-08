@@ -11823,12 +11823,35 @@ IPC-2141A's wide-strip formula does better. For the single stripline the
 solver mostly confirms Wheeler's formula; it is the same engine as for
 the stripline pairs, where the formulas part further.
 
+### Core and prepreg
+
+The "Core + prepreg" pill gives the stripline two dielectrics, as a real
+stack-up has: the core the trace is etched on, under it, and the prepreg
+pressed over it, which fills around the copper and up to the other plane
+(boxes "Core εr" and "Prepreg εr"; the material picker sets both). The
+solver takes the two layers (εr under the trace's bottom face, the
+prepreg's from there up) and gives the impedance and an effective εr,
+from which the delay; the comparison formulas, which know one εr, take
+the mean weighted by the dielectric's thickness on each side, as the
+manual used to ask the user to do by hand. With one εr (the default) the
+tool is as before.
+
+- **Checked:** a paper-thin trace centred between the planes has a field
+  symmetric about its plane, so its εeff is exactly the mean of the two:
+  core 3 and prepreg 5 give εeff 4.00000 and the same impedance as one εr
+  of 4 (61.617 Ω, 0.2 mm in 0.6 mm); two equal εr give the one-εr value.
+- **What it does:** the default 0.2 mm trace with 1 oz copper, core 3.8
+  and prepreg 4.6: 52.2 Ω and εeff 4.233, where the thickness-weighted
+  mean is 4.223: the prepreg around the copper's sides counts a little
+  more than its thickness.
+
 ### Assumptions and limits
 
 - **Symmetric stripline:** the trace centred between the planes; an
   off-centre trace is Asymmetric stripline's case.
-- **One dielectric:** core and prepreg of different εr are averaged by
-  the user.
+- **One dielectric or core and prepreg:** with the pill, two layers split
+  at the trace's bottom face (see Core and prepreg); more layers are
+  averaged by the user.
 - **Quasi-static field solution:** the trace a rectangle, the planes
   wide (the solver's side walls 5 b away), no losses; the board maker's
   stack-up calculation decides.
@@ -12030,8 +12053,9 @@ in parallel, minus Hogan's term; it is within 0.3 % in the first case but
 
 - **Quasi-static, no losses:** dispersion, losses and roughness are left
   out.
-- **One dielectric:** core and prepreg of different εr are averaged by the
-  user.
+- **One dielectric or core and prepreg:** with the pill, the core under
+  the trace (h1) and the prepreg from its bottom face up, as in
+  Stripline's Core and prepreg; more layers are averaged by the user.
 - **One trace:** traces on the other signal layer are left out.
 - **Rectangular trace;** the board maker's stack-up calculation decides.
 
@@ -12207,6 +12231,13 @@ result until 2026-11-07, when the solver took over. At 100 Ω the
 difference is in the width: IPC-2141A's 0.14 mm gives 96.7 Ω, the
 solver's 0.125 mm gives 100 Ω.
 
+### Core and prepreg
+
+As in Stripline: the "Core + prepreg" pill puts the core's εr under the
+traces and the prepreg's from their bottom faces up; the solver takes the
+two layers, the formulas the thickness-weighted mean. The default pair
+with core 3.8 and prepreg 4.6: 95.1 Ω (95.080), 68.8 ps/cm.
+
 ### Assumptions and limits
 
 - **Quasi-static field solution:** the traces rectangles, no losses; the
@@ -12337,7 +12368,8 @@ Centred, the estimate is IPC-2141A's own pair, whose error it carries
   pair changes its impedance; the tool takes the space between the planes
   as plain dielectric.
 - **Quasi-static field solution:** the traces rectangles, one dielectric
-  (core and prepreg averaged by the user), no losses; the board maker's
+  (or core and prepreg with the pill, as in Stripline), no losses; the
+  board maker's
   stack-up calculation decides.
 
 ### How it was checked
@@ -12496,7 +12528,9 @@ s 0.1 to 0.2 mm, b 0.4 to 0.8 mm, εr 4.3: −1.4 to −0.1 % for ½, 1 and
 - **The copper method is the tool's,** checked against the solver over
   the range above only.
 - **Centred pair, equal traces, one dielectric:** core and prepreg are
-  averaged by the user.
+  averaged by the user, or core and prepreg with the pill (the core
+  between the traces, the prepreg outside, as in Stripline's Core and
+  prepreg).
 
 ### How it was checked
 
