@@ -375,6 +375,12 @@ const FORMULAS = [
     note: "The tool's big result is a field solver; this IPC-2141A form ([4-42], s/t ≥ 5, sign corrected) is 1 to 3.6 % high against it. In air; Z0, Zo,0 Cohn's paper-thin strip alone and in the pair, Cf the edge fringing [4-44].",
   },
   {
+    tool: "Edge-coupled asym stripline",
+    domain: "pcb",
+    formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / (√εr × S),  Zdiff = 2 Zodd", "Estimate: 2/Zo = 1/Zo,a + 1/Zo,b", "Zo,a, Zo,b: planes 2h1 + t, 2h2 + t apart"],
+    note: "A field solver; no formula is published for an off-centre pair. The estimate takes it as two halves in parallel, Edge-coupled stripline's IPC-2141A pair between planes 2h1 + t and 2h2 + t apart: 1.5 to 5 % high.",
+  },
+  {
     tool: "Broadside-coupled stripline",
     domain: "pcb",
     formulas: ["Zo,thin = 295.9/√εr × (s/b) / tanh⁻¹(k)", "1/Zo = 1/Zo,thin(b − 2t) + ΔY,  Zdiff = 2 Zo"],

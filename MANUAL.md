@@ -122,6 +122,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Stripline](#stripline)
 - Impedance → [Asymmetric stripline](#dual-stripline)
 - Impedance → [Edge-coupled stripline](#diff-stripline)
+- Impedance → [Edge-coupled asym stripline](#asym-diff-stripline)
 - Impedance → [Broadside-coupled stripline](#broadside-stripline)
 - Impedance → [Coplanar waveguide](#coplanar)
 - Vias & layout → [Thermal vias](#thermal-vias)
@@ -12134,6 +12135,133 @@ solver's 0.125 mm gives 100 Ω.
 - the default pair: 94.6 Ω (94.596), IPC-2141A 97.6 Ω (+3.2 %),
   69.2 ps/cm;
 - the three length pickers move together.
+
+[↑ Index](#index)
+
+---
+
+<a id="asym-diff-stripline"></a>
+## Edge-coupled asym stripline
+
+`calc: asym-diff-stripline` · PCB & interconnect › Impedance
+
+### What it computes
+
+The differential impedance of two edge-coupled traces between two ground
+planes but nearer one of them (the asymmetric, offset or off-centre
+edge-coupled stripline, Saturn's "Edge Cpld Int Asym"), as a pair is on a
+board with two signal layers between the same planes, or the trace width
+that gives it at a gap:
+
+- **Inputs:** each trace's width w, the gap s, the dielectric under the
+  traces h1 and over them h2, the copper's thickness t (its own picker),
+  the material and εr.
+- **Width and differential impedance are two live boxes,** as in
+  Edge-coupled stripline.
+- **The big result:** Zdiff from the field solver (as in Edge-coupled
+  embedded), with the spacing between the planes, b = h1 + t + h2, and how
+  far the pair is off centre; or the width for the Zdiff typed. For the
+  moment the solver takes, the badge reads "Solving…" and the estimate
+  stands in.
+- **Below it:**
+  - the odd-mode impedance, each trace's share, Zdiff / 2;
+  - the even-mode and common-mode impedance, as in Edge-coupled
+    microstrip;
+  - one trace alone, from the solver, and the coupling (odd mode over
+    it);
+  - the estimate, and how far it is from the solver's;
+  - the delay per length, the signal seeing the full εr.
+- **Units:** mm or mil for the four lengths, moving together; oz, µm or
+  mil for the copper.
+- **Drawing:** the two planes, the pair drawn nearer the closer one, w and
+  s as a chain dimension, h1, h2, t and εr, in mm and mil. The traces are
+  green when their width is the answer.
+- **Remembered:** the length unit and the copper unit.
+
+Examples: 100 Ω and 90 Ω with 0.2 mm under and 0.4 mm over the pair, a
+pair close to one plane, and the centred pair, Edge-coupled stripline's.
+
+### Terms
+
+- **Differential pair, Zdiff, odd mode, even mode, common mode,
+  coupling:** as in Edge-coupled microstrip.
+- **h1, h2, b, t, εr, oz:** as in Asymmetric stripline.
+
+### Source
+
+- **No published formula read covers this pair.** Wadell's §4.6.7
+  "Asymmetric Edge-Coupled Striplines" (Transmission Line Design Handbook,
+  1991, pages 239–240, read, Pierre's scanned copy) is a different
+  structure: a centred pair of unequal widths, worked from each line's
+  capacitances (Cristal's method). IPC-2141A (March 2004, read) has the
+  centred pair only (§4.4.2).
+- **The field solver:** js/fieldsolver.js, its stripline cross-section
+  with the pair's gap, the odd or even mode and h1; tools/fd_lines.py's
+  app_stripline, a separate implementation with the same settings, gives
+  the values below.
+- **The estimate:** the tool's, built from IPC-2141A's centred pair as
+  Edge-coupled stripline corrects it.
+
+### Why the formulas are these
+
+The solver, the big result, solved three times, all in one dielectric:
+
+    odd mode: the traces at +1 V and −1 V,  Zodd = η0 / (√εr × S_air)
+    Zdiff = 2 Zodd,   even mode: both at +1 V,  common mode = Zeven / 2
+    one trace alone, as in Asymmetric stripline
+
+The estimate, the comparison and the width search's start:
+
+    Zo,a = IPC-2141A's centred pair between planes 2h1 + t apart
+    Zo,b = the same between planes 2h2 + t apart
+    1/Zo = (1/Zo,a + 1/Zo,b) / 2,   Zdiff = 2 Zo
+
+The pair's field divides between the two planes: the part going down sees
+the pair as if it were centred between planes 2h1 + t apart, the part going
+up as if centred between planes 2h2 + t apart, each with half the
+capacitance; the two halves add, as in Asymmetric stripline's and
+Broadside-coupled stripline's copper term. It leaves out how the field of
+one half spills into the other, so it reads high:
+
+| Case (1 oz, εr 4.3) | Solver Zdiff | Estimate |
+|---|---|---|
+| 0.15 mm, gap 0.2, h1 0.2, h2 0.4 mm | 92.39 Ω | +3.7 % |
+| 0.1 mm, gap 0.15, h1 0.15, h2 0.3 mm | 91.80 Ω | +1.7 % |
+| 0.15 mm, gap 0.2, h1 0.15, h2 0.6 mm | 87.66 Ω | +4.9 % |
+| 0.1 mm, gap 0.1, h1 0.1, h2 0.4 mm | 76.41 Ω | +2.1 % |
+| 0.25 mm, gap 0.3, h1 0.3, h2 0.5 mm | 92.30 Ω | +2.1 % |
+| 0.2 mm, gap 0.2, centred, h1 = h2 = 0.2 mm | 77.18 Ω | +1.5 % |
+
+Centred, the estimate is IPC-2141A's own pair, whose error it carries
+(up to +3.6 % in Edge-coupled stripline).
+
+### Assumptions and limits
+
+- **Traces on the other signal layer left out:** a trace under or over the
+  pair changes its impedance; the tool takes the space between the planes
+  as plain dielectric.
+- **Quasi-static field solution:** the traces rectangles, one dielectric
+  (core and prepreg averaged by the user), no losses; the board maker's
+  stack-up calculation decides.
+
+### How it was checked
+
+7 cases, the expected values from tools/fd_lines.py's app_stripline:
+- the default: 0.15 mm traces, 0.2 mm gap, 0.2 mm under and 0.4 mm over,
+  FR-4, 1 oz: 92.4 Ω (92.386), odd mode 46.2 Ω, even mode 65 Ω, common
+  mode 32.5 Ω, 56 Ω alone, coupling 0.825, estimate 95.8 Ω (+3.7 %),
+  69.2 ps/cm;
+- 100 Ω on the same layers: 0.117 mm (0.11662);
+- USB 90 Ω: 0.162 mm (0.16208);
+- close to one plane, 0.1 mm traces 0.1 mm apart, 0.1 and 0.4 mm away:
+  76.4 Ω (76.413), estimate +2.1 %;
+- centred, h1 = h2: 94.6 Ω, Edge-coupled stripline's value, the estimate
+  IPC-2141A's 97.6 Ω;
+- the four length pickers move together;
+- a zero gap is refused.
+
+The pair placed nearer the upper plane (h1 and h2 swapped) gives the same
+92.4 Ω, as its mirror image must.
 
 [↑ Index](#index)
 
