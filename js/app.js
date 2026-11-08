@@ -485,8 +485,7 @@ function renderTask(id) {
     <div class="tool-list" style="margin-top:6px">
       ${found.map((f) => `
         <button class="tool-row" style="flex-direction:column;align-items:flex-start;" data-route="${toolRoute(f)}">
-          <span>${f.tool.name}</span>
-          <span class="breadcrumb">${f.domain.title} · ${f.section.title}</span>
+          ${toolNameHTML(f.tool, `${f.domain.title} · ${f.section.title}`)}
         </button>`).join("")}
     </div>
     <div style="height:8px"></div>
@@ -511,6 +510,36 @@ function seeAlsoHTML(sec) {
   }).join("");
 }
 
+// Small cross-sections beside the impedance tools' names (Pierre,
+// 2026-11-07), so the structures can be told apart in a list: copper and
+// planes blue, the dielectric's outline grey, as in the tools' drawings.
+const THUMB_PARTS = {
+  surf: '<rect x="4" y="11" width="38" height="9" fill="none" stroke="#5A6169" stroke-width="1.2"/><rect x="4" y="20" width="38" height="3" fill="#8FC1F5"/>',
+  cover: '<rect x="4" y="5" width="38" height="15" fill="none" stroke="#5A6169" stroke-width="1.2"/><path d="M4 12 H42" stroke="#5A6169" stroke-width="0.8" stroke-dasharray="2 2"/><rect x="4" y="20" width="38" height="3" fill="#8FC1F5"/>',
+  planes: '<rect x="4" y="3" width="38" height="3" fill="#8FC1F5"/><rect x="4" y="20" width="38" height="3" fill="#8FC1F5"/><path d="M4 6 V20 M42 6 V20" stroke="#5A6169" stroke-width="1.2"/>',
+};
+const thumbCu = (x, y, w) => `<rect x="${x}" y="${y}" width="${w}" height="3" fill="#8FC1F5"/>`;
+const TOOL_THUMBS = {
+  "microstrip": THUMB_PARTS.surf + thumbCu(18, 8, 10),
+  "embedded-microstrip": THUMB_PARTS.cover + thumbCu(18, 9, 10),
+  "diff-microstrip": THUMB_PARTS.surf + thumbCu(12, 8, 9) + thumbCu(25, 8, 9),
+  "embedded-pair": THUMB_PARTS.cover + thumbCu(12, 9, 9) + thumbCu(25, 9, 9),
+  "stripline": THUMB_PARTS.planes + thumbCu(18, 11.5, 10),
+  "dual-stripline": THUMB_PARTS.planes + thumbCu(18, 8.5, 10),
+  "diff-stripline": THUMB_PARTS.planes + thumbCu(12, 11.5, 9) + thumbCu(25, 11.5, 9),
+  "broadside-stripline": THUMB_PARTS.planes + thumbCu(17, 8.5, 12) + thumbCu(17, 14.5, 12),
+  "coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 10) + thumbCu(18, 8, 10) + thumbCu(32, 8, 10),
+};
+// A tool's name in a list, its drawing first when it has one.
+// With a second line (crumb: the domain and section), the drawing sits
+// left of both lines.
+function toolNameHTML(t, crumb) {
+  const th = TOOL_THUMBS[t.calc];
+  const text = crumb ? `<span>${t.name}</span><span class="breadcrumb">${crumb}</span>` : t.name;
+  if (!th) return crumb ? text : `<span>${t.name}</span>`;
+  return `<span class="tool-name"><svg class="tool-thumb" width="46" height="26" viewBox="0 0 46 26" fill="none" aria-hidden="true">${th}</svg>${crumb ? `<span class="tool-text">${text}</span>` : text}</span>`;
+}
+
 function renderDomain(domainId, sectionIdx) {
   const d = DOMAINS.find(x => x.id === domainId);
   if (!d) return renderHome();
@@ -532,7 +561,7 @@ function renderDomain(domainId, sectionIdx) {
         ${built.map(({ t, ti }) => {
           const key = `${d.id}:${si}:${ti}`;
           return `<button class="tool-row" onclick="location.hash='/tool/${encodeURIComponent(key)}/${t.calc}'">
-            <span>${t.name}</span>
+            ${toolNameHTML(t)}
             <span class="chev">${ICONS.chevronRight}</span>
           </button>`;
         }).join("")}
@@ -758,8 +787,7 @@ function renderSearch() {
     }
     results.innerHTML = matches.slice(0, 40).map(m => `
       <button class="tool-row" style="flex-direction:column;align-items:flex-start;" onclick="location.hash='/tool/${encodeURIComponent(m.key)}/${m.t.calc || ""}'">
-        <span>${m.t.name}</span>
-        <span class="breadcrumb">${m.d.title} · ${m.sec.title}</span>
+        ${toolNameHTML(m.t, `${m.d.title} · ${m.sec.title}`)}
       </button>`).join("");
   });
 }
@@ -772,8 +800,7 @@ function renderFavorites() {
       ${items.length ? items.map(it => `
         <div class="tool-row fav-row">
           <button class="fav-open" data-route="/tool/${encodeURIComponent(it.key)}/${it.tool.calc || ""}">
-            <span>${it.tool.name}</span>
-            <span class="breadcrumb">${it.domain.title} · ${it.section.title}</span>
+            ${toolNameHTML(it.tool, `${it.domain.title} · ${it.section.title}`)}
           </button>
           <button class="icon-btn active fav-remove" data-id="${favoriteId(it.domain, it.section, it.tool)}"
                   aria-label="Remove ${it.tool.name} from favorites">${ICONS.star}</button>
