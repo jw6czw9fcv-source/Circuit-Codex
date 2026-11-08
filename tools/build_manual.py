@@ -70,7 +70,8 @@ def app_tools():
     events = []
     for m in re.finditer(r'\bid: "([a-z-]+)",\s*\n\s*title: "([^"]+)"', src):
         events.append((m.start(), "domain", m.group(1), m.group(2)))
-    for m in re.finditer(r'\btitle: "([^"]+)",\s*(?:\n\s*)?tools:', src):
+    # A section may name another between its title and tools (seeAlso).
+    for m in re.finditer(r'\btitle: "([^"]+)",\s*(?:seeAlso: \[[^\]]*\],\s*)?(?:\n\s*)?tools:', src):
         events.append((m.start(), "section", m.group(1), None))
     # A tool entry is { name, then optional fields (was, wasSection, calc) }.
     for m in re.finditer(r'\{ name: "([^"]+)"([^}]*)\}', src):

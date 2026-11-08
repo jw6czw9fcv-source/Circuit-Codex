@@ -93,6 +93,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Antennas & propagation → [Radio wavelength](#radio-wavelength)
 - Antennas & propagation → [Antenna length](#antenna-length)
+- Transmission lines → [VSWR / Return loss](#vswr)
 
 ### Power electronics
 
@@ -10952,6 +10953,98 @@ The length box works the formula backwards: f = (the factor in front) / L.
 - 144 MHz flags the 0.95.
 - A correction of 0 and 2.5 half waves are refused.
 - 468 / f at 10 MHz: 46.72 ft, 14.24 m, legs of 23.36 ft.
+
+[↑ Index](#index)
+
+---
+
+<a id="vswr"></a>
+## VSWR / Return loss
+
+`calc: vswr` · RF & microwave › Transmission lines
+
+### What it computes
+
+How much of a wave a load sends back, and what that costs:
+
+- **Two pills:** Convert (the six usual measures of a mismatch, linked)
+  and From a load (a line's Z0 and a load R + jX).
+- **Convert:** six boxes, VSWR, return loss, |Γ|, mismatch loss, the
+  reflected and the delivered share: type in any one, the five others
+  follow; the box typed in keeps its text until you leave it. With the
+  forward power, the big result is the reflected power in watts; below
+  it the voltage range along the line, and the two resistive loads that
+  give this VSWR on 50 Ω (50 × VSWR and 50 / VSWR).
+- **From a load:** Γ = (Z − Z0)/(Z + Z0) for Z = R + jX; the big result is
+  the VSWR, then |Γ| and its angle, return loss, Γ as re + j im,
+  mismatch loss, reflected and delivered power.
+- **Units:** mW, W or kW for the forward power; the rest fixed (dB, %,
+  Ω, : 1).
+- **Drawing:** the standing wave along the line, |1 + Γ e^(−j2βd)| over a
+  wavelength and a half back from the load (a zigzag, US style), Vmax and
+  Vmin dashed: their ratio is the VSWR. From a load, Γ's angle sets where
+  the peaks fall (a short puts a null at the load, an open a peak).
+- **Remembered:** the pill and the power unit.
+
+Examples: a 2:1 VSWR, 20 dB return loss, a 75 Ω load on 50 Ω coax, a
+short antenna of 25 − j50 Ω.
+
+### Terms
+
+- **Reflection coefficient Γ:** the reflected wave over the incident one
+  at the load, complex: 0 matched, magnitude 1 for an open, a short or a
+  pure reactance.
+- **VSWR (voltage standing wave ratio, SWR):** the incident and reflected
+  waves add into a standing wave; VSWR is its maximum over its minimum,
+  (1 + |Γ|)/(1 − |Γ|): 1 matched, infinite for total reflection.
+- **Return loss:** how many dB the reflected wave lies below the incident
+  one, −20 log |Γ|; positive, larger is better.
+- **Mismatch loss:** the power that does not reach the load because of
+  the reflection, in dB, −10 log (1 − |Γ|²), for a source matched to the
+  line.
+- **Forward power:** the power travelling toward the load, as a
+  directional wattmeter reads it.
+
+### Sources
+
+- **Keysight AN 1449-3, "Fundamentals of RF and Microwave Power
+  Measurements (Part 3)", literature number 5988-9215EN** (read): Γ = b/a
+  (eq. 2-1), Γ = (Z − Zo)/(Z + Zo) (2-5), |a|² the incident power, |b|²
+  the reflected (2-2, 2-3); SWR = (|a| + |b|)/(|a| − |b|) = (1 + ρ)/(1 −
+  ρ), "VSWR is shortened to SWR"; the "Zo mismatch loss", the ratio of
+  its equations 2-22 to 2-21 in dB: with a Zo generator (Γg = 0), 10
+  log(1/(1 − |Γ|²)) (its printed equations 2-25 and 2-26 did not survive
+  the text extraction; the tool derives them from 2-21 and 2-22).
+- **Keysight 5965-7707EN, "Understanding the Fundamental Principles of
+  Vector Network Analysis", 10 August 2022** (read): "Return loss = −20
+  log(ρ)", "the number of decibels that the reflected signal is below
+  the incident signal", "always expressed as a positive number", infinite
+  at the characteristic impedance, 0 dB for an open or short; VSWR = Emax
+  / Emin = (1 + ρ)/(1 − ρ).
+
+### Assumptions and limits
+
+- **One frequency, lossless line:** a lossy line attenuates the reflected
+  wave on its way back, so the VSWR read at the transmitter is better
+  than at the load.
+- **Mismatch loss with a matched source:** with a mismatched source the
+  power transferred depends on both reflections (AN 1449-3's mismatch
+  uncertainty).
+- **Resistive loads on 50 Ω:** the two pure resistances with this VSWR;
+  a complex load has the same VSWR on a circle of impedances.
+
+### How it was checked
+
+7 cases, the expected values from the formulas above:
+- VSWR 2: |Γ| 0.3333, return loss 9.542 dB, mismatch loss 0.5115 dB,
+  11.11 % reflected, 11.1 W of 100 W, loads 100 Ω or 25 Ω;
+- return loss 20 dB: VSWR 1.222, mismatch loss 0.04365 dB, 1 W;
+- a VSWR under 1 is refused;
+- 75 Ω on 50 Ω: Γ 0.2, VSWR 1.5, return loss 14 dB, 0.177 dB, 4 W;
+- 25 − j50 Ω on 50 Ω: Γ = (625 − j5000)/8125 = 0.0769 − j0.615, VSWR
+  4.27, return loss 4.15 dB, 38.5 W;
+- a short: |Γ| 1 at 180°, VSWR ∞, return loss 0 dB, 100 W back;
+- kW re-expresses the forward power.
 
 [↑ Index](#index)
 

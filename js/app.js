@@ -662,6 +662,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "prop-delay") return renderPropDelay(domain, tool, favId);
   if (calcId === "laminates") return renderLaminates(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
+  if (calcId === "vswr") return renderVswr(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "via-current") return renderViaCurrent(domain, tool, favId);
@@ -12584,6 +12585,209 @@ function renderInrushLimiter(domain, tool, favId) {
     app.querySelectorAll("select[data-unit]").forEach((el) => {
       el.onchange = () => { const k = el.dataset.unit; state.units[k] = el.value; setPref(C, `${k}Unit`, el.value); paint(); };
     });
+  }
+
+  paint();
+}
+
+// ---------- VSWR / Return loss ----------
+// How much of a wave a load sends back, six ways. Keysight AN 1449-3
+// ("Fundamentals of RF and Microwave Power Measurements (Part 3)", 5988-
+// 9215EN, read): the reflection coefficient Γ = b/a = (Z − Zo)/(Z + Zo)
+// (eq. 2-1, 2-5), |a|² the incident and |b|² the reflected power (2-2,
+// 2-3), SWR = (|a| + |b|)/(|a| − |b|) = (1 + |Γ|)/(1 − |Γ|), VSWR "shortened
+// to SWR"; from its 2-21 and 2-22 with a Zo generator (Γg = 0), the "Zo
+// mismatch loss" 10 log(1/(1 − |Γ|²)). Keysight 5965-7707EN ("Understanding
+// the Fundamental Principles of Vector Network Analysis", 2022, read):
+// "Return loss = −20 log(ρ)", "the number of decibels that the reflected
+// signal is below the incident signal", infinite for a load at the
+// characteristic impedance and 0 dB for an open or short.
+const VSWR_MODES = { convert: "Convert", load: "From a load" };
+const VSWR_P_UNITS = { mW: 1e-3, W: 1, kW: 1e3 };
+// Each box: its value from |Γ|, and |Γ| from its value (NaN outside).
+const VSWR_BOXES = {
+  g: { label: "|Γ|", unit: "", from: (g) => g, to: (v) => (v >= 0 && v <= 1 ? v : NaN) },
+  vswr: { label: "VSWR", unit: ": 1", from: (g) => (1 + g) / (1 - g), to: (v) => (v >= 1 ? (v - 1) / (v + 1) : NaN) },
+  rl: { label: "Return loss", unit: "dB", from: (g) => -20 * Math.log10(g), to: (v) => (v >= 0 ? 10 ** (-v / 20) : NaN) },
+  ml: { label: "Mismatch loss", unit: "dB", from: (g) => -10 * Math.log10(1 - g * g), to: (v) => (v >= 0 ? Math.sqrt(1 - 10 ** (-v / 10)) : NaN) },
+  refl: { label: "Reflected", unit: "%", from: (g) => 100 * g * g, to: (v) => (v >= 0 && v <= 100 ? Math.sqrt(v / 100) : NaN) },
+  deliv: { label: "Delivered", unit: "%", from: (g) => 100 * (1 - g * g), to: (v) => (v >= 0 && v <= 100 ? Math.sqrt(1 - v / 100) : NaN) },
+};
+
+function renderVswr(domain, tool, favId) {
+  const C = "vswr";
+  const state = {
+    mode: pref(C, "mode", "convert", Object.keys(VSWR_MODES)),
+    pUnit: pref(C, "pUnit", "W", Object.keys(VSWR_P_UNITS)),
+    // |Γ|, and the box last typed in (its text kept as typed).
+    g: 1 / 3, src: "vswr", text: "2",
+    si: { z0: 50, r: 75, x: 0, pf: 100 },
+  };
+  const load = () => state.mode === "load";
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const n3 = (v) => (isFinite(v) ? String(Number(v.toPrecision(3))) : "∞");
+  const watts = (v) => siFormat(Number(v.toPrecision(3)), "W", 3);
+  const dB = (v) => (isFinite(v) ? `${Number(v.toPrecision(3))} dB` : "∞ dB");
+
+  // Γ of the load, as [re, im].
+  function gammaLoad() {
+    const { z0, r, x } = state.si;
+    const nr = r - z0, dr = r + z0, d2 = dr * dr + x * x;
+    return [(nr * dr + x * x) / d2, (x * dr - nr * x) / d2];
+  }
+  const gNow = () => (load() ? Math.hypot(...gammaLoad()) : state.g);
+
+  function problem() {
+    const s = state.si;
+    if (load()) {
+      if (!(s.z0 > 0)) return "Enter the line's impedance Z0.";
+      if (!(s.r >= 0)) return "Enter the load's resistance, zero or more.";
+      if (!isFinite(s.x)) return "Enter the load's reactance (0 for none).";
+    } else if (!(state.g >= 0 && state.g <= 1)) {
+      const b = VSWR_BOXES[state.src];
+      return state.src === "vswr" ? "A VSWR is 1 or more." : state.src === "g" ? "|Γ| is between 0 and 1." : b.unit === "%" ? "Enter a share between 0 and 100 %." : "Enter a loss of 0 dB or more.";
+    }
+    if (!(s.pf >= 0)) return "Enter the forward power, zero or more.";
+    return "";
+  }
+
+  // The standing wave along the line: |V| = |1 + Γ e^(−j2βd)| from the load
+  // (right) back toward the source, a wavelength and a half; Vmax and Vmin
+  // dashed. The load's Γ phase sets where the peaks fall.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const ok = !problem(), g = ok ? gNow() : 1 / 3;
+    const [gr, gi] = ok && load() ? gammaLoad() : [g, 0];
+    const X0 = 64, X1 = 236, Y0 = 92, K = 32;    // |V| = 1 is K px above the axis
+    const pts = Array.from({ length: 181 }, (_, i) => {
+      const d = (1 - i / 180) * 1.5, ph = -4 * Math.PI * d;      // 2βd, d in wavelengths
+      const v = Math.hypot(1 + gr * Math.cos(ph) - gi * Math.sin(ph), gr * Math.sin(ph) + gi * Math.cos(ph));
+      return `${i ? "L" : "M"}${(X0 + (X1 - X0) * i / 180).toFixed(1)} ${(Y0 - K * v).toFixed(1)}`;
+    }).join(" ");
+    const yMax = Y0 - K * (1 + g), yMin = Y0 - K * (1 - g);
+    const top = !ok ? "" : g >= 1 ? "VSWR ∞: everything comes back" : `VSWR ${n3((1 + g) / (1 - g))} = Vmax / Vmin`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      ${lbl(150, 12, top, calc)}
+      <path d="M${X0} ${yMax.toFixed(1)} H${X1} M${X0} ${yMin.toFixed(1)} H${X1}" stroke="${grey}" stroke-width="1" stroke-dasharray="3 3"/>
+      ${lbl(X0 - 4, Math.min(yMax + 4, yMin - 9), `Vmax ${n3(1 + g)}`, grey, "end")}${lbl(X0 - 4, Math.max(yMin + 4, yMax + 17), `Vmin ${n3(1 - g)}`, grey, "end")}
+      <path d="${pts}" stroke="${calc}" stroke-width="1.8"/>
+      <path d="M${X0} ${Y0} H250 M250 ${Y0} V80 M250 106 V100" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M250 80 L255 82 L245 85 L255 88 L245 91 L255 94 L245 97 L250 100" stroke="${part}" stroke-width="1.6" stroke-linejoin="round"/>
+      ${lbl(262, 94, "load", part, "start")}
+      ${lbl(X0 + (X1 - X0) / 2, 106, `line ${load() ? `Z0 ${n3(state.si.z0)} Ω` : ""} · ← to the source`, grey)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, g = gNow();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const pr = s.pf * g * g, pd = s.pf - pr;
+    const vswr = (1 + g) / (1 - g), rl = -20 * Math.log10(g), ml = -10 * Math.log10(1 - g * g);
+    if (load()) {
+      const [gr, gi] = gammaLoad(), ang = Math.atan2(gi, gr) * 180 / Math.PI;
+      return `<div class="result-field">
+          <div class="result-head"><span class="label">VSWR of the load</span></div>
+          <div class="result-value"><span class="num" data-res="big">${isFinite(vswr) ? `${n3(vswr)} : 1` : "∞"}</span></div>
+          <div class="result-sub" data-res="sub">|Γ| ${n3(g)} at ${g > 0 ? n3(ang).replace("-", "−") : 0}°, return loss ${dB(rl)}</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Γ", `${n3(gr)} ${gi < 0 ? "−" : "+"} j${n3(Math.abs(gi))}`, "gamma")}
+          ${row("Mismatch loss", dB(ml), "ml")}
+          ${row("Reflected", `${watts(pr)} (${n3(100 * g * g)} %)`, "pr")}
+          ${row("Delivered to the load", `${watts(pd)} (${n3(100 * (1 - g * g))} %)`, "pd")}
+        </div>`;
+    }
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Reflected power</span></div>
+          <div class="result-value"><span class="num" data-res="big">${watts(pr)}</span></div>
+          <div class="result-sub" data-res="sub">of ${watts(s.pf)} forward; ${watts(pd)} reach the load</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Voltage along the line", `${n3(1 - g)} to ${n3(1 + g)} × the forward wave`, "vrange")}
+          ${row("Resistive load on 50 Ω", g < 1 ? `${n3(50 * vswr)} Ω or ${n3(50 / vswr)} Ω` : "open or short", "rload")}
+        </div>`;
+  }
+
+  // The boxes not being typed in follow |Γ|.
+  function syncBoxes() {
+    if (load()) return;
+    for (const k of Object.keys(VSWR_BOXES)) {
+      const el = app.querySelector(`input[data-key="${k}"]`);
+      if (!el || el === document.activeElement) continue;
+      el.value = k === state.src ? state.text : state.g >= 0 && state.g <= 1 ? fmt(VSWR_BOXES[k].from(state.g)) : "";
+    }
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); paint(); };
+  const fromBox = (k, v) => ({ g: VSWR_BOXES[k].to(v), src: k, text: String(v) });
+  useExamples([
+    { title: "A 2:1 VSWR", note: "|Γ| 1/3, return loss 9.54 dB, 0.512 dB mismatch loss: 11.1 W of 100 W come back.",
+      apply: example({ top: { mode: "convert", pUnit: "W", ...fromBox("vswr", 2) }, si: { pf: 100 } }) },
+    { title: "20 dB return loss", note: "|Γ| 0.1, VSWR 1.22, 1 % of the power reflected, 0.0436 dB lost.",
+      apply: example({ top: { mode: "convert", pUnit: "W", ...fromBox("rl", 20) }, si: { pf: 100 } }) },
+    { title: "75 Ω load on 50 Ω coax", note: "Γ = 0.2: VSWR 1.5, return loss 14 dB, 4 % reflected.",
+      apply: example({ top: { mode: "load", pUnit: "W" }, si: { z0: 50, r: 75, x: 0, pf: 100 } }) },
+    { title: "A short antenna, 25 − j50 Ω", note: "On 50 Ω: |Γ| 0.62, VSWR 4.27; 38.5 % of the power comes back.",
+      apply: example({ top: { mode: "load", pUnit: "W" }, si: { z0: 50, r: 25, x: -50, pf: 100 } }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const sel = `<select data-punit="1">${Object.keys(VSWR_P_UNITS).map((u) => `<option ${u === state.pUnit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const pf = field("pf", "Forward power", sel, fmt(s.pf / VSWR_P_UNITS[state.pUnit]));
+    const box = (k) => field(k, VSWR_BOXES[k].label, fixed(VSWR_BOXES[k].unit), "");
+    const inputs = load()
+      ? `<div class="field-pair">${field("z0", "Line, Z0", fixed("Ω"), fmt(s.z0))}${field("r", "Load, R", fixed("Ω"), fmt(s.r))}${field("x", "Load, X", fixed("Ω"), fmt(s.x))}</div>
+      <div class="field-pair">${pf}</div>`
+      : `<div class="field-pair">${box("vswr")}${box("rl")}${box("g")}</div>
+      <div class="field-pair">${box("ml")}${box("refl")}${box("deliv")}</div>
+      <div class="field-pair">${pf}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "How much of a wave a load sends back")}
+
+      ${pillRow(Object.entries(VSWR_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Γ = (Z − Z0) / (Z + Z0)", "VSWR = (1 + |Γ|) / (1 − |Γ|)", "RL = −20 log |Γ|", "ML = −10 log (1 − |Γ|²)", "P reflected = |Γ|² × P forward"],
+        "A wave travelling down a line meets the load. If the load's impedance equals the line's, Z0, it takes everything; otherwise part of the wave comes back. The reflection coefficient Γ is the reflected wave over the incident one: 0 for a matched load, 1 in size for an open or a short, which reflect everything. The two waves add along the line into a standing wave whose peaks and troughs, Vmax and Vmin, are 1 + |Γ| and 1 − |Γ| times the incident wave; their ratio is the voltage standing wave ratio, VSWR, 1 when matched. Return loss is how many dB the reflected wave lies below the incident one: larger is better. The reflected power is |Γ|² of the forward power; the rest reaches the load, and mismatch loss is that shortfall in dB, for a source matched to the line."
+      )}
+      ${calcFooter("")}
+    `;
+    syncBoxes();
+    wireCalc(favId, paint, (v) => { state.mode = v; setPref(C, "mode", v); paint(); });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key in VSWR_BOXES) { state.src = key; state.text = el.value; state.g = el.value === "" ? NaN : VSWR_BOXES[key].to(v); }
+        else if (key === "pf") state.si.pf = v * VSWR_P_UNITS[state.pUnit];
+        else state.si[key] = v;
+        show();
+      };
+      el.onblur = () => { if (key in VSWR_BOXES && state.g >= 0 && state.g <= 1) { state.text = fmt(VSWR_BOXES[key].from(state.g)); syncBoxes(); } };
+    });
+    app.querySelector("select[data-punit]").onchange = (e) => { state.pUnit = e.target.value; setPref(C, "pUnit", state.pUnit); paint(); };
   }
 
   paint();

@@ -405,6 +405,12 @@ const FORMULAS = [
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
   },
   {
+    tool: "VSWR / Return loss",
+    domain: "rf",
+    formulas: ["Γ = (Z − Z0) / (Z + Z0)", "VSWR = (1 + |Γ|) / (1 − |Γ|)", "RL = −20 log |Γ|", "ML = −10 log (1 − |Γ|²)", "P reflected = |Γ|² × P forward"],
+    note: "Keysight AN 1449-3 and 5965-7707EN. Mismatch loss for a source matched to the line (Γg = 0).",
+  },
+  {
     tool: "Propagation delay",
     domain: "pcb",
     formulas: ["t = l √εeff / c,   1/c = 33.356 ps/cm", "skew = Δl √εeff / c", "edge = tr × c / √εeff", "long beyond l = tr c / (6 √εeff)"],
