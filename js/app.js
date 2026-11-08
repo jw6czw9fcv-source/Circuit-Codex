@@ -780,6 +780,11 @@ function renderSearch() {
         });
       });
     });
+    // A tool found by its keywords stays with the tools of its section that
+    // matched by name ("strip" keeps Edge-coupled embedded among the
+    // impedance tools, in the list's order).
+    const named = new Set(matches.filter((m) => m.rank === 0).map((m) => m.sec));
+    matches.forEach((m) => { if (named.has(m.sec)) m.rank = 0; });
     matches.sort((a, b) => a.rank - b.rank);
     if (!matches.length) {
       results.innerHTML = `<div class="placeholder">${ICONS.search}<div>No matches for "${q}"</div></div>`;
