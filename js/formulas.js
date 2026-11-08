@@ -405,6 +405,12 @@ const FORMULAS = [
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
   },
   {
+    tool: "Propagation delay",
+    domain: "pcb",
+    formulas: ["t = l √εeff / c,   1/c = 33.356 ps/cm", "skew = Δl √εeff / c", "edge = tr × c / √εeff", "long beyond l = tr c / (6 √εeff)"],
+    note: "εeff is εr in a stripline, the field solver's in a microstrip. Electrically long at a delay of tr/6: Olney's 1 inch per ns of rise time in FR-4.",
+  },
+  {
     tool: "Crosstalk",
     domain: "pcb",
     formulas: ["NEXT = ¼ (Lm/L + Cm/C) × min(1, 2T/tr)", "FEXT = −(l / 2tr) (Lm/ζ − ζ Cm)", "T = l √(L C),   ζ = √(L / C)", "Sine: near = V_in,e − V_in,o", "far = V_end,e − V_end,o"],

@@ -127,6 +127,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Broadside-coupled, no plane](#paired-strips)
 - Impedance → [Coplanar waveguide](#coplanar)
 - Impedance → [Edge-coupled coplanar](#diff-coplanar)
+- Impedance → [Propagation delay](#prop-delay)
 - Impedance → [Crosstalk](#crosstalk)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
@@ -13487,6 +13488,106 @@ grounds take 4 %; with none, they take 14 %.
 - the pill switches to no plane;
 - the four length pickers move together;
 - a zero gap to the ground is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="prop-delay"></a>
+## Propagation delay
+
+`calc: prop-delay` · PCB & interconnect › Impedance
+
+### What it computes
+
+The time a signal takes along a trace, and what follows from it. It
+takes the place of the planned "Effective dielectric constant" and
+"Signal propagation delay" tools (Pierre, 2026-11-08), as every impedance
+tool already shows both for its own structure:
+
+- **Three pills:** Microstrip (the trace on an outer layer: εeff from the
+  field solver for its width, dielectric and copper), Stripline (between
+  two planes in one dielectric: εeff is εr exactly, whatever the trace)
+  and Known εeff (typed, for any other line: coplanar, embedded, a
+  maker's figure).
+- **Inputs:** the trace's width w, the dielectric h and the copper
+  (microstrip), the material and εr (or εeff), the trace's length l, a
+  length mismatch Δl, and the rise time.
+- **The big result:** the delay along the trace; below it εeff and the
+  speed as a share of the speed of light.
+- **Below it:** the delay per length (ps/cm and ps/in), the speed (cm/ns
+  and in/ns), the skew of the mismatch, the length of the rising edge on
+  the board (tr × v), and the length beyond which the trace is
+  electrically long, orange when this trace is.
+- **Units:** mm or mil for the cross-section and the mismatch, oz, µm or
+  mil for the copper, mm, cm or in for the length, linked (in switches
+  the others to mil); ps or ns for the rise time.
+- **Drawing:** the trace seen from above, driver to receiver, its delay
+  in green, the length in mm and in.
+- **Remembered:** the pill and the units.
+
+Examples: a 50 Ω microstrip, length matching in a stripline, a known εeff
+in inches.
+
+### Terms
+
+- **Effective dielectric constant, εeff:** the εr of a uniform material
+  that would give the line's speed; between 1 and εr when part of the
+  field is in air (microstrip), εr when all of it is in the dielectric
+  (stripline).
+- **Propagation delay:** the time for an edge to travel the trace, l √εeff
+  / c; per length it is √εeff / c, 33.356 ps/cm × √εeff.
+- **Skew:** the difference in arrival time of two signals, here from a
+  length mismatch Δl.
+- **Rising edge on the board:** how much of the trace the edge spans
+  while it rises, tr × v; a trace much shorter than it behaves as a
+  lumped load.
+- **Electrically long:** a trace whose delay is a large enough share of
+  the rise time that its reflections matter, and that should be
+  terminated.
+
+### Sources
+
+- **The delay:** the speed of a TEM wave, c/√εr, c = 299 792 458 m/s
+  exactly (SI); for a microstrip's quasi-TEM wave, εeff from the app's
+  field solver (as in Microstrip), Hammerstad's formula while it works.
+- **Electrically long:** Barry Olney, "Beyond Design: High-speed Rules of
+  Thumb", I-Connect007 (Design007 Magazine), 21 November 2024 (read):
+  drivers need "provision for termination" when the "length (in inches)
+  is equal to or greater than the rise and fall time (in ns)", and "the
+  propagation speed of a signal is ~6 in/ns in FR-4"; together, a delay
+  of a sixth of the rise time. The tool takes tr/6 with the trace's own
+  speed: 24.1 mm (0.949 in) for a stripline in FR-4 at 1 ns, his 1 in.
+- **The caution:** Howard Johnson, "Resonance in Short Transmission
+  Line", High-Speed Digital Design Online Newsletter vol. 6 issue 06,
+  2003 (read): the delay-to-rise-time ratio "doesn't actually determine
+  whether a termination is needed"; a short line with a low-impedance
+  driver and a capacitive load can still ring.
+
+### Assumptions and limits
+
+- **Lossless, no dispersion:** εeff at the frequencies of the edge; a
+  real laminate's εr falls slowly with frequency, and a microstrip's εeff
+  rises toward εr at high frequency.
+- **Stripline:** one dielectric all round; with core and prepreg of
+  different εr, use Known εeff with the Stripline tool's value.
+- **The rule of thumb:** tr/6 is a guide (see Johnson above); other
+  authors use tr/4 or tr/2.
+
+### How it was checked
+
+7 cases, the expected values from tools/fd_lines.py's microstrip and
+the formulas above:
+- the default microstrip, 0.36 mm on 0.2 mm FR-4, 1 oz, 100 mm: εeff
+  3.13 (3.13056), 59.0 ps/cm, 150 ps/in, 16.9 cm/ns, 590 ps, 5.9 ps for 1
+  mm, the edge 169 mm at 1 ns, long beyond 28.2 mm;
+- the stripline length-matching example: 346 ps for 50 mm, 3.46 ps for
+  0.5 mm, long beyond 12.0 mm at 0.5 ns;
+- a known εeff of 3, 6 in: 880 ps, 147 ps/in, long beyond 1.14 in;
+- Olney's rule: a stripline in FR-4 at 1 ns is long beyond 24.1 mm;
+- 20 mm at 1 ns is not long;
+- inches on the length switch the cross-section to mil;
+- a zero rise time is refused.
 
 [↑ Index](#index)
 

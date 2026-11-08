@@ -533,6 +533,7 @@ const TOOL_THUMBS = {
   "coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 10) + thumbCu(18, 8, 10) + thumbCu(32, 8, 10),
   "crosstalk": THUMB_PARTS.surf + thumbCu(12, 8, 9) + '<rect x="25" y="8" width="9" height="3" fill="#5DCAA5"/>',
   "diff-coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 8) + thumbCu(15, 8, 7) + thumbCu(24, 8, 7) + thumbCu(34, 8, 8),
+  "prop-delay": '<path d="M4 7 V19 L13 13 Z M33 7 V19 L42 13 Z" stroke="#8FC1F5" stroke-width="1.2" stroke-linejoin="round"/><path d="M13 13 H33" stroke="#5DCAA5" stroke-width="2"/>',
 };
 // A tool's name in a list, its drawing first when it has one.
 // With a second line (crumb: the domain and section), the drawing sits
@@ -657,6 +658,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "coplanar") return renderCoplanar(domain, tool, favId);
   if (calcId === "diff-coplanar") return renderDiffCoplanar(domain, tool, favId);
   if (calcId === "crosstalk") return renderCrosstalk(domain, tool, favId);
+  if (calcId === "prop-delay") return renderPropDelay(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -16826,6 +16828,225 @@ function renderDiffCoplanar(domain, tool, favId) {
     wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
+  }
+
+  paint();
+}
+
+// ---------- Propagation delay ----------
+// The time a signal takes along a trace, from its effective dielectric
+// constant: t = l √εeff / c, c = 299 792 458 m/s (1/c = 33.356 ps/cm).
+// Merges the placeholders "Effective dielectric constant" and "Signal
+// propagation delay" (Pierre, 2026-11-08). εeff: in a stripline, one
+// dielectric all round, exactly εr, whatever the trace; in a microstrip,
+// part of the field in air, the field solver's for the trace (Hammerstad's
+// formula while it works); or typed. Also the skew of a length mismatch,
+// the rising edge's length on the board, tr × v, and where the trace becomes
+// electrically long: Barry Olney ("Beyond Design: High-speed Rules of
+// Thumb", I-Connect007, 21 November 2024, read) asks for termination when
+// "length (in inches) is equal to or greater than the rise and fall time
+// (in ns)", at "~6 in/ns in FR-4", i.e. a delay of tr/6; the tool takes
+// tr/6 with the trace's own speed. Howard Johnson ("Resonance in Short
+// Transmission Line", 2003, read) warns that the ratio "doesn't actually
+// determine whether a termination is needed".
+const PD_MODES = { micro: "Microstrip", strip: "Stripline", eeff: "Known εeff" };
+
+function renderPropDelay(domain, tool, favId) {
+  const C = "prop-delay";
+  const OZ = TRACE_OZ_MIL * 25.4e-6, C0 = 299792458;
+  const state = {
+    mode: pref(C, "mode", "micro", Object.keys(PD_MODES)),
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    cUnit: pref(C, "cUnit", "mm", Object.keys(XT_LEN_UNITS)),
+    rUnit: pref(C, "rUnit", "ns", Object.keys(XT_TR_UNITS)),
+    mat: "fr4",
+    si: { w: 0.36e-3, h: 0.2e-3, t: OZ, er: 4.3, ee: 3, len: 100e-3, dl: 1e-3, tr: 1e-9 },
+  };
+  const micro = () => state.mode === "micro";
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const metric = () => state.cUnit !== "in";
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  const cLen = (v, d = 3) => `${Number((v / XT_LEN_UNITS[state.cUnit]).toPrecision(d))} ${state.cUnit}`;
+  const time = (v) => siFormat(Number(v.toPrecision(3)), "s", 3);
+  const n3 = (v) => Number(v.toPrecision(3));
+
+  function problem() {
+    const s = state.si;
+    if (micro()) {
+      if (!(s.w > 0)) return "Enter the trace width.";
+      if (!(s.h > 0)) return "Enter the dielectric's thickness.";
+      if (!(s.t >= 0)) return "Enter the copper's thickness, zero or more.";
+    }
+    if (state.mode === "eeff" ? !(s.ee >= 1) : !(s.er >= 1)) return state.mode === "eeff" ? "Enter the effective dielectric constant, 1 or more." : "Enter the dielectric constant, 1 or more.";
+    if (!(s.len >= 0)) return "Enter the trace's length, zero or more.";
+    if (!(s.dl >= 0)) return "Enter the length mismatch, zero or more.";
+    if (!(s.tr > 0)) return "Enter the rise time.";
+    return "";
+  }
+
+  // The microstrip's εeff by the solver; nothing to solve otherwise.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const link = solverLink({
+    kind: "microstrip", modes: [undefined], factor: 1,
+    params: (w) => { const q = state.si; return { w: mm(w), t: mm(q.t), h: mm(q.h), er: q.er }; },
+    estimate: () => NaN, estimateWidth: () => NaN, width: () => state.si.w, setWidth: () => {}, target: () => null,
+    problem: () => (micro() ? problem() : "not a microstrip"), show: () => show(),
+  });
+  // Hammerstad's εeff (as Microstrip's), until the solver answers.
+  const hammerstad = () => {
+    const { w, h, er } = state.si;
+    return (er + 1) / 2 + (er - 1) / 2 * ((1 + 12 * h / w) ** -0.5 + (w < h ? 0.04 * (1 - w / h) ** 2 : 0));
+  };
+  const eeff = () => (state.mode === "strip" ? state.si.er : state.mode === "eeff" ? state.si.ee : link.sol ? link.sol.res[0].eeff : hammerstad());
+
+  function values() {
+    const s = state.si, ee = eeff(), per = Math.sqrt(ee) / C0, v = C0 / Math.sqrt(ee);
+    return { ee, per, v, delay: per * s.len, skew: per * s.dl, edge: s.tr * v, long: s.tr / 6 * v };
+  }
+
+  // Seen from above: the driver, the trace (its delay the answer, green),
+  // the receiver; the length below, the structure above.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const s = state.si, ok = !problem(), k = ok ? values() : null;
+    const inch = (v) => `${n3(v / 0.0254)} in`, mmT = (v) => `${n3(v * 1e3)} mm`;
+    const both = (v) => (metric() ? `${mmT(v)} · ${inch(v)}` : `${inch(v)} · ${mmT(v)}`);
+    const what = state.mode === "micro" ? "microstrip" : state.mode === "strip" ? "stripline" : "any line";
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      ${lbl(145, 14, k ? `${what} · εeff ${n3(k.ee)}` : what)}
+      <path d="M30 42 V66 L52 54 Z" stroke="${part}" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M238 42 V66 L260 54 Z" stroke="${part}" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M52 54 H238" stroke="${calc}" stroke-width="3"/>
+      ${lbl(145, 44, k ? `delay ${time(k.delay)}` : "delay", calc)}
+      ${lbl(41, 80, "driver", part)}${lbl(249, 80, "receiver", part)}
+      <path d="M52 86 V94 M238 86 V94 M52 90 H238" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(145, 106, ok ? `l ${both(s.len)}` : "l")}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, k = values();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const pcm = k.per * 1e-2 * 1e12, pin = k.per * 0.0254 * 1e12;
+    const cmns = k.v * 1e-9 * 100, inns = k.v * 1e-9 / 0.0254;
+    const perTxt = metric() ? `${n3(pcm)} ps/cm · ${n3(pin)} ps/in` : `${n3(pin)} ps/in · ${n3(pcm)} ps/cm`;
+    const vTxt = metric() ? `${n3(cmns)} cm/ns · ${n3(inns)} in/ns` : `${n3(inns)} in/ns · ${n3(cmns)} cm/ns`;
+    const isLong = s.len > k.long;
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Delay along the trace</span>${micro() ? solverBadge(link) : ""}</div>
+          <div class="result-value"><span class="num" data-res="big">${time(k.delay)}</span></div>
+          <div class="result-sub" data-res="sub">εeff ${n3(k.ee)}${state.mode === "strip" ? " (= εr)" : ""}: ${n3(100 / Math.sqrt(k.ee))} % of the speed of light</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Per length", perTxt, "per")}
+          ${row("Speed", vTxt, "speed")}
+          ${row("Skew of the mismatch", `${time(k.skew)} for ${len(s.dl)}`, "skew")}
+          ${row("Rising edge on the board", cLen(k.edge), "edge")}
+          ${row("Electrically long beyond", isLong ? warn(`${cLen(k.long)}: this trace is`) : `${cLen(k.long)}: this trace is not`, "long")}
+        </div>`;
+  }
+
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+  function refresh() {
+    link.recall();
+    show();
+    if (micro()) link.schedule(false);
+  }
+
+  const example = (si, extra) => () => {
+    Object.assign(state, { mat: "custom" }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    paint();
+  };
+  useExamples([
+    { title: "A 50 Ω microstrip", note: "0.36 mm on 0.2 mm of FR-4, 100 mm long: 590 ps, electrically long beyond 28.2 mm at 1 ns.",
+      apply: example({ w: 0.36e-3, h: 0.2e-3, t: OZ, er: 4.3, len: 100e-3, dl: 1e-3, tr: 1e-9 }, { mode: "micro", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ns" }) },
+    { title: "Length matching", note: "Stripline in FR-4, 50 mm, 0.5 mm of mismatch: 346 ps, 3.46 ps of skew.",
+      apply: example({ er: 4.3, len: 50e-3, dl: 0.5e-3, tr: 0.5e-9 }, { mode: "strip", lUnit: "mm", cUnit: "mm", rUnit: "ns" }) },
+    { title: "A known εeff, in inches", note: "εeff 3, a 6 in trace, 1 ns edges: 880 ps, electrically long beyond 1.14 in.",
+      apply: example({ ee: 3, len: 6 * 0.0254, dl: 10 * 25.4e-6, tr: 1e-9 }, { mode: "eeff", lUnit: "mil", cUnit: "in", rUnit: "ns" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    link.recall();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="pd-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const board = state.mode === "eeff"
+      ? `<div class="field-pair">${field("ee", "Effective εr, εeff", fixed(""), fmt(s.ee))}</div>`
+      : `${micro() ? `<div class="field-pair">${lf("w", "Trace width, w", 1)}${lf("h", "Dielectric, h", 2)}${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}</div>` : ""}
+      <div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The time a signal takes along a trace")}
+
+      ${pillRow(Object.entries(PD_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${board}
+      <div class="field-pair">${field("len", "Trace length, l", sel('data-cunit="1"', XT_LEN_UNITS, state.cUnit), fmt(s.len / XT_LEN_UNITS[state.cUnit]))}${lf("dl", "Mismatch, Δl", 3)}${field("tr", "Rise time", sel('data-runit="1"', XT_TR_UNITS, state.rUnit), fmt(s.tr / XT_TR_UNITS[state.rUnit]))}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["t = l √εeff / c,   1/c = 33.356 ps/cm", "skew = Δl √εeff / c", "edge = tr × c / √εeff", "long beyond l = tr c / (6 √εeff)"],
+        "A signal travels along a trace at the speed of light c divided by √εeff, the effective dielectric constant: the εr of a uniform material that would give the trace's speed. In a stripline, one dielectric all round, εeff is the board's εr, whatever the trace's width; in a microstrip part of the field is in the air above, so εeff lies between 1 and εr and depends on the trace's width and the dielectric's thickness (the app's field solver computes it). A length mismatch between two traces gives a skew, their arrival times apart. The rising edge spans tr × v of the trace. A trace becomes electrically long, and should be terminated, when its delay reaches about a sixth of the rise time (Barry Olney's rule, 1 inch per ns of rise time in FR-4); Howard Johnson warns that this ratio is a guide, not a guarantee: a short line with a strong driver can still ring."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "w" || key === "h" || key === "dl") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "len") state.si.len = v * XT_LEN_UNITS[state.cUnit];
+        else if (key === "tr") state.si.tr = v * XT_TR_UNITS[state.rUnit];
+        else if (key === "ee") state.si.ee = v;
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("pd-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+    });
+    const ms = document.getElementById("pd-mat");
+    if (ms) ms.onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
+    app.querySelector("select[data-runit]").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
+    if (micro()) link.schedule(true);
   }
 
   paint();
