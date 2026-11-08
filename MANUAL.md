@@ -11455,9 +11455,8 @@ plane, or the width that gives an impedance, on one screen:
   - the effective dielectric constant, from the solver;
   - the delay per length, per cm in mm and per inch in mil;
   - the capacitance and inductance per length.
-- **Units:** mm or mil for the width and the thickness, µm or mil for
-  the solder mask; any picker switches them all, mil to mil, mm or µm to
-  metric.
+- **Units:** mm or mil for the width, the thickness and the solder mask;
+  any of their pickers switches them all.
 - **Drawing:** the board in cross-section, the trace with its w and t,
   the dielectric with its h and εr, the ground plane; w, h and t in both
   mm and mil (Pierre), the unit in use first. The trace is green when its
@@ -11602,8 +11601,8 @@ from the solver's εeff.
 The "Solder mask" pill coats the board and the trace with a solder mask of
 its own εr, as on almost every outer layer: c1 thick on the bare board,
 c2 over the copper's top and sides (a conformal coat; mask thins over
-copper, so c2 is usually less than c1), each with its own picker (µm or
-mil, moving together). The solver puts the mask's εr in those cells and
+copper, so c2 is usually less than c1), in the lengths' unit, mm or mil,
+their pickers moving with the others'. The solver puts the mask's εr in those cells and
 solves as before; a second solve without the mask gives the row "Without
 the mask"; the formula rows, which know no mask, say "no mask".
 
@@ -12824,8 +12823,8 @@ over a ground plane, or the trace width that gives it at a spacing:
     2026-11-07, and by AN-905's simpler factor, each with its difference
     from the solver's;
   - s/h against AN-905's range, 0.2 to 3, flagged outside.
-- **Units:** mm or mil for the three lengths, µm or mil for the solder
-  mask; any picker switches them all, mil to mil, mm or µm to metric.
+- **Units:** mm or mil for the three lengths and the solder mask; any of
+  their pickers switches them all.
 - **Drawing:** the pair on the dielectric over the ground plane, w and s
   as a chain dimension, h and εr, in mm and mil. The traces are green when
   their width is the answer.

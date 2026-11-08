@@ -1880,8 +1880,8 @@ const CHECK_CASES = {
       expect: [['select[data-lunit="1"]', "mil"], ['input[data-key="h1"]', "7.874"], ['input[data-key="h2"]', "11.81"]] },
   ],
   "diff-microstrip": [
-    { name: "the mask's picker switches every length: mil on the mask turns the width, spacing and dielectric to mil", do: [["pill", 1], ["set", 'select[data-munit="1"]', "mil"]],
-      expect: [['select[data-lunit="1"]', "mil"], ['select[data-lunit="3"]', "mil"], ['select[data-munit="2"]', "mil"], ['input[data-key="h"]', "7.874"]] },
+    { name: "the mask takes the lengths' unit: mil on the mask turns the width, spacing and dielectric to mil; 20 um reads 0.7874 mil", do: [["pill", 1], ["set", 'select[data-lunit="4"]', "mil"]],
+      expect: [['select[data-lunit="1"]', "mil"], ['select[data-lunit="3"]', "mil"], ['select[data-lunit="5"]', "mil"], ['input[data-key="h"]', "7.874"], ['input[data-key="c1"]', "0.7874"]] },
     { name: "USB 90 ohm under solder mask (20 um, 15 um on the copper, er 3.5), 0.2 mm apart on 0.2 mm: 0.287 mm (fd_lines with mask 0.28684); without the mask 94.1 (+4.5 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="4"]']],
       expect: [['[data-res="big"]', "/^0.28[678] mm$/"], ['[data-res="bare"]', "/^94.1 Ω ..4.[456] %.$/"]] },
     { name: "the default pair under the mask: 107 ohm (106.958), 114 without it (+7.0 %)", do: [["pill", 1]],
@@ -1926,8 +1926,10 @@ const CHECK_CASES = {
       expect: [['select[data-lunit="1"]', "mil"], ['input[data-key="b"]', "23.62"]] },
   ],
   "microstrip": [
-    { name: "a length picker switches the mask's too: mm to mil turns the mask to mil", do: [["pill", 1], ["set", 'select[data-lunit="1"]', "mil"]],
-      expect: [['select[data-munit="1"]', "mil"], ['select[data-munit="2"]', "mil"]] },
+    { name: "the mask follows the other lengths: in mm it reads 0.02 and 0.015 mm, in mil 0.7874 and 0.5906 mil", do: [["pill", 1], ["set", 'select[data-lunit="1"]', "mil"]],
+      expect: [['select[data-lunit="3"]', "mil"], ['select[data-lunit="4"]', "mil"], ['input[data-key="c1"]', "0.7874"], ['input[data-key="c2"]', "0.5906"]] },
+    { name: "in mm the mask reads in mm too", do: [["pill", 1]],
+      expect: [['select[data-lunit="3"]', "mm"], ['input[data-key="c1"]', "0.02"], ['input[data-key="c2"]', "0.015"]] },
     { name: "50 ohm under solder mask (Sanwa SPSR-950: 20 um on the board, 15 um on the copper, er 3.5) on 0.2 mm FR-4, 1 oz: 0.342 mm (fd_lines app_microstrip with mask, 0.34169); without the mask 51.4 ohm (+2.8 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="5"]']],
       expect: [['[data-res="big"]', "/^0.34[123] mm$/"], ['[data-res="bare"]', "/^51.4 Ω ..2.[789] %.$/"]] },
     { name: "the default under the mask: 50.4 ohm (50.421), 50.7 without it (+0.5 %)", do: [["pill", 1]],

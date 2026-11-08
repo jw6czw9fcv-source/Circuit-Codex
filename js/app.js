@@ -13596,7 +13596,6 @@ function wireLengthUnits(C, state, paint) {
 // microns", εr 2.8 as received and 3.5 after 96 h at 55 °C, 95 % RH, at
 // 1 MHz; the tool takes 20 µm on the board, 15 µm over the copper, εr 3.5.
 const MASK_MODES = { none: "No mask", mask: "Solder mask" };
-const MASK_UNITS = { "µm": 1e-6, mil: 25.4e-6 };
 const MASK_DEFAULT = { c1: 20e-6, c2: 15e-6, erm: 3.5 };
 const maskProblem = (s) => (!(s.c1 >= 0) || !(s.c2 >= 0) ? "Enter the mask's thicknesses, zero or more." : !(s.erm >= 1) ? "Enter the mask's dielectric constant, 1 or more." : "");
 // The mask in the solver's terms (mm), or nothing.
@@ -13608,7 +13607,6 @@ function renderMicrostrip(domain, tool, favId) {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     oz: pref(C, "oz", 1, TRACE_OZ),
     mask: pref(C, "mask", "none", Object.keys(MASK_MODES)),
-    mUnit: pref(C, "mUnit", "µm", Object.keys(MASK_UNITS)),
     mat: "fr4",
     si: { w: 3e-3, h: 1.6e-3, er: 4.3, ...MASK_DEFAULT },
     // An impedance typed in its box: the width is set to give it.
@@ -13767,7 +13765,7 @@ function renderMicrostrip(domain, tool, favId) {
     { title: "50 Ω on a 0.2 mm layer", note: "The thin prepreg of a four-layer board, εr 4.3, 1 oz: 0.36 mm; IPC-2141 says 47.7 Ω.",
       apply: example({ h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 50) },
     { title: "50 Ω under solder mask", note: "The same layer under LPI mask (20 µm, 15 µm on the copper, εr 3.5): 0.342 mm.",
-      apply: example({ h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1, mask: "mask", mUnit: "µm" }, 50) },
+      apply: example({ h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1, mask: "mask" }, 50) },
   ]);
 
   function paint() {
@@ -13792,7 +13790,7 @@ function renderMicrostrip(domain, tool, favId) {
 
       <div class="field-pair">${field("w", "Trace width", sel('data-lunit="1"', MS_LEN_UNITS, state.lUnit), fmt(s.w / MS_LEN_UNITS[state.lUnit]))}${field("h", "Dielectric, h", sel('data-lunit="2"', MS_LEN_UNITS, state.lUnit), fmt(s.h / MS_LEN_UNITS[state.lUnit]))}<div class="field"><label>Copper</label>${ozSel}</div></div>
       <div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Impedance", fixed("Ω"), "")}</div>
-      ${masked() ? `<div class="field-pair">${field("c1", "Mask on board", sel('data-munit="1"', MASK_UNITS, state.mUnit), fmt(s.c1 / MASK_UNITS[state.mUnit]))}${field("c2", "Mask on copper", sel('data-munit="2"', MASK_UNITS, state.mUnit), fmt(s.c2 / MASK_UNITS[state.mUnit]))}${field("erm", "Mask εr", fixed(""), fmt(s.erm))}</div>` : ""}
+      ${masked() ? `<div class="field-pair">${field("c1", "Mask on board", sel('data-lunit="3"', MS_LEN_UNITS, state.lUnit), fmt(s.c1 / MS_LEN_UNITS[state.lUnit]))}${field("c2", "Mask on copper", sel('data-lunit="4"', MS_LEN_UNITS, state.lUnit), fmt(s.c2 / MS_LEN_UNITS[state.lUnit]))}${field("erm", "Mask εr", fixed(""), fmt(s.erm))}</div>` : ""}
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -13813,7 +13811,7 @@ function renderMicrostrip(domain, tool, favId) {
         if (key === "z") state.target = v;
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "h") state.si.h = v * MS_LEN_UNITS[state.lUnit];
-        else if (key === "c1" || key === "c2") state.si[key] = v * MASK_UNITS[state.mUnit];
+        else if (key === "c1" || key === "c2") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
         else if (key === "erm") state.si.erm = v;
         else if (key === "er") {
           state.si.er = v;
@@ -15469,7 +15467,6 @@ function renderDiffMicrostrip(domain, tool, favId) {
     lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
     oz: pref(C, "oz", 1, TRACE_OZ),
     mask: pref(C, "mask", "none", Object.keys(MASK_MODES)),
-    mUnit: pref(C, "mUnit", "µm", Object.keys(MASK_UNITS)),
     mat: "fr4",
     si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, er: 4.3, ...MASK_DEFAULT },
     // A differential impedance typed in its box: the width is set to give
@@ -15632,7 +15629,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
     { title: "Ethernet or LVDS, 100 Ω", note: "The same layer and spacing: 0.251 mm traces, 50 Ω each in the pair.",
       apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1 }, 100) },
     { title: "USB, 90 Ω under solder mask", note: "The same layer under LPI mask (20 µm, 15 µm on the copper, εr 3.5): 0.287 mm.",
-      apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1, mask: "mask", mUnit: "µm" }, 90) },
+      apply: example({ s: 0.2e-3, h: 0.2e-3, er: 4.3 }, { lUnit: "mm", oz: 1, mask: "mask" }, 90) },
   ]);
 
   function paint() {
@@ -15658,7 +15655,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
 
       <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Spacing, s", 2)}${lf("h", "Dielectric, h", 3)}</div>
       <div class="field-pair"><div class="field"><label>Copper</label>${ozSel}</div><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
-      ${masked() ? `<div class="field-pair">${field("c1", "Mask on board", sel('data-munit="1"', MASK_UNITS, state.mUnit), fmt(s.c1 / MASK_UNITS[state.mUnit]))}${field("c2", "Mask on copper", sel('data-munit="2"', MASK_UNITS, state.mUnit), fmt(s.c2 / MASK_UNITS[state.mUnit]))}${field("erm", "Mask εr", fixed(""), fmt(s.erm))}</div>` : ""}
+      ${masked() ? `<div class="field-pair">${field("c1", "Mask on board", sel('data-lunit="4"', MS_LEN_UNITS, state.lUnit), fmt(s.c1 / MS_LEN_UNITS[state.lUnit]))}${field("c2", "Mask on copper", sel('data-lunit="5"', MS_LEN_UNITS, state.lUnit), fmt(s.c2 / MS_LEN_UNITS[state.lUnit]))}${field("erm", "Mask εr", fixed(""), fmt(s.erm))}</div>` : ""}
       <div class="field-pair">${field("z", "Differential impedance", fixed("Ω"), "")}</div>
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
@@ -15680,7 +15677,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
         if (key === "z") state.target = v;
         else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
         else if (key === "s" || key === "h") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
-        else if (key === "c1" || key === "c2") state.si[key] = v * MASK_UNITS[state.mUnit];
+        else if (key === "c1" || key === "c2") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
         else if (key === "erm") state.si.erm = v;
         else if (key === "er") {
           state.si.er = v;
