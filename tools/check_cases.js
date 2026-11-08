@@ -1842,6 +1842,14 @@ const CHECK_CASES = {
     { name: "a zero gap to the ground is refused", do: [["set", 'input[data-key="g"]', "0"]],
       expect: [['[data-res="err"]', "Enter the gap to the ground beside the traces."]] },
   ],
+  "laminates": [
+    { name: "RF shows the three Rogers laminates and hides the FR-4s", do: [["click", '.filter-btn[data-filter="rf"]']],
+      expect: [['[data-lam="ro4003c"] .formula-card-title', "/^Rogers RO4003C RF$/"], ['[data-lam="rt5880"] .formula-card-title', "/^Rogers RT.duroid 5880 RF, PTFE$/"], ['[data-lam="370hr"]', "(missing)"]] },
+    { name: "searching megtron finds MEGTRON 6 alone", do: [["set", "#lam-input", "megtron"]],
+      expect: [['[data-lam="megtron6"] .breadcrumb', "/^Dk 3.4 · Df 0.002 at 1 GHz/"], ['[data-lam="ro4350b"]', "(missing)"]] },
+    { name: "RO4350B's card: design Dk 3.66, Df 0.0037 at 10 GHz, Tg over 280 C (Rogers PUB 92-004)", do: [],
+      expect: [['[data-lam="ro4350b"] .breadcrumb', "/^Dk 3.66 · Df 0.0037 at 10 GHz.*Tg > 280 °C$/"]] },
+  ],
   "prop-delay": [
     { name: "the default microstrip, 0.36 mm on 0.2 mm FR-4, 1 oz, 100 mm: field solver eeff 3.131 (fd_lines app_microstrip 3.13056), 59.02 ps/cm, 590 ps; long beyond tr/6 of the way, 28.2 mm at 1 ns", do: [],
       expect: [['[data-res="big"]', "590 ps"], ['[data-res="by"]', "Field solver"], ['[data-res="sub"]', "εeff 3.13: 56.5 % of the speed of light"], ['[data-res="per"]', "59 ps/cm · 150 ps/in"], ['[data-res="speed"]', "16.9 cm/ns · 6.67 in/ns"], ['[data-res="skew"]', "5.9 ps for 1 mm"], ['[data-res="edge"]', "169 mm"], ['[data-res="long"]', "28.2 mm: this trace is"]] },
@@ -1962,6 +1970,10 @@ const CHECK_CASES = {
       expect: [['select[data-lunit="1"]', "mil"], ['input[data-key="b"]', "23.62"]] },
   ],
   "microstrip": [
+    { name: "Laminate materials in the picker: RO4350B sets er 3.66, 3 mm on 1.6 mm with 1 oz: 54.4 ohm (fd_lines app_microstrip 54.430)", do: [["set", "#ms-mat", "ro4350b"]],
+      expect: [['input[data-key="er"]', "3.66"], ['[data-res="big"]', "54.4 Ω"]] },
+    { name: "typing er 4.17 picks Isola 370HR: 51.4 ohm (51.387)", do: [["set", 'input[data-key="er"]', "4.17"]],
+      expect: [["#ms-mat", "370hr"], ['[data-res="big"]', "51.4 Ω"]] },
     { name: "the mask follows the other lengths: in mm it reads 0.02 and 0.015 mm, in mil 0.7874 and 0.5906 mil", do: [["pill", 1], ["set", 'select[data-lunit="1"]', "mil"]],
       expect: [['select[data-lunit="3"]', "mil"], ['select[data-lunit="4"]', "mil"], ['input[data-key="c1"]', "0.7874"], ['input[data-key="c2"]', "0.5906"]] },
     { name: "in mm the mask reads in mm too", do: [["pill", 1]],

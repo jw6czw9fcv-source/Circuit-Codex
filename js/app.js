@@ -533,6 +533,7 @@ const TOOL_THUMBS = {
   "coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 10) + thumbCu(18, 8, 10) + thumbCu(32, 8, 10),
   "crosstalk": THUMB_PARTS.surf + thumbCu(12, 8, 9) + '<rect x="25" y="8" width="9" height="3" fill="#5DCAA5"/>',
   "diff-coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 8) + thumbCu(15, 8, 7) + thumbCu(24, 8, 7) + thumbCu(34, 8, 8),
+  "laminates": '<rect x="4" y="4" width="38" height="3" fill="#8FC1F5"/><rect x="4" y="7" width="38" height="12" fill="none" stroke="#5A6169" stroke-width="1.2"/><path d="M6 13 Q10 10 14 13 T22 13 T30 13 T38 13" stroke="#5A6169" stroke-width="1"/><rect x="4" y="19" width="38" height="3" fill="#8FC1F5"/>',
   "prop-delay": '<path d="M4 7 V19 L13 13 Z M33 7 V19 L42 13 Z" stroke="#8FC1F5" stroke-width="1.2" stroke-linejoin="round"/><path d="M13 13 H33" stroke="#5DCAA5" stroke-width="2"/>',
 };
 // A tool's name in a list, its drawing first when it has one.
@@ -659,6 +660,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "diff-coplanar") return renderDiffCoplanar(domain, tool, favId);
   if (calcId === "crosstalk") return renderCrosstalk(domain, tool, favId);
   if (calcId === "prop-delay") return renderPropDelay(domain, tool, favId);
+  if (calcId === "laminates") return renderLaminates(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -13564,7 +13566,58 @@ function ipcCoupledMicrostripOdd(w, s, h, t, er) {
   const q10 = (q2 * q4 - q5 * Math.exp(Math.log(u) * q6 * u ** -q9)) / q2;
   return z0 * Math.sqrt(e0 / eo) / (1 - z0 / 376.730313668 * Math.sqrt(e0) * q10);
 }
-const MS_MATERIALS = { fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4], custom: ["Custom", null] };
+// Laminates from their makers' data sheets (Pierre, 2026-11-08: a
+// reference table that also feeds every impedance tool's material picker).
+// er is the value the pickers take: Rogers' "design Dk" where given (their
+// recommendation for circuit design, 8 to 40 GHz), otherwise the sheet's
+// Dk at 1 GHz (at 10 GHz for Pyralux AP, its only GHz figure). All typical
+// values, read from these sheets: Isola 370HR rev. C and FR408HR rev. E
+// (both last updated 15 April 2021), Shengyi S1000-2M CN-TDS-1911-03 (and
+// an older S1000-2M/S1000-2MB sheet for 1 MHz), Panasonic MEGTRON 6
+// R-5775(N) No. 17061630 (June 2017, low-Dk glass), Rogers RO4000 series
+// (PUB 92-004, 2022) and RT/duroid 5870/5880 (PUB 92-101, 2022), DuPont
+// Pyralux AP (EI-10124, 2/25).
+const LAMINATES = [
+  { key: "370hr", maker: "Isola", name: "370HR", group: "fr4", kind: "FR-4", er: 4.17, df: 0.0161, at: "1 GHz", tg: "180 °C",
+    spec: "IPC-4101 /98 /99 /101 /126", curve: "Dk 4.24 at 100 MHz, 4.04 at 2 GHz, 3.92 at 5 and 10 GHz; Df 0.0150 at 100 MHz to 0.0250 at 10 GHz.",
+    note: "A standard-loss, 180 °C Tg FR-4 for multilayers.", sheet: "Isola data sheet rev. C, April 2021" },
+  { key: "fr408hr", maker: "Isola", name: "FR408HR", group: "fr4", kind: "FR-4, lower loss", er: 3.69, df: 0.0091, at: "1 GHz", tg: "190 °C",
+    spec: "IPC-4101 /98 /99 /101 /126", curve: "Dk 3.72 at 100 MHz, 3.68 at 2 GHz, 3.65 at 10 GHz; Df 0.0072 at 100 MHz to 0.0095 at 10 GHz.",
+    note: "A high-performance FR-4, about half the loss of 370HR; Tg 230 °C by DMA.", sheet: "Isola data sheet rev. E, April 2021" },
+  { key: "s1000-2m", maker: "Shengyi", name: "S1000-2M", group: "fr4", kind: "FR-4", er: 4.6, df: 0.018, at: "1 GHz", tg: "180 °C",
+    spec: "IPC-4101 /126 (\"for your reference only\")", curve: "Dk 4.9 and Df 0.009 at 1 MHz (older sheet, whose spec column gives Dk ≤ 5.4 and Df ≤ 0.035 at 1 MHz).",
+    note: "A high-Tg, lead-free FR-4. Measured on 1.6 mm of 8 × 7628 glass, a resin-poor build: Dk falls as the resin content rises (the sheet charts 43 to 72 %).", sheet: "Shengyi CN-TDS-1911-03" },
+  { key: "megtron6", maker: "Panasonic", name: "MEGTRON 6", group: "lowloss", kind: "Low loss", er: 3.4, df: 0.002, at: "1 GHz", tg: "185 °C",
+    spec: "Laminate R-5775(N), prepreg R-5670(N)", curve: "Dk 3.35 and Df 0.004 at 12 GHz; its cores read Dk 3.18 to 3.40 at 1 GHz with the glass style and resin content.",
+    note: "A high-speed, low-loss multilayer material, low-Dk glass version; Tg 210 °C by DMA.", sheet: "Panasonic No. 17061630, June 2017" },
+  { key: "ro4003c", maker: "Rogers", name: "RO4003C", group: "rf", kind: "RF", er: 3.55, df: 0.0027, at: "10 GHz", tg: "> 280 °C",
+    spec: "IPC-4103 /10", curve: "Process Dk 3.38 ± 0.05 at 10 GHz; design Dk 3.55 from 8 to 40 GHz; Df 0.0021 at 2.5 GHz.",
+    note: "Hydrocarbon/ceramic, processed like FR-4 (no sodium etch, unlike PTFE). Not flame-retardant: RO4350B is the UL 94 V-0 version.", sheet: "Rogers PUB 92-004, 2022" },
+  { key: "ro4350b", maker: "Rogers", name: "RO4350B", group: "rf", kind: "RF", er: 3.66, df: 0.0037, at: "10 GHz", tg: "> 280 °C",
+    spec: "IPC-4103 /11 and /240", curve: "Process Dk 3.48 ± 0.05 at 10 GHz; design Dk 3.66 from 8 to 40 GHz; Df 0.0031 at 2.5 GHz.",
+    note: "The UL 94 V-0 version of RO4003C. The design Dk falls by about 0.1 as the core thins from 0.020 in to 0.004 in; 4 mil cores have a process Dk of 3.33.", sheet: "Rogers PUB 92-004, 2022" },
+  { key: "rt5880", maker: "Rogers", name: "RT/duroid 5880", group: "rf", kind: "RF, PTFE", er: 2.2, df: 0.0009, at: "10 GHz", tg: "—",
+    spec: "—", curve: "Dk 2.20 ± 0.02 at 10 GHz, design Dk 2.20 from 8 to 40 GHz; Df 0.0004 at 1 MHz.",
+    note: "Glass-microfiber reinforced PTFE for microwave work; soft, and its vias need PTFE processing.", sheet: "Rogers PUB 92-101, 2022" },
+  { key: "pyralux-ap", maker: "DuPont", name: "Pyralux AP", group: "flex", kind: "Flex, polyimide", er: 3.2, df: 0.003, at: "10 GHz", tg: "220 °C",
+    spec: "IPC-4204 /11", curve: "Dk 3.4 and Df 0.002 at 1 MHz (AP9121, 50 µm of dielectric).",
+    note: "An adhesiveless, all-polyimide double-sided copper-clad laminate for flex and rigid-flex; Tg by TMA.", sheet: "DuPont EI-10124, February 2025" },
+];
+// The pickers: the app's three round figures, then the makers' laminates.
+const MS_MATERIALS = {
+  fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4],
+  ...Object.fromEntries(LAMINATES.map((l) => [l.key, [l.name, l.er, l.maker]])),
+  custom: ["Custom", null],
+};
+// A material picker's options, the laminates grouped by maker.
+function matOptions(cur) {
+  const opt = ([key, [n]]) => `<option value="${key}" ${key === cur ? "selected" : ""}>${n}</option>`;
+  const all = Object.entries(MS_MATERIALS);
+  const makers = [...new Set(LAMINATES.map((l) => l.maker))];
+  return all.filter(([, v]) => !v[2] && v[1] !== null).map(opt).join("")
+    + makers.map((m) => `<optgroup label="${m}">${all.filter(([, v]) => v[2] === m).map(opt).join("")}</optgroup>`).join("")
+    + opt(["custom", MS_MATERIALS.custom]);
+}
 
 // The length pickers of a PCB impedance tool, linked (Pierre: a unit
 // changes from any box): the cross-section's (mm or mil), the copper's (oz,
@@ -13782,7 +13835,7 @@ function renderMicrostrip(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const ozSel = `<select id="ms-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
-    const matSel = `<select id="ms-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="ms-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "The impedance of a PCB trace over a ground plane")}
 
@@ -14077,7 +14130,7 @@ function renderStripline(domain, tool, favId) {
           <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
-    const matSel = `<select id="sl-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="sl-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "The impedance of a PCB trace between two planes")}
 
@@ -14409,7 +14462,7 @@ function renderDualStripline(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lv = (k) => fmt(s[k] / MS_LEN_UNITS[state.lUnit]);
-    const matSel = `<select id="ds-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="ds-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A PCB trace nearer one of its two planes")}
 
@@ -14696,7 +14749,7 @@ function renderDiffStripline(domain, tool, favId) {
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
     link.recall();
-    const matSel = `<select id="dsl-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="dsl-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A side-by-side pair between two planes")}
 
@@ -14979,7 +15032,7 @@ function renderAsymDiffStripline(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
-    const matSel = `<select id="ads-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="ads-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A side-by-side pair nearer one of two planes")}
 
@@ -15263,7 +15316,7 @@ function renderBroadsideStripline(domain, tool, favId) {
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
     link.recall();
-    const matSel = `<select id="bs-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="bs-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A pair of traces stacked between two planes")}
 
@@ -15509,7 +15562,7 @@ function renderPairedStrips(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
-    const matSel = `<select id="ps-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="ps-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A stacked pair on a sheet, no planes")}
 
@@ -15759,7 +15812,7 @@ function renderDiffMicrostrip(domain, tool, favId) {
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
     link.recall();
     const ozSel = `<select id="dm-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
-    const matSel = `<select id="dm-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="dm-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "The impedance of a pair of traces over a ground plane")}
 
@@ -16019,7 +16072,7 @@ function renderEmbeddedPair(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
-    const matSel = `<select id="ep-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="ep-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "Edge-coupled, under prepreg or solder mask")}
 
@@ -16259,7 +16312,7 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
     link.recall();
     const ozSel = `<select id="em-oz">${TRACE_OZ.map((o) => `<option value="${o}" ${o === state.oz ? "selected" : ""}>${o} oz</option>`).join("")}</select>`;
-    const matSel = `<select id="em-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="em-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A microstrip under solder mask or more dielectric")}
 
@@ -16534,7 +16587,7 @@ function renderCoplanar(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
-    const matSel = `<select id="cpw-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="cpw-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A trace between grounds on the same layer")}
 
@@ -16774,7 +16827,7 @@ function renderDiffCoplanar(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
-    const matSel = `<select id="dcpw-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="dcpw-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "A differential pair between grounds")}
 
@@ -16828,6 +16881,80 @@ function renderDiffCoplanar(domain, tool, favId) {
     wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
+  }
+
+  paint();
+}
+
+// ---------- Laminate materials ----------
+// The makers' laminates (LAMINATES, with the impedance tools' pickers), as
+// cards: Dk and Df at the frequency the sheet gives, Tg, the slash sheet
+// the maker states, how Dk and Df move with frequency, and the sheet read.
+const LAMINATE_FILTERS = [["all", "All"], ["fr4", "FR-4"], ["lowloss", "Low loss"], ["rf", "RF"], ["flex", "Flex"]];
+
+function renderLaminates(domain, tool, favId) {
+  const CALC = "laminates";
+  const state = { filter: pref(CALC, "filter", "all", LAMINATE_FILTERS.map((f) => f[0])), query: "" };
+
+  function card(l) {
+    return `
+      <div class="formula-card formula-card--static" data-lam="${l.key}">
+        <div class="formula-card-head">
+          <span class="formula-card-title">${l.maker} ${l.name} <span style="opacity:.55;font-weight:500">${l.kind}</span></span>
+        </div>
+        <div class="breadcrumb">Dk ${l.er} · Df ${l.df} at ${l.at} &nbsp;·&nbsp; Tg ${l.tg}</div>
+        <div class="formula-card-note">${l.curve} ${l.note}<br>${l.spec !== "—" ? `${l.spec}. ` : ""}${l.sheet}.</div>
+      </div>`;
+  }
+  const matches = (l, q) => [l.maker, l.name, l.kind, l.spec, l.note, l.curve].join(" ").toLowerCase().includes(q);
+  function filteredList() {
+    let list = state.filter === "all" ? LAMINATES : LAMINATES.filter((l) => l.group === state.filter);
+    if (state.query) list = list.filter((l) => matches(l, state.query));
+    return list;
+  }
+  function refreshResults() {
+    const list = filteredList();
+    document.getElementById("lam-results").innerHTML = list.length
+      ? list.map(card).join("")
+      : `<div class="placeholder">${ICONS.search}<div>No match${state.query ? ` for "${state.query}"` : ""}.</div></div>`;
+  }
+
+  function paint() {
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Dk and Df from the makers' data sheets")}
+
+      <div class="field">
+        <div class="color-row-note">Dk (the dielectric constant, εr) sets a trace's impedance and speed, Df (the loss tangent) its dielectric loss. Typical values: they vary with frequency, glass style and resin content. The impedance tools' Material pickers take the Dk shown here.</div>
+      </div>
+
+      <div class="filter-row" id="lam-chips">
+        ${LAMINATE_FILTERS.map(([value, label]) => `
+          <button class="filter-btn ${state.filter === value ? "active" : ""}" data-filter="${value}"
+                  style="${state.filter === value ? `background:${domain.bg};color:#8FC1F5;` : ""}">${label}</button>`).join("")}
+      </div>
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="lam-input" type="text" placeholder="Search a maker or laminate" autocapitalize="off" spellcheck="false" value="${state.query}" />
+      </div>
+      <div id="lam-results"></div>
+      ${tabbarHTML("")}
+    `;
+
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+    document.getElementById("lam-chips").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      state.filter = btn.dataset.filter;
+      setPref(CALC, "filter", state.filter);
+      paint();
+    });
+    const input = document.getElementById("lam-input");
+    refreshResults();
+    input.oninput = () => {
+      state.query = input.value.trim().toLowerCase();
+      refreshResults();
+    };
   }
 
   paint();
@@ -16989,7 +17116,7 @@ function renderPropDelay(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
-    const matSel = `<select id="pd-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="pd-mat">${matOptions(state.mat)}</select>`;
     const board = state.mode === "eeff"
       ? `<div class="field-pair">${field("ee", "Effective εr, εeff", fixed(""), fmt(s.ee))}</div>`
       : `${micro() ? `<div class="field-pair">${lf("w", "Trace width, w", 1)}${lf("h", "Dielectric, h", 2)}${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}</div>` : ""}
@@ -17328,7 +17455,7 @@ function renderCrosstalk(domain, tool, favId) {
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
     const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
-    const matSel = `<select id="xt-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const matSel = `<select id="xt-mat">${matOptions(state.mat)}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "Coupling between two traces side by side")}
 

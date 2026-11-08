@@ -129,6 +129,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Edge-coupled coplanar](#diff-coplanar)
 - Impedance → [Propagation delay](#prop-delay)
 - Impedance → [Crosstalk](#crosstalk)
+- Impedance → [Laminate materials](#laminates)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -11440,7 +11441,8 @@ plane, or the width that gives an impedance, on one screen:
 
 - **Inputs:** the trace width, the dielectric's thickness h (to the ground
   plane), the copper weight (its thickness t, ½ to 3 oz), the material
-  (FR-4, polyimide, PTFE or custom) and its dielectric constant εr.
+  (FR-4, polyimide or PTFE at AN-905's round figures, a maker's laminate
+  from Laminate materials, or custom) and its dielectric constant εr.
 - **Width and impedance are two live boxes:** type a width and the
   impedance box shows Z0; type the impedance you need and the width box
   shows the width that gives it (shown again when you leave the box).
@@ -11680,7 +11682,8 @@ two ground planes, or the width that gives an impedance, on one screen:
 
 - **Inputs:** the trace width, the spacing between the planes b, the
   copper's thickness t (in oz, µm or mil, its own picker), the material
-  (FR-4, polyimide, PTFE or custom) and its dielectric constant εr.
+  (FR-4, polyimide or PTFE at AN-905's round figures, a maker's laminate
+  from Laminate materials, or custom) and its dielectric constant εr.
 - **Width and impedance are two live boxes:** type a width and the
   impedance box shows Z0; type the impedance you need and the width box
   shows the width that gives it.
@@ -13815,5 +13818,128 @@ formulas above, the swing 3.3 V unless said:
 - sine on the stripline pair at its quarter wave, 711.28 MHz: −15.0 dB
   (588 mV, 17.8 %), twice the step's 8.9 %, far end 0;
 - a zero frequency is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="laminates"></a>
+## Laminate materials
+
+`calc: laminates` · PCB & interconnect › Impedance
+
+### What it computes
+
+A reference of real PCB laminates from their makers' data sheets, and the
+list behind every impedance tool's Material picker (Pierre, 2026-11-08).
+It takes the place of the planned "Laminate material reference (Dk/Df) —
+IPC-4101":
+
+- **Cards:** maker and name, the kind (FR-4, low loss, RF, flex), Dk and
+  Df at the frequency the sheet gives, Tg; then how Dk and Df move with
+  frequency, a note, the slash sheet the maker states, and the sheet read.
+- **Filters and search:** All, FR-4, Low loss, RF, Flex; search any maker,
+  name or word.
+- **In the impedance tools:** each Material picker lists FR-4, polyimide
+  and PTFE at AN-905's round figures (4.3, 4.2, 2.4), then these laminates
+  grouped by maker, then Custom; picking one sets εr to the Dk on its
+  card. Typing εr sets the picker to the laminate with that value, or to
+  Custom.
+- **Remembered:** the filter.
+
+| Laminate | Kind | Dk the pickers take | Df | Tg |
+|---|---|---|---|---|
+| Isola 370HR | FR-4 | 4.17 at 1 GHz | 0.0161 | 180 °C |
+| Isola FR408HR | FR-4, lower loss | 3.69 at 1 GHz | 0.0091 | 190 °C |
+| Shengyi S1000-2M | FR-4 | 4.6 at 1 GHz | 0.018 | 180 °C |
+| Panasonic MEGTRON 6 | Low loss | 3.40 at 1 GHz | 0.002 | 185 °C |
+| Rogers RO4003C | RF | 3.55 design (8–40 GHz) | 0.0027 at 10 GHz | > 280 °C |
+| Rogers RO4350B | RF | 3.66 design (8–40 GHz) | 0.0037 at 10 GHz | > 280 °C |
+| Rogers RT/duroid 5880 | RF, PTFE | 2.20 design (8–40 GHz) | 0.0009 at 10 GHz | — |
+| DuPont Pyralux AP | Flex | 3.2 at 10 GHz | 0.003 | 220 °C |
+
+### Terms
+
+- **Dk (dielectric constant, εr, relative permittivity):** how much the
+  material slows a signal and raises a trace's capacitance; it sets the
+  impedance and the delay.
+- **Df (dissipation factor, loss tangent, tan δ):** the share of the
+  field's energy the material turns into heat per cycle; it sets the
+  dielectric loss, which grows with frequency.
+- **Design Dk:** Rogers' value for circuit design, "an average number from
+  several different tested lots of material", measured on circuits from
+  8 to 40 GHz (differential phase length); the process Dk (clamped
+  stripline, IPC-TM-650 2.5.5.5) is the one for quality acceptance, and
+  Rogers warns it "may be incorrect for design purposes, especially
+  microstrip designs".
+- **Tg (glass transition temperature):** where the resin softens and its
+  expansion rises sharply; DSC and DMA give different figures (both shown
+  where the sheet gives both).
+- **Resin content, glass style:** a laminate is woven glass in resin; glass
+  has a higher Dk than the resin, so thin, resin-rich layers (106, 1080)
+  read lower than thick, glass-rich ones (7628). Makers give Dk per
+  construction; the cards give one typical figure.
+- **Slash sheet:** the IPC specification sheet a material is qualified
+  to: IPC-4101 for rigid FR-4-type laminates, IPC-4103 for high-frequency
+  ones, IPC-4204 for flexible ones. The cards give the slash sheets the
+  makers state; IPC-4101 itself was not read.
+- **Core, prepreg:** the cured, copper-clad laminate, and the uncured
+  sheets that bond the cores; the same resin system usually has both.
+
+### Sources
+
+All typical values, read from the makers' sheets:
+- **Isola 370HR** data sheet, revision C, last updated 15 April 2021:
+  Tg 180 °C (DSC), Dk 4.24, 4.17, 4.04, 3.92, 3.92 and Df 0.0150, 0.0161,
+  0.0210, 0.0250, 0.0250 at 100 MHz, 1, 2, 5 and 10 GHz; IPC-4101 /98 /99
+  /101 /126.
+- **Isola FR408HR** data sheet, revision E, last updated 15 April 2021
+  (a copy hosted by Michigan State University; Isola's server refused):
+  Tg 190 °C (DSC), 230 °C (DMA); Dk 3.72, 3.69, 3.68, 3.64, 3.65 and Df
+  0.0072, 0.0091, 0.0092, 0.0098, 0.0095 at the same frequencies; IPC-4101
+  /98 /99 /101 /126.
+- **Shengyi S1000-2M** typical data sheet CN-TDS-1911-03: Tg 180 °C (DSC),
+  185 °C (DMA), permittivity 4.6 and loss tangent 0.018 at 1 GHz
+  (IPC-TM-650 2.5.5.9) on 1.6 mm of 8 × 7628, IPC-4101/126 "for your
+  reference only"; an older S1000-2M/S1000-2MB sheet: 4.9 and 0.009 at
+  1 MHz, its spec column ≤ 5.4 and ≤ 0.035.
+- **Panasonic MEGTRON 6** laminate R-5775(N), prepreg R-5670(N), data
+  sheet No. 17061630, June 2017, low-Dk glass cloth version: Tg 185 °C
+  (DSC), 210 °C (DMA); Dk 3.40, Df 0.002 at 1 GHz and 3.35, 0.004 at
+  12 GHz on a 0.75 mm core; Dk 3.18 to 3.40 at 1 GHz across its cores.
+- **Rogers RO4000 series** data sheet, PUB 92-004, 2022: RO4003C process
+  Dk 3.38 ± 0.05 and RO4350B 3.48 ± 0.05 at 10 GHz, design Dk 3.55 and
+  3.66; Df 0.0027 and 0.0037 at 10 GHz, 0.0021 and 0.0031 at 2.5 GHz; Tg
+  > 280 °C; IPC-4103 /10 (RO4003C), /11 and /240 (RO4350B); the design Dk
+  "decreases by about 0.1 as the core thickness decreases from 0.020” to
+  0.004”".
+- **Rogers RT/duroid 5870/5880** data sheet, Publication 92-101, 2022:
+  5880 Dk 2.20 ± 0.02 at 10 GHz, design Dk 2.20 (8 to 40 GHz), Df 0.0004
+  at 1 MHz and 0.0009 at 10 GHz.
+- **DuPont Pyralux AP** data sheet EI-10124 (2/25): AP9121 Dk 3.4 and 3.2,
+  Df 0.002 and 0.003 at 1 MHz and 10 GHz; Tg 220 °C (TMA); IPC-4204/11.
+- **The round figures:** AN-905's Appendix D (see Microstrip): FR-4 and
+  G-10 4.3, polyimide 4.2, PTFE 2.4.
+
+### Assumptions and limits
+
+- **Typical, not guaranteed:** every sheet says so; a stack-up's real Dk
+  comes from the board maker, for the glass styles and resin contents it
+  uses.
+- **One Dk per laminate:** the pickers take one figure; Dk changes with
+  frequency (a few % per decade for FR-4, less for the RF laminates) and
+  with the construction.
+- **Not every laminate:** a short list of widely used ones; Custom takes
+  any other value.
+
+### How it was checked
+
+5 cases:
+- RF shows the three Rogers laminates and hides the FR-4s;
+- searching "megtron" finds MEGTRON 6 alone;
+- RO4350B's card reads Dk 3.66 · Df 0.0037 at 10 GHz, Tg > 280 °C;
+- in Microstrip, RO4350B sets εr 3.66: 3 mm on 1.6 mm with 1 oz, 54.4 Ω
+  (tools/fd_lines.py 54.430);
+- in Microstrip, typing εr 4.17 picks 370HR: 51.4 Ω (51.387).
 
 [↑ Index](#index)
