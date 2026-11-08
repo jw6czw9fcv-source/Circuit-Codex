@@ -11845,6 +11845,11 @@ width that gives an impedance:
 - **Below it,** each with its difference from the solver:
   - Robrish's formula, flagged outside its ±2 % range;
   - Hogan's formula, the one IPC-2141A reprints;
+  - the two dual-stripline formulas, the trace seen as one of two signal
+    layers between the planes: IPC-2251's, and the older IPC one that
+    other calculators still use ("Older IPC formula"); each flagged outside its range (W/(H − T) <
+    0.35, T/H < 0.25), and absent when the far side leaves no room for a
+    second layer;
   - the same trace centred between the same planes;
   - the delay per length, the signal seeing the full εr;
   - the capacitance and inductance per length.
@@ -11856,8 +11861,9 @@ width that gives an impedance:
 - **Remembered:** the length unit and the copper unit.
 
 Examples: a 0.2 mm trace 0.2 and 0.4 mm from the planes, the width for
-50 Ω on those layers, a centred trace (Stripline's case), and a narrow
-trace close to one plane.
+50 Ω on those layers, a centred trace (Stripline's case), a narrow trace
+close to one plane, and two dual striplines: LearnEMC's case with a 2 mil
+trace, and a 0.43 mm trace well outside the dual formulas' range.
 
 ### Terms
 
@@ -11904,6 +11910,32 @@ trace close to one plane.
   has 1/√εr. That 1/εr is a misprint: a uniform dielectric divides the
   impedance in air by √εr, and with 1/εr a centred FR-4 stripline would
   come out at half its value.
+- **The dual-stripline formulas.** For two signal layers between the
+  planes, H is the dielectric between a trace and its nearer plane and C
+  (D in the book below) the dielectric between the two signal layers; for
+  the tool's trace, H = the smaller of h1 and h2, and C = the larger − t −
+  H, the room left for the other layer.
+  - **IPC-2251, "Design Guide for Electronic Packaging Utilizing
+    High-Speed Techniques", 4th working draft, February 2001**, as the
+    LearnEMC dual stripline calculator (learnemc.com, also on the Missouri
+    S&T EMC Laboratory's site) publishes it, in its code and its equation
+    image (read; the IPC document itself not read): Z0 = ½ [60/√εr ×
+    ln(8H / (0.67π (0.8W + T))) + 60/√εr × ln(8(H + C) / (0.67π (0.8W +
+    T)))], valid for W/(H − T) < 0.35, T/H < 0.25; the calculator's notes
+    give it within 1 % of a 2D field solver for 0.08 < W/H < 0.35 at εr 4,
+    H 15 mil, C 10 mil, T 1.37 mil. It is the mean of two AN-905 striplines
+    (Stripline's section), planes 2H and 2(H + C) apart.
+  - **The older IPC dual stripline formula**, as a book page Pierre sent
+    prints it (§4.2.4 "Dual or Asymmetric Stripline Topology", eq. 4.10;
+    the book's title not yet noted here): Z0 = (80/√εr) ln[1.9 (2H + T) /
+    (0.8W + T)] [1 − H / (4 (H + D + T))], the same range, "approximate";
+    the page adds that both layers should be routed at right angles to each
+    other. Other calculators still use it: it reproduces one's 32.689 Ω for
+    W 0.4318, H 0.254, C 0.2032 mm, T 18 µm, εr 4.6. Its IPC source
+    (IPC-D-317A, 1995, or the first IPC-2141, 1996) was not read.
+  - **Which is the latest:** IPC-2251 followed IPC-D-317A; IPC-2141A
+    (2004, read) gives Hogan's formula for the offset trace instead, and no
+    IPC-2141B was found (2026-11-07).
 - **A correction:** this manual first called the full-B first term and the
   Z0,SS(b = h1) arguments of [4-17] and [4-19] misprints too. Wadell
   prints them the same way: they are Hogan's formula as published, and it
@@ -11930,6 +11962,21 @@ value.
 | 0.1 mm, h1 0.1, h2 0.5 mm | 50.81 Ω | −1.8 % (c/b 0.19) | +33 % | +34 % |
 | 0.2 mm centred, b 0.6 mm | 51.82 Ω | −2.8 % (wide form) | 0.0 % | 0.0 % |
 
+**The dual-stripline formulas against the solver** (one trace, the other
+layer left out):
+
+| Case | Solver | IPC-2251 | Older IPC dual |
+|---|---|---|---|
+| εr 4, H 15, C 10, T 1.37 mil, W 1 mil | 107.13 Ω | −1.3 % | +6.1 % |
+| the same, W 2 mil | 96.63 Ω | −0.3 % | +6.5 % |
+| the same, W 3 mil | 89.21 Ω | −0.1 % | +6.2 % |
+| the same, W 4 mil | 83.42 Ω | −0.0 % | +5.6 % |
+| εr 4.6, H 0.254, C 0.2032 mm, T 18 µm, W 0.4318 mm (W/(H − T) 1.83) | 38.27 Ω | −7.1 % | −14.6 % |
+
+Within their range IPC-2251's mean of two striplines is within 0.3 % of the
+solver above W = 2 mil, the older formula 5 to 6.5 % high; outside it both
+read low, the older one by 15 % on the wide trace.
+
 Robrish's stays within 3 %; Hogan's is barely below the centred value, its
 offset term being a fraction of an ohm, so it reads 7 to 33 % high off
 centre. Wadell's centred stripline (3.6.2.1), which Hogan's uses, is
@@ -11950,7 +11997,7 @@ in parallel, minus Hogan's term; it is within 0.3 % in the first case but
 
 ### How it was checked
 
-6 cases, the expected values from tools/fd_lines.py's app_stripline:
+8 cases, the expected values from tools/fd_lines.py's app_stripline:
 - 0.2 mm trace 0.2 and 0.4 mm from the planes, FR-4, 1 oz: 49.9 Ω
   (49.87); Robrish 49 Ω (−1.7 %), Hogan 53.2 Ω (+6.7 %), centred 53.4 Ω
   (+7.0 %); 69.2 ps/cm; 1.39 pF/cm and 3.45 nH/cm;
@@ -11960,7 +12007,12 @@ in parallel, minus Hogan's term; it is within 0.3 % in the first case but
 - 0.1 mm trace 0.1 and 0.5 mm from the planes: 50.8 Ω (50.81); Hogan
   +33.4 %; Robrish's flagged outside its range;
 - h1 and h2 swapped: the same impedance;
-- the three length pickers move together.
+- the three length pickers move together;
+- dual stripline, LearnEMC's case with a 2 mil trace: 96.6 Ω (96.631);
+  IPC-2251 96.3 Ω (−0.3 %), the older formula 103 Ω (+6.5 %);
+- dual stripline, the 0.4318 mm trace: 38.3 Ω (38.269); IPC-2251 35.6 Ω
+  (−7.1 %) and the older formula 32.7 Ω (−14.6 %), both flagged outside
+  their range.
 
 [↑ Index](#index)
 

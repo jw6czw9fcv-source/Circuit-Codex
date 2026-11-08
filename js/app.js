@@ -14130,6 +14130,23 @@ function renderDualStripline(domain, tool, favId) {
     const cf = (2 * Math.log(1 / g) + (F(t / b) - F(c / b)) / g) / Math.PI;
     return ETA / Math.sqrt(er) / (wb / gam + wb / (beta - gam) + 2 * cf);
   };
+  // The dual-stripline formulas, the trace seen as one of two signal layers
+  // between the planes: H the dielectric on the nearer plane's side, C the
+  // room the other layer leaves on the far side, far side − t − H. The
+  // older one, as a book page Pierre sent prints it (§4.2.4, eq. 4.10) and
+  // other calculators still use it: 80/√εr ln(1.9(2H + T)/(0.8W + T))
+  // (1 − H/(4(H + C + T))). IPC-2251's (4th working draft, February 2001,
+  // as LearnEMC's calculator publishes it): the mean of two centred
+  // striplines, 60/√εr ln(8H/(0.67π(0.8W + T))) and the same with H + C.
+  // Both state W/(H − T) < 0.35 and T/H < 0.25 (tools/fd_lines.py: IPC-2251
+  // within 0.3 % of the solver there, the older one 5 to 6.5 % high).
+  const dualHC = () => { const { h1, h2, t } = state.si, H = Math.min(h1, h2); return { H, C: Math.max(h1, h2) - t - H }; };
+  const dualOld = (w) => { const { t, er } = state.si, { H, C } = dualHC(); return C > 0 ? 80 / Math.sqrt(er) * Math.log(1.9 * (2 * H + t) / (0.8 * w + t)) * (1 - H / (4 * (H + C + t))) : NaN; };
+  const dual2251 = (w) => {
+    const { t, er } = state.si, { H, C } = dualHC(), d = 0.67 * Math.PI * (0.8 * w + t);
+    return C > 0 ? 30 / Math.sqrt(er) * (Math.log(8 * H / d) + Math.log(8 * (H + C) / d)) : NaN;
+  };
+  const dualInRange = (w) => { const { t } = state.si, { H } = dualHC(); return w / (H - t) < 0.35 && t / H < 0.25; };
   const robrishInRange = (w) => { const { h1, t } = state.si, b = B(), c = (h1 + t / 2) / b; return c > 0.2 && c < 0.8 && w > t && t / b < 0.2; };
   const estimateWidth = (z) => {
     const b = B();
@@ -14205,6 +14222,9 @@ function renderDualStripline(domain, tool, favId) {
     const vs = (v) => { const d = (v / z - 1) * 100; return `${ohm(v)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
     const off = Math.abs(s.h2 - s.h1) / 2;
     const zr = robrish(s.w), zh = hogan(s.w), zc = zSS(s.w, B(), s.t) / Math.sqrt(s.er);
+    // The dual-stripline rows: none when the far side leaves no room for a
+    // second layer, flagged outside W/(H − T) < 0.35, T/H < 0.25.
+    const dualRow = (v) => (!(v > 0) ? warn("no room for a second layer") : dualInRange(s.w) ? vs(v) : warn(`${vs(v)}, out of range`));
     const main = state.target !== null
       ? `<div class="result-field">
           <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω</span>${solverBadge(link)}</div>
@@ -14220,6 +14240,8 @@ function renderDualStripline(domain, tool, favId) {
         <div class="field notation-box">
           ${row("Robrish's formula (Wadell)", zr > 0 ? (robrishInRange(s.w) ? vs(zr) : warn(`${vs(zr)}, outside its ±2 % range`)) : warn("outside its range"), "robrish")}
           ${row("Hogan's formula (IPC-2141A)", zh > 0 ? vs(zh) : warn("outside its range"), "hogan")}
+          ${row("IPC-2251 formula", dualRow(dual2251(s.w)), "ipc2251")}
+          ${row("Older IPC formula", dualRow(dualOld(s.w)), "dualold")}
           ${row("Centred between the same planes", vs(zc), "centred")}
           ${row("Delay, εr all round", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
           ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
@@ -14265,6 +14287,10 @@ function renderDualStripline(domain, tool, favId) {
       apply: example({ w: 0.2e-3, h1: hC, h2: hC, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
     { title: "Close to one plane", note: "0.1 mm trace, 0.1 and 0.5 mm away: 50.8 Ω, where Hogan's formula reads 33 % high.",
       apply: example({ w: 0.1e-3, h1: 0.1e-3, h2: 0.5e-3, t: OZ, er: 4.3 }, { lUnit: "mm", tUnit: "oz" }) },
+    { title: "Dual stripline, 2 mil traces", note: "εr 4, 15 mil to the plane, 10 mil to the other layer: 96.6 Ω; IPC-2251 96.3 Ω.",
+      apply: example({ w: 2 * 25.4e-6, h1: (10 + 1.37 + 15) * 25.4e-6, h2: 15 * 25.4e-6, t: 1.37 * 25.4e-6, er: 4 }, { lUnit: "mil", tUnit: "mil" }) },
+    { title: "Dual stripline, a wide trace", note: "0.43 mm, 0.254 mm to the plane, 0.2 mm to the other layer, 18 µm: 38.3 Ω.",
+      apply: example({ w: 0.4318e-3, h1: (0.2032 + 0.018 + 0.254) * 1e-3, h2: 0.254e-3, t: 18e-6, er: 4.6 }, { lUnit: "mm", tUnit: "µm" }) },
   ]);
 
   function paint() {

@@ -1758,6 +1758,10 @@ const CHECK_CASES = {
       expect: [['input[data-key="b"]', "23.62"], ['input[data-key="s"]', "7.874"]] },
   ],
   "dual-stripline": [
+    { name: "dual stripline, LearnEMC's case (er 4, h 15 mil, c 10 mil, t 1.37 mil), 2 mil trace: solver 96.6 ohm (fd_lines 96.631); IPC-2251 draft formula 96.3 (-0.3 %), the older IPC dual formula 103 (+6.5 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="4"]']],
+      expect: [['[data-res="big"]', "96.6 Ω"], ['[data-res="ipc2251"]', "96.3 Ω (−0.3 %)"], ['[data-res="dualold"]', "103 Ω (+6.5 %)"]] },
+    { name: "dual stripline, a 0.4318 mm trace (W/(H-T) 1.83, outside both formulas' range): solver 38.3 ohm (38.269); IPC-2251 35.6 (-7.1 %), the older formula 32.689 (-14.6 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="5"]']],
+      expect: [['[data-res="big"]', "38.3 Ω"], ['[data-res="ipc2251"]', "35.6 Ω (−7.1 %), out of range"], ['[data-res="dualold"]', "32.7 Ω (−14.6 %), out of range"]] },
     { name: "0.2 mm trace 0.2 and 0.4 mm from the planes, FR-4, 1 oz: field solver 49.9 ohm (fd_lines app_stripline 49.87); Robrish 49.0, Hogan 53.2", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="big"]', "49.9 Ω"], ['[data-res="by"]', "Field solver"], ['input[data-key="z"]', "49.87"], ['[data-res="sub"]', "planes 0.635 mm apart, the trace 0.1 mm off centre"],
         ['[data-res="robrish"]', "49 Ω (−1.7 %)"], ['[data-res="hogan"]', "53.2 Ω (+6.7 %)"], ['[data-res="centred"]', "53.4 Ω (+7.0 %)"], ['[data-res="td"]', "69.2 ps/cm"], ['[data-res="lc"]', "1.39 pF/cm, 3.45 nH/cm"]] },
