@@ -16854,7 +16854,7 @@ function renderCrosstalk(domain, tool, favId) {
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const wait = "…";
     const sat = k && s.len >= k.lsat;
-    const fext = !k ? wait : !micro() ? "0: both modes at one speed" : k.skew >= s.tr ? warn(`${pct(k.fext)}, ${volt(k.fext * s.vs)}, an upper bound`) : `${pct(k.fext)}, ${volt(k.fext * s.vs)}`;
+    const fext = !k ? wait : !micro() ? "0: the two couplings cancel" : k.skew >= s.tr ? warn(`${pct(k.fext)}, ${volt(k.fext * s.vs)}, an upper bound`) : `${pct(k.fext)}, ${volt(k.fext * s.vs)}`;
     return `<div class="result-field">
           <div class="result-head"><span class="label">Near-end crosstalk (NEXT)</span>${solverBadge(link())}</div>
           <div class="result-value"><span class="num" data-res="big">${k ? pct(k.next) : wait}</span></div>

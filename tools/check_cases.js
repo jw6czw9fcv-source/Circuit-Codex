@@ -1844,7 +1844,7 @@ const CHECK_CASES = {
     { name: "10 mm at 1 ns: below saturation, NEXT 1.32 %, FEXT -0.32 %", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
       expect: [['[data-res="big"]', "1.32 %"], ['[data-res="fext"]', "−0.32 %, −10.6 mV"], ['[data-res="vnext"]', "/^43.[56] mV, for 115 ps$/"], ['[data-res="sub"]', "below saturation, reached at 87.3 mm"]] },
     { name: "stripline, 0.15 mm traces 0.2 mm apart, planes 0.6 mm apart: NEXT 8.9 % (8.915), no FEXT", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
-      expect: [['[data-res="big"]', "/^8.9[12] %$/"], ['[data-res="fext"]', "0: both modes at one speed"]] },
+      expect: [['[data-res="big"]', "/^8.9[12] %$/"], ['[data-res="fext"]', "0: the two couplings cancel"]] },
     { name: "a 1.8 V aggressor: 207 mV at the near end (11.519 % of 1.8 V), -288 mV at the far end", do: [["set", 'input[data-key="vs"]', "1.8"]],
       expect: [['[data-res="vnext"]', "207 mV, for 573 ps"], ['[data-res="fext"]', "−16 %, −288 mV"]] },
     { name: "a zero coupled length is refused", do: [["set", 'input[data-key="len"]', "0"]],

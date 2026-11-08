@@ -13483,7 +13483,9 @@ aggressor's step:
     the plateau lasts, the coupled length's round trip 2T;
   - the far-end crosstalk (FEXT) and its voltage on the victim, negative
     in microstrip (an inverted pulse about as long as the rise time), zero
-    in stripline; flagged as an upper bound when the even and odd modes'
+    in stripline, shown as "0: the two couplings cancel" (in one dielectric
+    the capacitive and inductive parts are equal and opposite, Lm/L =
+    Cm/C); flagged as an upper bound when the even and odd modes'
     edges arrive further apart than the rise time;
   - the pair's even- and odd-mode impedances, from the solver;
   - each trace's impedance with its neighbour present, ζ = √(L/C);
