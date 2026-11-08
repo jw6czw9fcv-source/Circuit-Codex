@@ -13564,6 +13564,31 @@ function ipcCoupledMicrostripOdd(w, s, h, t, er) {
 }
 const MS_MATERIALS = { fr4: ["FR-4", 4.3], polyimide: ["Polyimide", 4.2], ptfe: ["PTFE", 2.4], custom: ["Custom", null] };
 
+// The length pickers of a PCB impedance tool, linked (Pierre: a unit
+// changes from any box): the cross-section's (mm or mil), the copper's (oz,
+// µm or mil), a solder mask's (µm or mil) and a coupled length's (mm, cm or
+// in) switch to metric or to imperial together. oz, a copper weight rather
+// than a length, leaves the others as they are, and stays when they change.
+function wireLengthUnits(C, state, paint) {
+  const keys = { lunit: "lUnit", tunit: "tUnit", munit: "mUnit", cunit: "cUnit" };
+  app.querySelectorAll("select[data-lunit], select[data-tunit], select[data-munit], select[data-cunit]").forEach((el) => {
+    const key = Object.keys(keys).find((k) => el.hasAttribute(`data-${k}`));
+    el.onchange = (e) => {
+      const v = e.target.value;
+      state[keys[key]] = v;
+      if (v !== "oz") {
+        const metric = v !== "mil" && v !== "in";
+        if ("lUnit" in state && key !== "lunit") state.lUnit = metric ? "mm" : "mil";
+        if ("mUnit" in state && key !== "munit") state.mUnit = metric ? "µm" : "mil";
+        if ("tUnit" in state && key !== "tunit" && state.tUnit !== "oz") state.tUnit = metric ? "µm" : "mil";
+        if ("cUnit" in state && key !== "cunit") { if (!metric) state.cUnit = "in"; else if (state.cUnit === "in") state.cUnit = "mm"; }
+      }
+      for (const k of Object.values(keys)) if (k in state) setPref(C, k, state[k]);
+      paint();
+    };
+  });
+}
+
 // A solder mask over a surface trace (Microstrip, Edge-coupled microstrip):
 // c1 thick on the bare board, c2 over the copper's top and sides, its own
 // εr (a conformal coat). Defaults from Sanwa's SPSR-950 C-20 LPI
@@ -13807,9 +13832,8 @@ function renderMicrostrip(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The two length pickers move together; the mask's two have their own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelectorAll("select[data-munit]").forEach((el) => { el.onchange = (e) => { state.mUnit = e.target.value; setPref(C, "mUnit", state.mUnit); paint(); }; });
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     app.querySelectorAll(".pill").forEach((btn) => {
       btn.onclick = () => { state.mask = btn.dataset.pill; setPref(C, "mask", state.mask); paint(); };
     });
@@ -14079,9 +14103,8 @@ function renderStripline(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The two length pickers move together; the copper has its own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -14391,8 +14414,7 @@ function renderDualStripline(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -14658,8 +14680,7 @@ function renderDiffStripline(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -14921,9 +14942,8 @@ function renderAsymDiffStripline(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The four length pickers move together; the copper has its own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -15185,8 +15205,7 @@ function renderBroadsideStripline(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -15422,9 +15441,8 @@ function renderPairedStrips(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The two length pickers move together; the copper has its own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -15680,9 +15698,8 @@ function renderDiffMicrostrip(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The three length pickers move together; the mask's two have their own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelectorAll("select[data-munit]").forEach((el) => { el.onchange = (e) => { state.mUnit = e.target.value; setPref(C, "mUnit", state.mUnit); paint(); }; });
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     app.querySelectorAll(".pill").forEach((btn) => {
       btn.onclick = () => { state.mask = btn.dataset.pill; setPref(C, "mask", state.mask); paint(); };
     });
@@ -15936,9 +15953,8 @@ function renderEmbeddedPair(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The four length pickers move together; the copper has its own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -16177,8 +16193,8 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The three length pickers move together.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -16457,9 +16473,8 @@ function renderCoplanar(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The three length pickers move together; the copper has its own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -16698,9 +16713,8 @@ function renderDiffCoplanar(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The four length pickers move together; the copper has its own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     syncBoxes();
     link.schedule(true);
   }
@@ -16942,11 +16956,8 @@ function renderCrosstalk(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
-    // The three cross-section length pickers move together; the copper, the
-    // coupled length and the rise time each have their own.
-    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
-    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
-    app.querySelector("select[data-cunit]").onchange = (e) => { state.cUnit = e.target.value; setPref(C, "cUnit", state.cUnit); paint(); };
+    // Every length picker changes them all (wireLengthUnits).
+    wireLengthUnits(C, state, paint);
     app.querySelector("select[data-runit]").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
     link().schedule(true);
   }

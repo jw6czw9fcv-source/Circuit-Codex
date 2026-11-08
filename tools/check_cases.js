@@ -1793,6 +1793,8 @@ const CHECK_CASES = {
       expect: [['input[data-key="h1"]', "7.874"], ['input[data-key="w"]', "7.874"]] },
   ],
   "coplanar": [
+    { name: "lengths in mil, then µm on the copper: every length back to mm", do: [["set", 'select[data-lunit="1"]', "mil"], ["set", 'select[data-tunit="1"]', "µm"]],
+      expect: [['select[data-lunit="1"]', "mm"], ['select[data-lunit="3"]', "mm"], ['input[data-key="h"]', "0.2"]] },
     { name: "the default, grounded CPW: 0.3 mm trace, 0.15 mm gaps on 0.2 mm FR-4, 1 oz: field solver 49.2 ohm (fd_lines app_coplanar 49.219); Wadell 3.4.3 paper-thin 54.2 (+10.1 %)", do: [],
       expect: [['[data-res="big"]', "49.2 Ω"], ['[data-res="by"]', "Field solver"], ['input[data-key="z"]', "49.22"], ['[data-res="sub"]', "b 0.6 mm between the grounds, w/b 0.5"], ['[data-res="wadell"]', "54.2 Ω (+10.1 %)"], ['[data-res="eeff"]', "2.77"], ['[data-res="td"]', "55.5 ps/cm"], ['[data-res="lc"]', "1.13 pF/cm, 2.73 nH/cm"], ['[data-res="gnd"]', "0.6 mm or more (b)"]] },
     { name: "Wadell's example 3.4.1.1: 10 mil probe, b 23.4 mil, 1 mil copper, 25.2 mil of er 10, no plane: 52.6 ohm (52.639); his formula 50.0 (-5.1 %), the 50 ohm he solved for", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -1833,6 +1835,8 @@ const CHECK_CASES = {
       expect: [['[data-res="err"]', "Enter the gap to the ground beside the traces."]] },
   ],
   "crosstalk": [
+    { name: "inches on the coupled length switch the cross-section to mil; the copper's oz stays", do: [["set", 'select[data-cunit="1"]', "in"]],
+      expect: [['select[data-lunit="1"]', "mil"], ['select[data-tunit="1"]', "oz"], ['input[data-key="len"]', "1.969"]] },
     { name: "the default microstrip pair, 0.15 mm traces 0.15 mm apart on 0.2 mm FR-4, 1 oz, 50 mm side by side, 100 ps: NEXT 11.5 %, FEXT -16 % (Shlepnev's coefficients on the solver's modes, fd_lines 11.519 / -16.003); saturated beyond 8.73 mm", do: [],
       expect: [['[data-res="big"]', "11.5 %"], ['[data-res="by"]', "Field solver"], ['[data-res="fext"]', "−16 %"], ['[data-res="sub"]', "saturated: longer than 8.73 mm"], ['[data-res="modes"]', "91.6 Ω, 57.2 Ω"], ['[data-res="zeta"]', "73.4 Ω"], ['[data-res="lc"]', "/^0.286, 0.17[45]$/"], ['[data-res="skew"]', "/^32.[89] ps$/"]] },
     { name: "the 3w rule, 0.45 mm apart: NEXT 3.4 % (3.397), FEXT -9.19 %", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -1876,6 +1880,8 @@ const CHECK_CASES = {
       expect: [['select[data-lunit="1"]', "mil"], ['input[data-key="h1"]', "7.874"], ['input[data-key="h2"]', "11.81"]] },
   ],
   "diff-microstrip": [
+    { name: "the mask's picker switches every length: mil on the mask turns the width, spacing and dielectric to mil", do: [["pill", 1], ["set", 'select[data-munit="1"]', "mil"]],
+      expect: [['select[data-lunit="1"]', "mil"], ['select[data-lunit="3"]', "mil"], ['select[data-munit="2"]', "mil"], ['input[data-key="h"]', "7.874"]] },
     { name: "USB 90 ohm under solder mask (20 um, 15 um on the copper, er 3.5), 0.2 mm apart on 0.2 mm: 0.287 mm (fd_lines with mask 0.28684); without the mask 94.1 (+4.5 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="4"]']],
       expect: [['[data-res="big"]', "/^0.28[678] mm$/"], ['[data-res="bare"]', "/^94.1 Ω ..4.[456] %.$/"]] },
     { name: "the default pair under the mask: 107 ohm (106.958), 114 without it (+7.0 %)", do: [["pill", 1]],
@@ -1898,6 +1904,8 @@ const CHECK_CASES = {
       expect: [['select[data-lunit="1"]', "mil"], ['select[data-lunit="2"]', "mil"], ['input[data-key="h"]', "7.874"]] },
   ],
   "stripline": [
+    { name: "the copper's picker switches the lengths: mil on the copper turns the width and spacing to mil", do: [["set", 'select[data-tunit="1"]', "mil"]],
+      expect: [['select[data-lunit="1"]', "mil"], ['select[data-lunit="2"]', "mil"], ['input[data-key="b"]', "23.62"]] },
     { name: "Hafner et al. table I: 155 um strip, 1 um thick, 430 um of er 10 each side: field solver 50.05 ohm (fd_lines 50.054), their Wheeler value 50.06", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['input[data-key="z"]', "50.05"], ['[data-res="big"]', "50.1 Ω"], ['[data-res="by"]', "Field solver"], ['[data-res="wheeler"]', "50.1 Ω (+0.0 %)"], ['[data-res="ipc"]', "49.9 Ω (−0.2 %), narrow strip"]] },
     { name: "Hafner et al. table I: 45 um strip on 127 um, 49.79 ohm (fd_lines 49.792)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
@@ -1918,6 +1926,8 @@ const CHECK_CASES = {
       expect: [['select[data-lunit="1"]', "mil"], ['input[data-key="b"]', "23.62"]] },
   ],
   "microstrip": [
+    { name: "a length picker switches the mask's too: mm to mil turns the mask to mil", do: [["pill", 1], ["set", 'select[data-lunit="1"]', "mil"]],
+      expect: [['select[data-munit="1"]', "mil"], ['select[data-munit="2"]', "mil"]] },
     { name: "50 ohm under solder mask (Sanwa SPSR-950: 20 um on the board, 15 um on the copper, er 3.5) on 0.2 mm FR-4, 1 oz: 0.342 mm (fd_lines app_microstrip with mask, 0.34169); without the mask 51.4 ohm (+2.8 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="5"]']],
       expect: [['[data-res="big"]', "/^0.34[123] mm$/"], ['[data-res="bare"]', "/^51.4 Ω ..2.[789] %.$/"]] },
     { name: "the default under the mask: 50.4 ohm (50.421), 50.7 without it (+0.5 %)", do: [["pill", 1]],

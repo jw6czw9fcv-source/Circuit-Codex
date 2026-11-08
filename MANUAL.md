@@ -11455,8 +11455,9 @@ plane, or the width that gives an impedance, on one screen:
   - the effective dielectric constant, from the solver;
   - the delay per length, per cm in mm and per inch in mil;
   - the capacitance and inductance per length.
-- **Units:** mm or mil, the width's and the thickness's pickers moving
-  together.
+- **Units:** mm or mil for the width and the thickness, µm or mil for
+  the solder mask; any picker switches them all, mil to mil, mm or µm to
+  metric.
 - **Drawing:** the board in cross-section, the trace with its w and t,
   the dielectric with its h and εr, the ground plane; w, h and t in both
   mm and mil (Pierre), the unit in use first. The trace is green when its
@@ -11698,8 +11699,10 @@ two ground planes, or the width that gives an impedance, on one screen:
     b > 4t; each with its difference from the solver's;
   - the delay per length, the signal seeing the full εr;
   - the capacitance and inductance per length.
-- **Units:** mm or mil for the width and the spacing, moving together;
-  oz, µm or mil for the copper.
+- **Units:** mm or mil for the width and the spacing; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the two ground planes, the dielectric between them with b
   and εr, the trace centred with its w and t, lengths in mm and mil. The
   trace is green when its width is the answer.
@@ -11887,8 +11890,10 @@ width that gives an impedance:
   - the same trace centred between the same planes;
   - the delay per length, the signal seeing the full εr;
   - the capacitance and inductance per length.
-- **Units:** mm or mil for the three lengths, moving together; oz, µm or
-  mil for the copper.
+- **Units:** mm or mil for the three lengths; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the two planes, the trace drawn nearer the closer one, h1,
   h2, t and εr, lengths in mm and mil. The trace is green when its width
   is the answer.
@@ -12087,8 +12092,10 @@ that gives it at a gap:
     difference from the solver's;
   - which of IPC-2141A's two forms applies, by s/t;
   - the delay per length, the signal seeing the full εr.
-- **Units:** mm or mil for the three lengths, moving together; oz, µm or
-  mil for the copper.
+- **Units:** mm or mil for the three lengths; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the two planes, the pair centred between them, w and s as a
   chain dimension, b, t and εr, in mm and mil. The traces are green when
   their width is the answer.
@@ -12259,8 +12266,10 @@ that gives it at a gap:
     it);
   - the estimate, and how far it is from the solver's;
   - the delay per length, the signal seeing the full εr.
-- **Units:** mm or mil for the four lengths, moving together; oz, µm or
-  mil for the copper.
+- **Units:** mm or mil for the four lengths; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the two planes, the pair drawn nearer the closer one, w and
   s as a chain dimension, h1, h2, t and εr, in mm and mil. The traces are
   green when their width is the answer.
@@ -12384,8 +12393,10 @@ the trace width that gives it:
   - IPC-2141A's paper-thin Zdiff, and how much higher it reads;
   - w/s against IPC's range, 0.35 or more, flagged below;
   - the delay per length, the signal seeing the full εr.
-- **Units:** mm or mil for the three lengths, moving together; oz, µm or
-  mil for the copper.
+- **Units:** mm or mil for the three lengths; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the two planes, the pair stacked between them with w and s,
   b, t and εr, in mm and mil. The traces are green when their width is the
   answer.
@@ -12534,8 +12545,10 @@ trace width that gives it:
   - the effective εr, from the solver;
   - the delay per length;
   - the capacitance and inductance per length between the two traces.
-- **Units:** mm or mil for the two lengths, moving together; oz, µm or
-  mil for the copper.
+- **Units:** mm or mil for the two lengths; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the sheet with a trace on each face, w, h, t and εr, in mm
   and mil. The traces are green when their width is the answer.
 - **Remembered:** the length unit and the copper unit.
@@ -12811,7 +12824,8 @@ over a ground plane, or the trace width that gives it at a spacing:
     2026-11-07, and by AN-905's simpler factor, each with its difference
     from the solver's;
   - s/h against AN-905's range, 0.2 to 3, flagged outside.
-- **Units:** mm or mil, the three length pickers moving together.
+- **Units:** mm or mil for the three lengths, µm or mil for the solder
+  mask; any picker switches them all, mil to mil, mm or µm to metric.
 - **Drawing:** the pair on the dielectric over the ground plane, w and s
   as a chain dimension, h and εr, in mm and mil. The traces are green when
   their width is the answer.
@@ -13004,8 +13018,10 @@ gap. It is the first tool computed by the app's field solver (below):
   - the even-mode impedance and the common-mode impedance, half of it;
   - the formula estimate (below), and how far it is from the solver;
   - the delay per length in the odd mode.
-- **Units:** mm or mil for the four lengths, moving together; oz, µm or
-  mil for the copper.
+- **Units:** mm or mil for the four lengths; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the plane, the dielectric under the traces, the cover over
   them up to H2, w and s as a chain dimension, h1, H2, t and εr, in mm and
   mil. The traces are green when their width is the answer.
@@ -13170,8 +13186,10 @@ the trace width that gives an impedance at a gap:
   - how wide the ground copper beside the trace should be, each side: 5 b
     or more with no plane (Wadell §3.4.1), b or more with a plane below
     (§3.4.3's notes, which also tie the two sides together).
-- **Units:** mm or mil for the three lengths, moving together; oz, µm or
-  mil for the copper.
+- **Units:** mm or mil for the three lengths; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the trace between its two grounds on the substrate, the
   plane under it in the grounded mode, w and s as a chain dimension, h, t
   and εr, in mm and mil. The trace is green when its width is the answer.
@@ -13342,8 +13360,10 @@ width that gives it at given gaps:
   - the same pair without the side grounds (moved 50 times the
     cross-section away), the comparison: how much the grounds lower Zdiff;
   - the odd mode's effective εr and the delay per length.
-- **Units:** mm or mil for the four lengths, moving together; oz, µm or
-  mil for the copper.
+- **Units:** mm or mil for the four lengths; oz, µm or mil for the copper.
+  Any picker switches them all: mil anywhere
+  makes every length mil, mm or µm makes them metric; oz, a copper
+  weight, stays oz.
 - **Drawing:** the pair between its two grounds on the substrate, the
   plane under it in the grounded mode, w, s and g, h, t and εr, in mm and
   mil. The traces are green when their width is the answer.
@@ -13466,9 +13486,10 @@ aggressor's step:
   - each trace's impedance with its neighbour present, ζ = √(L/C);
   - the coupling ratios Lm/L and Cm/C;
   - in microstrip, how far apart the even and odd edges reach the far end.
-- **Units:** mm or mil for the cross-section, moving together; oz, µm or
-  mil for the copper; mm, cm or in for the coupled length; ps or ns for
-  the rise time.
+- **Units:** mm or mil for the cross-section; oz, µm or mil for the
+  copper; mm, cm or in for the coupled length: any of them switches the
+  others, mil or in to imperial, mm, µm or cm to metric (oz stays oz);
+  ps or ns for the rise time.
 - **Drawing:** the aggressor (blue) and the victim (green) over the plane
   or between the planes, w and s as a chain dimension, h or b, εr, in mm
   and mil.
