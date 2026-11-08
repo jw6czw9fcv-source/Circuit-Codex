@@ -17035,11 +17035,13 @@ function renderCrosstalk(domain, tool, favId) {
     const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
     const wait = "…";
     if (sine()) {
-      const fs = !k ? wait : !micro() ? "0 V: the two couplings cancel" : `${volt(k.far * s.vs)} (${db(k.far)})`;
+      // In dB first, as RF crosstalk is quoted (Pierre); the volts for the
+      // swing entered after.
+      const fs = !k ? wait : !micro() ? "0 V: the two couplings cancel" : `${db(k.far)} (${volt(k.far * s.vs)})`;
       return `<div class="result-field">
           <div class="result-head"><span class="label">Near-end noise on the victim</span>${solverBadge(link())}</div>
-          <div class="result-value"><span class="num" data-res="big">${k ? volt(k.near * s.vs) : wait}</span></div>
-          <div class="result-sub" data-res="sub">${k ? `${db(k.near)}, ${pct(k.near)} of the ${Number(s.vs.toPrecision(3))} V sine` : "the aggressor's sine, seen on the victim"}</div>
+          <div class="result-value"><span class="num" data-res="big">${k ? db(k.near) : wait}</span></div>
+          <div class="result-sub" data-res="sub">${k ? `${volt(k.near * s.vs)}, ${pct(k.near)} of the ${Number(s.vs.toPrecision(3))} V sine` : "the aggressor's sine, seen on the victim"}</div>
         </div>
         <div class="field notation-box">
           ${row("Far-end noise", fs, "far")}

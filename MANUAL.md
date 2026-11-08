@@ -13546,10 +13546,12 @@ clock (Sine wave).
 With "Sine wave" the rise time box becomes Frequency (MHz or GHz), and the
 tool gives the victim's noise for a sine on the aggressor:
 
-- **The big result:** the near-end noise in volts (the share times the
-  aggressor's swing; a peak-to-peak swing gives peak-to-peak noise), with
-  the share in dB, 20 log of it (−30 dB is 3.2 %), and in %.
-- **Below it:** the far-end noise in volts and dB ("0 V: the two
+- **The big result:** the near-end noise in dB, 20 log of its share of
+  the aggressor's amplitude (−30 dB is 3.2 %), as RF crosstalk is quoted
+  and whatever the swing (Pierre); below it the same in volts (the share
+  times the aggressor's swing; a peak-to-peak swing gives peak-to-peak
+  noise) and in %.
+- **Below it:** the far-end noise in dB and volts ("0 V: the two
   couplings cancel" in stripline); the quarter-wave frequency, where the
   coupled run is a quarter wavelength long, with the run's length in
   wavelengths at the chosen frequency; the even and odd modes, ζ, Lm/L
@@ -13705,12 +13707,12 @@ formulas above, the swing 3.3 V unless said:
   FEXT −0.32 %;
 - the stripline pair: NEXT 8.9 % (8.915), FEXT 0;
 - a zero coupled length is refused;
-- sine, the 100 MHz clock example: 136 mV (4.12 %, −27.7 dB) at the near
-  end, 33.1 mV (−40.0 dB) at the far end, quarter wave at 873 MHz, the
+- sine, the 100 MHz clock example: −27.7 dB (136 mV, 4.12 %) at the near
+  end, −40.0 dB (33.1 mV) at the far end, quarter wave at 873 MHz, the
   run 0.0286 λ;
-- sine at 1 GHz: 744 mV (22.5 %, −12.9 dB), far end 325 mV (−20.1 dB);
-- sine on the stripline pair at its quarter wave, 711.28 MHz: 588 mV
-  (17.8 %, −15.0 dB), twice the step's 8.9 %, far end 0;
+- sine at 1 GHz: −12.9 dB (744 mV, 22.5 %), far end −20.1 dB (325 mV);
+- sine on the stripline pair at its quarter wave, 711.28 MHz: −15.0 dB
+  (588 mV, 17.8 %), twice the step's 8.9 %, far end 0;
 - a zero frequency is refused.
 
 [↑ Index](#index)
