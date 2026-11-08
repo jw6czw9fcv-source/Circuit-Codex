@@ -124,6 +124,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Edge-coupled stripline](#diff-stripline)
 - Impedance → [Edge-coupled asym stripline](#asym-diff-stripline)
 - Impedance → [Broadside-coupled stripline](#broadside-stripline)
+- Impedance → [Broadside-coupled, no plane](#paired-strips)
 - Impedance → [Coplanar waveguide](#coplanar)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
@@ -12469,6 +12470,127 @@ s 0.1 to 0.2 mm, b 0.4 to 0.8 mm, εr 4.3: −1.4 to −0.1 % for ½, 1 and
 - no copper: 80 Ω, IPC's paper-thin formula (with 295.9) within 0.01 %;
 - copper reaching the planes is refused;
 - traces as far apart as the planes are refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="paired-strips"></a>
+## Broadside-coupled, no plane
+
+`calc: paired-strips` · PCB & interconnect › Impedance
+
+### What it computes
+
+The differential impedance of two traces facing each other on the two
+faces of a dielectric sheet, with no ground plane anywhere (a double-sided
+flex pair: the parallel-strip line, Wadell's "paired strips"), or the
+trace width that gives it:
+
+- **Inputs:** each trace's width w, the sheet between them h, the copper's
+  thickness t (its own picker), the material and εr.
+- **Width and Zdiff are two live boxes:** type a width and the Zdiff box
+  shows Zdiff; type the Zdiff you need and the width box shows the width.
+- **The big result:** Zdiff from the field solver, with the odd-mode
+  impedance; or the width for the Zdiff typed, with w/h. For the moment
+  the solver takes, the badge reads "Solving…" and Wheeler's value stands
+  in.
+- **Below it:**
+  - Wheeler's paper-thin formula, and how far it is from the solver's;
+  - the common mode: none, with no plane to return through;
+  - the effective εr, from the solver;
+  - the delay per length;
+  - the capacitance and inductance per length between the two traces.
+- **Units:** mm or mil for the two lengths, moving together; oz, µm or
+  mil for the copper.
+- **Drawing:** the sheet with a trace on each face, w, h, t and εr, in mm
+  and mil. The traces are green when their width is the answer.
+- **Remembered:** the length unit and the copper unit.
+
+Examples: 100 Ω on a 0.1 mm polyimide flex, wide traces on a thin sheet
+with 1 oz and paper-thin, and narrow paper-thin strips.
+
+### Terms
+
+- **Paired strips (parallel-strip line):** two flat conductors facing each
+  other across a dielectric sheet; the field runs between them, partly in
+  the sheet and partly in the air around it.
+- **No plane, no common mode:** with no ground plane, a signal on both
+  traces at once has nothing to return through; only the differential
+  (odd) mode is a transmission line.
+- **Differential pair, Zdiff, odd mode:** as in Edge-coupled microstrip.
+- **εr, εeff, Td, C0, L0, oz:** as in Microstrip.
+
+### Source
+
+- **Brian C. Wadell, "Transmission Line Design Handbook", Artech House,
+  1991, §3.3.5 "Paired Strips", pages 71–72** (read, Pierre's scanned
+  copy), a = w/2, b = h/2 (3.3.5.3, 3.3.5.4), paper-thin:
+  - wide strips, a/b > 1: Z0 = η0/√εr × {a/b + (1/π) ln 4 + (εr + 1)/(2π
+    εr) ln[π e (a/b + 0.94)/2] + (εr − 1)/(2π εr²) ln(e π²/16)}^−1
+    (3.3.5.1), "Stated error is less than 1% for wide strips";
+  - narrow strips, a/b < 1: Z0 = η0/(π√εr) × [ln(4b/a) + (1/8)(a/b)² −
+    (εr − 1)/(2(εr + 1)) (ln(π/2) + ln(4/π)/εr)] (3.3.5.2), "less than 1%
+    for narrow strips".
+- **A misprint corrected:** as printed, 3.3.5.2 reads 20 % below the
+  solver for εr 3.5 (126.0 against 156.8 Ω for 0.1 mm strips on 0.2 mm).
+  With η0/(π√((εr + 1)/2)) it comes within 0.3 % (157.2 Ω), and that
+  factor is Wheeler's narrow microstrip formula's, η0/(π√(2(εr + 1))),
+  doubled with h → b: the pair is two microstrips on the sheet's
+  mid-plane. In air (εr 1) the two factors agree.
+- **The field solver:** js/fieldsolver.js's microstrip on h/2, as in
+  Microstrip; tools/fd_lines.py's app_microstrip, a separate
+  implementation, gives the values below.
+
+### Why the formulas are these
+
+    odd mode: the sheet's mid-plane at 0 V
+    each half: a microstrip w wide, t thick, on h/2 of the sheet
+    Zdiff = 2 × Z0,ms(w, t, h/2),   εeff the half's
+    Td = 33.36 √εeff ps/cm,   C0 = Td / Zdiff,   L0 = Zdiff × Td
+
+The two traces carry equal and opposite voltages, so by symmetry the plane
+midway through the sheet is at 0 V: each trace with its half of the sheet
+is a microstrip over a ground plane, and the two are in series between the
+traces. Wheeler's formulas, from conformal mapping, cover the paper-thin
+strips; the copper's thickness adds capacitance at the edges and lowers
+Zdiff:
+
+| Case | Solver | Wheeler |
+|---|---|---|
+| 0.5 mm on 0.1 mm, εr 3.5, paper-thin | 32.90 Ω | +0.01 % |
+| 0.1 mm on 0.2 mm, εr 3.5, paper-thin | 156.80 Ω | +0.24 % (corrected) |
+| 0.3 mm on 0.2 mm, εr 4.3, paper-thin | 75.68 Ω | −0.63 % |
+| 0.5 mm on 0.1 mm, εr 3.5, 1 oz | 31.87 Ω | +3.3 % |
+| 0.3 mm on 0.2 mm, εr 4.3, 1 oz | 71.75 Ω | +4.8 % |
+| 0.0863 mm on 0.1 mm, εr 4.2, 18 µm | 100.00 Ω | +9.3 % |
+
+The width for a Zdiff starts from Wheeler's, then the solver's answer
+corrects it.
+
+### Assumptions and limits
+
+- **Air on both sides, nothing nearby:** a ground plane, a metal case or a
+  cover layer near the pair changes Zdiff (with planes it is
+  Broadside-coupled stripline).
+- **Equal traces facing each other exactly;** a sideways offset between
+  the layers raises Zdiff.
+- **Quasi-static field solution:** the traces rectangles, no losses; the
+  flex maker's calculation decides.
+
+### How it was checked
+
+7 cases, the expected values from tools/fd_lines.py's app_microstrip:
+- the default, 0.3 mm traces on 0.2 mm of FR-4, 1 oz: 71.7 Ω (71.748),
+  odd mode 35.9 Ω, Wheeler 75.2 Ω (+4.8 %), εeff 3.26, 60.2 ps/cm,
+  0.839 pF/cm and 4.32 nH/cm;
+- 100 Ω on 0.1 mm polyimide, 18 µm: 0.0863 mm (0.08632);
+- 0.5 mm on 0.1 mm, εr 3.5, 1 oz: 31.9 Ω (31.867), Wheeler +3.3 %;
+- the same paper-thin: 32.9 Ω (32.901), Wheeler +0.0 %;
+- 0.1 mm on 0.2 mm, εr 3.5, paper-thin: 157 Ω (156.80), Wheeler's narrow
+  form, corrected, +0.2 %;
+- the two length pickers move together;
+- a zero sheet is refused.
 
 [↑ Index](#index)
 

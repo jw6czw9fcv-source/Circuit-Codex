@@ -393,6 +393,12 @@ const FORMULAS = [
     note: "Grounded CPW, paper-thin (Wadell §3.4.3): a the trace's width, b between the grounds' edges, h the dielectric, K the complete elliptic integral. The tool's big result is a field solver; 1 oz copper lowers Z0 7 to 10 % below this.",
   },
   {
+    tool: "Broadside-coupled, no plane",
+    domain: "pcb",
+    formulas: ["a = w/2,  b = h/2,  wide strips (a/b > 1):", "Z0 = η0/√εr / (a/b + ln4/π + …)", "narrow: Z0 = η0/(π√((εr+1)/2)) (ln(4b/a) + …)"],
+    note: "Wheeler's paper-thin formulas (Wadell §3.3.5; the narrow form's factor corrected from √εr). The tool's big result is a field solver: twice a microstrip on h/2; 1 oz copper lowers Zdiff 3 to 9 % below these.",
+  },
+  {
     tool: "Edge-coupled embedded",
     domain: "pcb",
     formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  Zdiff = 2 Zodd"],

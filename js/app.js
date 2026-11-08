@@ -529,6 +529,7 @@ const TOOL_THUMBS = {
   "diff-stripline": THUMB_PARTS.planes + thumbCu(12, 11.5, 9) + thumbCu(25, 11.5, 9),
   "asym-diff-stripline": THUMB_PARTS.planes + thumbCu(12, 8.5, 9) + thumbCu(25, 8.5, 9),
   "broadside-stripline": THUMB_PARTS.planes + thumbCu(17, 8.5, 12) + thumbCu(17, 14.5, 12),
+  "paired-strips": '<rect x="4" y="10" width="38" height="6" fill="none" stroke="#5A6169" stroke-width="1.2"/>' + thumbCu(16, 7, 14) + thumbCu(16, 16, 14),
   "coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 10) + thumbCu(18, 8, 10) + thumbCu(32, 8, 10),
 };
 // A tool's name in a list, its drawing first when it has one.
@@ -647,6 +648,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "diff-stripline") return renderDiffStripline(domain, tool, favId);
   if (calcId === "asym-diff-stripline") return renderAsymDiffStripline(domain, tool, favId);
   if (calcId === "broadside-stripline") return renderBroadsideStripline(domain, tool, favId);
+  if (calcId === "paired-strips") return renderPairedStrips(domain, tool, favId);
   if (calcId === "diff-microstrip") return renderDiffMicrostrip(domain, tool, favId);
   if (calcId === "embedded-pair") return renderEmbeddedPair(domain, tool, favId);
   if (calcId === "embedded-microstrip") return renderEmbeddedMicrostrip(domain, tool, favId);
@@ -15145,6 +15147,244 @@ function renderBroadsideStripline(domain, tool, favId) {
       if (er) state.si.er = er;
       paint();
     };
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    syncBoxes();
+    link.schedule(true);
+  }
+
+  paint();
+}
+
+// ---------- Broadside-coupled, no plane ----------
+// Two traces facing each other on the two faces of a dielectric sheet, no
+// ground plane at all (a double-sided flex pair; the parallel-strip line,
+// Wadell's "paired strips"). By symmetry the odd mode has the mid-plane of
+// the sheet at 0 V, so each half is a microstrip on h/2 with its copper on
+// the outer face: Zdiff = 2 Z0,ms(w, t, h/2) by the field solver (FS
+// microstrip, 2026-11-07). With no plane, there is no common mode. For
+// comparison, Wheeler's paper-thin formulas as Wadell gives them (§3.3.5,
+// Pierre's copy, read), a = w/2, b = h/2: for a/b > 1, Z0 = η0/√εr / (a/b +
+// ln 4/π + (εr + 1)/(2π εr) ln(π e (a/b + 0.94)/2) + (εr − 1)/(2π εr²)
+// ln(e π²/16)), "less than 1%"; for a/b < 1, Z0 = η0/(π √((εr + 1)/2)) ×
+// (ln(4b/a) + (a/b)²/8 − (εr − 1)/(2(εr + 1)) (ln(π/2) + ln(4/π)/εr)).
+// Wadell prints the narrow form with η0/(π√εr), 20 % low against the solver;
+// √((εr + 1)/2) brings it within 0.3 %, and is Wheeler's narrow microstrip
+// form doubled (h → b). Paper-thin, both meet the solver within 0.3 %
+// (tools/fd_lines.py); 1 oz copper lowers Zdiff 3 to 9 % below them.
+function wheelerPairedStrips(w, h, er) {
+  const ETA = 376.730313668, r = w / h;
+  if (r > 1) {
+    return ETA / Math.sqrt(er) / (r + Math.log(4) / Math.PI + (er + 1) / (2 * Math.PI * er) * Math.log(Math.PI * Math.E * (r + 0.94) / 2)
+      + (er - 1) / (2 * Math.PI * er * er) * Math.log(Math.E * Math.PI ** 2 / 16));
+  }
+  return ETA / (Math.PI * Math.sqrt((er + 1) / 2)) * (Math.log(4 / r) + r * r / 8 - (er - 1) / (2 * (er + 1)) * (Math.log(Math.PI / 2) + Math.log(4 / Math.PI) / er));
+}
+
+function renderPairedStrips(domain, tool, favId) {
+  const C = "paired-strips";
+  const OZ = TRACE_OZ_MIL * 25.4e-6;
+  const state = {
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    mat: "fr4",
+    si: { w: 0.3e-3, h: 0.2e-3, t: OZ, er: 4.3 },
+    // A differential impedance typed in its box: the width is set to give it.
+    target: null,
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+  const zAt = (w) => wheelerPairedStrips(w, state.si.h, state.si.er);
+  // Zdiff falls as the traces widen: halving the bracket, on a log scale,
+  // from 10⁻⁴ to 100 times the sheet; NaN outside.
+  const wFor = (z) => {
+    let lo = state.si.h * 1e-4, hi = state.si.h * 100;
+    if (!(z < zAt(lo) && z > zAt(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (zAt(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
+  const geomOk = () => { const s = state.si; return s.h > 0 && s.t >= 0 && s.er >= 1; };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.h > 0)) return "Enter the dielectric between the traces.";
+    if (!(s.t >= 0)) return "Enter the copper's thickness, zero or more.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(wFor(state.target) > 0)) return "No width between 0.0001 and 100 times the dielectric gives that impedance.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    return "";
+  }
+
+  // One half: a microstrip on h/2, the sheet's mid-plane its ground.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const link = solverLink({
+    kind: "microstrip", modes: [undefined], factor: 2,
+    params: (w) => { const q = state.si; return { w: mm(w), t: mm(q.t), h: mm(q.h / 2), er: q.er }; },
+    estimate: zAt, estimateWidth: wFor,
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const zNow = () => (link.sol ? 2 * link.sol.res[0].z : zAt(state.si.w));
+  // Wheeler's εeff is not given; until the solver answers, the half
+  // microstrip's (Wadell's equations' εeff on h/2) stands in.
+  const eeffNow = () => {
+    if (link.sol) return link.sol.res[0].eeff;
+    const { w, h, er } = state.si, hh = h / 2;
+    return (er + 1) / 2 + (er - 1) / 2 * ((1 + 12 * hh / w) ** -0.5 + (w < hh ? 0.04 * (1 - w / hh) ** 2 : 0));
+  };
+
+  // The sheet with a trace on each face, no plane; green when the width is
+  // the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mmL = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mmL(v)}` : `${mmL(v)} · ${mil(v)}`);
+    const tLabel = state.lUnit === "mil" ? `${mil(s.t)} · ${Number((s.t * 1e6).toPrecision(3))} µm` : `${Number((s.t * 1e6).toPrecision(3))} µm · ${mil(s.t)}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="46" width="210" height="26" stroke="${wire}" stroke-width="1.4"/>
+      <rect x="115" y="38" width="60" height="8" fill="${tone}"/><rect x="115" y="72" width="60" height="8" fill="${tone}"/>
+      <path d="M115 24 V34 M175 24 V34 M115 29 H175" stroke="${tone}" stroke-width="1.2"/>
+      ${lbl(145, 19, ok ? `w ${both(s.w)}` : "w", tone)}
+      <path d="M30 46 V72 M26 46 H34 M26 72 H34" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(46, 63, `h ${both(s.h)}`, grey, "start")}
+      ${lbl(181, 44, `t ${tLabel}`, grey, "start")}
+      ${lbl(244, 63, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(145, 100, "no ground plane: air above and below", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, z = zNow();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const cmp = (zc) => { const d = (zc / z - 1) * 100; return `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)`; };
+    const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
+    const ee = eeffNow(), td = 33.356 * Math.sqrt(ee) * per;
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω differential</span>${solverBadge(link)}</div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${state.lUnit === "mil" ? `${Number((s.w * 1e3).toPrecision(3))} mm` : `${Number((s.w / 25.4e-6).toPrecision(3))} mil`}, w/h ${Number((s.w / s.h).toPrecision(3))}</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Differential impedance</span>${solverBadge(link)}</div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(z)}</span></div>
+          <div class="result-sub" data-res="sub">odd mode ${ohm(z / 2)}, each trace in the pair</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${row("Wheeler's formula, paper-thin", cmp(zAt(s.w)), "wheeler")}
+          ${row("Common mode", "none: no plane to return to", "cm")}
+          ${row("Effective εr", Number(ee.toPrecision(3)), "eeff")}
+          ${row("Delay", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+          ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number(zNow().toPrecision(4))));
+  }
+  function settle() { if (state.target > 0 && geomOk()) { const w = wFor(state.target); if (w > 0) state.si.w = w; } }
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+  function refresh() {
+    settle();
+    link.recall();
+    show();
+    link.schedule(false);
+  }
+
+  const example = (si, extra, target) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    paint();
+  };
+  useExamples([
+    { title: "100 Ω on a flex", note: "0.1 mm of polyimide, 18 µm copper: 0.086 mm traces.",
+      apply: example({ h: 0.1e-3, t: 18e-6, er: 4.2 }, { lUnit: "mm", tUnit: "µm" }, 100) },
+    { title: "Wide traces on a thin sheet", note: "0.5 mm on 0.1 mm, εr 3.5, 1 oz: 31.9 Ω; Wheeler's 32.9 Ω.",
+      apply: example({ w: 0.5e-3, h: 0.1e-3, t: OZ, er: 3.5 }, { lUnit: "mm", tUnit: "oz" }) },
+    { title: "Wheeler's wide strips", note: "The same, paper-thin: 32.9 Ω, Wheeler's formula within 0.01 %.",
+      apply: example({ w: 0.5e-3, h: 0.1e-3, t: 0, er: 3.5 }, { lUnit: "mm", tUnit: "µm" }) },
+    { title: "Narrow strips, paper-thin", note: "0.1 mm on 0.2 mm, εr 3.5: 157 Ω; Wheeler's narrow form 157.2 Ω.",
+      apply: example({ w: 0.1e-3, h: 0.2e-3, t: 0, er: 3.5 }, { lUnit: "mm", tUnit: "µm" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    link.recall();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="ps-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A stacked pair on a sheet, no planes")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("h", "Between them, h", 2)}${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}</div>
+      <div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}${field("z", "Zdiff", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Odd mode: the sheet's mid-plane at 0 V", "each half a microstrip on h/2, copper outside", "Zdiff = 2 × Z0(w, t, h/2), by the field solver", "Td = 33.36 √εeff ps/cm", "C0 = Td / Zdiff,   L0 = Zdiff × Td"],
+        "Two traces facing each other on the two faces of a dielectric sheet h thick, with no ground plane anywhere, as on a double-sided flex circuit: the parallel-strip line, or paired strips. Driven as a differential pair, the field runs between the two traces, partly in the sheet and partly in the air around it. By symmetry the plane midway through the sheet is at 0 V, so each half is a microstrip on h/2 with its copper on the outer face, and Zdiff is twice that microstrip's impedance, computed by the app's field solver (see Edge-coupled embedded's manual section). There is no common mode: without a plane, a signal on both traces has nothing to return through. Wheeler's formulas, for paper-thin traces, are shown for comparison. Type a width to get Zdiff, or the Zdiff you need to get the width."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "h") state.si.h = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("ps-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("ps-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // The two length pickers move together; the copper has its own.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
     app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
     syncBoxes();
