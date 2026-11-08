@@ -619,6 +619,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "diff-microstrip") return renderDiffMicrostrip(domain, tool, favId);
   if (calcId === "embedded-pair") return renderEmbeddedPair(domain, tool, favId);
   if (calcId === "embedded-microstrip") return renderEmbeddedMicrostrip(domain, tool, favId);
+  if (calcId === "coplanar") return renderCoplanar(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -15554,6 +15555,287 @@ function renderEmbeddedMicrostrip(domain, tool, favId) {
     };
     // The three length pickers move together.
     app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    syncBoxes();
+    link.schedule(true);
+  }
+
+  paint();
+}
+
+// ---------- Coplanar waveguide ----------
+// A trace with ground copper on both sides on the same layer, s away, on h
+// of substrate; with a ground plane under the substrate (grounded CPW, the
+// "Ground plane below" pill) or air under it. The big result is the field
+// solver's (FS coplanar, 2026-11-07): the coplanar grounds run to the box's
+// side wall, so they are taken as wide. For comparison, Wadell's
+// Transmission Line Design Handbook (1991, Pierre's copy, read):
+// - §3.4.1, no plane: Z0 = 30π/√εeff,t × K(kt')/K(kt), kt = at/bt, at = a +
+//   Δ, bt = b − Δ, Δ = 1.25t/π (1 + ln(4πa/t)); εeff = 1 + (εr − 1)/2 ×
+//   K(k')K(k1)/(K(k)K(k1')), k = a/b, k1 = sinh(πa/4h)/sinh(πb/4h); εeff,t =
+//   εeff − (εeff − 1)/((b − a)/2 / 0.7t × K(k)/K'(k) + 1). a is the trace's
+//   width, b the distance between the grounds' edges. Eq. 3.4.1.6 prints k1
+//   with at and bt; with a and b, as here, the tool reproduces its example
+//   3.4.1.1 (b = 23.4 mil for 50 Ω), with at and bt it gives 25.9 mil.
+// - §3.4.3, ground below, paper-thin: Z0 = 60π/√εeff / (K(k)/K(k') +
+//   K(k1)/K(k1')), k1 = tanh(πa/4h)/tanh(πb/4h), εeff = (1 + εr r)/(1 + r),
+//   r = K(k')K(k1)/(K(k)K(k1')).
+// Paper-thin, both meet the solver within 0.1 % (no plane) and 0.06 to
+// 0.5 % (ground below); with 1 oz copper §3.4.1's correction overshoots
+// (−4 to −10 %) and §3.4.3, with none, reads 7 to 10 % high
+// (tools/fd_lines.py app_coplanar).
+const CPW_MODES = { ground: "Ground plane below", open: "No plane below" };
+// K(k)/K(k') by the arithmetic-geometric mean, k' given (computed from
+// differences, not 1 − k², which loses it as k nears 1); ∞ when k' is 0.
+const cpwKK = (k, kp) => (kp > 0 ? ellipRatio(k, kp) : Infinity);
+// sinh(x)/sinh(y) without overflow for large arguments.
+const sinhRatio = (x, y) => Math.exp(x - y) * (1 - Math.exp(-2 * x)) / (1 - Math.exp(-2 * y));
+// The modulus a/b and its complement √((b − a)(b + a))/b.
+const cpwMod = (a, b) => [a / b, Math.sqrt((b - a) * (b + a)) / b];
+function wadellCpw(w, s, t, h, er) {
+  const a = w, b = w + 2 * s;
+  const d = t > 0 ? 1.25 * t / Math.PI * (1 + Math.log(4 * Math.PI * a / t)) : 0;
+  const at = a + d, bt = b - d;
+  if (!(bt > at)) return { z: NaN, eeff: NaN };
+  const [k, kp] = cpwMod(a, b), [kt, ktp] = cpwMod(at, bt);
+  const k1 = sinhRatio(Math.PI * a / (4 * h), Math.PI * b / (4 * h)), k1p = Math.sqrt(1 - k1 * k1);
+  const ee = 1 + (er - 1) / 2 * cpwKK(k1, k1p) / cpwKK(k, kp);
+  const eet = t > 0 ? ee - (ee - 1) / ((b - a) / 2 / (0.7 * t) * cpwKK(k, kp) + 1) : ee;
+  return { z: 30 * Math.PI / Math.sqrt(eet) / cpwKK(kt, ktp), eeff: eet };
+}
+function wadellGcpw(w, s, h, er) {
+  const a = w, b = w + 2 * s, x = Math.PI * a / (4 * h), y = Math.PI * b / (4 * h);
+  const [k, kp] = cpwMod(a, b);
+  const tx = Math.tanh(x), ty = Math.tanh(y), k1 = tx / ty;
+  // 1 − k1² = (tanh²y − tanh²x)/tanh²y, as sech²x − sech²y when both
+  // tanh are near 1.
+  const sech2 = (u) => { const e = Math.exp(-2 * u); return 4 * e / ((1 + e) * (1 + e)); };
+  const k1p = Math.sqrt(Math.max(y > 2 ? sech2(x) - sech2(y) : (ty - tx) * (ty + tx), 0)) / ty;
+  const r = cpwKK(k1, k1p) / cpwKK(k, kp);
+  const ee = isFinite(r) ? (1 + er * r) / (1 + r) : er;
+  return { z: 60 * Math.PI / Math.sqrt(ee) / (cpwKK(k, kp) + cpwKK(k1, k1p)), eeff: ee };
+}
+
+function renderCoplanar(domain, tool, favId) {
+  const C = "coplanar";
+  const state = {
+    mode: pref(C, "mode", "ground", Object.keys(CPW_MODES)),
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    mat: "fr4",
+    si: { w: 0.3e-3, s: 0.15e-3, h: 0.2e-3, t: TRACE_OZ_MIL * 25.4e-6, er: 4.3 },
+    // An impedance typed in its box: the width is set to give it, the gap kept.
+    target: null,
+  };
+  const grounded = () => state.mode === "ground";
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  // Wadell's value at a width, the estimate and the comparison.
+  const formula = (w) => {
+    const { s, t, h, er } = state.si;
+    return grounded() ? wadellGcpw(w, s, h, er) : wadellCpw(w, s, t, h, er);
+  };
+  const zAt = (w) => formula(w).z;
+  // Z0 falls as the trace widens (the gap kept): halving the bracket, on a
+  // log scale, from 10⁻³ to 100 times the gap; NaN outside.
+  const wFor = (z) => {
+    let lo = state.si.s * 1e-3, hi = state.si.s * 100;
+    if (!(z < zAt(lo) && z > zAt(hi))) return NaN;
+    for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (zAt(mid) > z) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  };
+  const geomOk = () => { const s = state.si; return s.s > 0 && s.h > 0 && s.t >= 0 && s.er >= 1; };
+
+  function problem() {
+    const s = state.si;
+    if (!(s.s > 0)) return "Enter the gap between the trace and its grounds.";
+    if (!(s.h > 0)) return "Enter the dielectric's thickness.";
+    if (!(s.t >= 0)) return "Enter the copper's thickness, zero or more.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null) {
+      if (!(state.target > 0)) return "Enter the impedance wanted, above zero.";
+      if (!(wFor(state.target) > 0)) return "No width between 0.001 and 100 times the gap gives that impedance.";
+    }
+    if (!(s.w > 0)) return "Enter the trace width.";
+    return "";
+  }
+
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const link = solverLink({
+    kind: "coplanar", modes: [undefined], factor: 1,
+    params: (w) => { const q = state.si; return { w: mm(w), s: mm(q.s), t: mm(q.t), h: mm(q.h), er: q.er, ground: grounded() }; },
+    estimate: zAt, estimateWidth: wFor,
+    width: () => state.si.w, setWidth: (w) => { state.si.w = w; }, target: () => state.target,
+    problem, show,
+  });
+  const zNow = () => (link.sol ? link.sol.res[0].z : zAt(state.si.w));
+  const eeffNow = () => (link.sol ? link.sol.res[0].eeff : formula(state.si.w).eeff);
+
+  // The board in cross-section: the trace between its two grounds on the
+  // substrate, the plane under it or not. The trace is green when its width
+  // is the answer.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const tone = state.target !== null ? calc : part;
+    const s = state.si, ok = !problem();
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mmT = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mmT(v)}` : `${mmT(v)} · ${mil(v)}`);
+    const tLabel = state.lUnit === "mil" ? `${mil(s.t)} · ${Number((s.t * 1e6).toPrecision(3))} µm` : `${Number((s.t * 1e6).toPrecision(3))} µm · ${mil(s.t)}`;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="30" y="52" width="230" height="38" stroke="${wire}" stroke-width="1.4"/>
+      ${grounded() ? `<rect x="30" y="90" width="230" height="6" fill="${part}" fill-opacity="0.8"/>` : ""}
+      <rect x="30" y="44" width="75" height="8" fill="${part}"/><rect x="185" y="44" width="75" height="8" fill="${part}"/>
+      <rect x="125" y="44" width="40" height="8" fill="${tone}"/>
+      <path d="M125 32 V40 M165 32 V40 M125 36 H165" stroke="${tone}" stroke-width="1.2"/>
+      <path d="M185 32 V40 M165 36 H185" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(160, 26, ok ? `w ${both(s.w)}` : "w", tone, "end")}
+      ${lbl(170, 26, `s ${both(s.s)}`, grey, "start")}
+      <path d="M20 52 V90 M16 52 H24 M16 90 H24" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(36, 74, `h ${both(s.h)}`, grey, "start")}
+      ${lbl(254, 64, `t ${tLabel}`, grey, "end")}
+      ${lbl(254, 84, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(145, 108, grounded() ? "grounds beside, plane below" : "grounds beside, air below", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, z = zNow(), b = s.w + 2 * s.s;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+    const cmp = (zc) => { const d = (zc / z - 1) * 100; return zc > 0 ? `${ohm(zc)} (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} %)` : "none"; };
+    const per = state.lUnit === "mil" ? 2.54 : 1, perU = state.lUnit === "mil" ? "in" : "cm";
+    const ee = eeffNow(), td = 33.356 * Math.sqrt(ee) * per;
+    const sub = `b ${len(b)} between the grounds, w/b ${Number((s.w / b).toPrecision(3))}`;
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Width for ${Number(state.target.toPrecision(3))} Ω</span>${solverBadge(link)}</div>
+          <div class="result-value"><span class="num" data-res="big">${len(s.w)}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Characteristic impedance</span>${solverBadge(link)}</div>
+          <div class="result-value"><span class="num" data-res="big">${ohm(z)}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${row(grounded() ? "Wadell, paper-thin, for comparison" : "Wadell, for comparison", cmp(zAt(s.w)), "wadell")}
+          ${row("Effective εr", Number(ee.toPrecision(3)), "eeff")}
+          ${row("Delay", `${Number(td.toPrecision(3))} ps/${perU}`, "td")}
+          ${row("Capacitance, inductance", `${Number((td / z).toPrecision(3))} pF/${perU}, ${Number((z * td / 1000).toPrecision(3))} nH/${perU}`, "lc")}
+          ${row("Side ground width", grounded() ? `${len(b)} or more (b)` : `${len(5 * b)} or more (5 b)`, "gnd")}
+        </div>`;
+  }
+
+  // The two live boxes: a width gives Z0, a Z0 gives the width.
+  function syncBoxes() {
+    const err = problem();
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("w", fmt(state.si.w / MS_LEN_UNITS[state.lUnit]));
+    set("z", err ? "" : fmt(Number(zNow().toPrecision(4))));
+  }
+  function settle() { if (state.target > 0 && geomOk()) { const w = wFor(state.target); if (w > 0) state.si.w = w; } }
+
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+  function refresh() {
+    settle();
+    link.recall();
+    show();
+    link.schedule(false);
+  }
+
+  const example = (si, extra, target) => () => {
+    Object.assign(state, { mat: "custom", target: target ?? null }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    paint();
+  };
+  const MIL = 25.4e-6, OZ = TRACE_OZ_MIL * MIL;
+  useExamples([
+    { title: "Wadell: a probe on alumina", note: "10 mil trace, b 23.4 mil, 1 mil copper, 25.2 mil of εr 10: 52.6 Ω; his formula 50 Ω.",
+      apply: example({ w: 10 * MIL, s: 6.7 * MIL, t: 1 * MIL, h: 25.2 * MIL, er: 10 }, { mode: "open", lUnit: "mil", tUnit: "mil" }) },
+    { title: "50 Ω on a 0.2 mm layer", note: "Plane below, FR-4, 1 oz, 0.15 mm gaps: 0.29 mm trace.",
+      apply: example({ s: 0.15e-3, t: OZ, h: 0.2e-3, er: 4.3 }, { mode: "ground", lUnit: "mm", tUnit: "oz" }, 50) },
+    { title: "50 Ω on a 1.6 mm board", note: "Plane below, FR-4, 1 oz, 0.2 mm gaps: 1.09 mm trace.",
+      apply: example({ s: 0.2e-3, t: OZ, h: 1.6e-3, er: 4.3 }, { mode: "ground", lUnit: "mm", tUnit: "oz" }, 50) },
+    { title: "No plane below", note: "0.3 mm trace, 0.15 mm gaps on 1.6 mm FR-4, 1 oz: 66.2 Ω.",
+      apply: example({ w: 0.3e-3, s: 0.15e-3, t: OZ, h: 1.6e-3, er: 4.3 }, { mode: "open", lUnit: "mm", tUnit: "oz" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    settle();
+    link.recall();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="cpw-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A trace between grounds on the same layer")}
+
+      ${pillRow(Object.entries(CPW_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Trace width", 1)}${lf("s", "Gap, s", 2)}${lf("h", "Dielectric, h", 3)}</div>
+      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${field("z", "Impedance", fixed("Ω"), "")}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["∇·(ε ∇φ) = 0, the trace at 1 V, the grounds at 0 V", "S = C / ε0 = Σ ε (Δφ)², with the board and in air", "Z0 = η0 / √(S × S_air),   εeff = S / S_air", "Td = 33.36 √εeff ps/cm,  C0 = Td/Z0,  L0 = Z0 Td"],
+        "A coplanar waveguide (CPW) is a trace with ground copper on both sides of it on the same layer, a gap s away; b = w + 2s is the distance between the grounds' edges. With a ground plane under the board as well it is a grounded coplanar waveguide (GCPW, or conductor-backed), common on RF boards, the two side grounds tied to the plane with rows of vias. Its characteristic impedance Z0 is set mostly by w and s: a narrower gap lowers it, and a trace can be made narrow to meet a part's pad while keeping Z0. The app's field solver computes it from the cross-section, once with the board and once in air (see Edge-coupled embedded's manual section), the side grounds taken as wide. Wadell's conformal-mapping formulas are shown for comparison; they hold for paper-thin copper, and real copper's walls across the gap lower Z0 by several percent. Type a width to get the impedance, or the impedance you need to get the width at your gap."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") state.target = v;
+        else if (key === "w") { state.target = null; state.si.w = v * MS_LEN_UNITS[state.lUnit]; }
+        else if (key === "s" || key === "h") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("cpw-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+      if (key === "z") el.onblur = () => setTimeout(syncBoxes);
+    });
+    document.getElementById("cpw-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // The three length pickers move together; the copper has its own.
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
     syncBoxes();
     link.schedule(true);
   }

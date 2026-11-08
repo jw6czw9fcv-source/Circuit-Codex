@@ -123,6 +123,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Asymmetric stripline](#dual-stripline)
 - Impedance → [Edge-coupled stripline](#diff-stripline)
 - Impedance → [Broadside-coupled stripline](#broadside-stripline)
+- Impedance → [Coplanar waveguide](#coplanar)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -12779,5 +12780,184 @@ is needed for the answer, which is the solver's.
 - under 1 mm: 86.8 Ω (86.76), εeff 4.3;
 - H2 below h1 is refused;
 - the four length pickers move together.
+
+[↑ Index](#index)
+
+---
+
+<a id="coplanar"></a>
+## Coplanar waveguide
+
+`calc: coplanar` · PCB & interconnect › Impedance
+
+### What it computes
+
+The characteristic impedance of a trace with ground copper on both sides of
+it on the same layer, with or without a ground plane under the board, or
+the trace width that gives an impedance at a gap:
+
+- **Two pills:** "Ground plane below", the grounded coplanar waveguide
+  (GCPW), the default; "No plane below", the coplanar waveguide (CPW) on
+  its own, air under the board.
+- **Inputs:** the trace width w, the gap s between the trace and each
+  ground, the dielectric h, the copper's thickness t (in oz, µm or mil, its
+  own picker), the material and εr.
+- **Width and impedance are two live boxes:** type a width and the
+  impedance box shows Z0; type the impedance you need and the width box
+  shows the width that gives it, the gap kept.
+- **The big result:** Z0 from the field solver (as in Edge-coupled
+  embedded), or the width for the impedance typed, with b = w + 2s, the
+  distance between the grounds' edges, and w/b. For the moment the solver
+  takes, the badge reads "Solving…" and Wadell's value stands in.
+- **Below it:**
+  - Wadell's formula for the mode, and how far it is from the solver's
+    (for the grounded mode it is the paper-thin one, so the row says so);
+  - the effective εr, from the solver;
+  - the delay per length, per cm in mm and per inch in mil;
+  - the capacitance and inductance per length;
+  - how wide the ground copper beside the trace should be, each side: 5 b
+    or more with no plane (Wadell §3.4.1), b or more with a plane below
+    (§3.4.3's notes, which also tie the two sides together).
+- **Units:** mm or mil for the three lengths, moving together; oz, µm or
+  mil for the copper.
+- **Drawing:** the trace between its two grounds on the substrate, the
+  plane under it in the grounded mode, w and s as a chain dimension, h, t
+  and εr, in mm and mil. The trace is green when its width is the answer.
+- **Remembered:** the mode, the length unit and the copper unit.
+
+Examples: Wadell's 50 Ω probe on alumina, 50 Ω with a plane below on a
+0.2 mm layer and on a 1.6 mm board, and a CPW with no plane below.
+
+### Terms
+
+- **Coplanar waveguide (CPW):** a trace with ground copper on both sides
+  of it on the same layer; the field runs mostly across the two gaps.
+- **Grounded coplanar waveguide (GCPW):** the same with a ground plane
+  under the board as well (also called conductor-backed, CBCPW), the usual
+  form on RF boards; the side grounds are tied to the plane by rows of
+  vias.
+- **s, b:** s is the gap between the trace's edge and the ground's edge;
+  b = w + 2s is the distance between the two grounds' edges (Wadell's a
+  and b are the trace's width and that distance).
+- **Z0, εr, εeff, Td, C0, L0, oz:** as in Microstrip.
+- **K(k):** the complete elliptic integral of the first kind; Wadell's
+  formulas are conformal mappings, which turn the cross-section into a
+  parallel-plate one whose capacitance is a ratio of two such integrals.
+
+### Source
+
+- **Brian C. Wadell, "Transmission Line Design Handbook", Artech House,
+  1991** (read, Pierre's scanned copy):
+  - §3.4.1, "Coplanar Waveguide", pages 73–76: Z0 = 30π/√εeff,t ×
+    K(kt′)/K(kt) (3.4.1.1); εeff,t = εeff − (εeff − 1)/((b − a)/2 / 0.7t ×
+    K(k)/K′(k) + 1) (3.4.1.2); εeff = 1 + (εr − 1)/2 × K(k′)K(k1)/(K(k)
+    K(k1′)) (3.4.1.3); k = a/b, kt = at/bt; k1 = sinh(πat/4h)/sinh(πbt/4h)
+    (3.4.1.6); at = a + 1.25t/π (1 + ln(4πa/t)), bt = b − the same
+    (3.4.1.8, 3.4.1.9); "The ground plane should extend greater than 5b on
+    each side of the gap"; its example 3.4.1.1, a 50 Ω probe, a = 10 mil,
+    t = 1 mil, h = 25.2 mil of 96 % alumina (εr 10): b = 0.0234 in (it
+    prints "= 0.615 cm" for 0.0594 cm);
+  - §3.4.3, "Coplanar Waveguide with Ground", page 79: Z0 = 60π/√εeff /
+    (K(k)/K(k′) + K(k1)/K(k1′)) (3.4.3.1), k = a/b, k1 = tanh(πa/4h)/
+    tanh(πb/4h) (3.4.3.5), εeff = (1 + εr r)/(1 + r), r = K(k′)K(k1)/
+    (K(k)K(k1′)) (3.4.3.6), no copper thickness; page 80: to avoid
+    microstrip-like modes, the side ground should extend more than b from
+    the trace on each side, and jumpers can tie its two halves together.
+- **The field solver:** js/fieldsolver.js, its coplanar cross-section;
+  tools/fd_lines.py's app_coplanar, a separate implementation with the
+  same settings, gives the values below (the two agree to the last digit
+  shown: 49.218 and 66.165 Ω for the first cases below).
+- **Not read:** the papers Wadell draws on (Ghione and Naldi, Gupta et
+  al.).
+
+### Why the formulas are these
+
+The solver, the big result:
+
+    ∇·(ε ∇φ) = 0: the trace at 1 V, the side grounds (and the plane) at 0 V
+    S = C / ε0 = Σ ε (Δφ)², once with the board, once in air (S_air)
+    Z0 = η0 / √(S × S_air),   εeff = S / S_air
+    Td = 33.36 √εeff ps/cm,   C0 = Td / Z0,   L0 = Z0 × Td
+
+The side grounds run to the solver's side wall, 20 b past the gap, and its
+box is 40 b above the copper and, with no plane, 40 b below the board: a
+paper-thin CPW in air then comes within 0.001 % of its exact impedance,
+η0/4 × K(k′)/K(k) (120.48 Ω for w/b 0.5). A box at 10 b, the side wall 5 b past the gap, read 0.15 % low.
+
+Wadell's formulas, the comparison, grounded and paper-thin:
+
+    k = a/b,   k1 = tanh(πa/4h) / tanh(πb/4h),   k′ = √(1 − k²)
+    r = K(k′) K(k1) / (K(k) K(k1′)),   εeff = (1 + εr r) / (1 + r)
+    Z0 = 60π / √εeff / (K(k)/K(k′) + K(k1)/K(k1′))
+
+and with no plane, with the copper:
+
+    at, bt = a ± 1.25t/π (1 + ln(4πa/t)),   kt = at/bt
+    k1 = sinh(πa/4h) / sinh(πb/4h)
+    εeff = 1 + (εr − 1)/2 × K(k′) K(k1) / (K(k) K(k1′))
+    εeff,t = εeff − (εeff − 1) / ((b − a)/2 / (0.7t) × K(k)/K(k′) + 1)
+    Z0 = 30π / √εeff,t × K(kt′) / K(kt)
+
+**One reading corrected.** Eq. 3.4.1.6 prints k1 with at and bt; with them
+Wadell's example needs b = 25.9 mil for 50 Ω. With a and b, as in the
+εeff equation that uses k1, it needs 23.43 mil, his 23.4 mil: the tool
+reads it that way. K(k)/K(k′) is computed by the arithmetic-geometric
+mean, and k′ from √((b − a)(b + a))/b, which keeps its precision for wide
+traces.
+
+**How Wadell's formulas compare with the solver** (εr 4.3 unless noted):
+
+| Case | Solver | Wadell |
+|---|---|---|
+| No plane, paper-thin, 0.3 mm, s 0.15 mm, h 1.6 mm | 74.14 Ω | +0.09 % |
+| No plane, 1 oz, 0.3 mm, s 0.15 mm, h 1.6 mm | 66.17 Ω | −9.6 % |
+| No plane, 1 oz, 1 mm, s 0.2 mm, h 1.6 mm | 53.97 Ω | −7.9 % |
+| No plane, 1 oz, 0.5 mm, s 0.25 mm, h 0.2 mm | 77.69 Ω | −3.8 % |
+| No plane, Wadell's probe, εr 10 | 52.64 Ω | −5.1 % |
+| Plane below, paper-thin, 0.3 mm, s 0.15 mm, h 0.2 mm | 53.91 Ω | +0.53 % |
+| Plane below, paper-thin, 0.3 mm, s 0.15 mm, h 1.6 mm | 73.42 Ω | +0.06 % |
+| Plane below, paper-thin, 1 mm, s 0.2 mm, h 1.6 mm | 54.86 Ω | +0.07 % |
+| Plane below, 1 oz, 0.3 mm, s 0.15 mm, h 0.2 mm | 49.22 Ω | +10.1 % |
+| Plane below, 1 oz, 1 mm, s 0.2 mm, h 1.6 mm | 51.33 Ω | +7.0 % |
+
+Paper-thin, both formulas meet the solver within 0.5 %: the conformal
+mappings are sound. The copper is what they handle badly. Its walls face
+each other across the gap and add capacitance, about t/s per wall on top
+of the gap's own field, so 1 oz on 0.15 mm gaps lowers Z0 by 9 to 11 %
+in the solver. §3.4.3 has no copper term and reads 7 to 10 % high;
+§3.4.1's correction overshoots and reads 4 to 10 % low. On Wadell's own
+probe, 52.6 Ω where he designed for 50 Ω.
+
+### Assumptions and limits
+
+- **Wide side grounds:** the solver takes them out to 20 b; narrower
+  ground copper raises Z0 (Wadell's 5 b, or b with a plane below, keeps
+  it close).
+- **Grounds tied together:** in the grounded mode, the side grounds and
+  the plane are at the same potential, as stitching vias make them; a CPW
+  without them can carry other modes (Wadell p80).
+- **Quasi-static field solution:** the trace and the grounds rectangles,
+  one dielectric, no solder mask, no losses; the board maker's stack-up
+  calculation decides.
+
+### How it was checked
+
+10 cases, the expected values from tools/fd_lines.py's app_coplanar:
+- the default, plane below: 0.3 mm trace, 0.15 mm gaps on 0.2 mm FR-4,
+  1 oz: 49.2 Ω (49.219), εeff 2.77, 55.5 ps/cm, 1.13 pF/cm and
+  2.73 nH/cm; Wadell paper-thin 54.2 Ω (+10.1 %);
+- Wadell's example 3.4.1.1: 10 mil probe, b 23.4 mil, 1 mil copper,
+  25.2 mil of εr 10, no plane: 52.6 Ω (52.639); his formula 50.0 Ω
+  (−5.1 %), the 50 Ω he solved for;
+- 50 Ω with a plane below on 0.2 mm, 0.15 mm gaps: 0.29 mm (0.29035);
+- 50 Ω with a plane below on 1.6 mm, 0.2 mm gaps: 1.09 mm (1.08937);
+- no plane, 0.3 mm on 1.6 mm, 0.15 mm gaps: 66.2 Ω (66.166), Wadell
+  59.8 Ω (−9.6 %), side grounds 3 mm (5 b);
+- the default without the plane: 70.5 Ω (70.530), Wadell 64.3 Ω
+  (−8.8 %);
+- paper-thin copper: 53.9 Ω (53.909), Wadell +0.5 %;
+- the copper's own picker (1 oz is 34.8 µm);
+- the three length pickers move together;
+- a zero gap is refused.
 
 [↑ Index](#index)

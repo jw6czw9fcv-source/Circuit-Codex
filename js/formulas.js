@@ -381,6 +381,12 @@ const FORMULAS = [
     note: "The tool's big result is a field solver; this copper method is within −1.0 to −0.3 % of it in the examples. k from w/b (IPC-2141A [4-46]–[4-48], paper-thin, constant corrected); ΔY the copper's edges, from two half-striplines in parallel.",
   },
   {
+    tool: "Coplanar waveguide",
+    domain: "pcb",
+    formulas: ["k = a/b,   k1 = tanh(πa/4h) / tanh(πb/4h)", "Z0 = 60π/√εeff / (K(k)/K(k') + K(k1)/K(k1'))", "r = K(k')K(k1) / (K(k)K(k1'))", "εeff = (1 + εr r) / (1 + r)"],
+    note: "Grounded CPW, paper-thin (Wadell §3.4.3): a the trace's width, b between the grounds' edges, h the dielectric, K the complete elliptic integral. The tool's big result is a field solver; 1 oz copper lowers Z0 7 to 10 % below this.",
+  },
+  {
     tool: "Edge-coupled embedded",
     domain: "pcb",
     formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  Zdiff = 2 Zodd"],

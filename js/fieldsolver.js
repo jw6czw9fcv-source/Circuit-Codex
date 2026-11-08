@@ -273,7 +273,23 @@
     };
   }
 
-  const KINDS = { stripline, broadside, microstrip };
+  // Coplanar waveguide: a trace w wide on h of substrate, ground copper on
+  // the same layer from s beyond each edge to the side wall, a plane under
+  // the substrate (ground) or air below it, air above; a far grounded box,
+  // 40 b above and below and 20 b past the gap (b = w + 2s; a paper-thin CPW
+  // in air is then within 0.006 % of its exact 30π K(k')/K(k)).
+  function coplanar({ w, s, t, h, er, ground }) {
+    const b = w + 2 * s, x1 = w / 2, x2 = w / 2 + s, X = x2 + 20 * b;
+    const D = ground ? 0 : 40 * b, y0 = D + h, y1 = y0 + t, top = y1 + 40 * b;
+    const m = Math.max(Math.min(w, s, h), Math.max(w, s) / 1000);
+    return {
+      xb: [0, x1, x2, X], yb: [0, D, y0, y1, top], h0: m / 20, hmax: 2 * Math.max(b, h), grow: 1.4,
+      rows: [0, top], cols: [X], signals: [[0, x1, y0, y1]], grounds: [[x2, X, y0, y1]],
+      layers: [[D, y0, er]], layered: true, factor: 2,
+    };
+  }
+
+  const KINDS = { stripline, broadside, microstrip, coplanar };
   function solve(kind, params) { return solveSpec(KINDS[kind](params)); }
 
   const api = { solve, solveSpec, KINDS, axis, ETA0, _parts: { makeLevel, weights, solvePotential, energy, prolong, start } };
