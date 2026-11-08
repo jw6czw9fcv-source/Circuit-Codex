@@ -405,6 +405,12 @@ const FORMULAS = [
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
   },
   {
+    tool: "Crosstalk",
+    domain: "pcb",
+    formulas: ["NEXT = ¼ (Lm/L + Cm/C) × min(1, 2T/tr)", "FEXT = −(l / 2tr) (Lm/ζ − ζ Cm)", "T = l √(L C),   ζ = √(L / C)"],
+    note: "Shlepnev's step coefficients (Signal Integrity Journal, 2025) for two equal traces; L, Lm, C, Cm per length from the pair's even and odd modes, by the field solver. In stripline FEXT is 0.",
+  },
+  {
     tool: "Edge-coupled embedded",
     domain: "pcb",
     formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  Zdiff = 2 Zodd"],

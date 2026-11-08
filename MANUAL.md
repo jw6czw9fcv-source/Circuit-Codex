@@ -127,6 +127,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Broadside-coupled, no plane](#paired-strips)
 - Impedance → [Coplanar waveguide](#coplanar)
 - Impedance → [Edge-coupled coplanar](#diff-coplanar)
+- Impedance → [Crosstalk](#crosstalk)
 - Vias & layout → [Thermal vias](#thermal-vias)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -13433,5 +13434,145 @@ grounds take 4 %; with none, they take 14 %.
 - the pill switches to no plane;
 - the four length pickers move together;
 - a zero gap to the ground is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="crosstalk"></a>
+## Crosstalk
+
+`calc: crosstalk` · PCB & interconnect › Impedance
+
+### What it computes
+
+The crosstalk a step on one trace (the aggressor) induces on its neighbour
+(the victim), two equal traces side by side, as a share of the
+aggressor's step:
+
+- **Two pills:** Microstrip (the pair on an outer layer over a plane) and
+  Stripline (the pair centred between two planes).
+- **Inputs:** each trace's width w, the spacing s between them, the
+  dielectric h (microstrip) or the spacing between the planes b
+  (stripline), the copper's thickness t, the material and εr, the length
+  the traces run side by side, and the aggressor's rise time.
+- **The big result:** the near-end crosstalk (NEXT), with whether the
+  coupled length saturates it and the saturation length.
+- **Below it:**
+  - the far-end crosstalk (FEXT), negative in microstrip (an inverted
+    pulse), zero in stripline; flagged as an upper bound when the even and
+    odd modes' edges arrive further apart than the rise time;
+  - the pair's even- and odd-mode impedances, from the solver;
+  - each trace's impedance with its neighbour present, ζ = √(L/C);
+  - the coupling ratios Lm/L and Cm/C;
+  - in microstrip, how far apart the even and odd edges reach the far end.
+- **Units:** mm or mil for the cross-section, moving together; oz, µm or
+  mil for the copper; mm, cm or in for the coupled length; ps or ns for
+  the rise time.
+- **Drawing:** the aggressor (blue) and the victim (green) over the plane
+  or between the planes, w and s as a chain dimension, h or b, εr, in mm
+  and mil.
+- **Remembered:** the pill and the units.
+
+Examples: the 3w rule (spacing three trace widths), a short run with a
+slow edge (below saturation), and a stripline pair (no FEXT).
+
+### Terms
+
+- **Crosstalk:** a signal one trace induces on another through their
+  mutual capacitance Cm and mutual inductance Lm.
+- **Near end, far end:** the victim's end next to the aggressor's driver,
+  and its end next to the aggressor's receiver.
+- **NEXT (near-end, backward):** a plateau at the near end that grows with
+  the coupled length until the length's round trip, 2T, reaches the rise
+  time, then stays: the length saturates it.
+- **FEXT (far-end, forward):** a pulse at the far end, as long as the rise
+  time, growing with the coupled length and with faster edges; the
+  capacitive and inductive parts cancel when both modes travel at one
+  speed, as in a stripline.
+- **Even and odd modes:** the pair driven alike and driven opposite; any
+  signal on one trace is half of each.
+- **Saturation length:** the coupled length whose round trip equals the
+  rise time, tr × v / 2.
+- **3w rule:** a common rule of thumb, traces three widths apart to keep
+  crosstalk low; the example takes the edge-to-edge spacing s = 3w.
+
+### Source
+
+- **Yuriy Shlepnev, "How Interconnects Work: Crosstalk Quantification",
+  Signal Integrity Journal, 10 March 2025** (read; its formulas as an
+  equation image on the page): the step-response coefficients of a coupled
+  segment of length l, rise time tr, K_B = l/(2(T1 + T2)) (L21/ζ1 − ζ2
+  C21) min(1, (T1 + T2)/tr) at the near end, K_F = −l/(2 max(|T1 − T2|,
+  tr)) (L21/ζ1 + ζ2 C21) at the far end, T1, T2 the traces' flight times,
+  ζ1, ζ2 their impedances, L21 and C21 the mutual inductance and
+  capacitance; "relatively accurate for lossless or low loss cases", "an
+  estimate of the maximal possible step crosstalk", and the step "may
+  underestimate the actual peak-to-peak crosstalk for short links by up to
+  2x". It cites Bracken's DesignCon 2016 paper "Improved Formulas for
+  Crosstalk Coefficients" (not read).
+- **The field solver:** js/fieldsolver.js, the microstrip and stripline
+  pairs' odd and even modes, as in Edge-coupled microstrip and
+  Edge-coupled stripline; tools/fd_lines.py gives the values below.
+
+### Why the formulas are these
+
+From the two modes, per length, with ve, vo = c/√εeff,e, c/√εeff,o:
+
+    Ce = 1/(Ze ve),  Le = Ze/ve,  Co = 1/(Zo vo),  Lo = Zo/vo
+    C = (Ce + Co)/2,  Cm = (Co − Ce)/2,  L = (Le + Lo)/2,  Lm = (Le − Lo)/2
+    ζ = √(L/C),   v = 1/√(L C),   T = l / v
+
+and, for two equal traces (T1 = T2 = T, ζ1 = ζ2 = ζ, C21 = −Cm, as the
+capacitance matrix's off-diagonal term is negative):
+
+    NEXT = l/(4T) (Lm/ζ + ζ Cm) × min(1, 2T/tr) = ¼ (Lm/L + Cm/C) × min(1, 2T/tr)
+    FEXT = −l/(2 tr) (Lm/ζ − ζ Cm)
+    saturation length = tr v / 2
+
+The even mode sees the pair's capacitance less its mutual part and its
+inductance plus its mutual part, the odd mode the reverse, so the four
+mode values give L, Lm, C and Cm exactly. In a stripline, one dielectric
+all round, Lm/L = Cm/C and FEXT cancels; in a microstrip part of the field
+is in air, Cm/C is smaller than Lm/L and FEXT is negative.
+
+**Checked:** the stripline's FEXT comes out 0 (Lm/L = Cm/C = 0.1783); the
+saturated NEXT agrees within 2 % with the near-end voltage the two modes
+give a matched driver, Ze/(Ze + Z0) − Zo/(Zo + Z0), Z0 = √(Ze Zo) (11.72
+against 11.52 %, 3.41 against 3.40 %).
+
+| Case (FR-4, 1 oz, 100 ps) | NEXT | FEXT |
+|---|---|---|
+| microstrip, 0.15 mm, s 0.15, h 0.2 mm, 50 mm | 11.52 % | −16.00 % |
+| the same, s 0.45 mm (3w) | 3.40 % | −9.19 % |
+| the same as the first, 10 mm, 1 ns | 1.32 % | −0.32 % |
+| stripline, 0.15 mm, s 0.2, b 0.6 mm, 50 mm | 8.92 % | 0 |
+
+### Assumptions and limits
+
+- **A step on matched, lossless lines:** the coefficients are the plateau
+  and the pulse a step gives; with losses, long lines or reflections the
+  real waveform differs, and for short links the peak-to-peak crosstalk
+  of a real signal can be up to twice the step's (Shlepnev).
+- **FEXT's growth:** it is linear in the length; once the even and odd
+  edges reach the far end further apart than the rise time, the pulse
+  stops growing, and the tool flags the value as an upper bound.
+- **Two equal traces, no other neighbours;** the cross-sections and their
+  limits as in Edge-coupled microstrip and Edge-coupled stripline (no
+  solder mask here).
+
+### How it was checked
+
+5 cases, the expected values from tools/fd_lines.py's modes and the
+formulas above:
+- the default microstrip pair, 0.15 mm traces 0.15 mm apart on 0.2 mm
+  FR-4, 1 oz, 50 mm side by side, 100 ps: NEXT 11.5 % (11.519), FEXT
+  −16 % (−16.003), saturated beyond 8.73 mm, even and odd modes 91.6 and
+  57.2 Ω, ζ 73.4 Ω, Lm/L 0.286 and Cm/C 0.175, the edges 32.9 ps apart;
+- the 3w rule, 0.45 mm apart: NEXT 3.4 % (3.397), FEXT −9.19 %;
+- 10 mm at 1 ns: below saturation (reached at 87.3 mm), NEXT 1.32 %,
+  FEXT −0.32 %;
+- the stripline pair: NEXT 8.9 % (8.915), FEXT 0;
+- a zero coupled length is refused.
 
 [↑ Index](#index)

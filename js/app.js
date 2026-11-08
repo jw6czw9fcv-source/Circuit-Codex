@@ -531,6 +531,7 @@ const TOOL_THUMBS = {
   "broadside-stripline": THUMB_PARTS.planes + thumbCu(17, 8.5, 12) + thumbCu(17, 14.5, 12),
   "paired-strips": '<rect x="4" y="10" width="38" height="6" fill="none" stroke="#5A6169" stroke-width="1.2"/>' + thumbCu(16, 7, 14) + thumbCu(16, 16, 14),
   "coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 10) + thumbCu(18, 8, 10) + thumbCu(32, 8, 10),
+  "crosstalk": THUMB_PARTS.surf + thumbCu(12, 8, 9) + '<rect x="25" y="8" width="9" height="3" fill="#5DCAA5"/>',
   "diff-coplanar": THUMB_PARTS.surf + thumbCu(4, 8, 8) + thumbCu(15, 8, 7) + thumbCu(24, 8, 7) + thumbCu(34, 8, 8),
 };
 // A tool's name in a list, its drawing first when it has one.
@@ -655,6 +656,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "embedded-microstrip") return renderEmbeddedMicrostrip(domain, tool, favId);
   if (calcId === "coplanar") return renderCoplanar(domain, tool, favId);
   if (calcId === "diff-coplanar") return renderDiffCoplanar(domain, tool, favId);
+  if (calcId === "crosstalk") return renderCrosstalk(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
@@ -16701,6 +16703,252 @@ function renderDiffCoplanar(domain, tool, favId) {
     app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
     syncBoxes();
     link.schedule(true);
+  }
+
+  paint();
+}
+
+// ---------- Crosstalk ----------
+// Crosstalk between two equal traces side by side, microstrip or stripline,
+// for a step with a rise time on one (the aggressor) seen on the other (the
+// victim). The field solver (FS) gives the pair's even and odd modes; from
+// them, per length, Ce = 1/(Ze ve), Le = Ze/ve, Co = 1/(Zo vo), Lo = Zo/vo,
+// and one trace's C11 = (Ce + Co)/2, Cm = (Co − Ce)/2, L11 = (Le + Lo)/2,
+// Lm = (Le − Lo)/2. Yuriy Shlepnev's step-response coefficients ("How
+// Interconnects Work: Crosstalk Quantification", Signal Integrity Journal,
+// 10 March 2025, read; after Bracken, DesignCon 2016, not read), for equal
+// traces (T1 = T2 = T, ζ1 = ζ2 = ζ = √(L11/C11), C21 = −Cm):
+//   NEXT = l/(4T) (Lm/ζ + ζ Cm) min(1, 2T/tr) = ¼ (Lm/L11 + Cm/C11) min(1, 2T/tr)
+//   FEXT = −l/(2 tr) (Lm/ζ − ζ Cm)
+// NEXT saturates once the coupled length's round trip reaches the rise
+// time; FEXT grows with length and vanishes in stripline, where both modes
+// travel at one speed. tools/fd_lines.py with the same steps gives the
+// cases' values.
+const XT_MODES = { micro: "Microstrip", strip: "Stripline" };
+const XT_LEN_UNITS = { mm: 1e-3, cm: 1e-2, in: 0.0254 };
+const XT_TR_UNITS = { ps: 1e-12, ns: 1e-9 };
+
+function renderCrosstalk(domain, tool, favId) {
+  const C = "crosstalk";
+  const OZ = TRACE_OZ_MIL * 25.4e-6, C0 = 299792458;
+  const state = {
+    mode: pref(C, "mode", "micro", Object.keys(XT_MODES)),
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    cUnit: pref(C, "cUnit", "mm", Object.keys(XT_LEN_UNITS)),
+    rUnit: pref(C, "rUnit", "ps", Object.keys(XT_TR_UNITS)),
+    mat: "fr4",
+    si: { w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12 },
+  };
+  const micro = () => state.mode === "micro";
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const len = (v, d = 3) => `${Number((v / MS_LEN_UNITS[state.lUnit]).toPrecision(d))} ${state.lUnit}`;
+  const cLen = (v, d = 3) => `${Number((v / XT_LEN_UNITS[state.cUnit]).toPrecision(d))} ${state.cUnit}`;
+  const ohm = (v) => `${Number(v.toPrecision(3))} Ω`;
+  const pct = (v) => `${v < 0 ? "−" : ""}${Number(Math.abs(v * 100).toPrecision(3))} %`;
+  const ps = (v) => (v >= 1e-9 ? `${Number((v * 1e9).toPrecision(3))} ns` : `${Number((v * 1e12).toPrecision(3))} ps`);
+
+  function problem() {
+    const s = state.si;
+    if (!(s.w > 0)) return "Enter the trace width.";
+    if (!(s.s > 0)) return "Enter the spacing between the traces.";
+    if (micro() ? !(s.h > 0) : !(s.b > 0)) return micro() ? "Enter the dielectric's thickness." : "Enter the spacing between the planes.";
+    if (!(s.t >= 0)) return "Enter the copper's thickness, zero or more.";
+    if (!micro() && !(s.t < s.b / 2)) return "The copper must be thinner than half the spacing between the planes.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (!(s.len > 0)) return "Enter the length the traces run side by side.";
+    if (!(s.tr > 0)) return "Enter the rise time.";
+    return "";
+  }
+
+  // The pair's odd and even modes, by the microstrip or the stripline cross-
+  // section; one link each, the pill choosing.
+  const mm = (v) => +(v * 1e3).toPrecision(10);
+  const common = { factor: 1, estimate: () => NaN, estimateWidth: () => NaN, width: () => state.si.w, setWidth: () => {}, target: () => null, problem, show: () => show() };
+  const links = {
+    micro: solverLink({ ...common, kind: "microstrip", modes: ["odd", "even"],
+      params: (w, mode) => { const q = state.si; return { w: mm(w), t: mm(q.t), h: mm(q.h), er: q.er, s: mm(q.s), mode }; } }),
+    strip: solverLink({ ...common, kind: "stripline", modes: ["odd", "even"],
+      params: (w, mode) => { const q = state.si; return { w: mm(w), t: mm(q.t), b: mm(q.b), er: q.er, s: mm(q.s), mode }; } }),
+  };
+  const link = () => links[state.mode];
+
+  // Shlepnev's coefficients from the two modes (see the header).
+  function coefficients() {
+    const L = link();
+    if (!L.complete()) return null;
+    const [o, e] = L.sol.res, { len: l, tr } = state.si;
+    const ve = C0 / Math.sqrt(e.eeff), vo = C0 / Math.sqrt(o.eeff);
+    const Ce = 1 / (e.z * ve), Le = e.z / ve, Co = 1 / (o.z * vo), Lo = o.z / vo;
+    const C11 = (Ce + Co) / 2, Cm = (Co - Ce) / 2, L11 = (Le + Lo) / 2, Lm = (Le - Lo) / 2;
+    const zeta = Math.sqrt(L11 / C11), v = 1 / Math.sqrt(L11 * C11), T = l / v;
+    return {
+      next: l / (4 * T) * (Lm / zeta + zeta * Cm) * Math.min(1, 2 * T / tr),
+      fext: -l / (2 * tr) * (Lm / zeta - zeta * Cm),
+      lsat: tr * v / 2, zeta, ze: e.z, zo: o.z, kl: Lm / L11, kc: Cm / C11,
+      skew: Math.abs(l / ve - l / vo),
+    };
+  }
+
+  // Two traces side by side, the aggressor blue and the victim green, over a
+  // plane (microstrip) or between two (stripline).
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const s = state.si;
+    const mil = (v) => `${Number((v / 25.4e-6).toPrecision(3))} mil`;
+    const mmT = (v) => `${Number((v * 1e3).toPrecision(3))} mm`;
+    const both = (v) => (state.lUnit === "mil" ? `${mil(v)} · ${mmT(v)}` : `${mmT(v)} · ${mil(v)}`);
+    if (micro()) {
+      return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="56" width="242" height="34" stroke="${wire}" stroke-width="1.4"/>
+      <rect x="40" y="90" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <rect x="101" y="48" width="44" height="8" fill="${part}"/><rect x="177" y="48" width="44" height="8" fill="${calc}"/>
+      <path d="M101 35 V45 M145 35 V45 M101 40 H145" stroke="${part}" stroke-width="1.2"/>
+      <path d="M177 35 V45 M145 40 H177" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(123, 30, `w ${both(s.w)}`, part)}
+      ${lbl(183, 44, `s ${both(s.s)}`, grey, "start")}
+      ${lbl(123, 70, "aggressor", part)}${lbl(199, 70, "victim", calc)}
+      <path d="M30 56 V90 M26 56 H34 M26 90 H34" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(46, 86, `h ${both(s.h)}`, grey, "start")}
+      ${lbl(276, 86, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(161, 108, "ground plane", part)}
+    </svg>`;
+    }
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <rect x="40" y="14" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <rect x="40" y="84" width="242" height="6" fill="${part}" fill-opacity="0.8"/>
+      <path d="M40 20 V84 M282 20 V84" stroke="${wire}" stroke-width="1.4"/>
+      <rect x="101" y="48" width="44" height="8" fill="${part}"/><rect x="177" y="48" width="44" height="8" fill="${calc}"/>
+      <path d="M101 33 V43 M145 33 V43 M101 38 H145" stroke="${part}" stroke-width="1.2"/>
+      <path d="M177 33 V43 M145 38 H177" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(123, 31, `w ${both(s.w)}`, part)}
+      ${lbl(183, 42, `s ${both(s.s)}`, grey, "start")}
+      ${lbl(123, 69, "aggressor", part)}${lbl(199, 69, "victim", calc)}
+      <path d="M30 20 V84 M26 20 H34 M26 84 H34" stroke="${wire}" stroke-width="1.2"/>
+      ${lbl(46, 80, `b ${both(s.b)}`, grey, "start")}
+      ${lbl(276, 80, `εr ${Number(s.er.toPrecision(3))}`, grey, "end")}
+      ${lbl(161, 10, "ground planes, above and below", part)}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, k = coefficients();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const wait = "…";
+    const sat = k && s.len >= k.lsat;
+    const fext = !k ? wait : !micro() ? "0: both modes at one speed" : k.skew >= s.tr ? warn(`${pct(k.fext)}, an upper bound: the edges separate`) : pct(k.fext);
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Near-end crosstalk (NEXT)</span>${solverBadge(link())}</div>
+          <div class="result-value"><span class="num" data-res="big">${k ? pct(k.next) : wait}</span></div>
+          <div class="result-sub" data-res="sub">${k ? (sat ? `saturated: longer than ${cLen(k.lsat)}` : `below saturation, reached at ${cLen(k.lsat)}`) : "of the aggressor's step, on the victim"}</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Far-end crosstalk (FEXT)", fext, "fext")}
+          ${row("Even mode, odd mode", k ? `${ohm(k.ze)}, ${ohm(k.zo)}` : wait, "modes")}
+          ${row("Each trace's impedance", k ? ohm(k.zeta) : wait, "zeta")}
+          ${row("Lm/L, Cm/C", k ? `${Number(k.kl.toPrecision(3))}, ${Number(k.kc.toPrecision(3))}` : wait, "lc")}
+          ${micro() ? row("Edges at the far end apart", k ? ps(k.skew) : wait, "skew") : ""}
+        </div>`;
+  }
+
+  function show() {
+    if (!app.querySelector(".diagram-box")) return;
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+  function refresh() {
+    link().recall();
+    show();
+    link().schedule(false);
+  }
+
+  const example = (si, extra) => () => {
+    Object.assign(state, { mat: "custom" }, extra);
+    Object.assign(state.si, si);
+    const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === state.si.er);
+    if (m) state.mat = m;
+    paint();
+  };
+  useExamples([
+    { title: "The 3w rule", note: "Microstrip, 0.15 mm traces 0.45 mm apart (3 w) on 0.2 mm, 50 mm at 100 ps: NEXT 3.4 %.",
+      apply: example({ w: 0.15e-3, s: 0.45e-3, h: 0.2e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12 }, { mode: "micro", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ps" }) },
+    { title: "Short run, slow edge", note: "The default pair, 10 mm side by side, 1 ns rise: NEXT 1.3 %, FEXT −0.32 %.",
+      apply: example({ w: 0.15e-3, s: 0.15e-3, h: 0.2e-3, t: OZ, er: 4.3, len: 10e-3, tr: 1e-9 }, { mode: "micro", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ns" }) },
+    { title: "Stripline: no far-end crosstalk", note: "0.15 mm traces 0.2 mm apart, planes 0.6 mm apart: NEXT 8.9 %, FEXT 0.",
+      apply: example({ w: 0.15e-3, s: 0.2e-3, b: 0.6e-3, t: OZ, er: 4.3, len: 50e-3, tr: 100e-12 }, { mode: "strip", lUnit: "mm", tUnit: "oz", cUnit: "mm", rUnit: "ps" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    link().recall();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-lunit="${n}"`, MS_LEN_UNITS, state.lUnit), fmt(s[key] / MS_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="xt-mat">${Object.entries(MS_MATERIALS).map(([key, [n]]) => `<option value="${key}" ${key === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Coupling between two traces side by side")}
+
+      ${pillRow(Object.entries(XT_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("w", "Each trace, w", 1)}${lf("s", "Spacing, s", 2)}${micro() ? lf("h", "Dielectric, h", 3) : lf("b", "Planes apart, b", 3)}</div>
+      <div class="field-pair">${field("t", "Copper", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))}<div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}</div>
+      <div class="field-pair">${field("len", "Side by side for", sel('data-cunit="1"', XT_LEN_UNITS, state.cUnit), fmt(s.len / XT_LEN_UNITS[state.cUnit]))}${field("tr", "Rise time", sel('data-runit="1"', XT_TR_UNITS, state.rUnit), fmt(s.tr / XT_TR_UNITS[state.rUnit]))}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["NEXT = ¼ (Lm/L + Cm/C) × min(1, 2T/tr)", "FEXT = −(l / 2tr) (Lm/ζ − ζ Cm)", "T = l √(L C),   ζ = √(L / C)", "L, Lm, C, Cm from the even and odd modes"],
+        "Crosstalk is the signal one trace (the aggressor) induces on its neighbour (the victim) through their mutual capacitance Cm and mutual inductance Lm. At the victim's near end, next to the aggressor's driver, it appears as a plateau (NEXT) that grows with the coupled length until the round trip 2T reaches the rise time tr, then saturates; at the far end it appears as a short pulse (FEXT) that grows with the length and with faster edges. In a stripline both modes of the pair travel at one speed and the far-end terms cancel; in microstrip, where part of the field is in air, they do not, and FEXT is often the larger. The app's field solver computes the pair's even and odd modes, from which L, Lm, C and Cm follow; the coefficients are Shlepnev's (Signal Integrity Journal, 2025), for a step on matched lines without loss. Values are a share of the aggressor's step."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "w" || key === "s" || key === "h" || key === "b") state.si[key] = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        else if (key === "len") state.si.len = v * XT_LEN_UNITS[state.cUnit];
+        else if (key === "tr") state.si.tr = v * XT_TR_UNITS[state.rUnit];
+        else if (key === "er") {
+          state.si.er = v;
+          const m = Object.keys(MS_MATERIALS).find((x) => MS_MATERIALS[x][1] === v) || "custom";
+          if (m !== state.mat) { state.mat = m; const ms = document.getElementById("xt-mat"); if (ms) ms.value = m; }
+        }
+        refresh();
+      };
+    });
+    document.getElementById("xt-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = MS_MATERIALS[state.mat][1];
+      if (er) state.si.er = er;
+      paint();
+    };
+    // The three cross-section length pickers move together; the copper, the
+    // coupled length and the rise time each have their own.
+    app.querySelectorAll("select[data-lunit]").forEach((el) => { el.onchange = (e) => { state.lUnit = e.target.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelector("select[data-tunit]").onchange = (e) => { state.tUnit = e.target.value; setPref(C, "tUnit", state.tUnit); paint(); };
+    app.querySelector("select[data-cunit]").onchange = (e) => { state.cUnit = e.target.value; setPref(C, "cUnit", state.cUnit); paint(); };
+    app.querySelector("select[data-runit]").onchange = (e) => { state.rUnit = e.target.value; setPref(C, "rUnit", state.rUnit); paint(); };
+    link().schedule(true);
   }
 
   paint();

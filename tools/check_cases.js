@@ -1832,6 +1832,18 @@ const CHECK_CASES = {
     { name: "a zero gap to the ground is refused", do: [["set", 'input[data-key="g"]', "0"]],
       expect: [['[data-res="err"]', "Enter the gap to the ground beside the traces."]] },
   ],
+  "crosstalk": [
+    { name: "the default microstrip pair, 0.15 mm traces 0.15 mm apart on 0.2 mm FR-4, 1 oz, 50 mm side by side, 100 ps: NEXT 11.5 %, FEXT -16 % (Shlepnev's coefficients on the solver's modes, fd_lines 11.519 / -16.003); saturated beyond 8.73 mm", do: [],
+      expect: [['[data-res="big"]', "11.5 %"], ['[data-res="by"]', "Field solver"], ['[data-res="fext"]', "−16 %"], ['[data-res="sub"]', "saturated: longer than 8.73 mm"], ['[data-res="modes"]', "91.6 Ω, 57.2 Ω"], ['[data-res="zeta"]', "73.4 Ω"], ['[data-res="lc"]', "/^0.286, 0.17[45]$/"], ['[data-res="skew"]', "/^32.[89] ps$/"]] },
+    { name: "the 3w rule, 0.45 mm apart: NEXT 3.4 % (3.397), FEXT -9.19 %", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
+      expect: [['[data-res="big"]', "3.4 %"], ['[data-res="fext"]', "−9.19 %"]] },
+    { name: "10 mm at 1 ns: below saturation, NEXT 1.32 %, FEXT -0.32 %", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['[data-res="big"]', "1.32 %"], ['[data-res="fext"]', "−0.32 %"], ['[data-res="sub"]', "below saturation, reached at 87.3 mm"]] },
+    { name: "stripline, 0.15 mm traces 0.2 mm apart, planes 0.6 mm apart: NEXT 8.9 % (8.915), no FEXT", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
+      expect: [['[data-res="big"]', "/^8.9[12] %$/"], ['[data-res="fext"]', "0: both modes at one speed"]] },
+    { name: "a zero coupled length is refused", do: [["set", 'input[data-key="len"]', "0"]],
+      expect: [['[data-res="err"]', "Enter the length the traces run side by side."]] },
+  ],
   "embedded-microstrip": [
     { name: "0.36 mm on 0.2 mm FR-4 under 20 um of mask: field solver 47.2 ohm (fd_lines app_microstrip 47.168), 50.0 bare (49.963); IPC-2141A [4-7] 46.9 (-0.6 %)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="big"]', "47.2 Ω"], ['[data-res="by"]', "Field solver"], ['input[data-key="z"]', "47.17"], ['[data-res="sub"]', "50 Ω uncovered: the cover takes 5.6 %"], ['[data-res="ipc"]', "46.9 Ω (−0.6 %)"], ['[data-res="eeff"]', "3.13, 3.51"], ['[data-res="td"]', "62.5 ps/cm"]] },
