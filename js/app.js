@@ -13534,9 +13534,9 @@ function renderSkinDepth(domain, tool, favId) {
 // coupling lets the signal bypass a high-loss pad.
 const ATT_MODES = { pi: "Pi", t: "T", bt: "Bridged T" };
 const ATT_P_UNITS = { mW: 1e-3, W: 1 };
-// The E series is picked in the Output heading, as in LED series resistor:
-// exact values, or any E series from E6 to E192.
-const ATT_SERIES = ["exact", ...Object.keys(E_TOLERANCE)];
+// The resistors' tolerance picks the E series, in the "Your inputs" heading
+// as in the Passive components tools (0: exact values, no series).
+const ATT_TOLS = [0, 0.1, 0.5, 1, 2, 5, 10];
 
 // The pad as a circuit: resistors rs for a kind, a Z0 load, input power Pin
 // → input impedance, voltage ratio out/in, each resistor's power, output power.
@@ -13577,9 +13577,10 @@ function renderAttenuator(domain, tool, favId) {
   const state = {
     mode: pref(C, "mode", "pi", Object.keys(ATT_MODES)),
     pUnit: pref(C, "pUnit", "W", Object.keys(ATT_P_UNITS)),
-    series: pref(C, "series", "exact", ATT_SERIES),
+    tol: pref(C, "tol", 0, ATT_TOLS),
     si: { a: 10, z0: 50, pin: 1 },
   };
+  const series = () => (state.tol === 0 ? "exact" : eSeriesForTolerance(state.tol));
   const n3 = (v) => String(Number(v.toPrecision(3)));
   const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
   const ohm = (v) => (v >= 1e3 ? `${n3(v / 1e3)} kΩ` : `${n3(v)} Ω`);
@@ -13601,7 +13602,7 @@ function renderAttenuator(domain, tool, favId) {
     if (state.mode === "t") { ideal = [z0 * (N - 1) / (N + 1), 2 * N * z0 / (N * N - 1)]; names = ["R1", "R2"]; }
     else if (state.mode === "pi") { ideal = [z0 * (N + 1) / (N - 1), z0 * (N * N - 1) / (2 * N)]; names = ["R3", "R4"]; }
     else { ideal = [z0, z0 * (N - 1), z0 / (N - 1)]; names = ["R0", "Rb", "Rs"]; }
-    const used = state.series === "exact" ? ideal : ideal.map((v) => nearestESeries(v, state.series).value);
+    const used = state.tol === 0 ? ideal : ideal.map((v) => nearestESeries(v, series()).value);
     return { ideal, used, names, N };
   }
   // The circuit's resistors in padAnalysis's order, from the two or three values.
@@ -13668,11 +13669,11 @@ function renderAttenuator(domain, tool, favId) {
     const what = state.mode === "t" ? "R1 series (each) / R2 shunt" : state.mode === "pi" ? "R3 shunt (each) / R4 series" : `Rb bridge / Rs shunt; the two arms R0 = ${ohm(r.used[0])}`;
     const hot = an.P.map((p, i) => [heatNames[state.mode][i], p]).sort((a, b) => b[1] - a[1])[0];
     const dbm = (w) => (w > 0 ? `${n3(Math.round(10 * Math.log10(w / 1e-3) * 1e6) / 1e6)} dBm` : "—");
-    const std = state.series !== "exact";
+    const std = state.tol !== 0;
     return `<div class="result-field">
           <div class="result-head"><span class="label">${ATT_MODES[state.mode]} pad, ${n3(s.a)} dB on ${n3(s.z0)} Ω</span></div>
           <div class="result-value"><span class="num" data-res="big">${big}</span></div>
-          <div class="result-sub" data-res="sub">${what}${std ? ` (${state.series} values)` : ""}</div>
+          <div class="result-sub" data-res="sub">${what}${std ? ` (${series()} values)` : ""}</div>
         </div>
         <div class="field notation-box">
           ${std ? row("Ideal values", r.ideal.map(ohm).join(", "), "ideal") : ""}
@@ -13691,13 +13692,13 @@ function renderAttenuator(domain, tool, favId) {
   const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); paint(); };
   useExamples([
     { title: "10 dB Pi pad on 50 Ω", note: "96.2 Ω shunt at each end, 71.2 Ω in series; 1 W in, 100 mW out.",
-      apply: example({ top: { mode: "pi", series: "exact", pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
+      apply: example({ top: { mode: "pi", tol: 0, pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
     { title: "10 dB T pad on 50 Ω", note: "Kuphaldt's example: 25.97 Ω in each series arm, 35.14 Ω to ground.",
-      apply: example({ top: { mode: "t", series: "exact", pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
+      apply: example({ top: { mode: "t", tol: 0, pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
     { title: "The same Pi pad in E96 values", note: "95.3 Ω and 71.5 Ω: 10.05 dB, 53.8 dB return loss.",
-      apply: example({ top: { mode: "pi", series: "E96", pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
+      apply: example({ top: { mode: "pi", tol: 1, pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
     { title: "20 dB bridged T on 75 Ω", note: "75 Ω arms, 675 Ω bridge, 8.33 Ω shunt.",
-      apply: example({ top: { mode: "bt", series: "exact", pUnit: "mW" }, si: { a: 20, z0: 75, pin: 0.1 } }) },
+      apply: example({ top: { mode: "bt", tol: 0, pUnit: "mW" }, si: { a: 20, z0: 75, pin: 0.1 } }) },
   ]);
 
   function paint() {
@@ -13716,13 +13717,14 @@ function renderAttenuator(domain, tool, favId) {
 
       <div class="diagram-box">${diagram()}</div>
 
-      <div class="field-pair">${field("a", "Attenuation", fixed("dB"), fmt(s.a))}${field("z0", "Impedance, Z0", fixed("Ω"), fmt(s.z0))}${field("pin", "Power in", sel('data-punit="1"', ATT_P_UNITS, state.pUnit), fmt(s.pin / ATT_P_UNITS[state.pUnit]))}</div>
-
-      <div class="section-label" style="color:#5DCAA5">Output
-        <select id="att-series" class="label-select">
-          ${ATT_SERIES.map((k) => `<option value="${k}" ${state.series === k ? "selected" : ""}>${k === "exact" ? "Exact values" : `${k} (${E_TOLERANCE[k]})`}</option>`).join("")}
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="att-tol" class="label-select">
+          ${ATT_TOLS.map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>${t === 0 ? "Exact values" : `±${t}% · ${eSeriesForTolerance(t)}`}</option>`).join("")}
         </select>
       </div>
+      <div class="field-pair">${field("a", "Attenuation", fixed("dB"), fmt(s.a))}${field("z0", "Impedance, Z0", fixed("Ω"), fmt(s.z0))}${field("pin", "Power in", sel('data-punit="1"', ATT_P_UNITS, state.pUnit), fmt(s.pin / ATT_P_UNITS[state.pUnit]))}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
@@ -13744,7 +13746,7 @@ function renderAttenuator(domain, tool, favId) {
         show();
       };
     });
-    document.getElementById("att-series").onchange = (e) => { state.series = e.target.value; setPref(C, "series", state.series); paint(); };
+    document.getElementById("att-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
     app.querySelector("select[data-punit]").onchange = (e) => { state.pUnit = e.target.value; setPref(C, "pUnit", state.pUnit); paint(); };
   }
 
