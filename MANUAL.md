@@ -97,6 +97,7 @@ will key on, since that is the id the app already holds for each tool.
 - Transmission lines → [Coax impedance](#coax)
 - Transmission lines → [Velocity factor](#velocity-factor)
 - Transmission lines → [Skin depth](#skin-depth)
+- Power & gain → [Attenuator](#attenuator)
 
 ### Power electronics
 
@@ -11352,6 +11353,109 @@ copper on a PCB.
   (the large-wire form), 268 mΩ/m;
 - 1 oz foil: 3.61 MHz; t/δ 0.527 at 1 MHz and 5.27 at 100 MHz;
 - a zero frequency and a μr under 1 are refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="attenuator"></a>
+## Attenuator
+
+`calc: attenuator` · RF & microwave › Power & gain
+
+### What it computes
+
+The resistors of a pad that cuts a signal by a set number of dB while
+looking like the line's impedance Z0 from both ends:
+
+- **Three pills:** Pi (a series resistor and a shunt resistor to ground
+  at each end), T (a series resistor in each arm and one to ground) and
+  Bridged T (two arms of Z0, a bridge across them and a shunt).
+- **Inputs:** the attenuation (dB), the impedance Z0 (50, 75 or 600 Ω
+  typically), the input power (mW or W) and the resistor values (Exact,
+  E24 or E96).
+- **The big result:** the two values that define the pad (T: R1 and R2,
+  Pi: R3 and R4, Bridged T: Rb and Rs, whose two arms are Z0).
+- **With E24 or E96:** the ideal values, then the pad's real loss and
+  its input return loss with the standard parts (the analysis of the
+  actual circuit); the bridged T's arms of Z0 are rounded too.
+- **Below it:** the output power in W and dBm, the hottest resistor and
+  its dissipation (to pick the resistors' rating), and the heat in the
+  whole pad; over 20 dB, a warning to split the pad in two.
+- **Drawing:** the pad as a schematic, US zigzag resistors in green with
+  their values (the standard ones when picked), ports in blue.
+- **Remembered:** the pill, the series and the power unit.
+
+Examples: a 10 dB Pi pad on 50 Ω, the T pad of the same loss (Kuphaldt's),
+the Pi pad in E96 values, a 20 dB bridged T on 75 Ω.
+
+| Pad (Z0) | T: R1, R2 | Pi: R3, R4 | Bridged T: Rb, Rs |
+|---|---|---|---|
+| 3 dB (50 Ω) | 8.55, 141.9 Ω | 292.4, 17.61 Ω | 20.63, 121.2 Ω |
+| 10 dB (50 Ω) | 25.97, 35.14 Ω | 96.25, 71.15 Ω | 108.1, 23.12 Ω |
+| 20 dB (50 Ω) | 40.91, 10.10 Ω | 61.11, 247.5 Ω | 450, 5.556 Ω |
+| 6 dB (75 Ω) | 24.92, 100.4 Ω | 225.7, 56.03 Ω | 74.64, 75.36 Ω |
+
+### Terms
+
+- **Attenuation A (dB):** the power ratio's 10 log; N = 10^(A/20) is the
+  voltage ratio Vin/Vout (3.16 at 10 dB, 10 at 20 dB).
+- **Constant-impedance pad:** a pad whose input sees Z0 when its output
+  has a Z0 load, and the reverse; T and Pi pads are symmetric, so they
+  work either way round.
+- **Return loss:** how many dB the reflection at the pad's input is below
+  the incident wave (see VSWR / Return loss); infinite for an exact pad.
+- **Shunt, series:** a resistor to ground, and one in the signal's path.
+- **Heat:** the power that does not reach the load is dissipated in the
+  resistors, mostly the one nearest the input.
+
+### Sources
+
+- **Ian Poole, "Resistive Attenuator Pads: Pi & T Circuit Design",
+  Electronics Notes** (read): N = Vin/Vout; T: R1 = R0 (N − 1)/(N + 1)
+  and R2 = R0 · 2N/(N² − 1); Pi: R3 = R0 (N + 1)/(N − 1) and R4 = R0
+  (N² − 1)/(2N); the advice not to attempt more than about 20 dB in one
+  section, and that bridged T pads suit PIN-diode variable attenuators.
+- **Kuphaldt, Lessons in Electric Circuits Vol. III ch. 1,
+  "Attenuators"** (ibiblio copy, read; its formulas are images, so the
+  text gives only the values): the pads from the voltage ratio K, the
+  50 Ω, 10 dB T pad of R1 = 25.97 Ω and R2 = 35.14 Ω, and Zin = R1 +
+  (R2 ‖ (R1 + Z)) = 25.97 + 24.03 = 50 Ω, which the tool reproduces; and
+  "multiply all R values by the ratio (600/50) to correct for 600 Ω
+  matching".
+- **Bridged T:** the arms R0 = Z0, the bridge Rb = Z0 (N − 1) and the
+  shunt Rs = Z0/(N − 1) were not found in readable text; they are
+  derived here and checked by nodal analysis of each pad at 1, 3, 6, 10,
+  20 and 30 dB: the input impedance is Z0 and the loss A to every figure
+  shown. The same analysis gives the power in each resistor and the
+  results with standard values.
+
+### Assumptions and limits
+
+- **Equal source and load impedance Z0, resistive:** no minimum-loss pad
+  between different impedances.
+- **Ideal resistors:** at high frequency a resistor's stray inductance
+  and capacitance, the board's layout and the shielding between sections
+  set the real loss; use small non-inductive surface-mount parts.
+- **Power ratings:** the hottest resistor's dissipation at the input power
+  entered; derate for temperature and for peaks.
+- **The T pad's heat sits mostly in R1 (52 % of the input at 10 dB), the
+  Pi pad's in the input shunt, R3.**
+
+### How it was checked
+
+11 cases, the expected values from the formulas above and a Python
+nodal analysis (input impedance and loss at 10, 20 and 30 dB):
+- the 10 dB Pi pad on 50 Ω at 1 W: 96.2 and 71.2 Ω, 100 mW (20 dBm)
+  out, 519 mW in the input shunt, 900 mW of heat;
+- Kuphaldt's T pad: 26 and 35.1 Ω;
+- the Pi pad in E96 (95.3 and 71.5 Ω): 10.05 dB and 53.8 dB return
+  loss; the T pad in E24 (27 and 36 Ω): 10.2 dB and 36.4 dB;
+- the 20 dB bridged T on 75 Ω at 100 mW: 75, 675 and 8.33 Ω, 1 mW out,
+  81 mW in the input arm;
+- 600 Ω: 312 and 422 Ω; 1 dB T: 2.88 and 433 Ω; 30 dB in one Pi pad:
+  53.3 and 790 Ω, flagged;
+- mW re-expresses the power; 0 dB and over 100 dB are refused.
 
 [↑ Index](#index)
 

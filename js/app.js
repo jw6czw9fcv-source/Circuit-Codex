@@ -664,6 +664,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "vswr") return renderVswr(domain, tool, favId);
   if (calcId === "coax") return renderCoax(domain, tool, favId);
+  if (calcId === "attenuator") return renderAttenuator(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -13511,6 +13512,238 @@ function renderSkinDepth(domain, tool, favId) {
   }
 
   setMatFromRho();
+  paint();
+}
+
+// ---------- Attenuator ----------
+// A resistor pad that lowers a signal by a set number of dB while keeping
+// the impedance Z0 at both ends. With N = Vin/Vout = 10^(A/20), as Ian Poole
+// writes it (Electronics Notes, "Pi & T Resistive Attenuator Pads", read):
+//   T:  series R1 = Z0 (N − 1)/(N + 1) in each arm, shunt R2 = 2 N Z0/(N² − 1)
+//   Pi: shunt R3 = Z0 (N + 1)/(N − 1) at each end, series R4 = Z0 (N² − 1)/(2N)
+// Kuphaldt (Lessons in Electric Circuits Vol. III ch. 1, "Attenuators",
+// ibiblio copy, read; his formulas are images): the same pads from the
+// voltage ratio K, 10 dB on 50 Ω giving R1 = 25.97 Ω and R2 = 35.14 Ω with
+// Zin = R1 + (R2 ‖ (R1 + Z)) = 25.97 + 24.03 = 50 Ω, which this reproduces.
+// The bridged T (an arm R0 = Z0 each side, the bridge Rb = Z0 (N − 1) from
+// input to output, the shunt Rs = Z0/(N − 1)) is not given in text by the
+// sources read: derived here and checked by nodal analysis (Zin = Z0 and
+// the loss A exactly, 1 to 30 dB). The dissipation in each resistor, and
+// the loss and return loss with standard-value resistors, come from the
+// same analysis. Poole: no more than about 20 dB in one section, as stray
+// coupling lets the signal bypass a high-loss pad.
+const ATT_MODES = { pi: "Pi", t: "T", bt: "Bridged T" };
+const ATT_P_UNITS = { mW: 1e-3, W: 1 };
+const ATT_SERIES = { exact: "Exact", E24: "E24", E96: "E96" };
+
+// The pad as a circuit: resistors rs for a kind, a Z0 load, input power Pin
+// → input impedance, voltage ratio out/in, each resistor's power, output power.
+function padAnalysis(kind, rs, Z0, Pin) {
+  const par = (a, b) => (a * b) / (a + b);
+  let zin, gain, V, P;
+  if (kind === "t") {
+    const [R1, R2] = rs, zl = R1 + Z0, zp = par(R2, zl);
+    zin = R1 + zp;
+    gain = (zp / zin) * (Z0 / zl);
+    const vin = Math.sqrt(Pin * zin), iin = vin / zin, vc = vin - iin * R1, iout = vc / zl;
+    P = [iin * iin * R1, (vc * vc) / R2, iout * iout * R1];
+    return { zin, gain, P, pout: iout * iout * Z0 };
+  }
+  if (kind === "pi") {
+    const [Rsh, Rser] = rs, zl = par(Rsh, Z0), zs = Rser + zl;
+    zin = par(Rsh, zs);
+    gain = zl / zs;
+    const vin = Math.sqrt(Pin * zin), is = vin / zs, vo = is * zl;
+    P = [(vin * vin) / Rsh, is * is * Rser, (vo * vo) / Rsh];
+    return { zin, gain, P, pout: (vo * vo) / Z0 };
+  }
+  // Bridged T: arms R0 (input, output), bridge Rb, shunt Rs; Vin = 1 first.
+  const [R0a, R0b, Rb, Rs] = rs;
+  const a11 = 1 / R0a + 1 / Rs + 1 / R0b, a12 = -1 / R0b, a22 = 1 / R0b + 1 / Rb + 1 / Z0;
+  const b1 = 1 / R0a, b2 = 1 / Rb, det = a11 * a22 - a12 * a12;
+  const c = (b1 * a22 - a12 * b2) / det, o = (a11 * b2 - a12 * b1) / det;
+  zin = 1 / ((1 - c) / R0a + (1 - o) / Rb);
+  gain = o;
+  const vin = Math.sqrt(Pin * zin);
+  V = [vin, c * vin, o * vin];
+  P = [((V[0] - V[1]) ** 2) / R0a, ((V[1] - V[2]) ** 2) / R0b, ((V[0] - V[2]) ** 2) / Rb, (V[1] * V[1]) / Rs];
+  return { zin, gain, P, pout: (V[2] * V[2]) / Z0 };
+}
+
+function renderAttenuator(domain, tool, favId) {
+  const C = "attenuator";
+  const state = {
+    mode: pref(C, "mode", "pi", Object.keys(ATT_MODES)),
+    pUnit: pref(C, "pUnit", "W", Object.keys(ATT_P_UNITS)),
+    series: pref(C, "series", "exact", Object.keys(ATT_SERIES)),
+    si: { a: 10, z0: 50, pin: 1 },
+  };
+  const n3 = (v) => String(Number(v.toPrecision(3)));
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const ohm = (v) => (v >= 1e3 ? `${n3(v / 1e3)} kΩ` : `${n3(v)} Ω`);
+  const watts = (v) => siFormat(Number(v.toPrecision(3)), "W", 3);
+
+  function problem() {
+    const s = state.si;
+    if (!(s.a > 0)) return "Enter an attenuation above 0 dB.";
+    if (!(s.a <= 100)) return "Enter an attenuation of 100 dB or less.";
+    if (!(s.z0 > 0)) return "Enter the line's impedance Z0.";
+    if (!(s.pin >= 0)) return "Enter the input power, zero or more.";
+    return "";
+  }
+
+  // The ideal resistor values, then the ones the series picks.
+  function resistors() {
+    const { a, z0 } = state.si, N = 10 ** (a / 20);
+    let ideal, names;
+    if (state.mode === "t") { ideal = [z0 * (N - 1) / (N + 1), 2 * N * z0 / (N * N - 1)]; names = ["R1", "R2"]; }
+    else if (state.mode === "pi") { ideal = [z0 * (N + 1) / (N - 1), z0 * (N * N - 1) / (2 * N)]; names = ["R3", "R4"]; }
+    else { ideal = [z0, z0 * (N - 1), z0 / (N - 1)]; names = ["R0", "Rb", "Rs"]; }
+    const used = state.series === "exact" ? ideal : ideal.map((v) => nearestESeries(v, state.series).value);
+    return { ideal, used, names, N };
+  }
+  // The circuit's resistors in padAnalysis's order, from the two or three values.
+  const circuit = (u) => (state.mode === "bt" ? [u[0], u[0], u[1], u[2]] : u);
+  const heatNames = {
+    t: ["R1 (input arm)", "R2 (shunt)", "R1 (output arm)"],
+    pi: ["R3 (input shunt)", "R4 (series)", "R3 (output shunt)"],
+    bt: ["R0 (input arm)", "R0 (output arm)", "Rb (bridge)", "Rs (shunt)"],
+  };
+
+  // A resistor, US zigzag, from (x1,y1) to (x2,y2).
+  function zig(x1, y1, x2, y2, col) {
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+    const lead = 0.14 * L, n = 6, amp = 4.5, body = L - 2 * lead;
+    const pt = (t, off) => `${(x1 + ux * t + nx * off).toFixed(1)} ${(y1 + uy * t + ny * off).toFixed(1)}`;
+    let d = `M${pt(0, 0)} L${pt(lead, 0)}`;
+    for (let i = 0; i < n; i++) d += ` L${pt(lead + body * (i + 0.5) / n, i % 2 ? amp : -amp)}`;
+    d += ` L${pt(L - lead, 0)} L${pt(L, 0)}`;
+    return `<path d="${d}" stroke="${col}" stroke-width="1.6" stroke-linejoin="round"/>`;
+  }
+
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5";
+    const lbl = (x, y, v, c = calc, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const ok = !problem(), r = ok ? resistors() : { used: [0, 0, 0], names: [] };
+    const v = (i) => (ok ? ohm(r.used[i]) : "");
+    const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.4"/>`;
+    const gnd = (x, y) => `${w(`M${x} ${y} V${y + 6}`)}${w(`M${x - 7} ${y + 6} H${x + 7} M${x - 4.5} ${y + 9} H${x + 4.5} M${x - 2} ${y + 12} H${x + 2}`)}`;
+    const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" stroke="${part}" stroke-width="1.4" fill="none"/>`;
+    const xc = 145;
+    let body = "";
+    if (state.mode === "t") {
+      body = `${w(`M23 40 H${xc - 75} M${xc - 35} 40 H${xc + 35} M${xc + 75} 40 H267`)}
+        ${zig(xc - 75, 40, xc - 35, 40, calc)}${zig(xc + 35, 40, xc + 75, 40, calc)}${zig(xc, 40, xc, 80, calc)}${gnd(xc, 80)}
+        ${lbl(xc - 55, 28, `R1 ${v(0)}`)}${lbl(xc + 55, 28, `R1 ${v(0)}`)}${lbl(xc + 10, 62, `R2 ${v(1)}`, calc, "start")}
+        ${port(20, 40)}${port(270, 40)}`;
+    } else if (state.mode === "pi") {
+      body = `${w(`M23 40 H${xc - 20} M${xc + 20} 40 H267`)}
+        ${zig(xc - 20, 40, xc + 20, 40, calc)}${zig(70, 40, 70, 80, calc)}${zig(220, 40, 220, 80, calc)}${gnd(70, 80)}${gnd(220, 80)}
+        ${lbl(xc, 28, `R4 ${v(1)}`)}${lbl(78, 62, `R3 ${v(0)}`, calc, "start")}${lbl(212, 62, `R3 ${v(0)}`, calc, "end")}
+        <circle cx="70" cy="40" r="1.8" fill="${wire}"/><circle cx="220" cy="40" r="1.8" fill="${wire}"/>
+        ${port(20, 40)}${port(270, 40)}`;
+    } else {
+      body = `${w(`M23 54 H55 M95 54 H195 M235 54 H267 M45 54 V22 H${xc - 20} M${xc + 20} 22 H245 V54`)}
+        ${zig(55, 54, 95, 54, calc)}${zig(195, 54, 235, 54, calc)}${zig(xc - 20, 22, xc + 20, 22, calc)}${zig(xc, 54, xc, 94, calc)}${gnd(xc, 94)}
+        ${lbl(75, 44, `R0 ${v(0)}`)}${lbl(215, 44, `R0 ${v(0)}`)}${lbl(xc, 13, `Rb ${v(1)}`)}${lbl(xc + 10, 78, `Rs ${v(2)}`, calc, "start")}
+        <circle cx="45" cy="54" r="1.8" fill="${wire}"/><circle cx="245" cy="54" r="1.8" fill="${wire}"/><circle cx="${xc}" cy="54" r="1.8" fill="${wire}"/>
+        ${port(20, 54)}${port(270, 54)}`;
+    }
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${body}</svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, r = resistors();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const an = padAnalysis(state.mode, circuit(r.used), s.z0, s.pin);
+    const lossDb = -20 * Math.log10(an.gain);
+    const g = Math.abs((an.zin - s.z0) / (an.zin + s.z0));
+    const rl = g < 1e-9 ? "∞" : `${n3(-20 * Math.log10(g))} dB`;
+    const big = state.mode === "t" ? `${ohm(r.used[0])} / ${ohm(r.used[1])}` : state.mode === "pi" ? `${ohm(r.used[0])} / ${ohm(r.used[1])}` : `${ohm(r.used[1])} / ${ohm(r.used[2])}`;
+    const what = state.mode === "t" ? "R1 series (each) / R2 shunt" : state.mode === "pi" ? "R3 shunt (each) / R4 series" : `Rb bridge / Rs shunt; the two arms R0 = ${ohm(r.used[0])}`;
+    const hot = an.P.map((p, i) => [heatNames[state.mode][i], p]).sort((a, b) => b[1] - a[1])[0];
+    const dbm = (w) => (w > 0 ? `${n3(Math.round(10 * Math.log10(w / 1e-3) * 1e6) / 1e6)} dBm` : "—");
+    const std = state.series !== "exact";
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">${ATT_MODES[state.mode]} pad, ${n3(s.a)} dB on ${n3(s.z0)} Ω</span></div>
+          <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+          <div class="result-sub" data-res="sub">${what}${std ? ` (${state.series} values)` : ""}</div>
+        </div>
+        <div class="field notation-box">
+          ${std ? row("Ideal values", r.ideal.map(ohm).join(", "), "ideal") : ""}
+          ${std ? row("Loss, return loss", `${n3(lossDb)} dB, ${rl}`, "actual") : ""}
+          ${row("Output power", `${watts(an.pout)} (${dbm(an.pout)})`, "pout")}
+          ${row("Hottest resistor", `${hot[0]}, ${watts(hot[1])}`, "hot")}
+          ${s.a > 20 ? row("Single section", warn("over 20 dB: use two pads"), "warn") : row("Heat in the pad", `${watts(s.pin - an.pout)} of ${watts(s.pin)}`, "heat")}
+        </div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); paint(); };
+  useExamples([
+    { title: "10 dB Pi pad on 50 Ω", note: "96.2 Ω shunt at each end, 71.2 Ω in series; 1 W in, 100 mW out.",
+      apply: example({ top: { mode: "pi", series: "exact", pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
+    { title: "10 dB T pad on 50 Ω", note: "Kuphaldt's example: 25.97 Ω in each series arm, 35.14 Ω to ground.",
+      apply: example({ top: { mode: "t", series: "exact", pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
+    { title: "The same Pi pad in E96 values", note: "95.3 Ω and 71.5 Ω: 10.05 dB, 53.8 dB return loss.",
+      apply: example({ top: { mode: "pi", series: "E96", pUnit: "W" }, si: { a: 10, z0: 50, pin: 1 } }) },
+    { title: "20 dB bridged T on 75 Ω", note: "75 Ω arms, 675 Ω bridge, 8.33 Ω shunt.",
+      apply: example({ top: { mode: "bt", series: "exact", pUnit: "mW" }, si: { a: 20, z0: 75, pin: 0.1 } }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const serSel = `<select id="att-series">${Object.entries(ATT_SERIES).map(([k, n]) => `<option value="${k}" ${k === state.series ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Resistor pads that cut a signal and keep Z0")}
+
+      ${pillRow(Object.entries(ATT_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${field("a", "Attenuation", fixed("dB"), fmt(s.a))}${field("z0", "Impedance, Z0", fixed("Ω"), fmt(s.z0))}${field("pin", "Power in", sel('data-punit="1"', ATT_P_UNITS, state.pUnit), fmt(s.pin / ATT_P_UNITS[state.pUnit]))}</div>
+      <div class="field-pair"><div class="field"><label>Resistor values</label>${serSel}</div></div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["N = Vin / Vout = 10^(A / 20)", "T:  R1 = Z0 (N − 1) / (N + 1)", "    R2 = 2 N Z0 / (N² − 1)", "Pi: R3 = Z0 (N + 1) / (N − 1)", "    R4 = Z0 (N² − 1) / (2 N)", "Bridged T: R0 = Z0, Rb = Z0 (N − 1),", "    Rs = Z0 / (N − 1)"],
+        "An attenuator pad is a few resistors that lower a signal by a chosen number of decibels while looking like the line's own impedance Z0 from both ends, so the source and the load stay matched. N is the voltage ratio the loss makes (10 dB is 3.16, 20 dB is 10). The T pad has two equal series resistors and one to ground, the Pi pad one in series and two to ground; the bridged T adds a resistor straight across a T whose arms are Z0. Resistors never come out exact, so choose E24 or E96 parts to see the loss and the return loss they really give. The pad turns the lost power into heat, mostly in the resistor nearest the input: the hottest one sets the power rating. For more than about 20 dB, use two pads in a row, as stray coupling lets a signal bypass a single high-loss pad."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "pin") state.si.pin = v * ATT_P_UNITS[state.pUnit];
+        else state.si[key] = v;
+        show();
+      };
+    });
+    document.getElementById("att-series").onchange = (e) => { state.series = e.target.value; setPref(C, "series", state.series); paint(); };
+    app.querySelector("select[data-punit]").onchange = (e) => { state.pUnit = e.target.value; setPref(C, "pUnit", state.pUnit); paint(); };
+  }
+
   paint();
 }
 

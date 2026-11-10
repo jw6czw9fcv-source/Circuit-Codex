@@ -399,6 +399,12 @@ const FORMULAS = [
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
   },
   {
+    tool: "Attenuator",
+    domain: "rf",
+    formulas: ["N = Vin / Vout = 10^(A / 20)", "T:  R1 = Z0 (N − 1) / (N + 1)", "    R2 = 2 N Z0 / (N² − 1)", "Pi: R3 = Z0 (N + 1) / (N − 1)", "    R4 = Z0 (N² − 1) / (2 N)", "Bridged T: R0 = Z0, Rb = Z0 (N − 1),", "    Rs = Z0 / (N − 1)"],
+    note: "Ian Poole (Electronics Notes) and Kuphaldt for the T and Pi pads; the bridged T is derived and checked by circuit analysis. Not more than about 20 dB per section.",
+  },
+  {
     tool: "Velocity factor",
     domain: "rf",
     formulas: ["VF = v / c = 1 / √εr", "λg = VF × c / f", "quarter wave: l = λg / 4", "measured: VF = l / (c t) = 4 l f / c"],
