@@ -266,6 +266,10 @@ const CHECK_CASES = {
       expect: [['#rcf-topology .pill.active', "High-pass"], ['.pill[data-pill].active', "C"], ["#rcf-poles", "3"], ['select[data-unit="r"]', "Ω"]] },
   ],
   "led-series-resistor": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#led-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #led-tol', "5"]] },
+    { name: "1 % is E96: 310 ohm goes up to 316, 9.81 mA", do: [["set", "#led-tol", "1"]],
+      expect: [['[data-res="e24"]', "/Next E96 value up: 316/"]] },
     { name: "red on 5 V at 10 mA: 310 Ω, next E24 up 330 Ω", do: [],
       expect: [['[data-res="r"]', "310 Ω"], ['[data-res="e24"]', "/330 Ω → 9\\.39 mA/"]] },
     { name: "a standard value exactly is said so", do: [["set", "#led-vs", "5"], ["set", "#led-vf", "2"], ["set", "#led-i", "20"]],
@@ -276,8 +280,8 @@ const CHECK_CASES = {
     { name: "the bright green preset is 3.3 V (Kingbright WP7113ZGC)", do: [["set", "#led-vf-preset", "Green, bright (3.3 V)"]], expect: [["#led-vf", "3.3"]] },
     { name: "example: three red LEDs on 12 V", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="2"]']],
       expect: [['[data-res="r"]', "315 Ω"], ['[data-res="e24"]', "/330 Ω/"]] },
-    { name: "the series and current unit are remembered", do: [["set", "#led-series", "E96"], ["set", "#led-i-unit", "A"], ["reopen"]],
-      expect: [["#led-series", "E96"], ["#led-i-unit", "A"]] },
+    { name: "the tolerance (so the series) and current unit are remembered: 1 % is E96", do: [["set", "#led-tol", "1"], ["set", "#led-i-unit", "A"], ["reopen"]],
+      expect: [["#led-tol", "1"], ["#led-i-unit", "A"]] },
   ],
   "opamp-inverting": [
     { name: "10 k / 100 k, 0.5 V: gain −10, −5 V", do: [],
@@ -418,6 +422,10 @@ const CHECK_CASES = {
       expect: [["#ld-part", "GL5539"], [".pill.active", "LDR at bottom"], ["#ld-gamma", "0.8"]] },
   ],
   "optocoupler": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#op-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #op-tol', "5"]] },
+    { name: "1 % is E96: Rin 380 ohm is itself near E96 383 ohm", do: [["set", "#op-tol", "1"]],
+      expect: [['[data-res="e24"]', "/^383 ?Ω$/"]] },
     { name: "PC817 any rank, 5 V, 10 mA, 10 k pull-up: 380 Ω, 10× margin", do: [],
       expect: [['[data-res="rin"]', "/^380 ?Ω$/"], ['[data-res="e24"]', "/^390 ?Ω$/"], ['[data-res="avail"]', "5 mA"], ['[data-res="needed"]', "480 µA"], ['[data-res="vout"]', "200 mV"], ['[data-res="verdict"]', "/10×/"]] },
     { name: "example: 3.3 V MCU, 420 Ω, 5.2× margin", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -560,6 +568,8 @@ const CHECK_CASES = {
       expect: [[".pill.active", "JK"]] },
   ],
   "multivibrator": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#mv-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #mv-tol', "5"]] },
     { name: "astable 47 k / 10 µF: period 651.6 ms, Rc 4.7 kΩ", do: [],
       expect: [['[data-res="main"]', "651.6 ms"], ['[data-res="t1"]', "325.8 ms"], ['[data-res="rce"]', "/^4\.7 ?kΩ$/"]] },
     { name: "example: LED flasher 68 k / 10 µF, 1.061 Hz", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -576,6 +586,8 @@ const CHECK_CASES = {
       expect: [[".pill.active", "Monostable"], ["#mv-tol", "1"]] },
   ],
   "555-timer": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#t5-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #t5-tol', "5"]] },
     { name: "astable 4.7 k / 4.7 k / 100 nF: 977.3 µs, 1.023 kHz, 66.67 %", do: [["pill", 0]],
       expect: [['[data-res="main"]', "977.3 µs"], ["#t5-fd", "1.023"], ["#t5-duty", "66.67"], ['[data-res="thr"]', "3.333 V"], ['[data-res="trig"]', "1.667 V"]] },
     { name: "example: LED blinker, 1.053 Hz, 50.36 %", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -688,6 +700,8 @@ const CHECK_CASES = {
       expect: [["#pwm-vhigh", "3.3"]] },
   ],
   "debounce-rc": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#db-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #db-tol', "5"]] },
     { name: "Ganssle's design: R2 18.539 k, R1 82.242 k; E24 rounded up to 20 k and 91 k", do: [],
       expect: [["#db-r2", "18.539"], ["#db-r1", "82.242"], ['[data-res="r2e"]', "20 kΩ"], ['[data-res="r1e"]', "91 kΩ"],
                ['[data-res="main"]', "21.58 ms"], ['[data-res="release"]', "22.03 ms"], ['[data-res="leak"]', "≤ 20 mV"]] },
@@ -709,6 +723,8 @@ const CHECK_CASES = {
       expect: [["#db-vtm", "2"]] },
   ],
   "i2c-pullup": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#i2c-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #i2c-tol', "5"]] },
     { name: "400 kHz, 3.3 V, 100 pF: 966.7 Ω – 3.541 kΩ, 1.8 kΩ suggested (UM10204)", do: [],
       expect: [['[data-res="main"]', "1.8 kΩ"], ['[data-res="min"]', "966.7 Ω"], ['[data-res="max"]', "3.541 kΩ"], ['[data-res="top"]', "the rise time"],
                ['[data-res="rise"]', "186.4 ns"], ['[data-res="sink"]', "1.318 mA"], ['[data-res="leak"]', "44 mV"]] },
@@ -751,6 +767,8 @@ const CHECK_CASES = {
       expect: [[".pill.active", "STM32 16x"], ["#ub-clk", "72"]] },
   ],
   "crystal-load": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#xl-tol, ±10% by default)", do: [],
+      expect: [['.section-label > #xl-tol', "10"]] },
     { name: "12.5 pF, 3 pF stray: 19 pF each; E12 18 pF presents 12 pF, +8.325 ppm", do: [],
       expect: [["#xl-c1", "19"], ['[data-res="main"]', "18 pF"], ['[data-res="sugload"]', "12 pF"], ['[data-res="sugppm"]', "+8.325 ppm"],
                ['[data-res="load"]', "12.5 pF"], ["#xl-pull", "16.65"]] },
@@ -1614,6 +1632,10 @@ const CHECK_CASES = {
       expect: [[".pill.active", "Drop"], ['select[data-runit="r"]', "Ω"]] },
   ],
   "zener-regulation": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#zr-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #zr-tol', "5"]] },
+    { name: "1 % is E96: the window 40.2 to 173.6 ohm now holds 169 ohm (E24 160)", do: [["set", "#zr-tol", "1"]],
+      expect: [['[data-res="pick"]', "169 Ω"], ['input[data-key="rs"]', "169"]] },
     { name: "1N4733A (5.1 V ± 5 %, knee 1 mA, IZM 178 mA), 9–12 V, 0–20 mA: 40.2 to 173.6 Ω, E24 160 Ω", do: [],
       expect: [['[data-res="pick"]', "160 Ω"], ['[data-res="sub"]', "any from 40.2 Ω to 173.6 Ω; the largest wastes least"], ['input[data-key="rs"]', "160"],
         ['[data-res="iz"]', "2.78 mA to 44.7 mA"], ['[data-res="pz"]', "239 mW of its 1.3 W"], ['[data-res="pr"]', "320 mW"]] },
@@ -1645,6 +1667,10 @@ const CHECK_CASES = {
       expect: [["#zr-part", "bzx55c12"]] },
   ],
   "zener-transistor": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#zt-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #zt-tol', "5"]] },
+    { name: "1 % is E96: the window 78.27 to 302.5 ohm holds 301 ohm (E24 300)", do: [["set", "#zt-tol", "1"]],
+      expect: [['[data-res="sub"]', "Vz less 700 mV base-emitter; the zener's resistor 301 Ω (E96, any from 78.27 Ω to 302.5 Ω)"]] },
     { name: "1N4734A + BD139, 12–18 V, 500 mA: base 19.2 mA (hFE 25), Rs 78.27–302.5 Ω, E24 300 Ω, output 4.62–5.18 V", do: [],
       expect: [['[data-res="vout"]', "4.62 V to 5.18 V"], ['[data-res="sub"]', "Vz less 700 mV base-emitter; the zener's resistor 300 Ω (E24, any from 78.27 Ω to 302.5 Ω)"],
         ['input[data-key="rs"]', "300"], ['[data-res="ib"]', "19.2 mA (hFE 25 min at 0.5 A)"]] },
@@ -1666,6 +1692,10 @@ const CHECK_CASES = {
       expect: [["#zt-tr", "tip31c"], ["#zt-zener", "bzx55c12"]] },
   ],
   "constant-current": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#cc-tol, ±5% by default)", do: [],
+      expect: [['.section-label > #cc-tol', "5"]] },
+    { name: "1 % is E96: 350 mA needs 3.571 ohm, E96 3.57 gives 350 mA and 3.65 gives 342 mA", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]'], ["set", "#cc-tol", "1"]],
+      expect: [['[data-res="sub"]', "/E96 3.57 Ω gives 350 mA/"]] },
     { name: "TI LM317 §8.3.7: 24 Ω gives 1.25 V ÷ 24 Ω + 50 µA = 52.1 mA", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="i"]', "52.1 mA, 50 mA to 54.2 mA over Vref's tolerance"], ['[data-res="pr"]', "65.1 mW (Vref × I)"], ['input[data-key="r"]', "24"]] },
     { name: "the charger from 12 V: 7.7 V left for the battery (1.3 V Vref max and 3 V headroom)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -1694,6 +1724,8 @@ const CHECK_CASES = {
       expect: [["#cc-part", "lm1086"]] },
   ],
   "attenuator": [
+    { name: "the E series is picked in the Your inputs heading, as in the Passive tools (#att-tol, exact by default)", do: [],
+      expect: [['.section-label > #att-tol', "0"]] },
     { name: "10 dB Pi pad on 50 ohm, 1 W in (the default): 96.25 and 71.15 ohm, 100 mW out (20 dBm), 519 mW in the input shunt, 900 mW of heat (nodal analysis; Zin 50 exactly)", do: [],
       expect: [['[data-res="big"]', "96.2 Ω / 71.2 Ω"], ['[data-res="sub"]', "R3 shunt (each) / R4 series"], ['[data-res="pout"]', "100 mW (20 dBm)"], ['[data-res="hot"]', "R3 (input shunt), 519 mW"], ['[data-res="heat"]', "900 mW of 1 W"]] },
     { name: "10 dB T pad on 50 ohm: Kuphaldt's 25.97 and 35.14 ohm", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
@@ -2129,6 +2161,10 @@ const CHECK_CASES = {
       expect: [['[data-res="err"]', "Enter the maximum duty cycle, between 0 and 100 %."]] },
   ],
   "boost": [
+    { name: "the E series is picked in the Your inputs heading, on the Feedback pill (#boost-tol, 1 % by default)", do: [["pill", 3]],
+      expect: [['.section-label > #boost-tol', "1"]] },
+    { name: "5 % is E24: R1 for 5 V on 100 kohm and 0.6 V is 733.3 kohm, E24 750 kohm", do: [["pill", 3], ["set", "#boost-tol", "5"]],
+      expect: [['[data-res="big"]', "750 kΩ"]] },
     { name: "TPS61030 (SLUS534G): 1.8 V to 5 V, 1 A at 80 %: 3.47 A in the inductor, 10 % at 600 kHz needs its 5.5 µH; next E6 is TI's 6.8 µH", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="big"]', "6.8 µH"], ['[data-res="sub"]', "at least 5.53 µH for 10 % ripple (347 mA)"], ['[data-res="il"]', "3.47 A, drawn from the input"]] },
     { name: "SLVA372 eqs. 1 to 4: D 71.2 %, 314 mA of ripple, 3.63 A peak, a 4.5 A limit delivers 1.25 A", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -2147,6 +2183,10 @@ const CHECK_CASES = {
       expect: [['[data-res="err"]', "A boost converter steps up: the output must be above the input."]] },
   ],
   "buck": [
+    { name: "the E series is picked in the Your inputs heading, on the Feedback pill (#buck-tol, 1 % by default)", do: [["pill", 3]],
+      expect: [['.section-label > #buck-tol', "1"]] },
+    { name: "0.5 % is E192: R1 for 3.3 V on 10 kohm and 0.8 V is 31.25 kohm, E192 31.2 kohm", do: [["pill", 3], ["set", "#buck-tol", "0.5"]],
+      expect: [['[data-res="big"]', "31.2 kΩ"]] },
     { name: "TPS54331 (SLVS839H eq. 8): 28 V to 3.3 V, 3 A, 570 kHz, 30 % needs 5.67 µH; the next E6 is TI's 6.8 µH", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
       expect: [['[data-res="big"]', "6.8 µH"], ['[data-res="sub"]', "at least 5.67 µH for 30 % ripple (900 mA)"]] },
     { name: "SLVA477 eqs. 1 to 4 at 90 %: D 13.1 %, 835 mA of ripple, 3.42 A peak, 3.5 A limit delivers 3.08 A", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="0"]']],
@@ -2197,6 +2237,10 @@ const CHECK_CASES = {
       expect: [[".pill.active", "DC"]] },
   ],
   "linear-regulator": [
+    { name: "the E series is picked in the Your inputs heading, in the R2 mode (#ldo-tol, 1 % by default)", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]']],
+      expect: [['.section-label > #ldo-tol', "1"]] },
+    { name: "5 % is E24: R2 2.044 kohm becomes 2 kohm", do: [["click", ".example-btn"], ["click", '.example-item[data-ex="1"]'], ["set", "#ldo-tol", "5"]],
+      expect: [['[data-res="sub"]', "/nearest 5 % [(]E24[)] 2 kΩ/"]] },
     { name: "LM317 with 240 Ω and 720 Ω: 5.036 V, 36 mV of it from IADJ (TI eq. 2)", do: [],
       expect: [['[data-res="vout"]', "5.036 V"], ['[data-res="sub"]', "36 mV of it from IADJ × R2"], ['[data-res="spread"]', "4.836 V to 5.236 V"]] },
     { name: "240 Ω through R1 is 5.208 mA, above the LM317's typical minimum load only", do: [],

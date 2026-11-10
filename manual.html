@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=1c7a35817c" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=8772c25ef3" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -294,7 +294,7 @@ was itself wrong: milliohms take the letter L, not R. The tool had printed
 <section class="tool" id="resistor-power-rating" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>Resistor power</h2>
-  <figure class="shot"><img src="manual/img/resistor-power-rating.jpg?h=79a65f4791" loading="lazy" alt="Resistor power as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/resistor-power-rating.jpg?h=af7e1d4742" loading="lazy" alt="Resistor power as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Resistor power rating)</p>
 <h3>What it computes</h3>
 <p>Which size a resistor needs. Enter its resistance and the voltage across it, or
@@ -465,7 +465,7 @@ highlighted; it now shows the nearest value's decade.</p>
 <section class="tool" id="series-parallel" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Resistors</div>
   <h2>Series/parallel (R)</h2>
-  <figure class="shot"><img src="manual/img/series-parallel.jpg?h=6673a8469d" loading="lazy" alt="Series/parallel (R) as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/series-parallel.jpg?h=45f6e60355" loading="lazy" alt="Series/parallel (R) as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The total resistance of two to four resistors connected in series or in
 parallel, the range it can take given the parts' tolerance, and the nearest
@@ -1195,7 +1195,7 @@ from a marking now shows in its own unit, n33 as 330 pF.</p>
 <section class="tool" id="cap-smd-code" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>SMD cap code</h2>
-  <figure class="shot"><img src="manual/img/cap-smd-code.jpg?h=5617171d3d" loading="lazy" alt="SMD cap code as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/cap-smd-code.jpg?h=5323ba7f00" loading="lazy" alt="SMD cap code as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Capacitor SMD code)</p>
 <h3>What it computes</h3>
 <p>The capacitance printed on a surface-mount capacitor, usually a tantalum part,
@@ -1374,7 +1374,7 @@ The ranges are the total × (1 ± t).</p>
 <section class="tool" id="rc-charge" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Capacitors</div>
   <h2>RC time constant</h2>
-  <figure class="shot"><img src="manual/img/rc-charge.jpg?h=11e10ce810" loading="lazy" alt="RC time constant as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/rc-charge.jpg?h=7b890c4f73" loading="lazy" alt="RC time constant as it appears in the app" width="430" height="932"></figure>
   <p>(formerly RC charge/discharge)</p>
 <h3>What it computes</h3>
 <p>For a capacitor charging from a supply through a resistor, or discharging
@@ -1681,7 +1681,7 @@ it was removed.</p>
 <section class="tool" id="ind-series-parallel" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Inductors</div>
   <h2>Series/parallel (L)</h2>
-  <figure class="shot"><img src="manual/img/ind-series-parallel.jpg?h=7ad0878483" loading="lazy" alt="Series/parallel (L) as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/ind-series-parallel.jpg?h=6ae243ff2b" loading="lazy" alt="Series/parallel (L) as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The total inductance of two to six inductors, in series or in parallel, by
 pill.</p>
@@ -2030,12 +2030,13 @@ regardless of current"; both were corrected.</p>
 <section class="tool" id="led-series-resistor" style="--accent:#B98FE0">
   <div class="crumb">Active &amp; semiconductor devices › Diodes</div>
   <h2>LED series resistor</h2>
-  <figure class="shot"><img src="manual/img/led-series-resistor.jpg?h=5de1f9ada7" loading="lazy" alt="LED series resistor as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/led-series-resistor.jpg?h=8d51fd62de" loading="lazy" alt="LED series resistor as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The resistor that sets an LED's current from a given supply — for one LED or
 several in series — the power it dissipates, the next standard value up and
 the current that value gives, and how much the current moves if the LED's
 forward voltage is 0.1 V off.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the next value up comes from (E24 by default).</p>
 <h3>Source</h3>
 <ul>
 <li>The formula is Ohm's law, applied to the voltage the LEDs leave.</li>
@@ -4059,7 +4060,7 @@ R = R_LDR.</p>
 <section class="tool" id="optocoupler" style="--accent:#B98FE0">
   <div class="crumb">Active &amp; semiconductor devices › Optoelectronics</div>
   <h2>Optocoupler</h2>
-  <figure class="shot"><img src="manual/img/optocoupler.jpg?h=117f6405f9" loading="lazy" alt="Optocoupler as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/optocoupler.jpg?h=764e2009db" loading="lazy" alt="Optocoupler as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>For a phototransistor optocoupler driven through a resistor, with a pull-up
 on the output side:
@@ -4069,6 +4070,7 @@ on the output side:
 - the current the pull-up needs to pull the output low;
 - the output voltage with the LED on;
 - whether the output really pulls low, and with how much margin.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series Rin is rounded to (E24 by default).</p>
 <h3>Source</h3>
 <p>Data read from the manufacturers' datasheets themselves.</p>
 <p><strong>Sharp PC817X series</strong> (sheet D2-A03101EN, 2003):
@@ -4550,7 +4552,7 @@ don't-cares, the product of sums reproduced the truth table.</p>
 <section class="tool" id="flip-flops" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Sequential logic</div>
   <h2>Flip-flops</h2>
-  <figure class="shot"><img src="manual/img/flip-flops.jpg?h=dcacc905fa" loading="lazy" alt="Flip-flops as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/flip-flops.jpg?h=6bb45bb770" loading="lazy" alt="Flip-flops as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Flip-flops (SR, D, JK, T))</p>
 <h3>What it computes</h3>
 <p>For the four flip-flop types (SR, D, JK and T), it shows:
@@ -4653,7 +4655,7 @@ and only a set or reset ends it.</p>
 <section class="tool" id="multivibrator" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Sequential logic</div>
   <h2>Multivibrators</h2>
-  <figure class="shot"><img src="manual/img/multivibrator.jpg?h=846a35cf6d" loading="lazy" alt="Multivibrators as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/multivibrator.jpg?h=bc6e07cab2" loading="lazy" alt="Multivibrators as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Multivibrators (astable/monostable))</p>
 <h3>What it computes</h3>
 <p>For the classic two-transistor multivibrator, the tool works in two modes.</p>
@@ -4670,6 +4672,7 @@ and only a set or reset ends it.</p>
 - the E-series value of R.</p>
 <p>Every field works in both directions, and the timing diagrams are drawn to
 the computed times.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the suggested resistors are rounded to and the tolerance their spread uses.</p>
 <h3>Source</h3>
 <ul>
 <li><strong>The timing</strong> is the standard textbook analysis of the circuit. Each
@@ -4770,7 +4773,7 @@ Shortest time between triggers = Pulse width + Recovery
 <section class="tool" id="555-timer" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Sequential logic</div>
   <h2>555 timer</h2>
-  <figure class="shot"><img src="manual/img/555-timer.jpg?h=43ddf84d3e" loading="lazy" alt="555 timer as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/555-timer.jpg?h=b87ddbde41" loading="lazy" alt="555 timer as it appears in the app" width="430" height="932"></figure>
   <p>(formerly 555 Timer (astable/monostable))</p>
 <h3>What it computes</h3>
 <p>The tool covers the 555 timer chip in its two classic circuits.</p>
@@ -4787,6 +4790,7 @@ Shortest time between triggers = Pulse width + Recovery
 <p>Every field works in both directions. The timing diagram, with the
 capacitor's voltage above the output, is drawn to the computed times. The
 mode and the tolerance are remembered.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the suggested resistors are rounded to and the tolerance their spread uses.</p>
 <h3>Source</h3>
 <p>Texas Instruments, <strong>NA555 / NE555 / SA555 / SE555 datasheet, SLFS022K</strong>
 (revised March 2026), was read for:
@@ -4915,7 +4919,7 @@ Monostable: Pulse width = ln 3 × R × C ≈ 1.1 × R × C
 <section class="tool" id="dec-hex-bin" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Number systems</div>
   <h2>Number bases</h2>
-  <figure class="shot"><img src="manual/img/dec-hex-bin.jpg?h=0b0d5007e6" loading="lazy" alt="Number bases as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/dec-hex-bin.jpg?h=5597c64c98" loading="lazy" alt="Number bases as it appears in the app" width="430" height="932"></figure>
   <p>(formerly DEC / HEX / OCT / BIN conversion)</p>
 <h3>What it computes</h3>
 <p>One value, shown in decimal, hexadecimal, octal and binary at once.
@@ -5247,7 +5251,7 @@ RMS     = √(Vlow² × (1 − D) + Vhigh² × D)
 <section class="tool" id="debounce-rc" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Timing &amp; interfaces</div>
   <h2>Switch debounce</h2>
-  <figure class="shot"><img src="manual/img/debounce-rc.jpg?h=1b2fb2d431" loading="lazy" alt="Switch debounce as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/debounce-rc.jpg?h=77c321b873" loading="lazy" alt="Switch debounce as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Debounce / RC timing)</p>
 <h3>What it computes</h3>
 <p>It sizes the RC debouncer from Jack Ganssle's guide: Vcc through R1 to the
@@ -5267,6 +5271,7 @@ switch, R2 from the switch to C, and C feeding a Schmitt-trigger input.
 after a release, rising through R1 + R2. Each is drawn against the bounce
 window, with a dot where it crosses the threshold: green after the bounce,
 amber inside it. Vcc, the thresholds and the series are remembered.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the sized resistors are rounded to and the tolerance their spread uses.</p>
 <h3>Source</h3>
 <ul>
 <li><strong>Jack Ganssle, <em>A Guide to Debouncing</em>, part 2</strong> (ganssle.com) was
@@ -5401,7 +5406,7 @@ Sizing:  R2 = t / (C × ln(Vcc / VT−)),   R1 + R2 = t / (C × −ln(1 − VT+ 
 <section class="tool" id="i2c-pullup" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Timing &amp; interfaces</div>
   <h2>I2C pull-up resistor</h2>
-  <figure class="shot"><img src="manual/img/i2c-pullup.jpg?h=a7ae3810ba" loading="lazy" alt="I2C pull-up resistor as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/i2c-pullup.jpg?h=43a33450de" loading="lazy" alt="I2C pull-up resistor as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>For an I²C bus, given the speed mode, the supply, the bus capacitance and
 the number of devices, it computes:
@@ -5412,6 +5417,7 @@ the number of devices, it computes:
 - <strong>for the Rp you have:</strong> its rise time, the current it asks a device to
   sink, and how far leakage pulls the high level down through it.</p>
 <p>The mode, the series and Vdd are remembered.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the suggested Rp is rounded to and the tolerance its spread uses.</p>
 <h3>Source</h3>
 <p><strong>NXP UM10204, I²C-bus specification and user manual, rev. 7.0 (1 October
 2021)</strong>, was read for every limit:
@@ -5676,7 +5682,7 @@ the error, and the marks that fall outside their own bit turn red.</p>
 <section class="tool" id="crystal-load" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Timing &amp; interfaces</div>
   <h2>Crystal load</h2>
-  <figure class="shot"><img src="manual/img/crystal-load.jpg?h=6276f4992a" loading="lazy" alt="Crystal load as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/crystal-load.jpg?h=a1b35913cc" loading="lazy" alt="Crystal load as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Crystal load capacitance)</p>
 <h3>What it computes</h3>
 <p>For a Pierce oscillator, it computes:
@@ -5696,6 +5702,7 @@ the error, and the marks that fall outside their own bit turn red.</p>
   crystal);
 - the crystal Y1, RExt, and CL1 and CL2, with their values.</p>
 <p>The crystal type and the series are remembered.</p>
+<p><strong>Standard values.</strong> The load capacitors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools (the series the CL1 and CL2 suggestions come from).</p>
 <h3>Source</h3>
 <ul>
 <li><strong>ST AN2867, Oscillator design guide, rev. 10 (DocID15287),</strong> was read in
@@ -6189,7 +6196,7 @@ The full RP2040 search takes about 3 ms.</p>
 <section class="tool" id="adc" style="--accent:#5DCAA5">
   <div class="crumb">Digital &amp; logic circuits › Data conversion</div>
   <h2>ADC resolution</h2>
-  <figure class="shot"><img src="manual/img/adc.jpg?h=13d149f1f6" loading="lazy" alt="ADC resolution as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/adc.jpg?h=2fd18c53f8" loading="lazy" alt="ADC resolution as it appears in the app" width="430" height="932"></figure>
   <p>(formerly ADC resolution / quantization)</p>
 <h3>What it computes</h3>
 <p>For an ideal N-bit converter and its reference: the size of one step (the LSB),
@@ -6709,7 +6716,7 @@ band 12; 100 Hz is outside the bands, its wavelength shown as 2997.925 km.</p>
 <section class="tool" id="antenna-length" style="--accent:#E08585">
   <div class="crumb">RF &amp; microwave › Antennas &amp; propagation</div>
   <h2>Antenna length</h2>
-  <figure class="shot"><img src="manual/img/antenna-length.jpg?h=3a652b78cf" loading="lazy" alt="Antenna length as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/antenna-length.jpg?h=37d99e060f" loading="lazy" alt="Antenna length as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Antenna length (dipole/monopole))</p>
 <h3>What it computes</h3>
 <p>How long to cut a wire antenna for a frequency, or the frequency a wire of
@@ -7465,6 +7472,7 @@ nodal analysis (input impedance and loss at 10, 20 and 30 dB):
 <p>Examples: an LM317 at 5 V, R2 for 12 V, an LM1117 from 5 V to 3.3 V at
 500 mA, an LM317 from 12 V to 5 V at 1 A, an LM1117 then an MCP1700 from a
 3.7 V cell, a 7805 from 12 V at 500 mA, and an LM337 at −5 V.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; on the R2 pill, it sets the series R2 is rounded to (E96 by default).</p>
 <h3>Source</h3>
 <p>Read in review, each from the maker's datasheet:
 - <strong>TI LM317 (SLVS044Z, April 2025):</strong>
@@ -7586,7 +7594,7 @@ watt above the air.</p>
 <section class="tool" id="zener-regulation" style="--accent:#EF9F27">
   <div class="crumb">Power electronics › Supply &amp; regulation</div>
   <h2>Zener regulation</h2>
-  <figure class="shot"><img src="manual/img/zener-regulation.jpg?h=98be231fc8" loading="lazy" alt="Zener regulation as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/zener-regulation.jpg?h=2c8e125ab1" loading="lazy" alt="Zener regulation as it appears in the app" width="430" height="932"></figure>
   <p>(also found as Zener voltage stabilization)</p>
 <h3>What it computes</h3>
 <p>The series resistor for a zener shunt regulator, on one screen:</p>
@@ -7622,6 +7630,7 @@ watt above the air.</p>
 <p>Examples: Kuphaldt's 12.6 V from 45 V through 1 kΩ, the same with a 500 Ω
 load, 5.1 V at 20 mA from 9–12 V with a 1N4733A, and a BZX55C5V1 for
 5 mA.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the series resistor is chosen from (E24 by default).</p>
 <h3>Source</h3>
 <ul>
 <li><strong>Tony R. Kuphaldt, Lessons in Electric Circuits, vol. III
@@ -7730,6 +7739,7 @@ the way TI's application note lays it out, on one screen:</p>
 </ul>
 <p>Examples: TI's TPS54331 design (its inductor, its feedback divider, its
 output capacitor), a 12 V to 5 V Schottky diode, and a 2 MHz 5 V to 1.2 V.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; on the Feedback pill, it sets the series R1 is rounded to (E96 by default).</p>
 <h3>Terms</h3>
 <ul>
 <li><strong>Buck converter:</strong> a switching regulator that steps a voltage down. A
@@ -7872,6 +7882,7 @@ buck converter:</p>
 </ul>
 <p>Examples: TI's TPS61030 design (its inductor and its output capacitor),
 TPS61023's feedback divider, and a 5 V to 12 V Schottky diode.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; on the Feedback pill, it sets the series R1 is rounded to (E96 by default).</p>
 <h3>Terms</h3>
 <ul>
 <li><strong>Boost converter:</strong> a switching regulator that steps a voltage up. The
@@ -7974,7 +7985,7 @@ counts the inductor's peak current, as the ESR really sees it, and gets
 <section class="tool" id="zener-transistor" style="--accent:#EF9F27">
   <div class="crumb">Power electronics › Supply &amp; regulation</div>
   <h2>Zener + transistor</h2>
-  <figure class="shot"><img src="manual/img/zener-transistor.jpg?h=7e2e926d3e" loading="lazy" alt="Zener + transistor as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/zener-transistor.jpg?h=3a21b81bc0" loading="lazy" alt="Zener + transistor as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Zener + transistor stabilization)</p>
 <h3>What it computes</h3>
 <p>A zener holding the base of an NPN emitter follower, which passes the
@@ -8007,6 +8018,7 @@ load current: on one screen,</p>
 <p>Examples: 5 V at 500 mA from 12–18 V with a 1N4734A and a BD139; 12 V at
 0.5 A from 16–20 V with a 1N4743A and a TIP31C; a 2N3055 at 4 A, where no
 resistor works.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the zener's resistor is chosen from (E24 by default).</p>
 <h3>Source</h3>
 <ul>
 <li><strong>Tony R. Kuphaldt, Lessons in Electric Circuits, vol. III, ch. 4</strong>
@@ -8078,7 +8090,7 @@ supply and the output, at the full load current.</p>
 <section class="tool" id="constant-current" style="--accent:#EF9F27">
   <div class="crumb">Power electronics › Supply &amp; regulation</div>
   <h2>Constant current</h2>
-  <figure class="shot"><img src="manual/img/constant-current.jpg?h=d767e88689" loading="lazy" alt="Constant current as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/constant-current.jpg?h=e9c9eb2976" loading="lazy" alt="Constant current as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Constant current source/driver)</p>
 <h3>What it computes</h3>
 <p>An adjustable regulator made into a current source with one resistor, on
@@ -8112,6 +8124,7 @@ one screen:</p>
 </ul>
 <p>Examples: TI's 50 mA charger (24 Ω), 350 mA for a power LED, 20 mA for
 an LED string, and 5 mA, too little for an LM317.</p>
+<p><strong>Standard values.</strong> The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the resistor is chosen from (E24 by default).</p>
 <h3>Source</h3>
 <ul>
 <li><strong>TI LM317, SLVS044Z, April 2025</strong> (read): "By connecting a fixed
@@ -12537,7 +12550,7 @@ search with no match; the remembered filter.</p>
 <section class="tool" id="ip-ratings" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Electrical safety</div>
   <h2>IP ratings</h2>
-  <figure class="shot"><img src="manual/img/ip-ratings.jpg?h=ff07b1b178" loading="lazy" alt="IP ratings as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/ip-ratings.jpg?h=529167d9f0" loading="lazy" alt="IP ratings as it appears in the app" width="430" height="932"></figure>
   <h3>What it shows</h3>
 <p>The meaning of an IEC 60529 ingress protection code, both ways. You can
 type a code (IP67, IPX4, IP20C, IP54W), or build one with four pickers:</p>
@@ -12640,7 +12653,7 @@ other manufacturer guides could not be fetched.</p>
 <section class="tool" id="basic-calculator" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>Calculator</h2>
-  <figure class="shot"><img src="manual/img/basic-calculator.jpg?h=bd770ae0a3" loading="lazy" alt="Calculator as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/basic-calculator.jpg?h=311d468f63" loading="lazy" alt="Calculator as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Standard &amp; Scientific Calculators)</p>
 <h3>What it does</h3>
 <p>A calculator with three keypads, chosen by pills (the choice is remembered):</p>
@@ -12706,7 +12719,7 @@ read back and multiplied by 1E18, and the remembered keypad.</p>
 <section class="tool" id="ohms-law" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>Ohm&#x27;s law</h2>
-  <figure class="shot"><img src="manual/img/ohms-law.jpg?h=46ceda2500" loading="lazy" alt="Ohm&#x27;s law as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/ohms-law.jpg?h=1a972d2ede" loading="lazy" alt="Ohm&#x27;s law as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>Any two of voltage (V), current (I), resistance (R) and power (P) give the
 other two. These are the six pairs of the Ohm's-law wheel: V·I, V·R, I·R,
@@ -12894,7 +12907,7 @@ leading.</p>
 <section class="tool" id="kirchhoff" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>Kirchhoff&#x27;s laws</h2>
-  <figure class="shot"><img src="manual/img/kirchhoff.jpg?h=27c88492c3" loading="lazy" alt="Kirchhoff&#x27;s laws as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/kirchhoff.jpg?h=6cc73c7dac" loading="lazy" alt="Kirchhoff&#x27;s laws as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The one missing term that balances a node or a loop. Enter two to five
 known terms, each with a sign and a unit, and the tool gives the term that
@@ -13041,7 +13054,7 @@ them by dividing by each prefix's factor. The best prefix is the power of
 <section class="tool" id="percent-tolerance" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>Tolerance &amp; error</h2>
-  <figure class="shot"><img src="manual/img/percent-tolerance.jpg?h=cc82081a6c" loading="lazy" alt="Tolerance &amp; error as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/percent-tolerance.jpg?h=945a74d8cf" loading="lazy" alt="Tolerance &amp; error as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Percent tolerance / error)</p>
 <h3>What it computes</h3>
 <p>Three related questions, one per pill (the choice is remembered):</p>
@@ -13115,7 +13128,7 @@ out the same whichever reading is A.</p>
 <section class="tool" id="db-ratio" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>dB ratio</h2>
-  <figure class="shot"><img src="manual/img/db-ratio.jpg?h=ec2db1c558" loading="lazy" alt="dB ratio as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/db-ratio.jpg?h=5051672642" loading="lazy" alt="dB ratio as it appears in the app" width="430" height="932"></figure>
   <p>(formerly Generic dB ratio calculator)</p>
 <h3>What it computes</h3>
 <p>The ratio of two values of one quantity, in decibels, both ways.</p>
@@ -13186,7 +13199,7 @@ is 20 lg. That way ×2 in voltage and ×4 in power are both +6.02 dB.
 <section class="tool" id="db-absolute" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Calculators</div>
   <h2>dB levels</h2>
-  <figure class="shot"><img src="manual/img/db-absolute.jpg?h=9acaeb75cf" loading="lazy" alt="dB levels as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/db-absolute.jpg?h=0e03d8d847" loading="lazy" alt="dB levels as it appears in the app" width="430" height="932"></figure>
   <p>(formerly dB / dBm / dBu / dBV conversion)</p>
 <h3>What it computes</h3>
 <p>A signal's level in decibels against a fixed reference, both ways, in six
@@ -13414,7 +13427,7 @@ the DC level. Vac is the rms of what is left around the mean.</p>
 <section class="tool" id="unit-converter" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Converters</div>
   <h2>Unit converter</h2>
-  <figure class="shot"><img src="manual/img/unit-converter.jpg?h=0e1bd6540d" loading="lazy" alt="Unit converter as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/unit-converter.jpg?h=1328d7fa54" loading="lazy" alt="Unit converter as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>One value shown in every unit of its quantity. All the fields are linked:
 type into any one and the rest follow.</p>
@@ -13659,7 +13672,7 @@ that fraction of its time: 20 ppm is 1.728 s a day.</p>
 <section class="tool" id="formula-search" style="--accent:#9AA0A8">
   <div class="crumb">Tools › Reference</div>
   <h2>Formula search</h2>
-  <figure class="shot"><img src="manual/img/formula-search.jpg?h=c1e6cec264" loading="lazy" alt="Formula search as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/formula-search.jpg?h=a6a615ce19" loading="lazy" alt="Formula search as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>Nothing: it finds. It holds the main formulas of 72 topics, one card each,
 searchable by a tool's name, by a formula or a symbol in it (fc, Vout,

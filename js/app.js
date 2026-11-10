@@ -1690,6 +1690,23 @@ function eSeriesForTolerance(tol) {
   return "E192";
 }
 
+// The tolerance of the resistors you will use picks the E series, in a select
+// at the right of a "Your inputs" heading above the inputs, as in the Passive
+// components tools (Pierre, 2026-11-09: one rule across the app).
+const STD_TOLS = [0.1, 0.5, 1, 2, 5, 10, 20];
+function tolHeading(id, tol) {
+  return `<div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="${id}" class="label-select">
+          ${STD_TOLS.map((t) => `<option value="${t}" ${tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>`;
+}
+// Its handler: the new tolerance is remembered, then the screen repainted.
+function wireTol(id, state, C, repaint) {
+  const el = document.getElementById(id);
+  if (el) el.onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); repaint(); };
+}
+
 // One tolerance, one series: a code or band set is checked against the series
 // its tolerance implies, and against no other. A 1% part reading 4.7 kΩ is
 // "not in E96", though makers sell it; the manual says so.
@@ -9115,8 +9132,10 @@ function renderLedSeriesResistor(domain, tool, favId) {
   const state = {
     n: 1, vs: 5, vf: 1.9, i: 10,
     iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
-    series: pref(C, "series", "E24", Object.keys(E_TOLERANCE)),
+    // The resistor's tolerance picks the E series, as in the Passive tools.
+    tol: pref(C, "tol", 5, [0.1, 0.5, 1, 2, 5, 10, 20]),
   };
+  const series = () => eSeriesForTolerance(state.tol);
 
   // LEDs as they are really driven. Each sets the whole circuit.
   const example = (n, vs, vf, i) => () => {
@@ -9196,10 +9215,10 @@ function renderLedSeriesResistor(domain, tool, favId) {
     }
     app.querySelector('[data-res="r"]').textContent = siFormat(r.r, "Ω");
     app.querySelector('[data-res="p"]').textContent = `${siFormat(r.p, "W")} dissipated in the resistor`;
-    const up = nextUp(r.r, state.series);
+    const up = nextUp(r.r, series());
     app.querySelector('[data-res="e24"]').textContent = up.exact
-      ? `${formatOhms(up.value)} is an ${state.series} standard value.`
-      : `Next ${state.series} value up: ${formatOhms(up.value)} → ${siFormat(r.vr / up.value, "A", 3)} through the LED${state.n > 1 ? "s" : ""}.`;
+      ? `${formatOhms(up.value)} is an ${series()} standard value.`
+      : `Next ${series()} value up: ${formatOhms(up.value)} → ${siFormat(r.vr / up.value, "A", 3)} through the LED${state.n > 1 ? "s" : ""}.`;
     shift.textContent = `${siFormat(r.vr, "V")} across R — 0.1 V more or less of Vf changes the current ${Number(r.shiftPct.toFixed(1))}%.`;
     shift.className = r.tight ? "error-text" : "result-sub";
   }
@@ -9210,6 +9229,11 @@ function renderLedSeriesResistor(domain, tool, favId) {
 
       <div class="diagram-box">${diagram()}</div>
 
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="led-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       <div class="field-pair">
         <div class="field">
           <label>LEDs in series</label>
@@ -9250,11 +9274,7 @@ function renderLedSeriesResistor(domain, tool, favId) {
       </div>
       <div class="error-text" data-res="err"></div>
 
-      <div class="section-label" style="color:#5DCAA5">Results
-        <select id="led-series" class="label-select">
-          ${Object.keys(E_TOLERANCE).map((s) => `<option value="${s}" ${state.series === s ? "selected" : ""}>${s} (${E_TOLERANCE[s]})</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Results</div>
       <div class="result-field">
         <div class="result-head">
           <span class="label">Series resistor</span>
@@ -9276,9 +9296,9 @@ function renderLedSeriesResistor(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint);
-    document.getElementById("led-series").onchange = (e) => {
-      state.series = e.target.value;
-      setPref(C, "series", state.series);
+    document.getElementById("led-tol").onchange = (e) => {
+      state.tol = parseFloat(e.target.value);
+      setPref(C, "tol", state.tol);
       refresh();
     };
 
@@ -10408,6 +10428,7 @@ function renderZenerRegulation(domain, tool, favId) {
   const C = "zener-regulation";
   const state = {
     part: pref(C, "part", "1n4733a", Object.keys(ZR_PARTS)),
+    tol: pref(C, "tol", 5, STD_TOLS),
     iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
     rUnit: pref(C, "rUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
     si: { vinMin: 9, vinMax: 12, ilMin: 0, ilMax: 20e-3, izMin: 1e-3, rs: 100, cvz: 5.1, cpz: 0.5 },
@@ -10431,7 +10452,7 @@ function renderZenerRegulation(domain, tool, favId) {
     const s = state.si, z = Z();
     const rMax = (s.vinMin - z.vzMax) / (s.ilMax + s.izMin);
     const rMin = (s.vinMax - z.vzMin) / (z.izMax + s.ilMin);
-    const pick = rMax >= rMin ? eSeriesBetween(rMin, rMax, "E24").pop() : undefined;
+    const pick = rMax >= rMin ? eSeriesBetween(rMin, rMax, eSeriesForTolerance(state.tol)).pop() : undefined;
     return { rMin, rMax, pick };
   }
 
@@ -10488,13 +10509,13 @@ function renderZenerRegulation(domain, tool, favId) {
     const rangeTxt = `${formatOhms(Math.max(w.rMin, 0))} to ${formatOhms(w.rMax)}`;
     const head = w.pick
       ? `<div class="result-field">
-          <div class="result-head"><span class="label">Series resistor, E24</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-head"><span class="label">Series resistor, ${eSeriesForTolerance(state.tol)}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
           <div class="result-value"><span class="num" data-res="pick">${formatOhms(w.pick)}</span></div>
           <div class="result-sub" data-res="sub">any from ${rangeTxt}; the largest wastes least</div>
         </div>`
       : `<div class="result-field">
           <div class="result-head"><span class="label">Series resistor</span></div>
-          <div class="result-value"><span class="num" data-res="pick">${w.rMax >= w.rMin ? "no E24 value" : "none works"}</span></div>
+          <div class="result-value"><span class="num" data-res="pick">${w.rMax >= w.rMin ? `no ${eSeriesForTolerance(state.tol)} value` : "none works"}</span></div>
           <div class="result-sub" data-res="sub">${w.rMax >= w.rMin ? `only ${rangeTxt}` : warn(`it must be under ${formatOhms(w.rMax)} to feed the load and over ${formatOhms(w.rMin)} to spare the zener: a bigger zener, or a narrower supply or load range`)}</div>
         </div>`;
     // The resistor in use, at the two extremes.
@@ -10567,6 +10588,7 @@ function renderZenerRegulation(domain, tool, favId) {
 
       <div class="diagram-box">${diagram()}</div>
 
+      ${tolHeading("zr-tol", state.tol)}
       ${fields}
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
@@ -10580,6 +10602,7 @@ function renderZenerRegulation(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint);
+    wireTol("zr-tol", state, C, paint);
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
       el.oninput = () => {
@@ -10632,6 +10655,7 @@ function renderZenerTransistor(domain, tool, favId) {
   const C = "zener-transistor";
   const state = {
     zener: pref(C, "zener", "1n4734a", Object.keys(ZR_PARTS)),
+    tol: pref(C, "tol", 5, STD_TOLS),
     tr: pref(C, "tr", "bd139", Object.keys(ZT_TRANSISTORS)),
     iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
     rUnit: pref(C, "rUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
@@ -10655,7 +10679,7 @@ function renderZenerTransistor(domain, tool, favId) {
     const s = state.si, z = Z();
     const rMax = (s.vinMin - z.vzMax) / (ib() + s.izMin);
     const rMin = (s.vinMax - z.vzMin) / z.izMax;
-    const pick = rMax >= rMin ? eSeriesBetween(rMin, rMax, "E24").pop() : undefined;
+    const pick = rMax >= rMin ? eSeriesBetween(rMin, rMax, eSeriesForTolerance(state.tol)).pop() : undefined;
     return { rMin, rMax, pick };
   }
 
@@ -10724,7 +10748,7 @@ function renderZenerTransistor(domain, tool, favId) {
         <div class="result-field">
           <div class="result-head"><span class="label">Output</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
           <div class="result-value"><span class="num" data-res="vout">${voutTxt}</span></div>
-          <div class="result-sub" data-res="sub">Vz less ${val(s.vbe, "V")} base-emitter; the zener's resistor ${w.pick ? `${formatOhms(w.pick)} (E24, any from ${rangeTxt})` : w.rMax >= w.rMin ? `only ${rangeTxt}, no E24 value` : warn(`none works: under ${formatOhms(w.rMax)} to feed the base, over ${formatOhms(w.rMin)} to spare the zener`)}</div>
+          <div class="result-sub" data-res="sub">Vz less ${val(s.vbe, "V")} base-emitter; the zener's resistor ${w.pick ? `${formatOhms(w.pick)} (${eSeriesForTolerance(state.tol)}, any from ${rangeTxt})` : w.rMax >= w.rMin ? `only ${rangeTxt}, no ${eSeriesForTolerance(state.tol)} value` : warn(`none works: under ${formatOhms(w.rMax)} to feed the base, over ${formatOhms(w.rMin)} to spare the zener`)}</div>
         </div>`;
     // The resistor in use.
     const r = s.rs;
@@ -10804,6 +10828,7 @@ function renderZenerTransistor(domain, tool, favId) {
 
       <div class="diagram-box">${diagram()}</div>
 
+      ${tolHeading("zt-tol", state.tol)}
       ${fields}
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
@@ -10817,6 +10842,7 @@ function renderZenerTransistor(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint);
+    wireTol("zt-tol", state, C, paint);
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
       el.oninput = () => {
@@ -10930,6 +10956,7 @@ function renderLinearRegulator(domain, tool, favId) {
   const C = "linear-regulator";
   const state = {
     part: pref(C, "part", "lm317", Object.keys(LDO_PARTS)),
+    tol: pref(C, "tol", 1, STD_TOLS),
     mode: pref(C, "mode", "vout", Object.keys(LDO_MODES)),
     r1Unit: pref(C, "r1Unit", "Ω", Object.keys(DIVIDER_R_UNITS)),
     r2Unit: pref(C, "r2Unit", "Ω", Object.keys(DIVIDER_R_UNITS)),
@@ -11037,12 +11064,12 @@ function renderLinearRegulator(domain, tool, favId) {
     }
     if (m === "r2") {
       const r2 = (s.target - vref()) / (vref() / s.r1 + iadj());
-      const near = nearestESeries(r2, "E96");
+      const near = nearestESeries(r2, eSeriesForTolerance(state.tol));
       return `
         <div class="result-field">
           <div class="result-head"><span class="label">R2 for ${volts(s.target)}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
           <div class="result-value"><span class="num" data-res="r2">${formatOhms(r2)}</span></div>
-          <div class="result-sub" data-res="sub">nearest 1 % (E96) ${formatOhms(near.value)} gives ${volts(voutOf(s.r1, near.value))}</div>
+          <div class="result-sub" data-res="sub">nearest ${state.tol} % (${eSeriesForTolerance(state.tol)}) ${formatOhms(near.value)} gives ${volts(voutOf(s.r1, near.value))}</div>
         </div>
         <div class="field notation-box">${r1Current(s.r1)}</div>`;
     }
@@ -11146,6 +11173,7 @@ function renderLinearRegulator(domain, tool, favId) {
 
       ${pills}
 
+      ${m === "r2" ? tolHeading("ldo-tol", state.tol) : ""}
       ${fields}
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
@@ -11159,6 +11187,8 @@ function renderLinearRegulator(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint, (v) => { if (P().fixed) return; state.mode = v; setPref(C, "mode", v); paint(); });
+
+    wireTol("ldo-tol", state, C, paint);
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
       el.oninput = () => {
@@ -12203,6 +12233,7 @@ function renderConstantCurrent(domain, tool, favId) {
   const C = "constant-current";
   const state = {
     part: pref(C, "part", "lm317", CC_PARTS),
+    tol: pref(C, "tol", 5, STD_TOLS),
     iUnit: pref(C, "iUnit", "mA", Object.keys(AMP_UNITS)),
     rUnit: pref(C, "rUnit", "Ω", Object.keys(DIVIDER_R_UNITS)),
     si: { i: 0.35, vinMin: 12, vinMax: 12, vlMin: 6, vlMax: 7, r: 3.6, cvref: 1.25, cdrop: 1 },
@@ -12234,10 +12265,10 @@ function renderConstantCurrent(domain, tool, favId) {
   // the nearest, unless its current would pass the part's rating, then the
   // larger one (less current).
   function e24Pick(exact) {
-    const vals = eSeriesBetween(exact / 1.2, exact * 1.2, "E24");
+    const vals = eSeriesBetween(exact / 1.2, exact * 1.2, eSeriesForTolerance(state.tol));
     const lo = vals.filter((v) => v <= exact * (1 + 1e-9)).pop();
     const hi = vals.find((v) => v >= exact * (1 - 1e-9));
-    const nearest = nearestESeries(exact, "E24").value;
+    const nearest = nearestESeries(exact, eSeriesForTolerance(state.tol)).value;
     const imax = P().imax;
     const pick = imax && currentOf(nearest) > imax && hi ? hi : nearest;
     return { lo, hi, pick };
@@ -12289,8 +12320,8 @@ function renderConstantCurrent(domain, tool, favId) {
     const e24 = e24Pick(exact);
     // Both neighbours when the exact value falls between two.
     const e24Txt = !e24.lo || !e24.hi || e24.lo === e24.hi
-      ? `E24 ${formatOhms(e24.pick)} gives ${val(currentOf(e24.pick), "A")}`
-      : `E24 ${formatOhms(e24.lo)} gives ${val(currentOf(e24.lo), "A")}, ${formatOhms(e24.hi)} gives ${val(currentOf(e24.hi), "A")}`;
+      ? `${eSeriesForTolerance(state.tol)} ${formatOhms(e24.pick)} gives ${val(currentOf(e24.pick), "A")}`
+      : `${eSeriesForTolerance(state.tol)} ${formatOhms(e24.lo)} gives ${val(currentOf(e24.lo), "A")}, ${formatOhms(e24.hi)} gives ${val(currentOf(e24.hi), "A")}`;
     const i = currentOf(s.r);
     // The current over the reference's spread.
     const spread = p.custom ? "" : `${val(currentOf(s.r, p.vrefMin), "A")} to ${val(currentOf(s.r, p.vrefMax), "A")} over Vref's tolerance`;
@@ -12367,6 +12398,7 @@ function renderConstantCurrent(domain, tool, favId) {
 
       <div class="diagram-box">${diagram()}</div>
 
+      ${tolHeading("cc-tol", state.tol)}
       ${fields}
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
@@ -12380,6 +12412,7 @@ function renderConstantCurrent(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint);
+    wireTol("cc-tol", state, C, paint);
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
       el.oninput = () => {
@@ -13958,6 +13991,7 @@ function renderBuck(domain, tool, favId) {
   const C = "buck";
   const state = {
     pill: pref(C, "pill", "l", Object.keys(BUCK_PILLS)),
+    tol: pref(C, "tol", 1, STD_TOLS),
     // The currents share one unit, as do the two pickers of each kind.
     iUnit: pref(C, "iUnit", "A", Object.keys(MA_A_UNITS)),
     fUnit: pref(C, "fUnit", "kHz", Object.keys(BUCK_F_UNITS)),
@@ -14084,9 +14118,9 @@ function renderBuck(domain, tool, favId) {
     }
     // Twelve figures first: 3.3 / 0.8 is 4.1249999…, and 10.125 kΩ read 10.12.
     const r1x = Number((s.r2 * (s.vout / s.vfb - 1)).toPrecision(12));
-    const r1 = nearestESeries(r1x, "E96").value;
+    const r1 = nearestESeries(r1x, eSeriesForTolerance(state.tol)).value;
     const vo = s.vfb * (1 + r1 / s.r2), idiv = s.vfb / s.r2;
-    return `${big("R1, nearest E96", formatOhms(r1), `exactly ${formatOhms(Number(r1x.toPrecision(4)))} for ${val(s.vout, "V")}`)}
+    return `${big(`R1, nearest ${eSeriesForTolerance(state.tol)}`, formatOhms(r1), `exactly ${formatOhms(Number(r1x.toPrecision(4)))} for ${val(s.vout, "V")}`)}
         <div class="field notation-box">
           ${row("Output with it", `${val(vo, "V", 4)} (${(vo / s.vout - 1) * 100 >= 0 ? "+" : "−"}${Math.abs((vo / s.vout - 1) * 100).toFixed(2)} %)`, "vo")}
           ${row("Divider current", s.ifb > 0 && idiv < 100 * s.ifb ? warn(`${val(idiv, "A")}, under 100 × IFB (${val(100 * s.ifb, "A")}): lower R2`) : `${val(idiv, "A")}${s.ifb > 0 ? `, ${Math.round(idiv / s.ifb)} × IFB` : ""}`, "idiv")}
@@ -14150,6 +14184,7 @@ function renderBuck(domain, tool, favId) {
 
       ${pillRow(Object.entries(BUCK_PILLS), p, domain.bg)}
 
+      ${p === "fb" ? tolHeading("buck-tol", state.tol) : ""}
       <div class="field-pair">${field("vin", "Vin, highest", fixed("V"))}${field("vout", "Vout", fixed("V"))}${field("iout", "Iout, max", iSel(1))}</div>
       <div class="field-pair">${field("fs", "Switching", sel('data-unit="fUnit"', BUCK_F_UNITS, state.fUnit))}${field("eta", "Efficiency", fixed("%"))}</div>
       <div class="field-pair">${rows}</div>
@@ -14165,6 +14200,8 @@ function renderBuck(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint, (v) => { state.pill = v; setPref(C, "pill", v); paint(); });
+
+    wireTol("buck-tol", state, C, paint);
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
       el.oninput = () => {
@@ -14207,6 +14244,7 @@ function renderBoost(domain, tool, favId) {
   const C = "boost";
   const state = {
     pill: pref(C, "pill", "l", Object.keys(BOOST_PILLS)),
+    tol: pref(C, "tol", 1, STD_TOLS),
     // The currents share one unit.
     iUnit: pref(C, "iUnit", "A", Object.keys(MA_A_UNITS)),
     fUnit: pref(C, "fUnit", "kHz", Object.keys(BUCK_F_UNITS)),
@@ -14334,9 +14372,9 @@ function renderBoost(domain, tool, favId) {
     }
     // Twelve figures first, so an exact half rounds the way it reads.
     const r1x = Number((s.r2 * (s.vout / s.vfb - 1)).toPrecision(12));
-    const r1 = nearestESeries(r1x, "E96").value;
+    const r1 = nearestESeries(r1x, eSeriesForTolerance(state.tol)).value;
     const vo = s.vfb * (1 + r1 / s.r2), idiv = s.vfb / s.r2;
-    return `${big("R1, nearest E96", formatOhms(r1), `exactly ${formatOhms(Number(r1x.toPrecision(4)))} for ${val(s.vout, "V")}`)}
+    return `${big(`R1, nearest ${eSeriesForTolerance(state.tol)}`, formatOhms(r1), `exactly ${formatOhms(Number(r1x.toPrecision(4)))} for ${val(s.vout, "V")}`)}
         <div class="field notation-box">
           ${row("Output with it", `${val(vo, "V", 4)} (${(vo / s.vout - 1) * 100 >= 0 ? "+" : "−"}${Math.abs((vo / s.vout - 1) * 100).toFixed(2)} %)`, "vo")}
           ${row("Divider current", s.ifb > 0 && idiv < 100 * s.ifb ? warn(`${val(idiv, "A")}, under 100 × IFB (${val(100 * s.ifb, "A")}): lower R2`) : `${val(idiv, "A")}${s.ifb > 0 ? `, ${Math.round(idiv / s.ifb)} × IFB` : ""}`, "idiv")}
@@ -14398,6 +14436,7 @@ function renderBoost(domain, tool, favId) {
 
       ${pillRow(Object.entries(BOOST_PILLS), p, domain.bg)}
 
+      ${p === "fb" ? tolHeading("boost-tol", state.tol) : ""}
       <div class="field-pair">${field("vin", "Vin, lowest", fixed("V"))}${field("vout", "Vout", fixed("V"))}${field("iout", "Iout, max", iSel(1))}</div>
       <div class="field-pair">${field("fs", "Switching", sel('data-unit="fUnit"', BUCK_F_UNITS, state.fUnit))}${field("eta", "Efficiency", fixed("%"))}</div>
       <div class="field-pair">${rows}</div>
@@ -14413,6 +14452,8 @@ function renderBoost(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint, (v) => { state.pill = v; setPref(C, "pill", v); paint(); });
+
+    wireTol("boost-tol", state, C, paint);
 
     app.querySelectorAll("input[data-key]").forEach((el) => {
       el.oninput = () => {
@@ -20771,6 +20812,11 @@ function renderDebounceRc(domain, tool, favId) {
         <div data-res="wave">${timing(r)}</div>
       </div>
 
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="db-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       <div class="field-pair">
         ${field("db-bounce", "bounce", "Bounce time", T_UNITS)}
         ${field("db-c", "c", "C", RCF_C_UNITS)}
@@ -20785,13 +20831,7 @@ function renderDebounceRc(domain, tool, favId) {
         ${field("db-vtp", "vtp", "VT+ min", "V")}
       </div>
 
-      <div class="section-label split" style="color:#5DCAA5">
-        <span>Output</span>
-        <span></span>
-        <select id="db-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
@@ -27037,6 +27077,7 @@ function renderOptocoupler(domain, tool, favId) {
 
   const state = {
     part: pref(C, "part", "PC817", PARTS),
+    tol: pref(C, "tol", 5, STD_TOLS),
     vin: 5, ifwd: 10, ctr: 50, vf: 1.2, vceSat: 0.2,
     vcc: 5, rl: 10, rlUnit: pref(C, "rlUnit", "kΩ", R_UNITS),
   };
@@ -27072,7 +27113,7 @@ function renderOptocoupler(domain, tool, favId) {
     if (!(vceSat >= 0) || vceSat >= vcc) return { problem: "Vce(sat) must be zero or more, and below Vcc." };
 
     const rin = (vin - vf) / ifwd;
-    const e24 = nearestESeries(rin, "E24").value;
+    const e24 = nearestESeries(rin, eSeriesForTolerance(state.tol)).value;
     // CTR is the whole specification: the collector current a given LED
     // current buys. The load decides how much is needed to pull the output
     // all the way down to Vce(sat).
@@ -27172,7 +27213,7 @@ function renderOptocoupler(domain, tool, favId) {
           <span class="badge-calc">${ICONS.bolt2}Calculated</span>
         </div>
         <div class="result-value"><span class="num" data-res="rin">${formatOhms(r.rin)}</span></div>
-        <div class="result-sub">Nearest E24 <span data-res="e24">${formatOhms(r.e24)}</span> gives ${siFormat(r.ifE24, "A")} &nbsp;·&nbsp; dissipates ${siFormat(r.pin, "W")}</div>
+        <div class="result-sub">Nearest ${eSeriesForTolerance(state.tol)} <span data-res="e24">${formatOhms(r.e24)}</span> gives ${siFormat(r.ifE24, "A")} &nbsp;·&nbsp; dissipates ${siFormat(r.pin, "W")}</div>
       </div>
       <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
         ${cell("Ic available", `<span data-res="avail">${siFormat(r.icAvail, "A")}</span>`)}
@@ -27195,6 +27236,7 @@ function renderOptocoupler(domain, tool, favId) {
 
       <div class="diagram-box" style="padding:2px 6px;">${diagram()}</div>
 
+      ${tolHeading("op-tol", state.tol)}
       <div class="field-pair">
         <div class="field">
           <label>Part</label>
@@ -27223,6 +27265,7 @@ function renderOptocoupler(domain, tool, favId) {
     `;
 
     wireCalc(favId, paint);
+    wireTol("op-tol", state, C, paint);
 
     document.getElementById("op-part").onchange = (e) => {
       state.part = e.target.value;
@@ -28081,6 +28124,11 @@ function renderMultivibrator(domain, tool, favId) {
         <div data-res="wave">${timing(r)}</div>
       </div>
 
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="mv-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       ${astable ? `
       <div class="field-pair">
         ${picker("mv-fd", "fd", "Frequency", F_UNITS)}
@@ -28103,13 +28151,7 @@ function renderMultivibrator(domain, tool, favId) {
         ${ohm("mv-rc", "rc", "Rc")}
       </div>`}
 
-      <div class="section-label split" style="color:#5DCAA5">
-        <span>Output</span>
-        <span></span>
-        <select id="mv-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
@@ -28547,6 +28589,11 @@ function render555(domain, tool, favId) {
         <div data-res="wave">${timing(r)}</div>
       </div>
 
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="t5-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       ${astable ? `
       <div class="field-pair">
         ${field("t5-fd", "fd", "Frequency", F_UNITS, 1.4)}
@@ -28567,13 +28614,7 @@ function render555(domain, tool, favId) {
         ${field("t5-cm", "cm", "C", RCF_C_UNITS)}
       </div>`}
 
-      <div class="section-label split" style="color:#5DCAA5">
-        <span>Output</span>
-        <span></span>
-        <select id="t5-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="results">${resultsHTML(r)}</div>
 
       <div data-res="formula">${formulaBlock(astable)}</div>
@@ -29226,6 +29267,11 @@ function renderI2CPullup(domain, tool, favId) {
         <div>${diagram()}</div>
       </div>
 
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="i2c-tol" class="label-select">
+          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       <div class="field-pair">
         ${field("i2c-vdd", "vdd", "Vdd", UNITS.vdd)}
         ${field("i2c-cb", "cb", "Bus capacitance", UNITS.cb)}
@@ -29236,13 +29282,7 @@ function renderI2CPullup(domain, tool, favId) {
         ${field("i2c-rp", "rp", "Your Rp", UNITS.rp)}
       </div>
 
-      <div class="section-label split" style="color:#5DCAA5">
-        <span>Output</span>
-        <span></span>
-        <select id="i2c-tol" class="label-select">
-          ${[0.1, 0.5, 1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>±${t}% · ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="results">${resultsHTML(r)}</div>
 
       ${formulaSection(
@@ -29871,6 +29911,11 @@ function renderCrystalLoad(domain, tool, favId) {
         <div data-res="schem">${diagram()}</div>
       </div>
 
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="xl-tol" class="label-select">
+          ${[1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>\u00b1${t}% \u00b7 ${eSeriesForTolerance(t)}</option>`).join("")}
+        </select>
+      </div>
       <div class="field-pair">
         ${field("xl-cl", "cl", "CL spec", "pF")}
         ${field("xl-stray", "stray", "Stray", "pF")}
@@ -29885,13 +29930,7 @@ function renderCrystalLoad(domain, tool, favId) {
         ${field("xl-pull", "pull", "Pullability", "ppm/pF", 1.3)}
       </div>
 
-      <div class="section-label split" style="color:#5DCAA5">
-        <span>Output</span>
-        <span></span>
-        <select id="xl-tol" class="label-select">
-          ${[1, 2, 5, 10, 20].map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>\u00b1${t}% \u00b7 ${eSeriesForTolerance(t)}</option>`).join("")}
-        </select>
-      </div>
+      <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="results">${resultsHTML(r)}</div>
 
       <div class="section-label" style="color:#8FC1F5">Start-up and RExt (AN2867)</div>

@@ -2225,6 +2225,8 @@ several in series — the power it dissipates, the next standard value up and
 the current that value gives, and how much the current moves if the LED's
 forward voltage is 0.1 V off.
 
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the next value up comes from (E24 by default).
+
 ### Source
 
 - The formula is Ohm's law, applied to the voltage the LEDs leave.
@@ -4500,6 +4502,8 @@ on the output side:
 - the output voltage with the LED on;
 - whether the output really pulls low, and with how much margin.
 
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series Rin is rounded to (E24 by default).
+
 ### Source
 
 Data read from the manufacturers' datasheets themselves.
@@ -5111,6 +5115,8 @@ For the classic two-transistor multivibrator, the tool works in two modes.
 Every field works in both directions, and the timing diagrams are drawn to
 the computed times.
 
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the suggested resistors are rounded to and the tolerance their spread uses.
+
 ### Source
 
 - **The timing** is the standard textbook analysis of the circuit. Each
@@ -5238,6 +5244,8 @@ The tool covers the 555 timer chip in its two classic circuits.
 Every field works in both directions. The timing diagram, with the
 capacitor's voltage above the output, is drawn to the computed times. The
 mode and the tolerance are remembered.
+
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the suggested resistors are rounded to and the tolerance their spread uses.
 
 ### Source
 
@@ -5773,6 +5781,8 @@ after a release, rising through R1 + R2. Each is drawn against the bounce
 window, with a dot where it crosses the threshold: green after the bounce,
 amber inside it. Vcc, the thresholds and the series are remembered.
 
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the sized resistors are rounded to and the tolerance their spread uses.
+
 ### Source
 
 - **Jack Ganssle, *A Guide to Debouncing*, part 2** (ganssle.com) was
@@ -5925,6 +5935,8 @@ the number of devices, it computes:
   sink, and how far leakage pulls the high level down through it.
 
 The mode, the series and Vdd are remembered.
+
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the suggested Rp is rounded to and the tolerance its spread uses.
 
 ### Source
 
@@ -6239,6 +6251,8 @@ The drawing is the oscillator as it is really built:
 - the crystal Y1, RExt, and CL1 and CL2, with their values.
 
 The crystal type and the series are remembered.
+
+**Standard values.** The load capacitors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools (the series the CL1 and CL2 suggestions come from).
 
 ### Source
 
@@ -9666,6 +9680,8 @@ Examples: an LM317 at 5 V, R2 for 12 V, an LM1117 from 5 V to 3.3 V at
 500 mA, an LM317 from 12 V to 5 V at 1 A, an LM1117 then an MCP1700 from a
 3.7 V cell, a 7805 from 12 V at 500 mA, and an LM337 at −5 V.
 
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; on the R2 pill, it sets the series R2 is rounded to (E96 by default).
+
 ### Source
 
 Read in review, each from the maker's datasheet:
@@ -10262,6 +10278,8 @@ Examples: Kuphaldt's 12.6 V from 45 V through 1 kΩ, the same with a 500 Ω
 load, 5.1 V at 20 mA from 9–12 V with a 1N4733A, and a BZX55C5V1 for
 5 mA.
 
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the series resistor is chosen from (E24 by default).
+
 ### Source
 
 - **Tony R. Kuphaldt, Lessons in Electric Circuits, vol. III
@@ -10372,6 +10390,8 @@ load current: on one screen,
 Examples: 5 V at 500 mA from 12–18 V with a 1N4734A and a BD139; 12 V at
 0.5 A from 16–20 V with a 1N4743A and a TIP31C; a 2N3055 at 4 A, where no
 resistor works.
+
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the zener's resistor is chosen from (E24 by default).
 
 ### Source
 
@@ -10486,6 +10506,8 @@ one screen:
 
 Examples: TI's 50 mA charger (24 Ω), 350 mA for a power LED, 20 mA for
 an LED string, and 5 mA, too little for an LM317.
+
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; it sets the series the resistor is chosen from (E24 by default).
 
 ### Source
 
@@ -11509,6 +11531,8 @@ the way TI's application note lays it out, on one screen:
 Examples: TI's TPS54331 design (its inductor, its feedback divider, its
 output capacitor), a 12 V to 5 V Schottky diode, and a 2 MHz 5 V to 1.2 V.
 
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; on the Feedback pill, it sets the series R1 is rounded to (E96 by default).
+
 ### Terms
 
 - **Buck converter:** a switching regulator that steps a voltage down. A
@@ -11661,6 +11685,8 @@ buck converter:
 
 Examples: TI's TPS61030 design (its inductor and its output capacitor),
 TPS61023's feedback divider, and a 5 V to 12 V Schottky diode.
+
+**Standard values.** The resistors' tolerance, with its E series, is picked in the "Your inputs" heading above the inputs, as in the Passive components tools: ±0.1 % to ±20 %, ±5 % being E24 and ±1 % E96; on the Feedback pill, it sets the series R1 is rounded to (E96 by default).
 
 ### Terms
 
