@@ -91,6 +91,7 @@ will key on, since that is the id the app already holds for each tool.
 
 ### RF & microwave
 
+- Antennas & propagation → [Path loss](#path-loss)
 - Antennas & propagation → [Radio wavelength](#radio-wavelength)
 - Antennas & propagation → [Antenna length](#antenna-length)
 - Transmission lines → [VSWR / Return loss](#vswr)
@@ -7294,6 +7295,191 @@ The review made these changes:
   rate's unit was cut to "MS…".
 - The diagram's labels went from 8–9 px to 11 px, with values to one decimal.
 - It added the six examples, the first cases (12) and a formula-search card.
+
+[↑ Index](#index)
+
+---
+
+<a id="path-loss"></a>
+## Path loss
+
+`calc: path-loss` · RF & microwave › Antennas & propagation
+
+### What it computes
+
+How much of a radio signal gets from one antenna to another, three ways
+(pills):
+
+- **Free space:** the frequency and the distance give the free-space path
+  loss in dB, between isotropic antennas. In three cells: the wavelength,
+  the distance in wavelengths and the power ratio (the share of the power
+  that arrives). Under them: what each doubling adds (6.02 dB), the loss at
+  ten times the distance, the loss at 1 m, and a warning when the distance
+  is under 5 wavelengths. The drawing is the loss against distance on a
+  logarithmic axis, your distance marked.
+- **Link budget:** the transmitter's power, the transmitting antenna's gain
+  and line loss, the receiving antenna's gain and line loss, the receiver's
+  sensitivity, the frequency, the distance and the exponent γ. The big
+  result is the received power in dBm, with the margin over the sensitivity
+  in the line under it ("the link closes" or "no link"). In three cells: the
+  EIRP, the path loss and the margin. Under them: the EIRP in watts, the
+  received power in watts (pW, fW) and the field strength, in free space,
+  for that EIRP at that distance (V/m and dBµV/m). The drawing is the
+  received level against distance, the sensitivity dashed, your distance
+  marked with its margin.
+- **Range:** the same equipment, and the margin you want instead of the
+  distance. The big result is the distance at which the signal falls to the
+  sensitivity plus that margin, with that level and the other system's unit
+  (miles for metres and kilometres, the other way round for miles) in the line
+  under it. In three cells: the path loss allowed, the EIRP and γ. Under
+  them: the range in free space (γ 2) and with γ 3 and γ 4. The drawing is
+  the level against distance with the sensitivity (grey) and the level
+  needed (green) dashed, the range marked.
+- **Units:** frequency kHz, MHz or GHz; distance m, km, mi, nmi or ft; the
+  transmit power dBm, mW or W; the antenna gains dBi or dBd (the two boxes
+  change together).
+- **Remembered:** the pill and the units.
+
+Examples: a Wi-Fi link across a field, a geostationary satellite, how far a
+LoRa node reaches, and what each doubling of distance costs.
+
+### Terms
+
+- **Path loss:** how much weaker a signal is at the receiving antenna than at
+  the transmitting one, in dB. In free space, the **free-space path loss**
+  (the ITU's "free-space basic transmission loss") is between **isotropic
+  antennas**, the reference ones that radiate and receive equally in every
+  direction.
+- **dBi, dBd:** an antenna's gain in dB over an isotropic antenna, or over a
+  half-wave dipole; dBd = dBi − 2.15, the dipole's own 2.15 dBi.
+- **EIRP:** the effective isotropic radiated power: the transmitter's power
+  less its line loss, plus the antenna's gain; the power an isotropic antenna
+  would need to radiate the same in the antenna's best direction.
+- **Line loss:** what the cable and connectors between the radio and its
+  antenna take, in dB (the Coax cable standards tool gives it for a cable).
+- **Sensitivity:** the weakest signal at the receiver's input that it can
+  use, in dBm; it depends on the bandwidth and the data rate.
+- **Link margin (fade margin):** how many dB the received power is above the
+  sensitivity: the cushion against fading, rain, bodies and misalignment.
+- **Path-loss exponent γ:** how fast the loss grows with distance, 10 γ dB
+  for each tenfold distance: 2 in free space, larger where walls, trees and
+  buildings are in the way.
+- **Far field, Fresnel zone:** the region well beyond the antennas (the
+  distance much more than the wavelength) where the formula holds; and the
+  ellipsoid round the straight path in which obstacles take signal away.
+
+### Sources
+
+- **Recommendation ITU-R P.525-3, "Calculation of free-space attenuation"
+  (09/2016; read as PDF text):** the field of an e.i.r.p. p (watts) at a
+  distance d (metres), e = √(30 p)/d V/m (eq. 1); the free-space basic
+  transmission loss between isotropic antennas, Lbf = 20 log (4π d/λ) dB with d
+  and λ in the same unit (eq. 3), and the same for f in MHz and d in km,
+  32.4 + 20 log f + 20 log d (eq. 4). The constant is 32.4478, so the
+  rounded 32.4 reads up to 0.05 dB low (2.4 GHz at 1 km: 100.004 dB by eq. 4,
+  100.052 by eq. 3): the tool uses eq. 3 with c = 299 792 458 m/s. Later
+  versions of the recommendation were not read (the address tried for version
+  4 did not exist).
+- **Wikipedia, "Free-space path loss" (last edited 20 July 2026; read through
+  a text-extraction tool):** FSPL = (4πd/λ)² between isotropic antennas, the
+  definition credited to IEEE Std 145; that the term is "a little
+  misleading", the frequency dependence belonging to the receiving antenna's
+  aperture and not to the path; valid with the antennas in each other's far
+  field (d ≫ λ) and the path clear of obstructions out to 0.6 of the first
+  Fresnel zone; the dB forms 20 log d + 20 log f − 147.55 (metres, hertz) and
+  20 log d + 20 log f + 92.45 (km, GHz), which the tool's constant agrees with.
+- **Wikipedia, "Link budget" (11 October 2026; read):** Prx = Ptx + Gtx − Ltx −
+  Lfs − Lm + Grx − Lrx, and the link margin as "a safety margin between the
+  received power and minimum power required by the receiver"; it cites Pozar,
+  Microwave Engineering, 4th ed. (not read). The tool's margin is the
+  cushion left over, so it has no separate Lm.
+- **Wikipedia, "Log-distance path loss model" (15 July 2026; read):**
+  L = L0 + 10 γ log (d/d0) + Xg, L0 the loss at the reference distance d0
+  from close-in measurements or the Friis model, d0 typically 1 to 10 m for a
+  microcell, Xg a zero-mean Gaussian term (the shadowing). Its table of
+  measured exponents γ (and standard deviations σ), credited to Rappaport,
+  Wireless Communications: Principles and Practice (Prentice-Hall, 2002;
+  not read): vacuum 2.0; grocery store at 914 MHz 1.8 (σ 5.2 dB); retail store
+  at 914 MHz 2.2 (8.7); office with soft partitions 2.4 at 900 MHz (9.6) and
+  2.6 at 1.9 GHz (14.1); with hard partitions 3.0 at 1.5 GHz (7); textile or
+  chemical works 2.0 at 1.3 GHz (3.0) and 2.1 at 4 GHz; offices 2.2 and
+  commercial buildings 1.7 at 60 GHz (3.92 and 7.9). The tool takes d0 = 1 m
+  and L0 the free-space loss there, so γ = 2 is exactly free space, and does
+  not model Xg: its σ, 3 to 14 dB in that table, is why a margin is wanted.
+- **Not read:** Friis' "A Note on a Simple Transmission Formula" (Proc.
+  IRE, 1946), Pozar, Rappaport's book, IEEE Std 145, ITU-R P.341 and P.526. The 2.15 dB between dBi and dBd is the textbook directivity of a
+  half-wave dipole (10 log 1.64); no source was read for it. The 5 wavelengths
+  at which the tool warns is its own rule of thumb: the sources say only
+  "far field, d ≫ λ".
+
+### Why the formulas are these
+
+An isotropic transmitter of power P spreads it evenly over a sphere, so at a
+distance d the power density is P/(4π d²). An isotropic receiving antenna
+collects it over the aperture λ²/(4π), so what arrives is P (λ/(4π d))² and
+the loss is (4π d/λ)², 20 log (4π d/λ) in dB: 6.02 dB for each doubling of
+the distance, and for each doubling of the frequency, which comes from the
+aperture, not from the path. With f in MHz and d in km the constant is
+20 log (4π × 10⁹/c) = 32.448; with d in metres and f in MHz, −27.55; for
+hertz and metres, −147.55.
+
+The field of an EIRP p at d follows from the power density: S = p/(4π d²) =
+e²/(120 π) (the 120 π Ω of free space), so e = √(30 p)/d, ITU-R P.525's eq. 1.
+
+The link budget adds what the equipment does in decibels: the power the
+antenna is given is Ptx − Ltx, its gain adds Gtx (EIRP = Ptx − Ltx + Gtx), the
+path takes PL, and the receiver gets EIRP − PL + Grx − Lrx; the margin is that
+less the sensitivity. For a path that loses more than free space the loss is
+PL(d) = FSPL(1 m) + 10 γ log (d / 1 m), the log-distance model with d0 = 1 m:
+for γ = 2 it is eq. 3 itself, since 20 log (4π d f/c) = 20 log (4π f/c) + 20 log d.
+Solving it for the distance at which the margin is a given M:
+
+    d = 10^((EIRP + Grx − Lrx − sensitivity − M − FSPL(1 m)) / (10 γ))   metres
+
+### Assumptions and limits
+
+- **Free space or a fitted exponent.** The tool has no terrain, ground
+  reflection (the two-ray model), diffraction, atmospheric absorption, rain
+  or foliage; γ is yours to choose, and a real path varies round it by the
+  shadowing σ.
+- **Far field, clear path.** Closer than about 5 wavelengths the formula is
+  not reliable, and the tool says so (its own rule of thumb). The path must
+  be clear of obstructions out to 0.6 of the first Fresnel zone for the
+  free-space figures to apply: the Fresnel zone tool, when built, is where
+  to check it.
+- **Antennas aligned and the polarization matched.** The gains are in the
+  direction of the link; a misalignment or a polarization mismatch is margin
+  you must keep.
+- **The sensitivity is yours.** It depends on the bandwidth, the data rate and
+  the noise figure; the receiver's data sheet gives it for each setting.
+- **The field strength** is the free-space far-field figure for the EIRP,
+  whatever γ you give.
+
+### How it was checked
+
+26 cases. The expected values come from a Python implementation of the same
+formulas:
+- Free space: 1 km at 2.4 GHz, 100.05 dB (λ 12.5 cm, 8006 wavelengths, a
+  power ratio of 9.88 × 10⁻¹¹, 40.05 dB at 1 m); a geostationary satellite,
+  12 GHz over 35 786 km, 205.11 dB; 100 m 80.05 dB and 200 m 86.07 dB; a mile,
+  104.18 dB; 868 MHz over 1 km, 91.22 dB; 0.5 m flagged as under 5 wavelengths;
+  a missing distance or frequency refused;
+- Link budget: 2.4 GHz over 1 km with 20 dBm, 2 dBi at each end, 0.5 dB lines
+  and −90 dBm: EIRP 21.5 dBm (141 mW), −77.05 dBm (19.7 pW), +12.95 dB, 2.06
+  mV/m; a −70 dBm receiver (7.05 dB short); the power in watts; the antenna in
+  dBd (−76.90 dBm); γ 3 (−107.05 dBm, 17.05 dB short); a negative line loss and
+  a zero exponent refused;
+- Range: 103 dB allowed, 1.4 km (0.872 mi), with γ 3 and 4 125 m and 37.5 m (411
+  ft); a LoRa node at 868 MHz, 14 dBm, −130 dBm, 10 dB margin, 137 dB allowed:
+  195 km in free space, 3.36 km at γ 3, 441 m at γ 4; no margin, 4.44 km; in
+  miles; a missing margin refused;
+- the four examples.
+
+The Python twin also showed that the log-distance form with γ = 2 equals eq. 3
+to 3 × 10⁻¹⁴ dB over 110 combinations of frequency and distance (30 cm to
+384 000 km, 100 kHz to 120 GHz), that solving the range and then running the link budget at it
+returns the margin asked for to 10⁻¹⁴ dB, and that e²/(120 π) equals
+p/(4π d²).
 
 [↑ Index](#index)
 

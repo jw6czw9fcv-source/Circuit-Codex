@@ -340,8 +340,8 @@ const FORMULAS = [
   {
     tool: "Path loss",
     domain: "rf",
-    formulas: ["Lbf = 20 log₁₀(4πd / λ)", "Lbf = 32.45 + 20 log₁₀ f + 20 log₁₀ d"],
-    note: "Free-space loss between isotropic antennas, f in MHz and d in km (ITU-R P.525-5, which rounds the constant to 32.4).",
+    formulas: ["FSPL = 20 log (4π d / λ)", "= 32.45 + 20 log f(MHz) + 20 log d(km)", "Prx = Ptx + Gt − Lt − PL + Gr − Lr", "PL(d) = FSPL(1 m) + 10 γ log (d / 1 m)", "E = √(30 · EIRP) / d  (V/m; W, m)", "range = 10^((PLmax − FSPL1m) / 10γ) m"],
+    note: "ITU-R P.525 (version 3 read) for the free-space loss between isotropic antennas, which rounds the constant to 32.4, and the field of an e.i.r.p.; link budget and log-distance model as Wikipedia gives them. γ is 2 in free space.",
   },
   {
     tool: "Radio wavelength",

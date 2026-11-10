@@ -670,6 +670,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "intercept-point") return renderInterceptPoint(domain, tool, favId);
   if (calcId === "intermodulation") return renderIntermodulation(domain, tool, favId);
   if (calcId === "power-divider") return renderPowerDivider(domain, tool, favId);
+  if (calcId === "path-loss") return renderPathLoss(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -15382,6 +15383,260 @@ function renderPowerDivider(domain, tool, favId) {
     app.querySelector("select[data-pu]").onchange = (e) => { state.pUnit = e.target.value; setPref(C, "pUnit", state.pUnit); paint(); };
     const pf = app.querySelector("select[data-pf]");
     if (pf) pf.onchange = (e) => { state.fUnit = e.target.value; setPref(C, "fUnit", state.fUnit); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- Path loss ----------
+// Free space: Rec. ITU-R P.525-3 "Calculation of free-space attenuation"
+// (09/2016, read): the free-space basic transmission loss between isotropic
+// antennas, Lbf = 20 log (4π d/λ) dB (eq. 3), written for f in MHz and d in km
+// as 32.4 + 20 log f + 20 log d (eq. 4): the constant is 32.4478, so the
+// rounded 32.4 reads up to 0.05 dB low; this uses eq. 3 with c = 299 792 458
+// m/s. The field of an e.i.r.p. p (W) at d (m): e = √(30 p)/d V/m (eq. 1).
+// The link budget, as Wikipedia's "Link budget" (11 Oct 2026, read; it cites
+// Pozar, Microwave Engineering, 4th ed., not read) writes it: Prx = Ptx + Gtx −
+// Ltx − Lfs − Lm + Grx − Lrx, the link margin "a safety margin between the
+// received power and minimum power required by the receiver". Beyond free
+// space the log-distance model, Wikipedia "Log-distance path loss model" (15
+// Jul 2026, read; its table credited to Rappaport, 2002, not read): L = L0 +
+// 10 γ log (d/d0), L0 the loss at the reference distance d0 from close-in
+// measurements or Friis; here d0 = 1 m and L0 the free-space loss there, so
+// γ = 2 is exactly free space. Validity (Wikipedia, "Free-space path loss",
+// 20 Jul 2026, read): the antennas in each other's far field, d ≫ λ, and the
+// path clear of obstructions to 0.6 of the first Fresnel zone. The 5 λ flag
+// of the tool is a rule of thumb of this tool's, not from a source.
+const PL_MODES = { fs: "Free space", link: "Link budget", range: "Range" };
+const PL_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const PL_D_UNITS = { m: 1, km: 1e3, mi: 1609.344, nmi: 1852, ft: 0.3048 };
+const PL_P_UNITS = { dBm: 0, mW: 1e-3, W: 1 };
+// A half-wave dipole's gain over an isotropic antenna, 10 log 1.64 = 2.15 dB:
+// dBd = dBi − 2.15 (textbook figure; no source read).
+const PL_G_UNITS = { dBi: 0, dBd: -2.15 };
+const PL_LIGHT = 299792458;
+
+function renderPathLoss(domain, tool, favId) {
+  const C = "path-loss";
+  const state = {
+    mode: pref(C, "mode", "fs", Object.keys(PL_MODES)),
+    fUnit: pref(C, "fUnit", "GHz", Object.keys(PL_F_UNITS)),
+    dUnit: pref(C, "dUnit", "km", Object.keys(PL_D_UNITS)),
+    pUnit: pref(C, "pUnit", "dBm", Object.keys(PL_P_UNITS)),
+    gUnit: pref(C, "gUnit", "dBi", Object.keys(PL_G_UNITS)),
+    // f in Hz, d in m; powers in dBm, gains in dBi, losses and margin in dB.
+    si: { f: 2.4e9, d: 1000, ptx: 20, gt: 2, lt: 0.5, gr: 2, lr: 0.5, sens: -90, margin: 10, gamma: 2 },
+  };
+  const s = state.si;
+  const n3 = (v) => String(Number(v.toPrecision(3))).replace("-", "−");
+  const n4 = (v) => String(Number(v.toPrecision(4))).replace("-", "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(5)) : "");
+  const db2 = (v) => (Math.round(v * 100) / 100 === 0 ? 0 : v).toFixed(2).replace("-", "−");
+  const sgn = (v) => (v >= 0 ? "+" : "") + db2(v).replace("+", "");
+  const watts = (w) => siFormat(Number(w.toPrecision(3)), "W", 3);
+  const sup = (e) => String(e).replace(/-/g, "⁻").replace(/\d/g, (c) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[+c]);
+  const sci = (v) => { const e = Math.floor(Math.log10(v)); return `${n3(v / 10 ** e)} × 10${sup(e)}`; };
+  const dFmt = (m) => (m >= 1000 ? `${n3(m / 1000)} km` : `${n3(m)} m`);
+  const dUser = (m) => `${n3(m / PL_D_UNITS[state.dUnit])} ${state.dUnit}`;
+  // A result in the unit worked in, except metres and kilometres, which take whichever reads better.
+  const dRes = (m) => (["m", "km"].includes(state.dUnit) ? dFmt(m) : dUser(m));
+  const lamTxt = (l) => (l >= 1 ? `${n3(l)} m` : l >= 0.01 ? `${n3(l * 100)} cm` : `${n3(l * 1000)} mm`);
+  const fTxt = (hz) => (hz >= 1e9 ? `${n4(hz / 1e9)} GHz` : hz >= 1e6 ? `${n4(hz / 1e6)} MHz` : `${n4(hz / 1e3)} kHz`);
+
+  // The maths. Distances in metres, levels in dBm.
+  const lambda = () => PL_LIGHT / s.f;
+  const fsplAt = (d) => 20 * Math.log10((4 * Math.PI * d * s.f) / PL_LIGHT);
+  const fspl1 = () => fsplAt(1);
+  const plAt = (d) => fspl1() + 10 * s.gamma * Math.log10(d);
+  const eirp = () => s.ptx - s.lt + s.gt;
+  const prx = (d) => eirp() - plAt(d) + s.gr - s.lr;
+  const budget = () => eirp() + s.gr - s.lr - s.sens;
+  const rangeFor = (margin, gamma = s.gamma) => 10 ** ((budget() - margin - fspl1()) / (10 * gamma));
+  const wattsOf = (dbm) => 10 ** ((dbm - 30) / 10);
+
+  function problem() {
+    if (!(s.f > 0)) return "Enter the frequency.";
+    if (state.mode !== "range" && !(s.d > 0)) return "Enter the distance, above zero.";
+    if (state.mode === "fs") return "";
+    if (!isFinite(s.ptx)) return "Enter the transmit power.";
+    if (!isFinite(s.gt)) return "Enter the transmitting antenna's gain.";
+    if (!(s.lt >= 0)) return "Enter the transmit line loss, zero or more dB.";
+    if (!isFinite(s.gr)) return "Enter the receiving antenna's gain.";
+    if (!(s.lr >= 0)) return "Enter the receive line loss, zero or more dB.";
+    if (!isFinite(s.sens)) return "Enter the receiver's sensitivity, in dBm.";
+    if (!(s.gamma > 0 && s.gamma <= 10)) return "Enter an exponent γ above 0 and at most 10 (2 is free space).";
+    if (state.mode === "range" && !isFinite(s.margin)) return "Enter the margin wanted, in dB.";
+    return "";
+  }
+
+  // ---------------- the drawing: level or loss against distance, both log in distance ----------------
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "start") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const ok = !problem();
+    const mode = state.mode, loss = mode === "fs";
+    const dref = ok ? (mode === "range" ? Math.max(1e-3, rangeFor(s.margin)) : s.d) : 1000;
+    const e = Math.floor(Math.log10(dref));
+    const dmin = 10 ** (e - 1), dmax = 10 ** (e + 2);
+    const X0 = 38, X1 = 278, Y0 = 16, Y1 = 84;
+    const px = (d) => X0 + ((Math.log10(Math.min(dmax, Math.max(dmin, d))) - Math.log10(dmin)) / 3) * (X1 - X0);
+    const val = (d) => (loss ? fsplAt(d) : prx(d));
+    const vals = ok ? [val(dmin), val(dmax)] : [60, 120];
+    if (!loss && ok) vals.push(s.sens, s.sens + (mode === "range" ? s.margin : 0));
+    let lo = Math.min(...vals) - 8, hi = Math.max(...vals) + 8;
+    const step = hi - lo > 110 ? 40 : 20;
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    const py = (v) => Y1 - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (Y1 - Y0);
+    let out = "";
+    for (let v = lo; v <= hi + 1e-9; v += step) out += `<path d="M${X0} ${py(v).toFixed(1)} H${X1}" stroke="${wire}" stroke-width="0.6" stroke-opacity="0.5"/>${lbl(X0 - 4, (py(v) + 4).toFixed(1), String(v).replace("-", "−"), grey, "end")}`;
+    for (let k = 0; k <= 3; k++) { const d = dmin * 10 ** k; out += `<path d="M${px(d).toFixed(1)} ${Y0} V${Y1}" stroke="${wire}" stroke-width="0.6" stroke-opacity="0.5"/>${lbl(Math.min(px(d), X1 - 8).toFixed(1), 103, dFmt(d), grey, "middle")}`; }
+    const legend = loss ? `<text x="${X0 + 4}" y="11" font-size="11" font-weight="600" fill="${grey}">path loss, dB</text>`
+      : `<text x="${X0 + 4}" y="11" font-size="11" font-weight="600"><tspan fill="${part}">level, dBm</tspan><tspan fill="${grey}"> · sensitivity</tspan>${mode === "range" ? `<tspan fill="${calc}"> · needed</tspan>` : ""}</text>`;
+    out += `<path d="M${X0} ${Y0} V${Y1} H${X1}" stroke="${wire}" stroke-width="1.2"/>${legend}`;
+    if (!ok) return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
+    if (!loss) {
+      out += `<path d="M${X0} ${py(s.sens).toFixed(1)} H${X1}" stroke="${grey}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+      if (mode === "range") out += `<path d="M${X0} ${py(s.sens + s.margin).toFixed(1)} H${X1}" stroke="${calc}" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+    }
+    out += `<path d="M${px(dmin).toFixed(1)} ${py(val(dmin)).toFixed(1)} L${px(dmax).toFixed(1)} ${py(val(dmax)).toFixed(1)}" stroke="${part}" stroke-width="1.8"/>`;
+    const dm = mode === "range" ? dref : s.d, vm = val(dm);
+    out += `<path d="M${px(dm).toFixed(1)} ${Y1} V${py(vm).toFixed(1)}" stroke="${calc}" stroke-width="1.2" stroke-dasharray="3 3"/><circle cx="${px(dm).toFixed(1)}" cy="${py(vm).toFixed(1)}" r="3.4" fill="${calc}"/>`;
+    const right = px(dm) < (X0 + X1) / 2;
+    const tx = (right ? px(dm) + 7 : px(dm) - 7).toFixed(1), anchor = right ? "start" : "end";
+    const above = loss ? !right : right;
+    const ty = (above ? py(vm) - 6 : py(vm) + 14).toFixed(1);
+    out += lbl(tx, ty, loss ? `${db2(vm)} dB` : mode === "link" ? `${sgn(vm - s.sens)} dB margin` : dFmt(dm), calc, anchor);
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
+  }
+
+  // ---------------- results ----------------
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+    const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const lam = lambda();
+    const close = state.mode !== "range" && s.d < 5 * lam ? row("Distance", warn("under 5 wavelengths: too close"), "warn") : "";
+
+    if (state.mode === "fs") {
+      const L = fsplAt(s.d);
+      return `${head(`Free-space path loss, ${dUser(s.d)} at ${fTxt(s.f)}`, `${db2(L)} dB`, "between isotropic antennas: 20 log (4π d / λ)")}
+        ${grid([cell("Wavelength", lamTxt(lam), "lam"), cell("Distance / λ", s.d / lam >= 1e6 ? sci(s.d / lam) : n4(s.d / lam), "dl"), cell("Power ratio", sci(10 ** (-L / 10)), "ratio")])}
+        <div class="field notation-box">
+          ${row("Each doubling adds", `${db2(20 * Math.log10(2))} dB`, "dbl")}
+          ${row("Ten times the distance", `${db2(L + 20)} dB`, "ten")}
+          ${row("At 1 m", `${db2(fspl1())} dB`, "one")}
+          ${close}
+        </div>`;
+    }
+
+    if (state.mode === "link") {
+      const d = s.d, pr = prx(d), margin = pr - s.sens, ew = wattsOf(eirp());
+      const field = Math.sqrt(30 * ew) / d;
+      const sub = margin >= 0 ? `${db2(margin)} dB over the receiver's ${n4(s.sens)} dBm: the link closes` : `${db2(-margin)} dB short of the ${n4(s.sens)} dBm needed: no link`;
+      return `${head(`Received power, ${dUser(d)} at ${fTxt(s.f)}`, `${db2(pr)} dBm`, sub)}
+        ${grid([cell("EIRP", `${n4(eirp())} dBm`, "eirp"), cell("Path loss", `${db2(plAt(d))} dB`, "pl"), cell("Margin", `${sgn(margin)} dB`, "margin")])}
+        <div class="field notation-box">
+          ${row("EIRP", watts(ew), "eirpw")}
+          ${row("Received power", siFormat(Number(wattsOf(pr).toPrecision(3)), "W", 3), "prxw")}
+          ${row("Field strength, free space", `${siFormat(Number(field.toPrecision(3)), "V/m", 3)} · ${n4(20 * Math.log10(field / 1e-6))} dBµV/m`, "field")}
+          ${close}
+        </div>`;
+    }
+
+    const r = rangeFor(s.margin), limit = budget() - s.margin;
+    const other = ["m", "km"].includes(state.dUnit) ? (r < 160.9344 ? `${n3(r / 0.3048)} ft` : `${n3(r / 1609.344)} mi`) : dFmt(r);
+    return `${head(`Range for a ${n4(s.margin)} dB margin at ${fTxt(s.f)}`, dRes(r), `the signal falls to ${n4(s.sens + s.margin)} dBm there (${n4(s.sens)} + ${n4(s.margin)} dB) · ${other}`)}
+        ${grid([cell("Path loss allowed", `${db2(limit)} dB`, "allowed"), cell("EIRP", `${n4(eirp())} dBm`, "eirp"), cell("Exponent γ", n3(s.gamma), "gamma")])}
+        <div class="field notation-box">
+          ${row("Free space, γ 2", dFmt(rangeFor(s.margin, 2)), "g2")}
+          ${row("With γ 3 · γ 4", `${dFmt(rangeFor(s.margin, 3))} · ${dFmt(rangeFor(s.margin, 4))}`, "g34")}
+          ${r < 5 * lam ? row("Range", warn("under 5 wavelengths: too close"), "warn") : ""}
+        </div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); paint(); };
+  useExamples([
+    { title: "A Wi-Fi link across a field", note: "2.4 GHz, 20 dBm, 2 dBi each end, 1 km, −90 dBm receiver: −77.05 dBm, a 12.95 dB margin.",
+      apply: example({ top: { mode: "link", fUnit: "GHz", dUnit: "km", pUnit: "dBm", gUnit: "dBi" }, si: { f: 2.4e9, d: 1000, ptx: 20, gt: 2, lt: 0.5, gr: 2, lr: 0.5, sens: -90, margin: 10, gamma: 2 } }) },
+    { title: "A geostationary satellite", note: "12 GHz over 35 786 km: 205.11 dB, between isotropic antennas.",
+      apply: example({ top: { mode: "fs", fUnit: "GHz", dUnit: "km" }, si: { f: 12e9, d: 35786e3 } }) },
+    { title: "How far a LoRa node reaches", note: "868 MHz, 14 dBm, −130 dBm receiver, 10 dB margin: 3.36 km with γ 3, 195 km in free space.",
+      apply: example({ top: { mode: "range", fUnit: "MHz", dUnit: "km", pUnit: "dBm", gUnit: "dBi" }, si: { f: 868e6, ptx: 14, gt: 2, lt: 0.5, gr: 2, lr: 0.5, sens: -130, margin: 10, gamma: 3 } }) },
+    { title: "Each doubling costs 6 dB", note: "100 m and 200 m at 2.4 GHz: 80.05 and 86.07 dB.",
+      apply: example({ top: { mode: "fs", fUnit: "GHz", dUnit: "m" }, si: { f: 2.4e9, d: 100 } }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const pShow = (dbm) => (state.pUnit === "dBm" ? fmt(dbm) : fmt(10 ** (dbm / 10) * (state.pUnit === "mW" ? 1 : 1e-3)));
+    const gShow = (dbi) => fmt(dbi + PL_G_UNITS[state.gUnit]);
+    const ptx = field("ptx", "Tx power", sel('data-up="1"', PL_P_UNITS, state.pUnit), pShow(s.ptx));
+    const gt = field("gt", "Tx antenna", sel('data-ug="1"', PL_G_UNITS, state.gUnit), gShow(s.gt));
+    const lt = field("lt", "Tx line loss", fixed("dB"), fmt(s.lt));
+    const gr = field("gr", "Rx antenna", sel('data-ug="2"', PL_G_UNITS, state.gUnit), gShow(s.gr));
+    const lr = field("lr", "Rx line loss", fixed("dB"), fmt(s.lr));
+    const sens = field("sens", "Sensitivity", fixed("dBm"), fmt(s.sens));
+    const fr = field("f", "Frequency", sel('data-uf="1"', PL_F_UNITS, state.fUnit), fmt(s.f / PL_F_UNITS[state.fUnit]));
+    const di = field("d", "Distance", sel('data-ud="1"', PL_D_UNITS, state.dUnit), fmt(s.d / PL_D_UNITS[state.dUnit]));
+    const ga = field("gamma", "Exponent γ", fixed(""), fmt(s.gamma));
+    const mg = field("margin", "Margin wanted", fixed("dB"), fmt(s.margin));
+    const inputs = state.mode === "fs" ? `<div class="field-pair">${fr}${di}</div>`
+      : `<div class="field-pair">${ptx}${gt}${lt}</div><div class="field-pair">${gr}${lr}${sens}</div><div class="field-pair">${fr}${state.mode === "link" ? di : mg}${ga}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Free-space loss, link budget and range")}
+
+      ${pillRow(Object.entries(PL_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["FSPL = 20 log (4π d / λ)", "= 32.45 + 20 log f(MHz) + 20 log d(km)", "Prx = Ptx + Gt − Lt − PL + Gr − Lr", "PL(d) = FSPL(1 m) + 10 γ log (d / 1 m)", "E = √(30 · EIRP) / d  (V/m; W, m)", "range = 10^((PLmax − FSPL1m) / 10γ) m"],
+        "A radio signal spreads out as it travels, so a receiver catches a smaller and smaller share of it: in free space the share falls with the square of the distance, 6 dB for every doubling, and for isotropic antennas (the reference that radiates equally in all directions) it also falls with the square of the frequency, because a higher frequency has a smaller receiving antenna. That is the free-space path loss. A link budget adds what the equipment does: the transmitter's power less the line loss is what the antenna is given, the antenna's gain concentrates it (the product is the EIRP, the power an isotropic antenna would need to radiate the same in the best direction), the path loses its share, and the receiving antenna's gain less its line loss is what the receiver gets. The margin is how far that is above the receiver's sensitivity, the weakest signal it can use; it is the cushion against fading, rain, bodies and misalignment. Real paths lose more than free space: the exponent γ of the log-distance model is 2 in free space and larger where buildings and walls are in the way. The formulas hold in the far field (the distance well over the wavelength) with a clear path out to 0.6 of the first Fresnel zone."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "f") s.f = v * PL_F_UNITS[state.fUnit];
+        else if (key === "d") s.d = v * PL_D_UNITS[state.dUnit];
+        else if (key === "ptx") s.ptx = state.pUnit === "dBm" ? v : 10 * Math.log10(v * (state.pUnit === "mW" ? 1 : 1000));
+        else if (key === "gt" || key === "gr") s[key] = v - PL_G_UNITS[state.gUnit];
+        else s[key] = v;
+        show();
+      };
+    });
+    const unit = (attr, name) => app.querySelectorAll(`select[${attr}]`).forEach((el) => { el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); paint(); }; });
+    unit("data-uf", "fUnit"); unit("data-ud", "dUnit"); unit("data-up", "pUnit"); unit("data-ug", "gUnit");
   }
 
   paint();
