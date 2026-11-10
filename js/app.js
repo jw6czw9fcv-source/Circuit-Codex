@@ -664,6 +664,8 @@ function renderTool(rawKey, calcId) {
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "vswr") return renderVswr(domain, tool, favId);
   if (calcId === "coax") return renderCoax(domain, tool, favId);
+  if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
+  if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "via-current") return renderViaCurrent(domain, tool, favId);
@@ -13028,6 +13030,487 @@ function renderCoax(domain, tool, favId) {
   }
 
   setMatFromEr();
+  paint();
+}
+
+// ---------- Velocity factor ----------
+// How much slower than light a wave travels on a line: VF = v/c = 1/√εr
+// (εr the dielectric's, or εeff for a microstrip). Belden's data sheets
+// call it "velocity of propagation" (66 % solid PE, 70 % PTFE, 82 % foam
+// PE; read). Wadell (Transmission Line Design Handbook, Pierre's copy,
+// §2.8.3, p32–35, read): the guided wavelength λg = c/(f √εr), and a
+// shorted lossless line has Zin = j Z0 tan(2π l/λ), infinite at l = λ/4
+// ("series LC resonator" is his name for l = nλ/4); his example (2.8.3.1),
+// a PTFE (εr 2.10) line at 402 MHz: λg/4 = 0.1287 m = 5.07 in (with
+// c = 3 × 10⁸; the tool uses 299 792 458 m/s: 0.12865 m = 5.065 in).
+const VF_MODES = { eps: "From εr", cut: "Cut a length", meas: "Measure" };
+const VF_LEN_UNITS = { mm: 1e-3, cm: 1e-2, m: 1, in: 0.0254, ft: 0.3048 };
+const VF_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+
+function renderVelocityFactor(domain, tool, favId) {
+  const C = "velocity-factor";
+  const state = {
+    mode: pref(C, "mode", "eps", Object.keys(VF_MODES)),
+    lUnit: pref(C, "lUnit", "m", Object.keys(VF_LEN_UNITS)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(VF_F_UNITS)),
+    mat: "pe", cable: "8259",
+    // er of the line; f for the cut length; l, t (one-way delay) measured.
+    si: { er: 1 / 0.66 ** 2, f: 100e6, l: 10, t: 10 / (COAX_C * 0.66) },
+    src: "t",
+  };
+  const n3 = (v) => String(Number(v.toPrecision(3)));
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const cable = () => COAX_CABLES.find((c) => c.key === state.cable);
+  const imperial = () => state.lUnit === "in" || state.lUnit === "ft";
+  // A length as both systems, the one in use first.
+  const lenBoth = (m) => {
+    const metric = m >= 1 ? `${n3(m)} m` : `${n3(m * 100)} cm`;
+    const imp = m / 0.0254 >= 24 ? `${n3(m / 0.3048)} ft` : `${n3(m / 0.0254)} in`;
+    return imperial() ? `${imp} · ${metric}` : `${metric} · ${imp}`;
+  };
+  const vfNow = () => 1 / Math.sqrt(state.si.er);
+
+  function problem() {
+    const s = state.si;
+    if (state.mode === "meas") {
+      if (!(s.l > 0)) return "Enter the cable's length.";
+      if (!(s.t > 0)) return "Enter the delay or the resonant frequency.";
+      if (s.l / (COAX_C * s.t) > 1.0000001) return "That is faster than light: check the length and the delay.";
+      return "";
+    }
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more (or a velocity factor of 1 or less).";
+    if (state.mode === "cut" && !(s.f > 0)) return "Enter the frequency.";
+    return "";
+  }
+  // VF and εr, whichever mode: measured, or from the line.
+  const vfOf = () => (state.mode === "meas" ? state.si.l / (COAX_C * state.si.t) : vfNow());
+
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const ok = !problem(), vf = ok ? Math.min(1, vfOf()) : 0.66;
+    const X0 = 30, W = 230, cyc = 1.5;     // one and a half free-space wavelengths shown
+    const wave = (y, amp, wl, col, w) => {
+      const pts = Array.from({ length: 121 }, (_, i) => `${i ? "L" : "M"}${(X0 + W * i / 120).toFixed(1)} ${(y - amp * Math.sin(2 * Math.PI * (i / 120) * cyc / wl)).toFixed(1)}`);
+      return `<path d="${pts.join(" ")}" stroke="${col}" stroke-width="${w}"/>`;
+    };
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      ${lbl(X0, 12, "free space: λ", grey, "start")}
+      ${wave(34, 12, 1, grey, 1.4)}
+      ${lbl(X0, 62, `in the line: λg = VF × λ = ${ok ? n3(vf) : "VF"} λ`, calc, "start")}
+      ${wave(80, 12, vf, calc, 1.8)}
+      ${state.mode === "cut" && ok ? `<path d="M${X0} 96 V104 M${(X0 + W * vf / 4 / cyc).toFixed(1)} 96 V104 M${X0} 100 H${(X0 + W * vf / 4 / cyc).toFixed(1)}" stroke="${part}" stroke-width="1.2"/>${lbl(X0 + W * vf / 4 / cyc + 8, 104, "λg / 4", part, "start")}` : ""}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, vf = vfOf(), er = 1 / (vf * vf);
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const dm = 1 / (vf * COAX_C), perM = `${n3(dm * 1e9)} ns/m`, perIn = `${n3(dm * 0.0254 * 1e12)} ps/in`;
+    const delayTxt = imperial() ? `${perIn} · ${perM}` : `${perM} · ${perIn}`;
+    const near = Object.entries(COAX_MATERIALS).filter(([k, v]) => v[1] !== null && k !== "air").map(([k, v]) => [k, v[0], Math.abs(1 / Math.sqrt(v[1]) - vf)]).sort((a, b) => a[2] - b[2])[0];
+    if (state.mode === "cut") {
+      const l0 = COAX_C / s.f, lg = vf * l0;
+      return `<div class="result-field">
+          <div class="result-head"><span class="label">Quarter-wave length, λg / 4</span></div>
+          <div class="result-value"><span class="num" data-res="big">${lenBoth(lg / 4)}</span></div>
+          <div class="result-sub" data-res="sub">at ${siFormat(Number(s.f.toPrecision(4)), "Hz", 4)}, VF ${n3(vf * 100)} % (εr ${n3(er)})</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Half wave, λg / 2", lenBoth(lg / 2), "half")}
+          ${row("Whole wave, λg", lenBoth(lg), "whole")}
+          ${row("Free-space wavelength, λ", lenBoth(l0), "free")}
+          ${row("Delay of the quarter wave", `${n3(lg / 4 / (vf * COAX_C) * 1e9)} ns`, "qdelay")}
+        </div>`;
+    }
+    const head = state.mode === "meas"
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Velocity factor of this cable</span></div>
+          <div class="result-value"><span class="num" data-res="big">${n3(vf * 100)} %</span></div>
+          <div class="result-sub" data-res="sub">εr ${n3(er)}; resonant at ${siFormat(Number((1 / (4 * s.t)).toPrecision(4)), "Hz", 4)} for ${lenBoth(s.l)}</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Velocity factor</span></div>
+          <div class="result-value"><span class="num" data-res="big">${n3(vf * 100)} %</span></div>
+          <div class="result-sub" data-res="sub">εr ${n3(er)}: the wave travels at ${n3(vf)} c</div>
+        </div>`;
+    const cb = cable();
+    return `${head}
+        <div class="field notation-box">
+          ${row("Delay per length", delayTxt, "delay")}
+          ${row("Speed", `${n3(vf * COAX_C / 1e6)} × 10⁶ m/s`, "speed")}
+          ${row("Looks most like", near ? `${near[1]} (${n3(1 / Math.sqrt(COAX_MATERIALS[near[0]][1]) * 100)} %)` : "—", "near")}
+          ${state.mode === "eps" && cb ? row("Belden's velocity", `${Math.round(cb.vf * 100)} % (${cb.name.replace(/^[^,]*, /, "")})`, "maker") : ""}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    const s = state.si;
+    set("er", fmt(s.er)); set("vf", fmt(1 / Math.sqrt(s.er)));
+    set("l", fmt(s.l / VF_LEN_UNITS[state.lUnit]));
+    set("t", fmt(s.t * 1e9));
+    set("fr", fmt(1 / (4 * s.t) / VF_F_UNITS[state.fUnit]));
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+  function leaveCable() {
+    if (state.cable !== "custom") { state.cable = "custom"; const el = document.getElementById("vf-cable"); if (el) el.value = "custom"; }
+  }
+  function setMatFromEr() {
+    state.mat = Object.keys(COAX_MATERIALS).find((x) => COAX_MATERIALS[x][1] !== null && Math.abs(COAX_MATERIALS[x][1] - state.si.er) < 1e-9) || "custom";
+    const el = document.getElementById("vf-mat");
+    if (el) el.value = state.mat;
+  }
+
+  const example = (si, extra) => () => {
+    Object.assign(state, { cable: "custom", src: "t" }, extra);
+    Object.assign(state.si, si);
+    setMatFromEr();
+    paint();
+  };
+  useExamples([
+    { title: "RG-58 at 66 %", note: "Belden 8259, solid PE: 66 % of light, 5.05 ns/m, 128 ps/in.",
+      apply: example({ er: 1 / 0.66 ** 2 }, { mode: "eps", cable: "8259", lUnit: "m" }) },
+    { title: "A quarter wave of RG-58 at 100 MHz", note: "A stub or balun length: 49.5 cm of cable, against 75 cm in air.",
+      apply: example({ er: 1 / 0.66 ** 2, f: 100e6 }, { mode: "cut", cable: "8259", lUnit: "cm", fUnit: "MHz" }) },
+    { title: "Wadell's PTFE resonator", note: "PTFE (εr 2.10) at 402 MHz: λg/4 = 12.9 cm = 5.07 in, as in his example (2.8.3.1).",
+      apply: example({ er: 2.1, f: 402e6 }, { mode: "cut", lUnit: "in", fUnit: "MHz" }) },
+    { title: "Measure a 10 m cable", note: "Shorted at the far end, the first impedance peak is at 4.95 MHz: VF 66 %.",
+      apply: example({ l: 10, t: 1 / (4 * 4.95e6) }, { mode: "meas", lUnit: "m", fUnit: "MHz", src: "f" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lbox = field("l", "Cable length, l", sel('data-vl="1"', VF_LEN_UNITS, state.lUnit), fmt(s.l / VF_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="vf-mat">${Object.entries(COAX_MATERIALS).map(([k, [n]]) => `<option value="${k}" ${k === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const cabSel = `<select id="vf-cable"><option value="custom" ${state.cable === "custom" ? "selected" : ""}>Custom</option>${COAX_CABLES.map((c) => `<option value="${c.key}" ${c.key === state.cable ? "selected" : ""}>${c.name}</option>`).join("")}</select>`;
+    const line = `<div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}${field("vf", "Velocity factor", fixed(""), fmt(1 / Math.sqrt(s.er)))}</div>`;
+    const inputs = state.mode === "meas"
+      ? `<div class="field-pair">${lbox}${field("t", "Delay, one way", fixed("ns"), fmt(s.t * 1e9))}${field("fr", "Resonance, λg/4", sel('data-vf="1"', VF_F_UNITS, state.fUnit), fmt(1 / (4 * s.t) / VF_F_UNITS[state.fUnit]))}</div>`
+      : state.mode === "cut"
+        ? `${line}<div class="field-pair"><div class="field"><label>Cable</label>${cabSel}</div>${field("f", "Frequency", sel('data-vf="1"', VF_F_UNITS, state.fUnit), fmt(s.f / VF_F_UNITS[state.fUnit]))}<div class="field"><label>Lengths in</label>${sel('data-vl="1"', VF_LEN_UNITS, state.lUnit)}</div></div>`
+        : `${line}<div class="field-pair"><div class="field"><label>Cable</label>${cabSel}</div><div class="field"><label>Length units</label>${sel('data-vl="1"', VF_LEN_UNITS, state.lUnit)}</div></div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "How much slower than light a wave travels on a line")}
+
+      ${pillRow(Object.entries(VF_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["VF = v / c = 1 / √εr", "λg = VF × c / f", "quarter wave: l = λg / 4", "from a measurement: VF = l / (c t) = 4 l f / c"],
+        "A wave on a cable or a trace travels slower than light because the dielectric around the conductors slows it: its speed is c divided by the square root of the effective dielectric constant, and the share of light's speed is the velocity factor. The wavelength in the line shrinks by the same factor, so a quarter-wave stub or a matching section is shorter than in air: that is the length this tool gives. To measure it, take a known length of the cable and find how long a pulse takes to run along it (a time-domain reflectometer), or short its far end and find the first frequency where the impedance seen at the other end peaks, which is where the cable is a quarter wavelength long."
+      )}
+      ${calcFooter("")}
+    `;
+    syncBoxes();
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "er") { state.si.er = v; setMatFromEr(); leaveCable(); }
+        else if (key === "vf") { state.si.er = v > 0 ? 1 / (v * v) : NaN; setMatFromEr(); leaveCable(); }
+        else if (key === "f") state.si.f = v * VF_F_UNITS[state.fUnit];
+        else if (key === "l") state.si.l = v * VF_LEN_UNITS[state.lUnit];
+        else if (key === "t") { state.si.t = v * 1e-9; state.src = "t"; }
+        else if (key === "fr") { state.si.t = 1 / (4 * v * VF_F_UNITS[state.fUnit]); state.src = "f"; }
+        show();
+      };
+    });
+    const ms = document.getElementById("vf-mat");
+    if (ms) ms.onchange = (e) => {
+      state.mat = e.target.value;
+      const er = COAX_MATERIALS[state.mat][1];
+      if (er) { state.si.er = er; leaveCable(); }
+      paint();
+    };
+    const cs = document.getElementById("vf-cable");
+    if (cs) cs.onchange = (e) => {
+      state.cable = e.target.value;
+      const c = cable();
+      if (c) { state.si.er = 1 / (c.vf * c.vf); setMatFromEr(); }
+      paint();
+    };
+    app.querySelectorAll("select[data-vl]").forEach((el) => { el.onchange = () => { state.lUnit = el.value; setPref(C, "lUnit", state.lUnit); paint(); }; });
+    app.querySelectorAll("select[data-vf]").forEach((el) => { el.onchange = () => { state.fUnit = el.value; setPref(C, "fUnit", state.fUnit); paint(); }; });
+  }
+
+  setMatFromEr();
+  paint();
+}
+
+// ---------- Skin depth ----------
+// δ = √(ρ / (π f μ)) = 1/√(π f μ σ): the depth at which a conductor's
+// current density has fallen to 1/e (37 %). Wadell (§2.7.1, p25, read, as
+// in Coax impedance): Rs = 1/(σδ) = √(π f μ/σ) ohms per square, δ "the depth
+// at which the current density is reduced to 1/e"; his printed 1/√(ωμσ) is
+// √2 short of that (2.7.1.5). Resistivities at 20 °C in µΩ·cm: Kuphaldt,
+// Lessons in Electric Circuits Vol. I, ch. 12, specific resistance table
+// (ibiblio copy, read): copper 1.678, silver 1.587, gold 2.214, aluminum
+// 2.650; copper as wire is sold, IACS, 1.7241 (CDA, NBS Handbook 100; as in
+// Wire sizing). For a round wire, the textbook solution of Maxwell's
+// equations: Z/Rdc = (z/2) J0(z)/J1(z), z = (1 − j) r/δ, whose real part is
+// Rac/Rdc, worked by power series up to r/δ = 12 and by its large-r form
+// r/(2δ) + 1/4 + 3δ/(32r) above; checked against scipy's Bessel functions
+// (not from a page read).
+const SKIN_MATERIALS = { cu: ["Copper (IACS)", 1.7241], cupure: ["Copper, pure", 1.678], ag: ["Silver", 1.587], au: ["Gold", 2.214], al: ["Aluminum", 2.650], custom: ["Custom", null] };
+const SKIN_MODES = { depth: "Skin depth", wire: "Round wire", foil: "PCB copper" };
+const SKIN_F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const SKIN_MU0 = 4e-7 * Math.PI;
+// Rac/Rdc of a round wire, a = r/δ.
+function skinWireRatio(a) {
+  if (!(a > 0)) return 1;
+  if (a > 12) return a / 2 + 0.25 + 3 / (32 * a);
+  // S0/S1 with w = j a²/2: sums of w^m/(m!)² and w^m/(m!(m+1)!), as [re, im].
+  const w = a * a / 2;
+  let t0 = [1, 0], t1 = [1, 0], s0 = [1, 0], s1 = [1, 0];
+  const mulJ = (t, k) => [-t[1] * k, t[0] * k];          // t × j × k
+  for (let m = 0; m < 400; m++) {
+    t0 = mulJ(t0, w / ((m + 1) * (m + 1)));
+    t1 = mulJ(t1, w / ((m + 1) * (m + 2)));
+    s0 = [s0[0] + t0[0], s0[1] + t0[1]];
+    s1 = [s1[0] + t1[0], s1[1] + t1[1]];
+    if (m > w && Math.abs(t0[0]) + Math.abs(t0[1]) < 1e-18 * (Math.abs(s0[0]) + Math.abs(s0[1]))) break;
+  }
+  const d = s1[0] * s1[0] + s1[1] * s1[1];
+  return (s0[0] * s1[0] + s0[1] * s1[1]) / d;
+}
+
+function renderSkinDepth(domain, tool, favId) {
+  const C = "skin-depth";
+  const OZ = TRACE_OZ_MIL * 25.4e-6;
+  const state = {
+    mode: pref(C, "mode", "depth", Object.keys(SKIN_MODES)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(SKIN_F_UNITS)),
+    lUnit: pref(C, "lUnit", "mm", Object.keys(MS_LEN_UNITS)),
+    tUnit: pref(C, "tUnit", "oz", Object.keys(SL_T_UNITS)),
+    mat: "cu",
+    si: { f: 1e6, rho: 1.7241, mur: 1, d: 1e-3, t: OZ },
+  };
+  const n3 = (v) => String(Number(v.toPrecision(3)));
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const rhoSI = () => state.si.rho * 1e-8;                   // Ω·m from µΩ·cm
+  const delta = (f = state.si.f) => Math.sqrt(rhoSI() / (Math.PI * f * SKIN_MU0 * state.si.mur));
+  const fAt = (dl) => rhoSI() / (Math.PI * SKIN_MU0 * state.si.mur * dl * dl);   // frequency where δ = dl
+  const um = (v) => (v >= 1e-3 ? `${n3(v * 1e3)} mm` : `${n3(v * 1e6)} µm`);
+  const mil = (v) => `${n3(v / 25.4e-6)} mil`;
+  const hzTxt = (v) => siFormat(Number(v.toPrecision(3)), "Hz", 3);
+
+  function problem() {
+    const s = state.si;
+    if (!(s.f > 0)) return "Enter the frequency.";
+    if (!(s.rho > 0)) return "Enter the resistivity, above zero.";
+    if (!(s.mur >= 1)) return "Enter the relative permeability, 1 or more.";
+    if (state.mode === "wire" && !(s.d > 0)) return "Enter the wire's diameter.";
+    if (state.mode === "foil" && !(s.t > 0)) return "Enter the copper's thickness.";
+    return "";
+  }
+
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const ok = !problem(), dl = ok ? delta() : 1e-5, s = state.si;
+    if (state.mode === "wire") {
+      const R = 40, share = ok ? Math.min(1, dl / (s.d / 2)) : 0.3, rr = R * (1 - share);
+      return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+        <circle cx="76" cy="56" r="${R}" fill="${calc}" fill-opacity="0.85"/>
+        ${rr > 0.5 ? `<circle cx="76" cy="56" r="${rr.toFixed(1)}" fill="${part}" fill-opacity="0.9"/>` : ""}
+        <circle cx="76" cy="56" r="${R}" stroke="${wire}" stroke-width="1.2"/>
+        ${lbl(134, 40, ok ? `d ${um(s.d)} · ${mil(s.d)}` : "d", part, "start")}
+        ${lbl(134, 58, ok ? `δ ${um(dl)}` : "δ", calc, "start")}
+        ${lbl(134, 76, ok && dl >= s.d / 2 ? "δ ≥ radius: all of it carries" : "current flows in the green", grey, "start")}
+      </svg>`;
+    }
+    if (state.mode === "foil") {
+      const H = 34, bd = ok ? Math.min(H / 2, H * dl / s.t) : 8;
+      return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+        <rect x="40" y="34" width="210" height="${H}" fill="${part}" fill-opacity="0.9"/>
+        <rect x="40" y="34" width="210" height="${bd.toFixed(1)}" fill="${calc}" fill-opacity="0.9"/>
+        <rect x="40" y="${(34 + H - bd).toFixed(1)}" width="210" height="${bd.toFixed(1)}" fill="${calc}" fill-opacity="0.9"/>
+        <path d="M28 34 V${34 + H} M24 34 H32 M24 ${34 + H} H32" stroke="${wire}" stroke-width="1.2"/>
+        ${lbl(145, 24, ok ? `t ${um(s.t)} · ${mil(s.t)}` : "t", part)}
+        ${lbl(145, 90, ok ? `δ ${um(dl)} each face${dl * 2 >= s.t ? ": the foil is full" : ""}` : "δ", calc)}
+        ${lbl(145, 106, "copper foil, seen on edge", grey)}
+      </svg>`;
+    }
+    // Current density against depth: e^(−x/δ) over five depths.
+    const X0 = 44, X1 = 262, Y0 = 14, Y1 = 84, ux = (X1 - X0) / 5;
+    const pts = Array.from({ length: 101 }, (_, i) => { const u = i / 20; return `${i ? "L" : "M"}${(X0 + ux * u).toFixed(1)} ${(Y1 - (Y1 - Y0) * Math.exp(-u)).toFixed(1)}`; }).join(" ");
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <path d="M${X0} ${Y0} V${Y1} H${X1}" stroke="${wire}" stroke-width="1.4"/>
+      <path d="M${X0 + ux} ${Y0} V${Y1} M${X0} ${(Y1 - (Y1 - Y0) * Math.exp(-1)).toFixed(1)} H${X0 + ux}" stroke="${grey}" stroke-width="1" stroke-dasharray="3 3"/>
+      <path d="${pts}" stroke="${calc}" stroke-width="1.8"/>
+      <circle cx="${X0 + ux}" cy="${(Y1 - (Y1 - Y0) * Math.exp(-1)).toFixed(1)}" r="3" fill="${calc}"/>
+      ${lbl(X0 + ux + 6, Y1 - (Y1 - Y0) * Math.exp(-1) - 6, "37 % at δ", calc, "start")}
+      ${lbl(X0 + ux * 1.6, Y0 + 10, "current density, relative", part, "start")}
+      ${lbl(X0 + ux, 98, ok ? `δ = ${um(dl)}` : "δ", calc)}
+      ${lbl(X1, 98, "depth into the conductor →", grey, "end")}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, dl = delta(), rs = rhoSI() / dl;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const fTxt = hzTxt(s.f);
+    if (state.mode === "wire") {
+      const r = s.d / 2, a = r / dl, ratio = skinWireRatio(a), rdc = rhoSI() / (Math.PI * r * r);
+      return `<div class="result-field">
+          <div class="result-head"><span class="label">AC resistance ÷ DC resistance</span></div>
+          <div class="result-value"><span class="num" data-res="big">× ${n3(ratio)}</span></div>
+          <div class="result-sub" data-res="sub">r/δ ${n3(a)}: δ ${um(dl)} in a wire of ${um(s.d)}</div>
+        </div>
+        <div class="field notation-box">
+          ${row("DC resistance", `${n3(rdc * 1e3)} mΩ/m`, "rdc")}
+          ${row(`AC resistance, ${fTxt}`, `${n3(rdc * ratio * 1e3)} mΩ/m`, "rac")}
+          ${row("Skin effect starts (δ = r) at", hzTxt(fAt(r)), "fr")}
+          ${row("Wire's current is carried by", `${n3(100 * (1 - (1 - Math.min(1, dl / r)) ** 2))} % of its area (within δ)`, "area")}
+        </div>`;
+    }
+    if (state.mode === "foil") {
+      const f1 = fAt(s.t), ratio = s.t / dl;
+      return `<div class="result-field">
+          <div class="result-head"><span class="label">δ equals the copper's thickness at</span></div>
+          <div class="result-value"><span class="num" data-res="big">${hzTxt(f1)}</span></div>
+          <div class="result-sub" data-res="sub">${um(s.t)} · ${mil(s.t)} of copper, δ = t</div>
+        </div>
+        <div class="field notation-box">
+          ${row(`δ at ${fTxt}`, `${um(dl)} · ${mil(dl)}`, "delta")}
+          ${row("Thickness ÷ δ", ratio >= 1 ? warn(`${n3(ratio)}: thicker than δ`) : `${n3(ratio)}: thinner than δ`, "ratio")}
+          ${row("Surface resistance, Rs", `${n3(rs * 1e3)} mΩ per square`, "rs")}
+          ${row("DC resistance of the foil", `${n3(rhoSI() / s.t * 1e3)} mΩ per square`, "rdcs")}
+        </div>`;
+    }
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Skin depth, δ</span></div>
+          <div class="result-value"><span class="num" data-res="big">${um(dl)}</span></div>
+          <div class="result-sub" data-res="sub">${mil(dl)} at ${fTxt}: the current has fallen to 37 % at this depth</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Surface resistance, Rs", `${n3(rs * 1e3)} mΩ per square`, "rs")}
+          ${row("99 % of the current within", um(dl * Math.log(100)), "d99")}
+          ${row("Resistivity, μr", `${n3(s.rho)} µΩ·cm, ${n3(s.mur)}`, "mat")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("rho", fmt(state.si.rho));
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+  function setMatFromRho() {
+    state.mat = Object.keys(SKIN_MATERIALS).find((x) => SKIN_MATERIALS[x][1] !== null && SKIN_MATERIALS[x][1] === state.si.rho) || "custom";
+    const el = document.getElementById("sk-mat");
+    if (el) el.value = state.mat;
+  }
+
+  const example = (si, extra) => () => {
+    Object.assign(state, extra);
+    Object.assign(state.si, { mur: 1 }, si);
+    setMatFromRho();
+    paint();
+  };
+  useExamples([
+    { title: "Copper at 1 MHz", note: "66.1 µm (2.6 mil), 0.261 mΩ per square: a 1 oz foil is only half a depth thick.",
+      apply: example({ f: 1e6, rho: 1.7241 }, { mode: "depth", fUnit: "MHz" }) },
+    { title: "Silver at 1 GHz", note: "2.0 µm: at microwave frequencies a few micrometres of plating carry the current.",
+      apply: example({ f: 1e9, rho: 1.587 }, { mode: "depth", fUnit: "GHz" }) },
+    { title: "A 1 mm copper wire at 1 MHz", note: "r/δ 7.57: the AC resistance is 4.05 times the DC resistance, 88.8 mΩ/m.",
+      apply: example({ f: 1e6, rho: 1.7241, d: 1e-3 }, { mode: "wire", fUnit: "MHz", lUnit: "mm" }) },
+    { title: "1 oz copper on a PCB", note: "δ equals the foil's 34.8 µm at 3.61 MHz; above it the current uses only the outer skin.",
+      apply: example({ f: 1e6, rho: 1.7241, t: OZ }, { mode: "foil", fUnit: "MHz", tUnit: "oz" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const matSel = `<select id="sk-mat">${Object.entries(SKIN_MATERIALS).map(([k, [n]]) => `<option value="${k}" ${k === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const extra = state.mode === "wire"
+      ? field("d", "Wire diameter, d", sel('data-lunit="1"', MS_LEN_UNITS, state.lUnit), fmt(s.d / MS_LEN_UNITS[state.lUnit]))
+      : state.mode === "foil"
+        ? field("t", "Copper, t", sel('data-tunit="1"', SL_T_UNITS, state.tUnit), fmt(s.t / SL_T_UNITS[state.tUnit]))
+        : "";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "How deep a high-frequency current flows in a conductor")}
+
+      ${pillRow(Object.entries(SKIN_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${field("f", "Frequency", sel('data-sf="1"', SKIN_F_UNITS, state.fUnit), fmt(s.f / SKIN_F_UNITS[state.fUnit]))}<div class="field"><label>Material</label>${matSel}</div></div>
+      <div class="field-pair">${field("rho", "Resistivity, ρ", fixed("µΩ·cm"), fmt(s.rho))}${field("mur", "Permeability, μr", fixed(""), fmt(s.mur))}${extra}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["δ = √(ρ / (π f μ0 μr)) = 1 / √(π f μ σ)", "Rs = ρ / δ = √(π f μ ρ)", "Rac / Rdc ≈ r / (2δ) + 1/4  (r ≫ δ)", "δ = t at f = ρ / (π μ t²)"],
+        "At high frequency the current in a conductor does not fill it: the changing magnetic field inside pushes it toward the surface, and its density falls off exponentially with depth. The skin depth δ is the depth at which it has fallen to 1/e, about 37 %; most of the current (99 %) flows within 4.6 δ. It shrinks as the square root of the frequency, and a better conductor or a magnetic one (μr above 1) makes it smaller still. The resistance the surface presents, Rs, in ohms per square, rises with the same square root, which is why a wire's resistance at radio frequencies is several times its DC value and a trace's loss grows with frequency. The round-wire ratio comes from the exact solution for an isolated straight wire; nearby conductors (a coil's turns, a pair of wires) add proximity effect, which this does not include."
+      )}
+      ${calcFooter("")}
+    `;
+    syncBoxes();
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "f") state.si.f = v * SKIN_F_UNITS[state.fUnit];
+        else if (key === "rho") { state.si.rho = v; setMatFromRho(); }
+        else if (key === "mur") state.si.mur = v;
+        else if (key === "d") state.si.d = v * MS_LEN_UNITS[state.lUnit];
+        else if (key === "t") state.si.t = v * SL_T_UNITS[state.tUnit];
+        show();
+      };
+    });
+    document.getElementById("sk-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const r = SKIN_MATERIALS[state.mat][1];
+      if (r) state.si.rho = r;
+      paint();
+    };
+    wireLengthUnits(C, state, paint);
+    app.querySelector("select[data-sf]").onchange = (e) => { state.fUnit = e.target.value; setPref(C, "fUnit", state.fUnit); paint(); };
+  }
+
+  setMatFromRho();
   paint();
 }
 

@@ -399,6 +399,18 @@ const FORMULAS = [
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
   },
   {
+    tool: "Velocity factor",
+    domain: "rf",
+    formulas: ["VF = v / c = 1 / √εr", "λg = VF × c / f", "quarter wave: l = λg / 4", "measured: VF = l / (c t) = 4 l f / c"],
+    note: "Wadell §2.8.3: a shorted line's impedance peaks at l = λg/4. Belden's sheets give 66 % for solid PE, 70 % PTFE, 82 % foam PE.",
+  },
+  {
+    tool: "Skin depth",
+    domain: "rf",
+    formulas: ["δ = √(ρ / (π f μ0 μr))", "Rs = ρ / δ = √(π f μ ρ)", "Rac / Rdc ≈ r / (2δ) + 1/4  (r ≫ δ)", "δ = t at f = ρ / (π μ t²)"],
+    note: "δ: where the current density has fallen to 1/e (Wadell §2.7.1); copper 66 µm at 1 MHz. The round-wire ratio is the exact Bessel solution.",
+  },
+  {
     tool: "Coax impedance",
     domain: "rf",
     formulas: ["Z0 = η0 / (2π √εr) × ln(D / d)", "C = 2π ε0 εr / ln(D / d)", "L = μ0/(2π) × ln(D / d)", "TE11 from λ ≈ π (D + d) / 2", "α ≈ Rs (1/πd + 1/πD) / (2 Z0)"],

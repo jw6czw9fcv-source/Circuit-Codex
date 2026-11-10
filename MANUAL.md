@@ -95,6 +95,8 @@ will key on, since that is the id the app already holds for each tool.
 - Antennas & propagation → [Antenna length](#antenna-length)
 - Transmission lines → [VSWR / Return loss](#vswr)
 - Transmission lines → [Coax impedance](#coax)
+- Transmission lines → [Velocity factor](#velocity-factor)
+- Transmission lines → [Skin depth](#skin-depth)
 
 ### Power electronics
 
@@ -11166,6 +11168,190 @@ the same formulas):
 - at 50 MHz the maker's loss row goes and the copper loss reads 7.8
   dB/100 m;
 - D smaller than d is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="velocity-factor"></a>
+## Velocity factor
+
+`calc: velocity-factor` · RF & microwave › Transmission lines
+
+### What it computes
+
+How much slower than light a wave travels on a cable or trace, and the
+lengths that follow:
+
+- **Three pills:**
+  - **From εr:** the Material picker (air, PTFE, solid and foam PE at
+    Belden's 66 % and 82 %), εr and the velocity factor as linked boxes
+    (typing one sets the other), a Cable picker (Coax impedance's seven
+    Belden cables, which set εr; typing a value returns it to Custom);
+  - **Cut a length:** the same line plus a frequency: the quarter-wave
+    length λg/4 as the big result, then the half and whole guided
+    wavelength, the free-space wavelength and the quarter wave's delay;
+  - **Measure:** a cable's length, its one-way delay and the frequency
+    of its first resonance, linked (resonance = 1/(4 × delay)); type the
+    delay or the resonance and the velocity factor of the cable follows.
+- **The big result:** VF in % (or the quarter-wave length); below it the
+  delay per length (ns/m and ps/in), the speed, and the dielectric it
+  looks most like (solid PE, foam PE, PTFE).
+- **Units:** mm, cm, m, in or ft for lengths (the order of metric and
+  imperial in the results follows the one picked); kHz, MHz or GHz.
+- **Drawing:** a wave in free space (grey) over the same wave in the line
+  (green), λg = VF × λ, with λg/4 marked in Cut a length.
+- **Remembered:** the pill and the units.
+
+Examples: RG-58 at 66 %, a quarter wave of it at 100 MHz, Wadell's PTFE
+resonator, a 10 m cable measured by its resonance.
+
+### Terms
+
+- **Velocity factor (velocity of propagation):** the wave's speed on the
+  line as a share of the speed of light: 1/√εr, εr the dielectric's (εeff
+  for a microstrip).
+- **Guided wavelength λg:** the wavelength in the line, λ × VF.
+- **Quarter-wave section or stub:** a line λg/4 long; it turns a short
+  into an open and the reverse, and is the usual length of a balun or a
+  matching section.
+- **Resonance:** with the far end shorted, the input impedance of a
+  lossless line is j Z0 tan(2π l/λg), which is infinite where l = λg/4:
+  the first peak, which a network analyser or a grid-dip meter finds.
+- **TDR (time-domain reflectometer):** an instrument that sends a pulse
+  down a cable and times its echo; half the round trip is the delay.
+
+### Sources
+
+- **Brian C. Wadell, Transmission Line Design Handbook, 1991**
+  (Pierre's scan, read): §2.8.3 (p32–35): Zsc = j Z0 tan(2πl/λ) (2.8.3.2),
+  infinite at l = λ/4 (2.8.3.7), λg = c/(f √εr) (its example); the
+  example 2.8.3.1: PTFE (εr 2.10) at 402 MHz, λg/4 = 0.1287 m = 5.07 in
+  with c = 3 × 10⁸ m/s.
+- **Belden technical data sheets** (see Coax impedance): "velocity of
+  propagation" 66 % (PE), 70 % (PTFE), 82 % (foam PE).
+- **c = 299 792 458 m/s** (SI), so the tool's 402 MHz example reads
+  0.12865 m = 5.065 in, rounding to Wadell's 5.07 in.
+
+### Assumptions and limits
+
+- **Lossless, no dispersion:** one εr; a cable's VF varies a little with
+  frequency and with its braid and jacket.
+- **Open ends and connectors** add a little capacitance and length, so a
+  measured quarter-wave resonance reads slightly low; trim on the air.
+- **Shortening of antennas** (the 0.95 end-effect factor of Antenna
+  length) is a different effect, for a wire in air.
+
+### How it was checked
+
+8 cases, the expected values from the formulas above and a Python check:
+- RG-58: 66 %, 5.05 ns/m, 128 ps/in (128.37), 198 × 10⁶ m/s, solid PE;
+- typing VF 0.82: εr 1.487, foam PE, 4.07 ns/m, 103 ps/in, cable picker
+  Custom;
+- a quarter wave of RG-58 at 100 MHz: 49.5 cm, half 98.9 cm, whole
+  1.98 m, free space 3 m;
+- Wadell's PTFE resonator: 5.07 in (12.9 cm), VF 69 %;
+- a 10 m cable resonating at 4.95 MHz: 66 %; a 50 ns delay: 66.7 % and
+  5 MHz; a delay faster than light is refused;
+- inches put the imperial figure first.
+
+[↑ Index](#index)
+
+---
+
+<a id="skin-depth"></a>
+## Skin depth
+
+`calc: skin-depth` · RF & microwave › Transmission lines
+
+### What it computes
+
+How deep a high-frequency current flows in a conductor, and what that
+does to a wire's or a foil's resistance:
+
+- **Three pills:**
+  - **Skin depth:** δ at a frequency, with the surface resistance Rs
+    (ohms per square) and the depth within which 99 % of the current
+    flows (δ ln 100 = 4.6 δ);
+  - **Round wire:** a wire's diameter gives the AC resistance as a
+    multiple of its DC resistance, the two in mΩ/m, the frequency where
+    δ equals the radius (where the skin effect begins) and the share of
+    the wire's area that carries the current;
+  - **PCB copper:** a foil's thickness (oz, µm or mil) gives the
+    frequency where δ equals it; and at the frequency typed, δ, t/δ, Rs
+    and the foil's DC resistance per square.
+- **Inputs:** the frequency (Hz to GHz), the material, its resistivity ρ
+  in µΩ·cm and relative permeability μr (typing ρ sets the picker to
+  Custom).
+- **Materials (ρ at 20 °C):** copper as wire is sold (IACS) 1.7241; pure
+  copper 1.678; silver 1.587; gold 2.214; aluminum 2.650.
+- **Units:** the wire's diameter in mm or mil, the foil's thickness in
+  oz, µm or mil, linked as in the impedance tools.
+- **Drawing:** the current density e^(−x/δ) against depth with 37 % at δ
+  marked; the wire's section with its green ring δ thick; the foil seen
+  on edge with δ from each face.
+- **Remembered:** the pill and the units.
+
+Examples: copper at 1 MHz, silver at 1 GHz, a 1 mm wire at 1 MHz, 1 oz
+copper on a PCB.
+
+### Terms
+
+- **Skin effect:** at high frequency the changing magnetic field inside a
+  conductor pushes the current toward its surface; the resistance rises.
+- **Skin depth δ:** the depth at which the current density has fallen to
+  1/e (37 %) of its surface value.
+- **Surface resistance Rs:** ρ/δ, in ohms per square: the resistance of
+  a square of the skin, whatever its size.
+- **Rac/Rdc:** the wire's AC resistance over its DC resistance.
+- **μr:** the relative permeability; 1 for copper, silver, gold and
+  aluminum, hundreds for iron, which has a much shallower skin.
+- **Proximity effect:** current crowding caused by a neighbouring
+  conductor (turns of a coil); not included.
+
+### Sources
+
+- **Brian C. Wadell, Transmission Line Design Handbook, 1991**
+  (Pierre's scan, read): §2.7.1 (p25): Rs = 1/(σδ) = √(π f μ/σ),
+  δ = "the depth at which the current density is reduced to 1/e"; its
+  printed δ = 1/√(ωμσ) (2.7.1.5) is √2 short of the δ its own Rs implies,
+  1/√(π f μ σ); the tool uses the latter (copper 66.1 µm at 1 MHz).
+- **David Kuphaldt, Lessons in Electric Circuits, Vol. I, ch. 12,
+  "Specific resistance at 20 °C"** (ibiblio copy, read): copper 1.678,
+  silver 1.587, gold 2.214, aluminum 2.650 µΩ·cm. Other sources list gold
+  at 2.44; copper as wire is sold is the IACS value 1.7241 (1/58
+  Ω·mm²/m, NBS Handbook 100 / Copper Development Association), as in
+  Wire sizing: 1.3 % deeper than pure copper.
+- **The round wire:** the textbook solution of Maxwell's equations for an
+  isolated straight round wire, Z/Rdc = (z/2) J0(z)/J1(z), z = (1 − j)
+  r/δ, real part Rac/Rdc. It is not from a page read; the tool computes
+  it by power series up to r/δ = 12 and by r/(2δ) + 1/4 + 3δ/(32r)
+  above, and both agree with scipy's Bessel functions to 6 figures
+  (r/δ = 7.566: 4.04524; 23.93: 12.21687).
+
+### Assumptions and limits
+
+- **A smooth, uniform, isolated conductor at 20 °C:** resistivity rises
+  0.4 % per °C; surface roughness (PCB copper) adds loss.
+- **Foils and planes:** the foil's DC resistance and Rs are per square for
+  current in the plane; a trace's current runs on one face as well as
+  the edges, so its loss needs a field solver.
+- **Magnetic metals:** μr is taken as constant, and iron's falls with
+  frequency.
+
+### How it was checked
+
+12 cases, the expected values from the formula and a Python check
+(scipy for the Bessel ratios):
+- copper at 1 MHz: 66.1 µm (2.6 mil), 0.261 mΩ per square, 99 % within
+  304 µm; silver at 1 GHz 2.005 µm, 7.92 mΩ per square; gold 74.9 µm and
+  aluminum 81.9 µm at 1 MHz;
+- μr 100 with ρ typed: the picker goes to Custom;
+- a 1 mm copper wire: at 1 MHz × 4.05, 22 and 88.8 mΩ/m, skin effect
+  from 17.5 kHz, 24.7 % of the area; at 100 kHz × 1.45; at 10 MHz × 12.2
+  (the large-wire form), 268 mΩ/m;
+- 1 oz foil: 3.61 MHz; t/δ 0.527 at 1 MHz and 5.27 at 100 MHz;
+- a zero frequency and a μr under 1 are refused.
 
 [↑ Index](#index)
 
