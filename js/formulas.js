@@ -399,6 +399,12 @@ const FORMULAS = [
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
   },
   {
+    tool: "Power divider",
+    domain: "rf",
+    formulas: ["resistive: R = Z0 (M − 1) / (M + 1)", "loss = isolation = 20 log M", "Wilkinson: Z1 = Z0 √N, R = Z0 each", "unequal: K² = P3 / P2", "Z02 = Z0 √(K (1 + K²))", "Z03 = Z0 √((1 + K²) / K³)", "R = Z0 (K + 1/K)", "Z04 = Z0 √K,  Z05 = Z0 / √K"],
+    note: "Resistive: Marki Microwave application note; Wilkinson N-way: Maloratsky and London (2003); unequal split derived and checked by an S-parameter solver (Pozar, Microwave Engineering, 7.3). M outputs; N arms.",
+  },
+  {
     tool: "Intercept point",
     domain: "rf",
     formulas: ["OIP3 = P + (P − IM3) / 2,  IIP3 = OIP3 − G", "IM3 = 3 P − 2 OIP3", "OP1dB ≈ OIP3 − 10.6 dB,  IP1dB ≈ IIP3 − 9.6 dB", "1/OIP3 = Σ 1 / (OIP3,k × gains after k)", "SFDR = 2/3 × (IIP3 − noise floor)"],

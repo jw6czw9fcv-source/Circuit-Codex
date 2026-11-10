@@ -668,6 +668,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rf-cascade") return renderCascade(domain, tool, favId);
   if (calcId === "intercept-point") return renderInterceptPoint(domain, tool, favId);
   if (calcId === "intermodulation") return renderIntermodulation(domain, tool, favId);
+  if (calcId === "power-divider") return renderPowerDivider(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -14575,6 +14576,406 @@ function renderIntermodulation(domain, tool, favId) {
     app.querySelectorAll("select[data-funit]").forEach((el) => {
       el.onchange = () => { state.fUnit = el.value; setPref(C, "fUnit", state.fUnit); paint(); };
     });
+  }
+
+  paint();
+}
+
+// ---------- Power divider ----------
+// Three ways to split a signal, all matched to Z0 at every port.
+//  * Resistive star: the input and each of the M outputs reach one centre node
+//    through a resistor R. Matching the input to Z0 gives R + (R + Z0)/M = Z0,
+//    so R = Z0 (M − 1)/(M + 1): Marki Microwave, "6 Ways to Make an N-Way Power
+//    Splitter" (2015, read), "direct N-way wye", N the number of outputs. Every
+//    port sees the same star, so every transmission, between the input and an
+//    output or between two outputs, is 1/M: 20 log M dB, isolation included.
+//  * Wilkinson, N equal outputs: N quarter-wave arms of Z1 = Z0 √N (each loaded
+//    with Z0, N of them in parallel look like Z0) and N resistors of Z0 from
+//    each output to one floating common point (any two outputs then have 2 Z0
+//    between them, the 2 Z0 of the two-way). Maloratsky and London, Microwave
+//    Journal, Sept 2003 (read): Z1 = Z0 √N, resistors to a floating common node,
+//    infinite isolation at the centre frequency, bandwidth narrowing as N
+//    grows. Exciting one output only, the others cancel when the arms' input end
+//    is a virtual ground and each output sees its resistor Z0 alone: R = Z0.
+//  * Unequal two-way (power ratio K² = P3/P2, Pozar, Microwave Engineering §7.3,
+//    cited by Wikipedia, not read): arm ends loaded with R2 = K Z0 and R3 = Z0/K,
+//    brought to Z0 by quarter-wave transformers Z04 = Z0 √K, Z05 = Z0/√K; equal
+//    voltage at the arm ends (no current in R) and an input matched to Z0 give
+//    Z02 = Z0 √(K (1 + K²)), Z03 = Z0 √((1 + K²)/K³); isolation gives
+//    R = Z02 Z03/Z0 = Z0 (K + 1/K), connected between the arm ends, ahead of the
+//    transformers. Derived here and checked by a nodal S-parameter solver
+//    (S11 = S22 = S33 = S23 = 0 and the split exact, K² = 1 to 100).
+// The bandwidth, the loss and match with standard resistors, and the heat in
+// each resistor come from the same solver (a Python twin, numpy). The power
+// in the isolation resistor with one output open or shorted is
+// (N − 1)/N² of the input power, K²/(1 + K²)² for the unequal divider: the
+// reflected power splits between the input and the resistors.
+const DIV_MODES = { res: "Resistive", wilk: "Wilkinson", uneq: "Unequal" };
+const DIV_TOLS = [0, 0.1, 0.5, 1, 2, 5, 10];
+const DIV_P_UNITS = { mW: 1e-3, W: 1 };
+const DIV_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const DIV_C = 299792458;
+
+// Complex nodal solver. A matrix is an array of rows of [re, im].
+function divInvert(A) {
+  const n = A.length;
+  const cm = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+  const cd = (a, b) => { const d = b[0] * b[0] + b[1] * b[1]; return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d]; };
+  const M = A.map((row, i) => [...row.map((v) => [v[0], v[1]]), ...Array.from({ length: n }, (_, j) => (i === j ? [1, 0] : [0, 0]))]);
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.hypot(...M[r][c]) > Math.hypot(...M[p][c])) p = r;
+    [M[c], M[p]] = [M[p], M[c]];
+    const pv = M[c][c];
+    for (let k = 0; k < 2 * n; k++) M[c][k] = cd(M[c][k], pv);
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = M[r][c];
+      if (f[0] === 0 && f[1] === 0) continue;
+      for (let k = 0; k < 2 * n; k++) { const t = cm(f, M[c][k]); M[r][k] = [M[r][k][0] - t[0], M[r][k][1] - t[1]]; }
+    }
+  }
+  return M.map((row) => row.slice(n));
+}
+
+// Admittance matrix of a circuit at x = f/f0: ["R", a, b, ohms] resistors and
+// ["T", a, b, Zc] lines that are a quarter wave (90°) at x = 1.
+function divY(n, elems, x) {
+  const Y = Array.from({ length: n }, () => Array.from({ length: n }, () => [0, 0]));
+  const add = (i, j, re, im) => { Y[i][j][0] += re; Y[i][j][1] += im; };
+  const th = (Math.PI / 2) * x;
+  for (const [kind, a, b, v] of elems) {
+    if (kind === "R") { const g = 1 / v; add(a, a, g, 0); add(b, b, g, 0); add(a, b, -g, 0); add(b, a, -g, 0); }
+    else { const yc = 1 / v, y11 = -yc / Math.tan(th), y12 = yc / Math.sin(th); add(a, a, 0, y11); add(b, b, 0, y11); add(a, b, 0, y12); add(b, a, 0, y12); }
+  }
+  return Y;
+}
+
+// S-parameters of the ports (each Z0): S[j][k] = [re, im].
+function divS(m, Z0, x) {
+  const Y = divY(m.n, m.elems, x);
+  for (const p of m.ports) Y[p][p][0] += 1 / Z0;
+  const Z = divInvert(Y);
+  return m.ports.map((pj, j) => m.ports.map((pk, k) => [(2 * Z[pj][pk][0]) / Z0 - (j === k ? 1 : 0), (2 * Z[pj][pk][1]) / Z0]));
+}
+
+// The power in each resistor, as a fraction of the power the source can
+// deliver, with the first port driven, the others terminated in Z0, except
+// port `open` (an index), which is left open (a total reflection).
+function divHeat(m, Z0, x, open) {
+  const Y = divY(m.n, m.elems, x);
+  m.ports.forEach((p, k) => { if (k !== open) Y[p][p][0] += 1 / Z0; });
+  const Z = divInvert(Y), p0 = m.ports[0];
+  const V = Z.map((row) => [row[p0][0] / Z0, row[p0][1] / Z0]);
+  const pinc = 1 / (8 * Z0);
+  return m.elems.filter((e) => e[0] === "R").map(([, a, b, r]) => {
+    const dv = [V[a][0] - V[b][0], V[a][1] - V[b][1]];
+    return (dv[0] * dv[0] + dv[1] * dv[1]) / (2 * r) / pinc;
+  });
+}
+
+// The span of x round 1 where every port's return loss and every pair of
+// outputs' isolation is at least `down` dB; null when x = 1 itself is not.
+function divBand(m, Z0, down) {
+  const lim = 10 ** (-down / 20), P = m.ports.length;
+  const ok = (x) => {
+    const S = divS(m, Z0, x);
+    for (let i = 0; i < P; i++) if (Math.hypot(...S[i][i]) > lim) return false;
+    for (let i = 1; i < P; i++) for (let j = i + 1; j < P; j++) if (Math.hypot(...S[i][j]) > lim) return false;
+    return true;
+  };
+  if (!ok(1)) return null;
+  const edge = (dir) => {
+    let x = 1;
+    while (x + dir * 0.01 > 0.03 && x + dir * 0.01 < 1.97 && ok(x + dir * 0.01)) x += dir * 0.01;
+    let a = x, b = x + dir * 0.01;
+    for (let i = 0; i < 30; i++) { const mid = (a + b) / 2; if (ok(mid)) a = mid; else b = mid; }
+    return a;
+  };
+  return [edge(-1), edge(1)];
+}
+
+// The circuit of a divider: nodes, the ports (the input first) and the elements.
+function divModel(mode, d, n) {
+  if (mode === "res") {
+    return { n: n + 2, ports: Array.from({ length: n + 1 }, (_, i) => i), elems: Array.from({ length: n + 1 }, (_, i) => ["R", i, n + 1, d.used[0]]) };
+  }
+  if (mode === "wilk") {
+    const elems = Array.from({ length: n }, (_, j) => ["T", 0, j + 1, d.arm]);
+    if (n === 2) elems.push(["R", 1, 2, d.used[0]]);
+    else for (let j = 1; j <= n; j++) elems.push(["R", j, n + 1, d.used[0]]);
+    return { n: n === 2 ? 3 : n + 2, ports: Array.from({ length: n + 1 }, (_, i) => i), elems };
+  }
+  return { n: 5, ports: [0, 3, 4], elems: [["T", 0, 1, d.z02], ["T", 0, 2, d.z03], ["T", 1, 3, d.z04], ["T", 2, 4, d.z05], ["R", 1, 2, d.used[0]]] };
+}
+
+function renderPowerDivider(domain, tool, favId) {
+  const C = "power-divider";
+  const state = {
+    mode: pref(C, "mode", "res", Object.keys(DIV_MODES)),
+    tol: pref(C, "tol", 0, DIV_TOLS),
+    pUnit: pref(C, "pUnit", "W", Object.keys(DIV_P_UNITS)),
+    fUnit: pref(C, "fUnit", "GHz", Object.keys(DIV_F_UNITS)),
+    // n: outputs; split: P3/P2 in dB; er: the lines' effective dielectric constant.
+    si: { n: 2, z0: 50, pin: 1, split: 3, f: 1e9, er: 1 / 0.66 ** 2 },
+  };
+  const series = () => eSeriesForTolerance(state.tol);
+  const n3 = (v) => String(Number(v.toPrecision(3)));
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const ohm = (v) => (v >= 1e3 ? `${n3(v / 1e3)} kΩ` : `${n3(v)} Ω`);
+  const watts = (v) => siFormat(Number(v.toPrecision(3)), "W", 3);
+  const dbm = (w) => (w > 0 ? `${n3(Math.round(10 * Math.log10(w / 1e-3) * 1e6) / 1e6)} dBm` : "—");
+  // dB "down", from a magnitude; a perfect match or isolation reads ∞.
+  const down = (mag) => (mag < 1e-9 ? Infinity : -20 * Math.log10(mag));
+  const dbTxt = (v) => (v === Infinity ? "∞" : `${n3(v)} dB`);
+  const mag = (c) => Math.hypot(c[0], c[1]);
+  // A length as metric and imperial, the metric first.
+  const lenTxt = (m) => {
+    const metric = m >= 1 ? `${n3(m)} m` : m >= 0.1 ? `${n3(m * 100)} cm` : `${n3(m * 1000)} mm`;
+    const imp = m / 0.0254 >= 24 ? `${n3(m / 0.3048)} ft` : `${n3(m / 0.0254)} in`;
+    return `${metric} · ${imp}`;
+  };
+  const std = (v) => (state.tol === 0 ? v : nearestESeries(v, series()).value);
+
+  function problem() {
+    const s = state.si;
+    if (state.mode === "res") {
+      if (!(Number.isInteger(s.n) && s.n >= 2 && s.n <= 16)) return "Enter a whole number of outputs, 2 to 16.";
+    } else if (state.mode === "wilk") {
+      if (!(Number.isInteger(s.n) && s.n >= 2 && s.n <= 8)) return "Enter a whole number of outputs, 2 to 8.";
+    } else if (!(s.split >= 0 && s.split <= 20)) return "Enter a split from 0 to 20 dB (port 3 gets the larger share).";
+    if (!(s.z0 > 0)) return "Enter the line's impedance Z0.";
+    if (!(s.pin >= 0)) return "Enter the input power, zero or more.";
+    if (state.mode !== "res") {
+      if (!(s.f > 0)) return "Enter the frequency.";
+      if (!(s.er >= 1)) return "Enter the effective dielectric constant, 1 or more (or a velocity factor of 1 or less).";
+    }
+    return "";
+  }
+
+  // The ideal values, then the ones the series picks for the resistor.
+  function design() {
+    const { n, z0, split } = state.si;
+    if (state.mode === "res") { const r = (z0 * (n - 1)) / (n + 1); return { ideal: [r], used: [std(r)] }; }
+    if (state.mode === "wilk") { const r = n === 2 ? 2 * z0 : z0; return { arm: z0 * Math.sqrt(n), ideal: [r], used: [std(r)] }; }
+    const K = 10 ** (split / 20), K2 = K * K;
+    const z03 = z0 * Math.sqrt((1 + K2) / (K * K2)), r = z0 * (K + 1 / K);
+    return { K, z02: K2 * z03, z03, z04: z0 * Math.sqrt(K), z05: z0 / Math.sqrt(K), ideal: [r], used: [std(r)] };
+  }
+
+  // Everything computed from the circuit with the values in use.
+  function analysis(d) {
+    const s = state.si, m = divModel(state.mode, d, s.n), P = m.ports.length;
+    const S = divS(m, s.z0, 1);
+    let rl = Infinity;
+    for (let i = 0; i < P; i++) rl = Math.min(rl, down(mag(S[i][i])));
+    let iso = Infinity;
+    for (let i = 1; i < P; i++) for (let j = i + 1; j < P; j++) iso = Math.min(iso, down(mag(S[i][j])));
+    const heat = divHeat(m, s.z0, 1, -1).map((f) => f * s.pin);
+    let open = null;
+    if (state.mode !== "res") {
+      const runs = (state.mode === "uneq" ? [1, 2] : [1]).map((k) => divHeat(m, s.z0, 1, k).map((f) => f * s.pin));
+      open = runs.map((h) => ({ total: h.reduce((a, b) => a + b, 0), max: Math.max(...h) })).sort((a, b) => b.total - a.total)[0];
+    }
+    const band = state.mode === "res" ? null : divBand(m, s.z0, 20);
+    return { m, S, loss: S.slice(1).map((row) => down(mag(row[0]))), rl, iso, heat, open, band };
+  }
+
+  // The geometry shared by the drawings: up to four lines, else three, dots and the last.
+  function rowsFor(n) {
+    const k = Math.min(n, 4);
+    const ys = k === 2 ? [32, 80] : k === 3 ? [26, 54, 82] : [18, 39, 60, 81];
+    const labels = Array.from({ length: k }, (_, i) => String(i + 2));
+    let dots = -1;
+    if (n > 4) { dots = 2; labels[3] = String(n + 1); }
+    return { ys, labels, dots, yin: (ys[0] + ys[k - 1]) / 2 };
+  }
+
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = calc, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.4"/>`;
+    const port = (x, y, name) => `<circle cx="${x}" cy="${y}" r="3" stroke="${part}" stroke-width="1.4" fill="none"/>${lbl(x, y - 8, name, grey)}`;
+    const dot = (x, y) => `<circle cx="${x}" cy="${y}" r="1.8" fill="${wire}"/>`;
+    const dots3 = (x, y) => [-5, 0, 5].map((o) => `<circle cx="${x}" cy="${y + o}" r="1.2" fill="${grey}"/>`).join("");
+    const box = (x, y, wd, text) => `<rect x="${x}" y="${y - 8}" width="${wd}" height="16" rx="2" stroke="${calc}" stroke-width="1.6"/>${lbl(x + wd / 2, y + 4, text)}`;
+    function zig(x1, y1, x2, y2) {
+      const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+      const lead = 0.14 * L, n = 6, amp = 4.5, body = L - 2 * lead;
+      const pt = (t, off) => `${(x1 + ux * t + nx * off).toFixed(1)} ${(y1 + uy * t + ny * off).toFixed(1)}`;
+      let d = `M${pt(0, 0)} L${pt(lead, 0)}`;
+      for (let i = 0; i < n; i++) d += ` L${pt(lead + (body * (i + 0.5)) / n, i % 2 ? amp : -amp)}`;
+      d += ` L${pt(L - lead, 0)} L${pt(L, 0)}`;
+      return `<path d="${d}" stroke="${calc}" stroke-width="1.6" stroke-linejoin="round"/>`;
+    }
+    const ok = !problem(), d = ok ? design() : null, n = ok && state.mode !== "uneq" ? state.si.n : 2;
+    let body = "";
+    if (state.mode === "res") {
+      const { ys, labels, dots, yin } = rowsFor(n), xb = 132, last = ys[ys.length - 1];
+      body = w(`M23 ${yin} H46 M106 ${yin} H${xb} M${xb} ${ys[0]} V${last}`) + zig(46, yin, 106, yin) + dot(xb, yin) + port(20, yin, "1");
+      ys.forEach((y, i) => {
+        if (i === dots) { body += dots3(xb + 60, y); return; }
+        body += zig(xb, y, 192, y) + w(`M192 ${y} H267`) + port(270, y, labels[i]);
+      });
+      body += lbl(145, 109, ok ? `every leg ${ohm(d.used[0])}` : "every leg R");
+    } else if (state.mode === "wilk") {
+      const { ys, labels, dots, yin } = rowsFor(n), xi = 56, last = ys[ys.length - 1];
+      body = w(`M23 ${yin} H${xi} M${xi} ${ys[0]} V${last}`) + dot(xi, yin) + port(20, yin, "1");
+      ys.forEach((y, i) => {
+        if (i === dots) { body += dots3(110, y) + (n > 2 ? dots3(190, y) : ""); return; }
+        body += w(`M${xi} ${y} H70 M124 ${y} H152`) + box(70, y, 54, "λ/4") + port(156, y, labels[i]);
+        if (n > 2) body += zig(160, y, 214, y);
+      });
+      if (n === 2) body += w(`M160 ${ys[0]} H200 M160 ${ys[1]} H200`) + zig(200, ys[0], 200, ys[1]) + lbl(210, (ys[0] + ys[1]) / 2 + 4, "R", calc, "start");
+      else body += w(`M220 ${ys[0]} V${last}`);
+      const r = ok ? (n === 2 ? ohm(d.used[0]) : `${n} × ${ohm(d.used[0])}`) : "R";
+      body += lbl(145, 109, ok ? `arms ${ohm(d.arm)} · ${r}` : "arms Z1 · R");
+    } else {
+      const xi = 44, y0 = 30, y1 = 80, yin = 55, z = (v) => (ok ? ` ${ohm(v)}` : "");
+      body = w(`M23 ${yin} H${xi} M${xi} ${y0} V${y1}`) + dot(xi, yin) + port(20, yin, "1");
+      [[y0, "Z02", "Z04", d && d.z02, d && d.z04, "2", 14], [y1, "Z03", "Z05", d && d.z03, d && d.z05, "3", 106]].forEach(([y, a, t, za, zt, name, ly]) => {
+        body += w(`M${xi} ${y} H56 M104 ${y} H128 M176 ${y} H267`) + box(56, y, 48, "λ/4") + box(128, y, 48, "λ/4") + dot(116, y) + port(270, y, name);
+        body += lbl(80, ly, `${a}${z(za)}`) + lbl(152, ly, `${t}${z(zt)}`);
+      });
+      body += zig(116, y0, 116, y1) + lbl(124, (y0 + y1) / 2 + 4, ok ? `R ${ohm(d.used[0])}` : "R", calc, "start");
+    }
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${body}</svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, d = design(), a = analysis(d), stdOn = state.tol !== 0;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+    const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const fu = DIV_F_UNITS[state.fUnit], f0 = s.f;
+    const quarter = DIV_C / (4 * f0 * Math.sqrt(s.er));
+    const bandRange = a.band ? `${n3((f0 * a.band[0]) / fu)}–${n3((f0 * a.band[1]) / fu)} ${state.fUnit}` : null;
+    const bandPct = a.band ? `±${n3(((a.band[1] - a.band[0]) / 2) * 100)} %` : "none";
+    const heatTxt = a.open ? (state.mode === "wilk" && s.n > 2 ? `${watts(a.open.total)}, ${watts(a.open.max)} in one` : watts(a.open.total)) : "";
+    const seriesTag = stdOn ? ` (${series()} value${state.mode === "wilk" && s.n > 2 ? "s" : ""})` : "";
+
+    if (state.mode === "res") {
+      const M = s.n, tot = a.heat.reduce((x, y) => x + y, 0), hot = a.heat.indexOf(Math.max(...a.heat));
+      const pout = s.pin * Math.pow(10, -a.loss[0] / 10);
+      return `${head(`Resistive divider, ${M} outputs on ${n3(s.z0)} Ω`, ohm(d.used[0]), `${M + 1} resistors in a star; an ideal split costs ${n3(10 * Math.log10(M))} dB${stdOn ? ` · ${series()}` : ""}`)}
+        ${grid([cell("Loss", dbTxt(a.loss[0]), "loss"), cell("Isolation", dbTxt(a.iso), "iso"), cell("Return loss", dbTxt(a.rl), "rl")])}
+        <div class="field notation-box">
+          ${stdOn ? row("Ideal value", ohm(d.ideal[0]), "ideal") : ""}
+          ${row("Output power, each", `${watts(pout)} (${dbm(pout)})`, "pout")}
+          ${row("Hottest resistor", `${hot === 0 ? "the input leg" : "an output leg"}, ${watts(a.heat[hot])}`, "hot")}
+          ${row("Lost as heat", `${watts(tot)} (${n3((tot / (s.pin || 1)) * 100)} %)`, "heat")}
+        </div>`;
+    }
+    if (state.mode === "wilk") {
+      const N = s.n, rTxt = N === 2 ? ohm(d.used[0]) : `${N} × ${ohm(d.used[0])}`;
+      return `${head(`Arm impedance, ${N}-way Wilkinson on ${n3(s.z0)} Ω`, ohm(d.arm), `quarter wave: ${lenTxt(quarter)}`)}
+        ${grid([cell("Resistor", rTxt, "res"), cell("Loss", dbTxt(a.loss[0]), "loss"), cell("20 dB band", bandPct, "bandpct")])}
+        <div class="field notation-box">
+          ${stdOn ? row("Ideal value", `${ohm(d.ideal[0])}${N > 2 ? " each" : ""}`, "ideal") : ""}
+          ${row("Return loss, isolation", `${dbTxt(a.rl)}, ${dbTxt(a.iso)}`, "match")}
+          ${row("Band, 20 dB", bandRange || warn("none: under 20 dB at f0"), "band")}
+          ${row("Heat if an output opens", heatTxt, "open")}
+        </div>`;
+    }
+    return `${head(`Arms, ${n3(s.split)} dB split on ${n3(s.z0)} Ω`, `${n3(d.z02)} / ${n3(d.z03)} Ω`, `to port 2 / port 3; quarter wave: ${lenTxt(quarter)}`)}
+        ${grid([cell("Resistor", ohm(d.used[0]), "res"), cell("Z04, port 2", ohm(d.z04), "z04"), cell("Z05, port 3", ohm(d.z05), "z05")])}
+        <div class="field notation-box">
+          ${row("Loss to port 2 · port 3", `${dbTxt(a.loss[0])} · ${dbTxt(a.loss[1])}`, "split")}
+          ${stdOn ? row("Ideal resistor", ohm(d.ideal[0]), "ideal") : ""}
+          ${row("Return loss, isolation", `${dbTxt(a.rl)}, ${dbTxt(a.iso)}`, "match")}
+          ${row("Band, 20 dB", bandRange || warn("none: under 20 dB at f0"), "band")}
+          ${row("Heat if an output opens", heatTxt, "open")}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    set("er", fmt(state.si.er)); set("vf", fmt(1 / Math.sqrt(state.si.er)));
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+
+  const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); paint(); };
+  useExamples([
+    { title: "2-way resistive on 50 Ω", note: "Three 16.7 Ω resistors: 6.02 dB to each output, and the outputs only 6.02 dB apart.",
+      apply: example({ top: { mode: "res", tol: 0 }, si: { n: 2, z0: 50, pin: 1 } }) },
+    { title: "The same in E24 resistors", note: "Three 16 Ω: 5.93 dB, a 39.9 dB match, outputs 5.93 dB apart.",
+      apply: example({ top: { mode: "res", tol: 5 }, si: { n: 2, z0: 50, pin: 1 } }) },
+    { title: "Wilkinson for 1 GHz on 50 Ω", note: "70.7 Ω arms 49.5 mm long (VF 66 %), 100 Ω across the outputs, matched within ±18 %.",
+      apply: example({ top: { mode: "wilk", tol: 0, fUnit: "GHz" }, si: { n: 2, z0: 50, pin: 1, f: 1e9, er: 1 / 0.66 ** 2 } }) },
+    { title: "3-way Wilkinson on 75 Ω", note: "130 Ω arms and three 75 Ω resistors to a common point: 4.77 dB, a ±11 % band.",
+      apply: example({ top: { mode: "wilk", tol: 0, fUnit: "MHz" }, si: { n: 3, z0: 75, pin: 1, f: 100e6, er: 1 / 0.66 ** 2 } }) },
+    { title: "A 2:1 unequal split on 50 Ω", note: "Arms 103 and 51.5 Ω, a 106 Ω resistor, output lines 59.5 and 42 Ω: ⅓ and ⅔ of the power.",
+      apply: example({ top: { mode: "uneq", tol: 0, fUnit: "GHz" }, si: { z0: 50, pin: 1, split: 3.0103, f: 1e9, er: 1 / 0.66 ** 2 } }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const first = state.mode === "uneq" ? field("split", "Split, P3 / P2", fixed("dB"), fmt(s.split)) : field("n", "Outputs", fixed(""), fmt(s.n));
+    const row1 = `<div class="field-pair">${first}${field("z0", "Impedance, Z0", fixed("Ω"), fmt(s.z0))}${field("pin", "Power in", sel('data-pu="1"', DIV_P_UNITS, state.pUnit), fmt(s.pin / DIV_P_UNITS[state.pUnit]))}</div>`;
+    const row2 = state.mode === "res" ? "" : `<div class="field-pair">${field("f", "Frequency", sel('data-pf="1"', DIV_F_UNITS, state.fUnit), fmt(s.f / DIV_F_UNITS[state.fUnit]))}${field("er", "εeff", fixed(""), fmt(s.er))}${field("vf", "Velocity factor", fixed(""), fmt(1 / Math.sqrt(s.er)))}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Split one signal into two or more, and combine them")}
+
+      ${pillRow(Object.entries(DIV_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs
+        <select id="pd-tol" class="label-select">
+          ${DIV_TOLS.map((t) => `<option value="${t}" ${state.tol === t ? "selected" : ""}>${t === 0 ? "Exact values" : `±${t}% · ${eSeriesForTolerance(t)}`}</option>`).join("")}
+        </select>
+      </div>
+      ${row1}
+      ${row2}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["resistive: R = Z0 (M − 1) / (M + 1)", "loss = isolation = 20 log M", "Wilkinson: arms Z1 = Z0 √N, λg / 4", "resistors Z0 each, to a common point", "unequal, K² = P3 / P2:", "  Z02 = Z0 √(K (1 + K²))", "  Z03 = Z0 √((1 + K²) / K³)", "  R = Z0 (K + 1/K)", "  Z04 = Z0 √K,  Z05 = Z0 / √K", "heat in R, output open: (N − 1) / N²"],
+        "A power divider splits one signal into several shares and, run backwards, combines them. The resistive one is a star of resistors: no tuned parts, so it works from DC up, and every port is matched. It pays for that in loss (6 dB for two outputs, where an ideal split costs 3), and the outputs are isolated from each other by only that loss. The Wilkinson uses quarter-wave lines, so it only works near one frequency: the band shown is where the match and the isolation stay 20 dB or better, and it narrows as the outputs multiply. Inside it the split is lossless (3 dB for two outputs) and the outputs are isolated, so a signal that enters one output is absorbed by the resistor, not passed to the other. That resistor stays cold while the outputs are matched and equal; the heat shown is the worst case, an output open or shorted. For an unequal split the two arms differ and each output has a quarter-wave transformer back to Z0. Lengths are a quarter of the wavelength in the line: the velocity factor is 1 / √εeff, from the cable or the PCB trace."
+      )}
+      ${calcFooter("")}
+    `;
+    syncBoxes();
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "pin") state.si.pin = v * DIV_P_UNITS[state.pUnit];
+        else if (key === "f") state.si.f = v * DIV_F_UNITS[state.fUnit];
+        else if (key === "vf") state.si.er = v > 0 ? 1 / (v * v) : NaN;
+        else state.si[key] = v;
+        show();
+      };
+    });
+    document.getElementById("pd-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
+    app.querySelector("select[data-pu]").onchange = (e) => { state.pUnit = e.target.value; setPref(C, "pUnit", state.pUnit); paint(); };
+    const pf = app.querySelector("select[data-pf]");
+    if (pf) pf.onchange = (e) => { state.fUnit = e.target.value; setPref(C, "fUnit", state.fUnit); paint(); };
   }
 
   paint();

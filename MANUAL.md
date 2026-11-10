@@ -101,6 +101,7 @@ will key on, since that is the id the app already holds for each tool.
 - Power & gain → [Attenuator](#attenuator)
 - Power & gain → [Intercept point](#intercept-point)
 - Power & gain → [Intermodulation](#intermodulation)
+- Power & gain → [Power divider](#power-divider)
 
 ### Power electronics
 
@@ -11949,6 +11950,238 @@ equations and from Keysight's example:
   does not move; an interferer at 30 MHz has no partner below the channel,
   only 65 MHz; one on the channel refused; kHz re-expresses the
   frequencies.
+
+[↑ Index](#index)
+
+---
+
+<a id="power-divider"></a>
+## Power divider
+
+`calc: power-divider` · RF & microwave › Power & gain
+
+### What it computes
+
+How to split one signal into two or more shares, and combine them back,
+with every port matched to Z0. Three pills:
+
+- **Resistive:** a star of resistors: the input and each of 2 to 16 outputs
+  are joined to one centre node through a resistor R. The big result is R,
+  the same in every leg. In three cells: the loss from the input to each
+  output, the isolation between two outputs and the worst return loss.
+  Under them: the power out of each output, the hottest resistor (the input
+  leg) and the power lost as heat, for the input power you give.
+- **Wilkinson:** 2 to 8 equal outputs on quarter-wave arms. The big result
+  is the arm impedance, with the quarter-wave length for your frequency and
+  line (millimetres and inches, or centimetres, metres and feet for long
+  lines). The cells: the isolation resistor (one resistor for two outputs,
+  a star of N resistors of Z0 for more), the loss (the split itself,
+  10 log N dB) and the 20 dB band as ± a percentage of the centre
+  frequency. Under them: the return loss and isolation at the centre
+  frequency (∞ with exact values), the band as a frequency range, and the
+  heat in the resistor if an output opens or shorts.
+- **Unequal:** a two-way Wilkinson with the split you ask for, P3/P2 from
+  0 to 20 dB (port 3 gets the larger share). The big result is the two arm
+  impedances (to port 2 and to port 3); the cells: the isolation resistor
+  and the two output lines Z04 and Z05 that bring each output back to Z0;
+  under them: the loss to each port, the match and isolation, the 20 dB
+  band and the heat as above.
+- **Inputs:** the number of outputs (or the split), Z0, the power in (mW or
+  W) and, for the two quarter-wave pills, the frequency (kHz to GHz) and the
+  line's εeff and velocity factor (linked boxes: VF = 1/√εeff). The tolerance
+  at the top of the inputs picks the E series for the resistors: "Exact
+  values" shows the ideal ones, any series shows the loss, the match and the
+  isolation the standard resistor really gives.
+- **Drawing:** the circuit, ports numbered, the resistors and quarter-wave
+  lines in green. Up to four outputs are drawn; more are drawn as two, dots
+  and the last.
+- **Remembered:** the pill, the tolerance and both units.
+
+Examples: a 2-way resistive divider on 50 Ω, the same in E24 resistors, a
+Wilkinson for 1 GHz on 50 Ω, a 3-way Wilkinson on 75 Ω at 100 MHz and a 2:1
+unequal split.
+
+### Terms
+
+- **Divider, splitter, combiner:** one network. Run backwards, the outputs
+  are inputs and the input is the output.
+- **Port:** a connection to the outside, each matched to Z0. Port 1 is the
+  input, ports 2 and up the outputs.
+- **Loss (insertion loss):** how much weaker the signal is at an output
+  than at the input, in dB. It includes the unavoidable split: 3.01 dB for
+  two equal outputs, 10 log N for N.
+- **Isolation:** how much weaker a signal is at one output when it is
+  applied to another. High is good.
+- **Return loss:** how much weaker the reflected wave is than the wave that
+  entered a port, in dB. ∞ is a perfect match.
+- **Quarter-wave line:** a line a quarter of a wavelength long at the
+  centre frequency (90°). It turns a load R into Z²/R, Z being its own
+  impedance.
+- **Isolation resistor (Wilkinson):** the resistor across the outputs. It
+  carries no current while the outputs are equal and in step, and absorbs
+  the difference when they are not.
+- **εeff, velocity factor:** the effective dielectric constant a line sees,
+  and the share of light's speed a wave travels at: VF = 1/√εeff.
+- **K:** √(P3/P2), the unequal split's amplitude ratio (K² = P3/P2).
+- **20 dB band:** the frequencies round the centre where every return loss
+  and every output-to-output isolation is at least 20 dB.
+
+### Sources
+
+- **Marki Microwave, "6 Ways to Make an N-Way Power Splitter"
+  (application note, posted 24 June 2015, modified 13 July 2023; read):**
+  the direct N-way wye resistive splitter, R = Z0 (N − 1)/(N + 1), N the
+  number of outputs; the branched resistive splitters lose 6 dB per split
+  and the direct wye as much; and the Wilkinson dissipates nothing in its
+  isolation resistors in splitting use. It gives no isolation figure for the
+  resistive types and no N-way Wilkinson impedances.
+- **University of Utah, lecture notes L23, "ECE 6130 Wilkinson Power
+  Divider", text section 7.3 (a PDF with no author name in its metadata,
+  created 11 October 2006; read):** the equal Wilkinson is matched at all
+  ports, with complete isolation between the outputs, lossless when the
+  outputs are matched and lossy when they are not (only reflected power is
+  lost); by even and odd modes S11 = S22 = S33 = 0, S21 = S31 = −j/√2,
+  S23 = 0, and all the odd-mode power is lost in the resistor. It leaves the
+  unequal split as an exercise.
+- **Benha University, ECE 344 Microwave Fundamentals, Lecture 08, "Power
+  Dividers and Couplers, Part 1" (Dr. Sherif Hekal, 30 April 2018; read, but
+  the equations in its text layer are garbled, so only its statements and
+  examples were used):** the resistive three-port divider has all ports
+  matched, but half of the input power is dissipated in the resistors and
+  the outputs are not isolated; no lossless divider can match all three
+  ports; the Wilkinson is matched at all ports, isolates the outputs and
+  loses no power between port 1 and ports 2 and 3 (50 Ω, 70.7 Ω arms, 100 Ω).
+- **Maloratsky and London, "Quarter-wavelength N-way power
+  dividers/combiners: historical aspects and new modifications",
+  Microwave Journal, 1 September 2003 (read; its general equations are
+  images and did not come through as text):** for N outputs, line impedance
+  Z1 = Z0 √N; the resistors go to a floating common node; theoretically
+  infinite isolation between any two ports at the centre frequency; the
+  bandwidth narrows as N grows; planar layouts are difficult for N > 2.
+- **Wikipedia, "Wilkinson power divider" (last edited 20 August 2025;
+  read):** the unequal split with K² = P3/P2 and R = Z0 (K + 1/K); its arm
+  equations came out garbled, and it cites Pozar, Microwave Engineering,
+  3rd ed. (2005) for them, and Wilkinson's paper, IRE Trans. MTT, vol. 8,
+  pp. 116–118, January 1960.
+- **Huettner et al. (Nuvotronics), "How Hot Do Those Isolation Resistors
+  Get?", Microwave Journal, 13 May 2025 (read):** with the amplifier pairs in
+  phase no power goes to the isolation resistor; with a phase difference all
+  the mismatched power goes to one resistor. It gives no formula.
+- **RF Essentials, "Wilkinson Divider" (a web glossary page, no author or
+  date; read through a text-extraction tool):** 70.7 Ω and 100 Ω for two
+  ways, 10 log N for the split, and a one-section bandwidth of about 25 to
+  30 % (criterion not given; the 36 % here is for 20 dB). Its unequal-split
+  equations (K² = P2/P3, arms Z0 √(K (1 + K²)) and Z0 √((1 + K²)/K)) were
+  simulated as given, resistor across the arm ends, and leave a 15 dB match
+  at K² = 2, so they are not used.
+- **Derived here and checked by simulation:** every equation in the next
+  section, the heat in the resistors, and the bands.
+- **Not read:** Pozar, Microwave Engineering, §7.2 and §7.3 (the book);
+  Wilkinson's 1960 paper; Microwaves101's Wilkinson page (it returned "not
+  found").
+
+### Why the formulas are these
+
+**Resistive.** With every leg R and the M outputs ended in Z0, the input
+sees R + (R + Z0)/M. Setting that to Z0 gives R (M + 1) = Z0 (M − 1), so
+R = Z0 (M − 1)/(M + 1). Every port sees the same star, so the transmission
+between any two ports, input to output or output to output, is 1/M: the loss
+and the isolation are both 20 log M dB (6.02 dB for two outputs, 9.54 for
+three, 12.0 for four). The input leg carries the input current and
+dissipates (R/Z0) of the input power, (M − 1)/(M + 1) of it; each output leg
+(R/Z0)/M² of it; together (M − 1)/M of it is heat.
+
+**Wilkinson, N equal outputs.** Each arm, a quarter wave of impedance Z1
+loaded with Z0, looks like Z1²/Z0 from the input; N in parallel look like
+Z1²/(N Z0), which is Z0 when Z1 = Z0 √N. For the isolation, send signals of
+opposite signs to the outputs, adding up to zero: the arms' input ends are
+then a virtual ground, a quarter-wave line shorted at one end looks open at
+the other, and each output sees only its star resistor: matched when that
+resistor is Z0. (Between any two outputs that is 2 Z0, the 100 Ω of the
+two-way, so for two outputs one 2 Z0 resistor does.) Signals in step leave
+the common point at the outputs' voltage: no current in the resistors.
+
+**Unequal, K² = P3/P2.** Load the arm ends with R2 = K Z0 and R3 = Z0/K (any pair
+with the ratio K² would do; this one has R2 R3 = Z0² and keeps the output lines
+near Z0), brought back to Z0 by quarter-wave lines of Z04 = √(Z0 R2) = Z0 √K
+and Z05 = Z0/√K. Driven from port 1, the arm ends must be at the same voltage (no
+current in R), which gives R2/Z02 = R3/Z03 and, for the power split
+(R3/Z03²)/(R2/Z02²) = K², R2/R3 = K². Matching the input,
+Z02²/R2 ‖ Z03²/R3 = Z0, then gives Z02 = Z0 √(K (1 + K²)) and
+Z03 = Z0 √((1 + K²)/K³). For the isolation, drive port 2 and ask for no
+voltage at the end of arm 3. The voltage V2 at the end of arm 2 sends a
+current V2/R through R into the end of arm 3; that end, held at zero, is a
+short, which a quarter-wave line passes on as a current V1/Z03 (V1 the
+voltage at the input node); and with port 1 ended in Z0, V1 = Z0 V2/Z02.
+Equating the two currents gives R = Z02 Z03/Z0 = Z0 (K + 1/K) = R2 + R3. R
+goes between the arm ends, ahead of the transformers. For K = 1 these are
+70.7 Ω, 100 Ω and no transformers.
+
+**Heat with an output open or shorted.** The output k that fails reflects
+all the power it was given, P_k. Of that, the fraction |S1k|² goes back to
+the input, none to the other outputs (they are isolated), and the rest to
+the resistors: P_k (1 − |S1k|²). For N equal outputs that is (P/N)(1 − 1/N)
+= P (N − 1)/N² of the input power P; for the unequal split, either port
+gives K²/(1 + K²)² P. In the star of N resistors the failed output's
+resistor takes (N − 1)/N of it and each other 1/(N (N − 1)).
+
+**The band.** The arms' length is 90° × f/f0. The solver computes the
+S-parameters round the centre, and the band is the span where every return
+loss and every output-to-output isolation is at least 20 dB. For two equal
+outputs it is 0.819 to 1.18 f0; it narrows with the outputs (±11.1 % for
+three, ±8.56 % for four, ±5.18 % for eight) and with the split (about ±15 %
+for 3 dB, ±9.4 % for 6 dB, ±2.3 % for 20 dB).
+
+### Assumptions and limits
+
+- **Ideal lossless lines.** The loss shown is the split only. A real line
+  adds its own loss, and the resistors and junctions add parasitics that
+  matter at GHz. No discontinuity is modelled.
+- **One section.** Wider bands need several sections; they are not computed.
+- **The same εeff for every line,** though lines of different impedance have
+  different widths and so slightly different εeff: use the figure for the
+  trace you mean (the microstrip tool gives it).
+- **N > 2 needs a floating common point.** On a PCB that takes crossovers
+  or vias (Maloratsky and London); the tool computes the ideal circuit.
+- **The heat is the worst case:** total reflection at one output, the others
+  matched, at the centre frequency. For a combiner, two inputs of unequal
+  amplitude or phase give the resistor |a1 − a2|²/2 (the odd-mode power).
+- **Power in** is the power a matched source can deliver.
+- **Standard values:** one value for every leg or resistor, the nearest in
+  the series to the ideal one.
+- **Unequal:** port 3 gets the larger share; swap the ports for the other
+  way round. Splits over 20 dB are refused (the transformers get extreme).
+- **Not covered:** hybrid and directional couplers and the two-resistor
+  "leveling" splitter of test equipment.
+
+### How it was checked
+
+27 cases. The expected values come from a Python S-parameter solver (numpy,
+nodal analysis with quarter-wave line matrices) and the app's own solver
+agreed with it to the digits shown:
+- Resistive: 2 outputs on 50 Ω, 16.7 Ω, 6.02 dB (loss and isolation),
+  matched, 250 mW out of 1 W, 333 mW in the input leg, 500 mW lost; in E24,
+  16 Ω: 5.93 dB, a 39.9 dB match, 490 mW lost; 4 outputs, 30 Ω, 12 dB, 750 mW
+  lost; 3 outputs on 75 Ω, 37.5 Ω, 9.54 dB; 8 outputs in E96, 39.2 Ω, 18.1
+  dB, 49.1 dB; 100 mW in; one and 17 outputs refused;
+- Wilkinson: 2 outputs on 50 Ω at 1 GHz, VF 66 %: 70.7 Ω, 49.5 mm, 100 Ω,
+  3.01 dB, ±18.1 %, 250 mW; 3 outputs on 75 Ω at 100 MHz: 130 Ω, 49.5 cm,
+  4.77 dB, ±11.1 %, 222 mW (148 mW in one resistor); 4 outputs (100 Ω,
+  ±8.56 %, 187 mW) and 8 (141 Ω, ±5.18 %, 109 mW); E12 star resistors, 47 Ω:
+  a 33.7 dB match and 39.7 dB isolation; 10 MHz, 4.95 m; VF 1, 74.9 mm; VF
+  0.5 and εeff 4 linked; nine outputs and no frequency refused;
+- Unequal: 3 dB: 103 and 51.5 Ω, 106 Ω, 59.4 and 42.1 Ω, 4.76 and 1.76 dB,
+  0.852 to 1.15 GHz, 222 mW; 4:1: 158 and 39.5 Ω, 125 Ω, 70.7 and 35.4 Ω,
+  160 mW; 0 dB: the equal Wilkinson; 20 dB; 6 dB in E24 (120 Ω for 125 Ω: a
+  36.1 dB match, 42.1 dB isolation); 25 dB refused;
+- three of the examples.
+
+The solver also confirmed, to numerical zero at the centre frequency, the
+equal and N-way Wilkinson (every port matched, every pair of outputs
+isolated), the unequal one for K² from 1 to 100 with the exact split, and
+that the resistor placed after the output transformers, or the transformers
+left out, or RF Essentials' arms, do not give a matched and isolated
+divider.
 
 [↑ Index](#index)
 
