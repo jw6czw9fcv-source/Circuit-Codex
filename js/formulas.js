@@ -399,6 +399,18 @@ const FORMULAS = [
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
   },
   {
+    tool: "Intercept point",
+    domain: "rf",
+    formulas: ["OIP3 = P + (P − IM3) / 2,  IIP3 = OIP3 − G", "IM3 = 3 P − 2 OIP3", "OP1dB ≈ OIP3 − 10.6 dB,  IP1dB ≈ IIP3 − 9.6 dB", "1/OIP3 = Σ 1 / (OIP3,k × gains after k)", "SFDR = 2/3 × (IIP3 − noise floor)"],
+    note: "Keysight AN 1408-17 and 1408-9 for the two-tone formulas; P1dB 9.6 dB below the intercept is for an ideal cubic nonlinearity (real amplifiers 10 to 15 dB). Chain: the in-phase (worst-case) sum.",
+  },
+  {
+    tool: "Intermodulation",
+    domain: "rf",
+    formulas: ["products: n f1 + m f2,  order |n| + |m|", "third order: 2f1 − f2,  2f2 − f1", "fifth order: 3f1 − 2f2,  3f2 − 2f1", "product on f0: f2 = 2 f1 − f0", "or f2 = (f1 + f0) / 2", "IM3 (dBm) = 2 P1 + P2 − 2 IIP3"],
+    note: "Keysight AN 1408-17 and 1408-9. The partner of an interferer that puts a product on a channel is the same equation solved for f2.",
+  },
+  {
     tool: "RF cascade",
     domain: "rf",
     formulas: ["F = F1 + (F2 − 1)/G1 + (F3 − 1)/(G1 G2) + …", "NF = 10 log F,  Te = 290 K × (F − 1)", "1/OP(k) = 1/OP,k + 1/(OP(k−1) × Gk)", "OP1dB = IP1dB + G − 1 dB", "Noise floor = −174 dBm/Hz + 10 log B + NF"],

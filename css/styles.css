@@ -889,6 +889,7 @@ div.tool-row { cursor: default; }
 .cc-cols { margin: 0 26px 2px 26px; color: var(--text-muted); font-size: 11.5px; font-weight: 600; grid-template-columns: 20px 58px 1fr 1fr 1fr 20px; }
 .cc-cols span { white-space: nowrap; }
 .cc-grid input { text-align: left; }
+.cc-cum { color: var(--result-text); font-size: 15px; font-weight: 600; white-space: nowrap; }
 
 /* A control that rides a section heading, like .label-select. */
 .label-btn {

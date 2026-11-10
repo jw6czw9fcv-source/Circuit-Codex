@@ -99,6 +99,8 @@ will key on, since that is the id the app already holds for each tool.
 - Transmission lines → [Skin depth](#skin-depth)
 - Power & gain → [RF cascade](#rf-cascade)
 - Power & gain → [Attenuator](#attenuator)
+- Power & gain → [Intercept point](#intercept-point)
+- Power & gain → [Intermodulation](#intermodulation)
 
 ### Power electronics
 
@@ -11612,6 +11614,341 @@ formulas, and Rohde & Schwarz's example:
   dB over its OP1dB; adding then removing a stage; a blank gain, a noise
   figure under 0 dB and a zero bandwidth refused; kHz re-expresses the
   bandwidth.
+
+[↑ Index](#index)
+
+---
+
+<a id="intercept-point"></a>
+## Intercept point
+
+`calc: intercept-point` · RF & microwave › Power & gain
+
+### What it computes
+
+How linear an amplifier, or a whole chain of stages, is, summed up by its
+third-order intercept point (IP3), three ways (pills):
+
+- **Measure** (you have run a two-tone test): the level of each tone at
+  the output and the level of one third-order product (IM3), both in dBm,
+  and the gain in dB (optional). The big result is the output intercept
+  point (OIP3), with how far the product sits below each tone. Under it:
+  the input intercept point (IIP3, needs the gain), the estimated 1 dB
+  compression points OP1dB and IP1dB, how far the tone is below that
+  compression, and how far down the product would be for 10 dB less tone.
+- **Predict** (you know the IP3, say from a data sheet): IIP3, Gain and
+  OIP3 are linked boxes (type any two and the third follows; the intercept
+  you typed last is the one held when the gain changes), the level of each
+  input tone and the IM3 rejection you want, in dB. The big result is the
+  IM3 product at the output, with its rejection. Under it: the output
+  tone, the product as it appears at the input, OP1dB; then the largest
+  tone that still gives the rejection you asked for (at the output and at
+  the input), and how far the tone is below its compression.
+- **Chain** (several stages): up to five rows, each Amp (gain in dB, OIP3
+  in dBm, left blank when unknown) or Loss (an attenuator, a filter or a
+  cable: its loss in dB, with no distortion of its own); "+ add stage"
+  adds a row, × removes one. Then the input tone level and the noise floor
+  at the input, in dBm. The big result is the chain's OIP3, with the stage
+  that adds most of the distortion and its share. Under it: the gain, the
+  IIP3 and the spur-free dynamic range (SFDR); the IM3 product for that
+  input level (at the output and in dBc) and the tone at the output. Each
+  row shows the chain's OIP3 up to and including that stage.
+- **Drawing:** Measure and Predict: the tone line (blue, 1 dB per dB) and
+  the IM3 line (green, 3 dB per dB) meeting at the intercept, with the
+  tone and product levels marked and the gap between them, the rejection;
+  not to scale. Chain: the stages as boxes (dashed for a loss), each
+  stage's own gain inside, and under each the cumulative gain (blue) and
+  OIP3 (green).
+- **Remembered:** the pill.
+
+Examples: Keysight's amplifier (−10 dBm in, 20 dB gain, OIP3 +38 dBm), the
+same figures worked backwards from a two-tone test, a receiver's input IP3
+with two −40 dBm interferers, and an LNA, a pad and an amplifier in a
+chain.
+
+### Terms
+
+- **Two-tone test:** two equal sine waves, close in frequency (f1 and f2),
+  applied to the device. The output shows the two tones and, beside them,
+  their intermodulation products.
+- **IM3:** the third-order products, at 2f1 − f2 and 2f2 − f1. Their level
+  rises 3 dB for every 1 dB the tones rise (the tones rise 1 dB).
+- **dBc:** dB relative to the carrier, here to each tone: an IM3 of −56 dBc
+  is 56 dB below the tone.
+- **Third-order intercept point (IP3, TOI):** the level at which the tone
+  line and the IM3 line, each extended along its small-signal slope, would
+  meet. It is never reached, because the device compresses first: a figure
+  of merit, the higher the more linear.
+- **OIP3, IIP3:** the intercept read on the output power axis or on the
+  input one. They differ by the gain: IIP3 = OIP3 − G.
+- **P1dB:** the power at which the gain has fallen by 1 dB. OP1dB is read
+  at the output, IP1dB at the input: OP1dB = IP1dB + G − 1 dB.
+- **Spur-free dynamic range (SFDR):** the range of input tone levels from
+  the noise floor up to where the IM3 product reaches that floor.
+- **Noise floor:** the noise power in the bandwidth of interest, referred
+  to the input (the RF cascade tool computes it).
+
+### Sources
+
+- **Agilent (now Keysight) application note 1408-9, "Amplifier and CW
+  Swept Intermodulation-Distortion Measurements" (publication
+  5988-9474EN; read):** the products at n f1 + m f2; the third-order ones
+  as the concern because they sit beside the tones and rise three times as
+  fast; and, for two equal tones, IP3 (dBm) = the output power of a tone +
+  ½ × (that power − the larger third-order product), in dB. It requires the
+  measurement to be made in the amplifier's linear region. Its measured
+  examples (a −1.258 dBm tone with a −42.03 dBm product: 19.13 dBm; −0.6
+  and −39.3: printed as 19, this gives 18.75) are reproduced. Its example
+  amplifier has a 1 dB compression point of +3 dBm and an intercept of +14
+  dBm, 11 dB apart; the model here puts them 10.6 dB apart.
+- **Keysight application note 1408-17, "Making Accurate Intermodulation
+  Distortion Measurements with the PNA-X Network Analyzer" (5989-7265EN;
+  read), appendix B:** an amplifier with an OIP3 of +38 dBm and 20 dB of
+  gain, driven at −10 dBm per tone: +10 dBm out, the product at −46 dBm,
+  −56 dBc. The tool reproduces it (the first example).
+- **The compression point:** Wikipedia, "Third-order intercept point" (an
+  encyclopedia page, not a standard; read): for a weakly nonlinear
+  odd-order power-series model, the 1 dB compression point lies about 9.6
+  dB below the intercept (a factor 0.10875, −9.636 dB), and "approximately
+  10 dB" below it as a rule of thumb for many amplifiers; the page cites no
+  source for either. The 9.636 dB is re-derived below and used as is. RF
+  Cafe, "Cascaded P1dB" (read, see RF cascade) gives the rule of thumb as 10
+  to 15 dB below the IP3.
+- **The cascade:** RF Essentials, "What is Cascaded IP3?" (a web glossary
+  page, no author or date shown; read): 1/OIP3 = 1/OIP3,n + 1/(OIP3,n−1 ×
+  Gn) + 1/(OIP3,n−2 × Gn × Gn−1) + …, in linear power; products adding in
+  phase degrade the linearity fastest, and design tools assume that worst
+  case. Its worked table for four stages (an LNA of 16 dB and +22 dBm, a
+  filter of −1.5 dB, a mixer of −6 dB and +18 dBm, an IF amplifier of 12 dB
+  and +25 dBm) lists the cumulative OIP3 as +22.00, +20.50, +12.65 and
+  +10.90 dBm. The first two follow its formula; the third is 0.25 dB under
+  the formula's +12.90 and the last 11 dB under its +21.94. The tool
+  follows the formula and treats the table's last entry as an error. The
+  page was read through a text-extraction tool, not as raw HTML, so a
+  transcription slip cannot be ruled out.
+- **Derived here, not quoted:** the relations in the next section, the
+  share of each stage, and the SFDR = ⅔ (IIP3 − noise floor), a form in
+  common use for which no source was read.
+- **Not read:** Analog Devices' tutorial 749, "Use Selectivity to Improve
+  Receiver Intercept Point" (the fetch failed), and any standard that
+  defines the intercept point.
+
+### Why the formulas are these
+
+For a weakly nonlinear stage, output = a1 x + a3 x³ with a3 < 0 (it
+compresses). Two equal tones of amplitude A give a fundamental a1 A and an
+IM3 product of amplitude ¾ |a3| A³, so product over tone = ¾ (|a3|/a1) A²,
+which grows with the square of the tone: 2 dB per dB of amplitude, 3 dB per
+dB of power against the tone's 1. It reaches 1 at A² = 4 a1 / (3 |a3|),
+the intercept. In dB, with P the tone level and IP3 the intercept on the
+same axis, the product sits 2 (IP3 − P) below the tone:
+
+    IM3 = 3 P − 2 IP3
+    IP3 = P + (P − IM3) / 2        (Keysight's formula)
+
+A single tone is compressed by the same term: its gain falls by the factor
+1 − A²/A_IP². For 1 dB, 1 − A²/A_IP² = 10^(−1/20), so A²/A_IP² = 0.10875,
+which is −9.636 dB. Hence IP1dB = IIP3 − 9.636 dB and, with the 1 dB of gain
+lost, OP1dB = OIP3 − 10.636 dB.
+
+For a chain, stage k with input intercept IIP3,k and the gain Gprev ahead of
+it puts a distortion voltage at the chain's output proportional to Gprev /
+IIP3,k, which is 1/(OIP3,k × the gain after k) once referred to the output.
+Taken in phase (the worst case), the voltages add, and so do these terms:
+
+    1/OIP3 = Σ 1 / (OIP3,k × G(k+1) × … × Gn)
+
+A stage with no limit (a loss, or a blank OIP3) adds no term, but its gain
+still weighs the stages before it. Taken from the input, stage by stage:
+
+    1/OIP3(k) = 1/OIP3,k + 1/(OIP3(k−1) × Gk)
+
+which gives the cumulative figure on each row. A stage's share is its term
+over the sum.
+
+The product referred to the input is 3 P − 2 IIP3. It reaches the noise
+floor N when P = (2 IIP3 + N)/3, so the range from N up to there is
+(2 IIP3 + N)/3 − N = ⅔ (IIP3 − N).
+
+### Assumptions and limits
+
+- **Two equal tones, close together,** in a device without memory (the
+  intercept does not depend on their spacing).
+- **The 3:1 slope holds only well below compression.** Near the P1dB the
+  product stops following the line. The tool flags a tone within 10 dB of
+  its estimated P1dB, and one over it, in amber.
+- **The compression point is an estimate.** The cubic model puts it 10.6 dB
+  under the OIP3; real amplifiers are 10 to 15 dB under, Keysight's example
+  11 dB. If the data sheet gives the P1dB, trust that.
+- **Third order only.** Fifth-order terms bend the product's line near
+  compression and are not modelled.
+- **The chain sum is the in-phase worst case.** If the stages' products had
+  random phases they would add less: for two equal contributions the
+  root-sum-square would give 1.5 dB more OIP3 than the in-phase sum.
+- **A loss has no limit here.** A passive part is far more linear than an
+  amplifier (RF Essentials' example gives its filter +100 dBm) and is
+  entered as no limit. A mixer is an Amp with its conversion loss as a
+  negative gain and its own OIP3.
+- **The noise floor is yours to choose,** and the SFDR follows it: take it
+  for the bandwidth you need (the RF cascade tool gives it).
+
+### How it was checked
+
+14 cases; the expected values come from a Python implementation of the same
+formulas and from the published examples:
+- Measure, +10 dBm tones with a −46 dBm product and 20 dB of gain: OIP3 +38
+  dBm, 56 dB below the tone, IIP3 +18 dBm, OP1dB +27.36 dBm, IP1dB +8.364
+  dBm, the tone 17.4 dB under its P1dB, the product 76 dB down for 10 dB
+  less tone; the same without the gain (the input figures show "—"); a +25
+  dBm tone with a +20 dBm product flagged 8.14 dB over its estimated P1dB; a
+  product as strong as the tone refused;
+- Keysight AN 1408-9's example, −1.258 dBm and −42.03 dBm: +19.13 dBm;
+- Predict, Keysight's amplifier: −46 dBm product, 56 dB down, −66 dBm at the
+  input, the largest tone for 50 dB +13 dBm out and −7 dBm in; typing an
+  IIP3 of 18 with 20 dB gives an OIP3 of 38, and a gain of 10 then keeps the
+  IIP3 and moves the OIP3 to 28; a receiver with an IIP3 of −10 dBm and
+  −40 dBm tones: −100 dBm, 60 dB down; a blank gain refused;
+- Chain, an LNA (15 dB, +25 dBm), a 3 dB loss and an amplifier (20 dB, +30
+  dBm): 32 dB, OIP3 +29.73 dBm, IIP3 −2.266 dBm, SFDR 71.8 dB for a −110 dBm
+  floor, 94.1 % of the distortion from stage 3, a −83.47 dBm product (−75.5
+  dBc) for −40 dBm in; RF Essentials' four stages: +21.94 dBm by the formula
+  (the table says +10.90), +20.5 and +12.9 dBm after stages 2 and 3, IIP3
+  +1.438 dBm; no OIP3 entered shows "—" and "nothing limits the chain"; a
+  negative loss refused; adding then removing a stage.
+
+[↑ Index](#index)
+
+---
+
+<a id="intermodulation"></a>
+## Intermodulation
+
+`calc: intermodulation` · RF & microwave › Power & gain
+
+### What it computes
+
+What two signals leave behind in anything not perfectly linear, and which
+pair of signals lands on a channel. Two pills:
+
+- **Products:** the frequencies of two tones f1 and f2 (in either order;
+  one unit picker, Hz to GHz, sets both). The big result is the third-order
+  products, 2f1 − f2 and 2f2 − f1, with how far outside each tone they sit
+  (one tone spacing). Under it: the fifth order (3f1 − 2f2, 3f2 − 2f1), the
+  seventh order (4f1 − 3f2, 4f2 − 3f1), the second order (f2 − f1, f1 + f2),
+  the harmonics (2f1, 2f2) and the third-order sums (2f1 + f2, f1 + 2f2). A
+  product that falls below 0 Hz is shown at its mirror image, marked *.
+- **Interferers:** the channel you listen on (f0) and one interferer (f1).
+  The big result is the frequency of a second interferer that puts a
+  third-order product on the channel: 2f1 − f2 = f0 gives f2 = 2f1 − f0 (A,
+  as far beyond f1 as f1 is from the channel) and 2f2 − f1 = f0 gives
+  f2 = (f1 + f0)/2 (B, halfway between the channel and f1); a value at or
+  below 0 Hz shows "—". Under it: the fifth-order partners, (3f1 − f0)/2
+  and (f0 + 2f1)/3. With the receiver's IIP3, the level of each interferer
+  and the noise floor (all in dBm, at the receiver's input): the product's
+  level at the input (3 × level − 2 × IIP3), how far it sits above or below
+  the floor, and how far the floor rises when the product adds to it
+  ("unchanged" under 0.05 dB).
+- **Drawing:** Products: the spectrum as lines, the tones (blue), IM3
+  (green), IM5 and IM7 (grey). Interferers: the channel (green), the
+  interferer (blue), and the partners A and B (dashed blue).
+- **Remembered:** the pill and the frequency unit.
+
+Examples: two close tones at 100 and 101 MHz, Keysight's PNA-X tones
+(5.00001 and 5.00011 GHz), and an interferer at 100.2 MHz near a 100 MHz
+channel.
+
+### Terms
+
+- **Intermodulation:** the mixing of two or more signals in a nonlinear
+  device (an amplifier, a mixer, a diode, a corroded joint): the output
+  holds signals at the sums and differences of their multiples.
+- **Product, order:** n f1 + m f2 for whole numbers n and m, of order
+  |n| + |m|. IM3, IM5 and IM7 are the odd orders with the tones' difference
+  (2f1 − f2, 3f1 − 2f2, 4f1 − 3f2 and their mirror images).
+- **Harmonic:** a multiple of one tone alone (2f1, 2f2).
+- **Interferer:** an unwanted signal near the channel; two of them can put
+  a product on it.
+- **Mirror image (\*):** a product at −f is the same tone as one at +f, so
+  it is shown at f with a star.
+- **IIP3:** the receiver's input intercept (see Intercept point).
+
+### Sources
+
+- **Agilent (now Keysight) application notes 1408-9 and 1408-17 (see
+  Intercept point; read):** the output holds signals at n f1 + m f2 for
+  whole n and m; the third-order products 2f2 − f1 and 2f1 − f2 are the
+  concern because they sit close to the tones and so cannot be filtered
+  out. Their example, tones at 5.00001 and 5.00011 GHz, gives products at
+  4.99991 and 5.00021 GHz, which the tool reproduces. For tones of
+  different level, note 1408-17 gives the high-side product as P(f1) − 2 ×
+  (IP3 − P(f2)) and the low-side one as P(f2) − 2 × (IP3 − P(f1)), at the
+  receiver: the tool's level for equal interferers is the same formula.
+- **Derived here, not quoted:** the definition of the order as |n| + |m|
+  (the notes name the third-order products and give n f1 + m f2 but do not
+  define the order), the fifth- and seventh-order products, the second-order
+  products and sums, and the partner frequencies of the Interferers pill
+  (the third-order equation solved for the second tone).
+- **Not read:** a standard that defines intermodulation orders.
+
+### Why the frequencies are these
+
+A nonlinearity of order N makes terms of the form (A cos ω1t + B cos ω2t)^N.
+Each product of cosines splits into cosines at the sum and the difference of
+their frequencies, so the output holds n f1 + m f2 with |n| + |m| up to N.
+With Δ = f2 − f1, the odd-order products with opposite signs land at
+
+    2f1 − f2 = f1 − Δ        2f2 − f1 = f2 + Δ
+    3f1 − 2f2 = f1 − 2Δ      3f2 − 2f1 = f2 + 2Δ
+    4f1 − 3f2 = f1 − 3Δ      4f2 − 3f1 = f2 + 3Δ
+
+equally spaced by Δ either side of the pair: the picture the tool draws.
+That is why no filter that passes the tones can stop them.
+
+Backwards, a second interferer f2 puts IM3 on the channel f0 when 2f1 − f2 =
+f0, so f2 = 2f1 − f0, or when 2f2 − f1 = f0, so f2 = (f1 + f0)/2. The same
+for the fifth order: 3f1 − 2f2 = f0 gives f2 = (3f1 − f0)/2, and
+3f2 − 2f1 = f0 gives f2 = (f0 + 2f1)/3.
+
+The product at the receiver's input, for two interferers of level P each
+and an input intercept IIP3, is 3 P − 2 IIP3 (see Intercept point). The
+floor is the noise N plus that product in power: the rise is
+10 log(1 + 10^((IM3 − N)/10)), which is 3 dB when the product equals the
+noise and 10.4 dB when it is 10 dB above it.
+
+### Assumptions and limits
+
+- **Equal levels:** both interferers are taken at the same level; for
+  unequal ones the product is 2 P1 + P2 − 2 IIP3 for 2f1 − f2 (two of the
+  tone whose frequency is doubled).
+- **The 3:1 rule** holds below compression only; with strong interferers
+  the real product can differ.
+- **The intercept is the receiver's, at its input.** If a filter before the
+  first nonlinear stage removes an interferer, it makes no product; if the
+  gain ahead of that stage is high, use the chain's IIP3 (Intercept point).
+- **Orders above the third** are listed by frequency only; their levels are
+  not computed. Second-order products (f2 − f1, f1 + f2) and harmonics need
+  the second-order intercept, which the app does not compute.
+- **The tool does not know your receiver's passband,** so it does not say
+  whether a product falls in it.
+
+### How it was checked
+
+10 cases; the expected values come from a Python implementation of the same
+equations and from Keysight's example:
+- 100 and 101 MHz: IM3 at 99 and 102 MHz, IM5 at 98 and 103, IM7 at 97 and
+  104, second order 1 and 201, harmonics 200 and 202, third-order sums 301
+  and 302; the tones typed in the other order give the same;
+- Keysight AN 1408-17's tones, 5.00001 and 5.00011 GHz: 4.99991 and
+  5.00021 GHz (and IM5 4.99981 · 5.00031, IM7 4.99971 · 5.00041);
+- 10 and 100 MHz: an IM3 below 0 Hz shown as 80* and the other at 190 MHz;
+  two equal tones refused;
+- a 100 MHz channel with an interferer at 100.2 MHz: 100.4 or 100.1 MHz,
+  fifth order 100.3 and 100.1333, with −40 dBm interferers and an IIP3 of
+  −10 dBm an IM3 of −100 dBm, 10 dB over a −110 dBm floor, which rises
+  10.4 dB; at −60 dBm the product is −160 dBm, 50 dB under the floor, which
+  does not move; an interferer at 30 MHz has no partner below the channel,
+  only 65 MHz; one on the channel refused; kHz re-expresses the
+  frequencies.
 
 [↑ Index](#index)
 

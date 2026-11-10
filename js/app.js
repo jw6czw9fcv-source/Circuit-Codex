@@ -666,6 +666,8 @@ function renderTool(rawKey, calcId) {
   if (calcId === "coax") return renderCoax(domain, tool, favId);
   if (calcId === "attenuator") return renderAttenuator(domain, tool, favId);
   if (calcId === "rf-cascade") return renderCascade(domain, tool, favId);
+  if (calcId === "intercept-point") return renderInterceptPoint(domain, tool, favId);
+  if (calcId === "intermodulation") return renderIntermodulation(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -14034,6 +14036,545 @@ function renderCascade(domain, tool, favId) {
     app.querySelector('input[data-sys="pin"]').oninput = (e) => { state.pin = parseFloat(e.target.value); show(); };
     app.querySelector('input[data-sys="bw"]').oninput = (e) => { state.bw = parseFloat(e.target.value) * CASC_B_UNITS[state.bUnit]; show(); };
     app.querySelector("select[data-bunit]").onchange = (e) => { state.bUnit = e.target.value; setPref(C, "bUnit", state.bUnit); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- Intercept point ----------
+// The third-order intercept point (IP3, TOI): the level where the straight-
+// line extensions of the tone (1 dB per dB) and its third-order product (3 dB
+// per dB) cross. Keysight AN 1408-17 (5989-7265EN, "Making Accurate
+// Intermodulation Distortion Measurements with the PNA-X", read): the third-
+// order products 2f1 − f2 and 2f2 − f1 "increase by a factor of three" in
+// level against the tones, and
+//   IP3 (dBm) = P(f1) + (P(f2) − P(2f1 − f2)) / 2,
+//   product (dBm) = P(f1) − 2 (IP3 − P(f2))  (high side; the low side swaps),
+// with its worked example (Appendix B): input −10 dBm, gain 20 dB, OIP3
+// +38 dBm: output tone +10 dBm, product −46 dBm, −56 dBc, which this
+// reproduces. Keysight AN 1408-9 (5988-9474EN, read): for equal tones, "TOI
+// or IP3 (dBm) = output power of a fundamental tone + 1/2 × {output power
+// of a fundamental tone − maximum (2f2 − f1, 2f1 − f2)}", measured "in the
+// linear operating region of the amplifier". For a pure third-order
+// nonlinearity the 1 dB compression comes where the cubic term is 0.10875 of
+// the linear one, 9.636 dB below the IP3 at the input (Wikipedia, "Third-order
+// intercept point", read; checked here), so OP1dB = OIP3 − 10.64 dB; RF
+// Cafe's rule of thumb is 10 to 15 dB. The chain: the in-phase (worst case)
+// sum 1/OIP3 = Σ 1/(OIP3,k × the gains after stage k), RF Essentials'
+// "Cascaded IP3" (read); derived below from the stages' distortion voltages.
+const IP_MODES = { measure: "Measure", predict: "Predict", chain: "Chain" };
+// P1dB below IIP3, in dB, for a cubic nonlinearity: 10 log (1 − 10^(−1/20)).
+const IP_P1 = 10 * Math.log10(1 - 10 ** (-1 / 20));
+
+// The chain's cumulative gain and output intercept, and each stage's share
+// of the distortion (the terms of 1/OIP3, which add in phase).
+function ipChainOf(stages) {
+  const G = stages.map((st) => (st.type === "loss" ? casc.lin(-st.g) : casc.lin(st.g)));
+  const OP = stages.map((st) => (st.type === "loss" || st.op === null ? Infinity : casc.lin(st.op)));
+  let gc = 1, inv = 0;
+  const per = stages.map((st, i) => {
+    inv = (OP[i] === Infinity ? 0 : 1 / OP[i]) + inv / G[i];
+    gc *= G[i];
+    return { g: casc.db(gc), op: inv > 0 ? casc.db(1 / inv) : null };
+  });
+  const term = OP.map((op, k) => { let after = 1; for (let j = k + 1; j < G.length; j++) after *= G[j]; return op === Infinity ? 0 : 1 / (op * after); });
+  const tot = term.reduce((a, b) => a + b, 0);
+  const last = per[per.length - 1];
+  return { per, gDb: last.g, opDb: last.op, ipDb: last.op === null ? null : last.op - last.g, share: tot > 0 ? term.map((x) => (x / tot) * 100) : null };
+}
+
+function renderInterceptPoint(domain, tool, favId) {
+  const C = "intercept-point";
+  const state = {
+    mode: pref(C, "mode", "measure", Object.keys(IP_MODES)),
+    p: 10, im: -46, g: 20,
+    // Predict: the intercept as last typed, output-referred ("o") or input-referred ("i").
+    ref: "o", ipv: 38, pin: -10, want: 50,
+    stages: [{ type: "amp", g: 15, op: 25 }, { type: "loss", g: 3, op: null }, { type: "amp", g: 20, op: 30 }],
+    cpin: -40, nfl: -110,
+  };
+  const num = (v, d = 3) => String(Number(v.toPrecision(d))).replace("-", "−");
+  const fmt = (v) => (v === null || !isFinite(v) ? "" : String(+v.toPrecision(5)));
+  const dbm = (v) => `${v >= 0 ? "+" : "−"}${num(Math.abs(v), 4)} dBm`;
+  const known = (v) => v !== null && isFinite(v);
+  const oipOf = () => (state.ref === "o" ? state.ipv : state.ipv + state.g);
+
+  function problem() {
+    if (state.mode === "measure") {
+      if (!isFinite(state.p)) return "Enter the tone level, in dBm.";
+      if (!isFinite(state.im)) return "Enter the IM3 product's level, in dBm.";
+      if (!(state.im < state.p)) return "The IM3 product must be weaker than the tone.";
+    } else if (state.mode === "predict") {
+      if (!isFinite(state.ipv)) return "Enter the intercept point, in dBm.";
+      if (!isFinite(state.g)) return "Enter the gain, in dB.";
+      if (!isFinite(state.pin)) return "Enter the input tone level, in dBm.";
+      if (!(state.want > 0)) return "Enter the IM3 rejection you want, above 0 dB.";
+    } else {
+      for (let i = 0; i < state.stages.length; i++) {
+        const st = state.stages[i], k = i + 1;
+        if (!isFinite(st.g)) return st.type === "loss" ? `Stage ${k}: enter the loss in dB.` : `Stage ${k}: enter the gain in dB.`;
+        if (st.type === "loss" && !(st.g >= 0)) return `Stage ${k}: a loss is zero or more dB (a gain is an amplifier).`;
+      }
+      if (!isFinite(state.cpin)) return "Enter the input tone level, in dBm.";
+      if (!isFinite(state.nfl)) return "Enter the noise floor, in dBm.";
+    }
+    return "";
+  }
+
+  // The numbers of each mode.
+  const measureOf = () => {
+    const oip = state.p + (state.p - state.im) / 2;
+    return { oip, dbc: state.p - state.im, iip: known(state.g) ? oip - state.g : null, op1: oip + IP_P1 - 1, ip1: known(state.g) ? oip - state.g + IP_P1 : null };
+  };
+  const predictOf = () => {
+    const oip = oipOf(), iip = oip - state.g, pout = state.pin + state.g, im = 3 * pout - 2 * oip, op1 = oip + IP_P1 - 1;
+    return { oip, iip, pout, im, dbc: 2 * (oip - pout), imin: im - state.g, op1, ip1: iip + IP_P1, maxOut: oip - state.want / 2, maxIn: oip - state.want / 2 - state.g, below: op1 - pout };
+  };
+
+  // Tone, product and the intercept: the tone line at 1 dB per dB, the
+  // product's at 3, crossing at the OIP3. Not to scale; the gap between the
+  // lines at the tone's level is the rejection.
+  function plot() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const ok = !problem();
+    const r = ok ? (state.mode === "measure" ? measureOf() : predictOf()) : null;
+    const oip = r ? r.oip : 38, tone = r ? (state.mode === "measure" ? state.p : r.pout) : 10;
+    const b = Math.max(0.5, oip - tone);
+    const Xc = 218, Yc = 24, Yb = 84;
+    const sy = Math.min(1.6, (Yb - Yc - 14) / (3 * b)), sx = 2 * sy;
+    const Xo = Xc - sx * b, Yf = Yc + sy * b, Yi = Yc + 3 * sy * b;
+    const dxF = (Yb - Yc) / 0.5, dxI = (Yb - Yc) / 1.5;
+    const imv = r ? (state.mode === "measure" ? state.im : r.im) : -46;
+    let out = `<path d="M30 ${Yb} H272 M30 12 V${Yb}" stroke="${wire}" stroke-width="1.2"/>`;
+    out += `<path d="M${(Xc - dxF).toFixed(1)} ${Yb} L${Xc} ${Yc}" stroke="${part}" stroke-width="1.8"/>`;
+    out += `<path d="M${(Xc - dxI).toFixed(1)} ${Yb} L${Xc} ${Yc}" stroke="${calc}" stroke-width="1.8"/>`;
+    out += `<path d="M${Xo.toFixed(1)} ${Yf.toFixed(1)} V${Yi.toFixed(1)}" stroke="${grey}" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+    out += `<circle cx="${Xc}" cy="${Yc}" r="3.2" fill="${calc}"/><circle cx="${Xo.toFixed(1)}" cy="${Yf.toFixed(1)}" r="3" fill="${part}"/><circle cx="${Xo.toFixed(1)}" cy="${Yi.toFixed(1)}" r="3" fill="${calc}"/>`;
+    out += lbl(Xc - 8, 14, ok ? `OIP3 ${dbm(oip)}` : "OIP3", calc, "end");
+    out += lbl(Xo - 8, Yf - 5, ok ? `tone ${dbm(tone)}` : "tone", part, "end");
+    // The product's label and the gap's go to the right of the green line, where
+    // nothing else is drawn (the tone line crosses anything to its left).
+    const imTxt = ok ? `IM3 ${dbm(imv)}` : "IM3";
+    out += Xo + 12 + imTxt.length * 6.2 > 288 ? lbl(Xo - 8, Yi + 4, imTxt, calc, "end") : lbl(Xo + 12, Yi + 4, imTxt, calc, "start");
+    if (ok && Yi - Yf >= 26) out += lbl(Xo + (sy * b + 8) / 1.5 + 6, (Yf + Yi) / 2 + 4, `${num(2 * b)} dB`, grey, "start");
+    out += `<text x="150" y="102" font-size="11" font-weight="600" text-anchor="middle"><tspan fill="${part}">tone 1 dB/dB</tspan><tspan fill="${grey}"> · </tspan><tspan fill="${calc}">IM3 3 dB/dB</tspan></text>`;
+    return `<svg width="320" height="124" viewBox="0 0 290 108" fill="none">${out}</svg>`;
+  }
+
+  // The chain as boxes: each stage's gain inside, below it the cumulative
+  // gain and the cumulative OIP3 up to and including it.
+  function boxes() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const st = state.stages, n = st.length, ok = !problem();
+    const r = ok ? ipChainOf(st) : null;
+    const w = 40, gap = 14, total = n * w + (n - 1) * gap, x0 = (290 - total) / 2;
+    let out = `<path d="M${(x0 - 14).toFixed(1)} 31 H${x0.toFixed(1)} M${(x0 + total).toFixed(1)} 31 H${(x0 + total + 14).toFixed(1)}" stroke="${wire}" stroke-width="1.4"/>`;
+    for (let i = 0; i < n; i++) {
+      const x = x0 + i * (w + gap), loss = st[i].type === "loss";
+      if (i) out += `<path d="M${(x - gap).toFixed(1)} 31 H${x.toFixed(1)}" stroke="${wire}" stroke-width="1.4"/>`;
+      out += `<rect x="${x.toFixed(1)}" y="18" width="${w}" height="26" rx="3" stroke="${part}" stroke-width="1.6" ${loss ? 'stroke-dasharray="4 3"' : ""}/>`;
+      out += lbl(x + w / 2, 14, `${i + 1}`, grey);
+      out += lbl(x + w / 2, 35, ok ? (loss ? `−${num(st[i].g)}` : `${st[i].g >= 0 ? "+" : "−"}${num(Math.abs(st[i].g))}`) : "", part);
+      if (r) {
+        const c = r.per[i];
+        out += lbl(x + w / 2, 60, `${c.g >= 0 ? "+" : "−"}${num(Math.abs(c.g))}`, part);
+        out += lbl(x + w / 2, 75, c.op === null ? "—" : `${c.op >= 0 ? "+" : "−"}${num(Math.abs(c.op))}`, calc);
+      }
+    }
+    out += `<text x="145" y="92" font-size="11" font-weight="600" text-anchor="middle"><tspan fill="${part}">cumulative gain dB</tspan><tspan fill="${grey}"> · </tspan><tspan fill="${calc}">OIP3 dBm</tspan></text>`;
+    return `<svg width="320" height="108" viewBox="0 0 290 98" fill="none">${out}</svg>`;
+  }
+  const diagram = () => (state.mode === "chain" ? boxes() : plot());
+
+  function cell(label, value, key) {
+    return `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  }
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+  const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+  const near = (below) => (below < 0 ? warn(`${num(-below)} dB over its estimated P1dB: past the 3:1 rule`)
+    : below < 10 ? warn(`${num(below)} dB: close to P1dB, the 3:1 rule is optimistic`) : `${num(below)} dB (estimated)`);
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    if (state.mode === "measure") {
+      const r = measureOf();
+      return `${head("Output intercept point, OIP3", dbm(r.oip), `IM3 is ${num(r.dbc)} dB below each tone: the intercept is ${num(r.dbc / 2)} dB above it`)}
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+          ${cell("IIP3", r.iip === null ? "—" : dbm(r.iip), "iip")}
+          ${cell("OP1dB ≈", dbm(r.op1), "op1")}
+          ${cell("IP1dB ≈", r.ip1 === null ? "—" : dbm(r.ip1), "ip1")}
+        </div>
+        <div class="field notation-box">
+          ${row("Tone below its P1dB", near(r.op1 - state.p), "below")}
+          ${row("For 10 dB less tone", `IM3 ${num(r.dbc + 20)} dB below it`, "less")}
+        </div>`;
+    }
+    if (state.mode === "predict") {
+      const r = predictOf();
+      return `${head("IM3 product, at the output", dbm(r.im), `${num(r.dbc)} dB below each ${dbm(r.pout)} tone`)}
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+          ${cell("Output tone", dbm(r.pout), "pout")}
+          ${cell("IM3 at the input", dbm(r.imin), "imin")}
+          ${cell("OP1dB ≈", dbm(r.op1), "op1")}
+        </div>
+        <div class="field notation-box">
+          ${row(`Largest tone for ${num(state.want)} dB`, `${dbm(r.maxOut)} out, ${dbm(r.maxIn)} in`, "max")}
+          ${row("Tone below its P1dB", near(r.below), "below")}
+        </div>`;
+    }
+    const r = ipChainOf(state.stages), st = state.stages;
+    const top = r.share ? r.share.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0])[0] : null;
+    const sub = r.opDb === null ? "no OIP3 entered: nothing limits the chain" : `most of the distortion from stage ${top[1] + 1}, the ${st[top[1]].type === "loss" ? "loss" : "amplifier"} (${num(top[0], 3)} %)`;
+    const pout = state.cpin + r.gDb;
+    const im = r.opDb === null ? null : 3 * pout - 2 * r.opDb;
+    const sfdr = r.ipDb === null ? null : (2 / 3) * (r.ipDb - state.nfl);
+    return `${head("Output intercept point of the chain", r.opDb === null ? "—" : dbm(r.opDb), sub)}
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+          ${cell("Gain", `${r.gDb >= 0 ? "" : "−"}${num(Math.abs(r.gDb))} dB`, "gain")}
+          ${cell("IIP3", r.ipDb === null ? "—" : dbm(r.ipDb), "iip")}
+          ${cell("SFDR", sfdr === null ? "—" : `${num(sfdr)} dB`, "sfdr")}
+        </div>
+        <div class="field notation-box">
+          ${row(`IM3 for ${dbm(state.cpin).replace(" dBm", "")} in`, im === null ? "—" : `${dbm(im)} out, −${num(2 * (r.opDb - pout))} dBc`, "im")}
+          ${row("Tone at the output", dbm(pout), "pout")}
+        </div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+  function syncBoxes() {
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    if (state.mode === "predict" && isFinite(state.ipv) && isFinite(state.g)) { set("oip", fmt(oipOf())); set("iip", fmt(oipOf() - state.g)); }
+    if (state.mode === "chain" && !problem()) {
+      const r = ipChainOf(state.stages);
+      app.querySelectorAll("[data-cum]").forEach((el) => { const c = r.per[+el.dataset.cum]; el.textContent = c.op === null ? "—" : `${c.op >= 0 ? "+" : "−"}${num(Math.abs(c.op), 3)}`; });
+    }
+  }
+
+  const example = (st) => () => {
+    if (st.stages) state.stages = st.stages.map((x) => ({ type: "amp", g: 0, op: null, ...x }));
+    Object.assign(state, st.top || {});
+    paint();
+  };
+  useExamples([
+    { title: "Keysight's amplifier", note: "−10 dBm in, 20 dB gain, OIP3 +38 dBm: IM3 −46 dBm, 56 dB down (AN 1408-17).",
+      apply: example({ top: { mode: "predict", ref: "o", ipv: 38, g: 20, pin: -10, want: 50 } }) },
+    { title: "From a two-tone test", note: "+10 dBm tones with a −46 dBm product: OIP3 +38 dBm, and +18 dBm at the input with 20 dB of gain.",
+      apply: example({ top: { mode: "measure", p: 10, im: -46, g: 20 } }) },
+    { title: "A receiver's input IP3", note: "IIP3 −10 dBm, two −40 dBm interferers: an IM3 of −100 dBm at the input.",
+      apply: example({ top: { mode: "predict", ref: "i", ipv: -10, g: 0, pin: -40, want: 50 } }) },
+    { title: "LNA, pad and amplifier", note: "Gain 32 dB, OIP3 +29.7 dBm: the last amplifier does 94 % of the distortion.",
+      apply: example({ top: { mode: "chain", cpin: -40, nfl: -110 }, stages: [{ g: 15, op: 25 }, { type: "loss", g: 3 }, { g: 20, op: 30 }] }) },
+  ]);
+
+  function paint() {
+    const field = (attrs, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" ${attrs} value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const stageHTML = (st, i) => {
+      const loss = st.type === "loss";
+      const inp = (f, v, ph) => `<input type="number" inputmode="decimal" step="any" data-stage="${i}" data-f="${f}" value="${fmt(v)}" ${ph ? `placeholder="${ph}"` : ""} />`;
+      return `
+      <div class="r-item"><div class="r-line cc-grid">
+        <span class="r-index">${i + 1}</span>
+        <select data-type="${i}" aria-label="Stage ${i + 1} kind">
+          <option value="amp" ${loss ? "" : "selected"}>Amp</option>
+          <option value="loss" ${loss ? "selected" : ""}>Loss</option>
+        </select>
+        ${inp("g", st.g)}
+        ${loss ? `<span class="r-hint">no limit</span>` : inp("op", st.op, "none")}
+        <span class="cc-cum" data-cum="${i}"></span>
+        <button class="r-drop" data-drop="${i}" aria-label="Remove stage ${i + 1}" ${state.stages.length <= 1 ? "disabled" : ""}>×</button>
+      </div></div>`;
+    };
+    let inputs;
+    if (state.mode === "measure") {
+      inputs = `<div class="field-pair">${field('data-key="p"', "Tone out, each", fixed("dBm"), fmt(state.p))}${field('data-key="im"', "IM3 product", fixed("dBm"), fmt(state.im))}${field('data-key="g"', "Gain (optional)", fixed("dB"), fmt(state.g))}</div>`;
+    } else if (state.mode === "predict") {
+      inputs = `<div class="field-pair">${field('data-key="iip"', "IIP3", fixed("dBm"), fmt(oipOf() - state.g))}${field('data-key="g"', "Gain", fixed("dB"), fmt(state.g))}${field('data-key="oip"', "OIP3", fixed("dBm"), fmt(oipOf()))}</div>
+      <div class="field-pair">${field('data-key="pin"', "Input tone, each", fixed("dBm"), fmt(state.pin))}${field('data-key="want"', "IM3 rejection wanted", fixed("dB"), fmt(state.want))}</div>`;
+    } else {
+      inputs = `<div class="section-label split" style="color:#8FC1F5">
+        <span>Stages</span>
+        <button class="label-btn" id="ip-add" ${state.stages.length >= CASC_MAX ? "disabled" : ""}>+ add stage</button>
+        <span></span>
+      </div>
+      <div class="cc-grid cc-cols"><span></span><span></span><span>Gain, loss dB</span><span>OIP3 dBm</span><span>Chain OIP3</span><span></span></div>
+      <div class="r-list">${state.stages.map(stageHTML).join("")}</div>
+      <div class="field-pair">${field('data-key="cpin"', "Input tone, each", fixed("dBm"), fmt(state.cpin))}${field('data-key="nfl"', "Noise floor, input", fixed("dBm"), fmt(state.nfl))}</div>`;
+    }
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Where a two-tone test's products would match the tones")}
+
+      ${pillRow(Object.entries(IP_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["OIP3 = P + (P − IM3) / 2,  IIP3 = OIP3 − G", "IM3 = 3 P − 2 OIP3 = P − 2 (OIP3 − P)", "OP1dB ≈ OIP3 − 10.6 dB,  IP1dB ≈ IIP3 − 9.6 dB", "1/OIP3 = Σ 1 / (OIP3,k × gains after k)", "SFDR = 2/3 × (IIP3 − noise floor)"],
+        "Pass two tones of equal level through an amplifier and it produces, besides the tones, products of their mixing. The third-order ones, at 2f1 − f2 and 2f2 − f1, sit right beside the tones and rise 3 dB for every dB the tones rise, while the tones rise 1 dB: so their levels would meet, if nothing saturated first, at the third-order intercept point (IP3). It is a figure of merit, not a level you can reach: the higher it is, the further below the tones the products sit at a given level, 2 dB for each dB between the tone and the intercept. Referred to the output it is the OIP3, to the input the IIP3, differing by the gain. A real device compresses first, about 10 dB below the intercept for an ideal cubic nonlinearity, so the 3:1 rule holds only for tones well below that. In a chain, each stage's distortion, referred to the output, adds; taken in phase, the worst case, the reciprocals of the output intercepts add after the gain that follows each stage, so the last stages, where the signal is largest, dominate. The spur-free dynamic range is the range of tone level from the noise floor up to where the product reaches it: two thirds of the distance from the noise floor to the IIP3."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key, v = parseFloat(el.value);
+        if (k === "oip") { state.ref = "o"; state.ipv = v; }
+        else if (k === "iip") { state.ref = "i"; state.ipv = v; }
+        else state[k] = v;
+        show();
+      };
+    });
+    app.querySelectorAll("input[data-stage]").forEach((el) => {
+      el.oninput = () => {
+        const st = state.stages[+el.dataset.stage], k = el.dataset.f, v = parseFloat(el.value);
+        st[k] = k === "op" ? (el.value === "" || !isFinite(v) ? null : v) : v;
+        show();
+      };
+    });
+    app.querySelectorAll("select[data-type]").forEach((el) => {
+      el.onchange = () => {
+        const st = state.stages[+el.dataset.type];
+        st.type = el.value;
+        Object.assign(st, el.value === "loss" ? { g: 3, op: null } : { g: 15, op: 25 });
+        paint();
+      };
+    });
+    app.querySelectorAll("[data-drop]").forEach((btn) => {
+      btn.onclick = () => { if (state.stages.length > 1) { state.stages.splice(+btn.dataset.drop, 1); paint(); } };
+    });
+    const add = document.getElementById("ip-add");
+    if (add) add.onclick = () => { if (state.stages.length < CASC_MAX) { state.stages.push({ type: "amp", g: 10, op: 25 }); paint(); } };
+    syncBoxes();
+  }
+
+  paint();
+}
+
+// ---------- Intermodulation ----------
+// What two tones leave behind in a nonlinear stage: Keysight AN 1408-17 and
+// AN 1408-9 (read): "the output will contain signals at the following
+// frequencies: n f1 + m f2, where n, m = 0, ±1, ±2, etc."; the order of a
+// product is |n| + |m|; the third-order products, 2f2 − f1 and 2f1 − f2, "are
+// a major concern because of their proximity to the fundamental frequencies",
+// which "precludes their removal by filtering"; their example, f1 =
+// 5.00001 GHz and f2 = 5.00011 GHz, gives 4.99991 and 5.00021 GHz, which this
+// reproduces. The fifth- and seventh-order products 3f1 − 2f2, 3f2 − 2f1,
+// 4f1 − 3f2 and 4f2 − 3f1 follow the same rule (the manual's table). Finding
+// the pair that lands on a channel is the same equation solved for the second
+// tone (derived here). The level of the product on the channel, for unequal
+// tones, is Keysight's: P(f2) − 2 (IP3 − P(f1)) for 2f1 − f2, with the
+// levels and the IP3 taken at the receiver's input.
+const IM_MODES = { products: "Products", find: "Interferers" };
+const IM_F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+
+function renderIntermodulation(domain, tool, favId) {
+  const C = "intermodulation";
+  const state = {
+    mode: pref(C, "mode", "products", Object.keys(IM_MODES)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(IM_F_UNITS)),
+    f1: 100e6, f2: 101e6,
+    frx: 100e6, fi: 100.2e6, iip3: -10, lvl: -40, nfl: -110,
+  };
+  const num = (v, d = 3) => String(Number(v.toPrecision(d))).replace("-", "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const u = () => IM_F_UNITS[state.fUnit];
+  // A frequency in the unit picked, a product below 0 Hz as its mirror image (*).
+  // Rounded to 1 Hz, so a repeating decimal does not run on.
+  const DEC = { Hz: 3, kHz: 3, MHz: 6, GHz: 9 };
+  const one = (v) => `${String(+(Math.abs(v) / u()).toFixed(DEC[state.fUnit]))}${v <= 0 ? "*" : ""}`;
+  const fq = (v) => `${one(v)} ${state.fUnit}`;
+  const pair = (a, b) => `${one(a)} · ${one(b)} ${state.fUnit}`;
+  const pairReal = (a, b) => `${a > 0 ? one(a) : "—"} · ${b > 0 ? one(b) : "—"} ${state.fUnit}`;
+  const dbm = (v) => `${v >= 0 ? "+" : "−"}${num(Math.abs(v), 4)} dBm`;
+  const finite = (v) => v !== null && isFinite(v);
+
+  function problem() {
+    if (state.mode === "products") {
+      if (!(state.f1 > 0)) return "Enter the first tone's frequency.";
+      if (!(state.f2 > 0)) return "Enter the second tone's frequency.";
+      if (state.f1 === state.f2) return "The two tones must be at different frequencies.";
+    } else {
+      if (!(state.frx > 0)) return "Enter the channel's frequency.";
+      if (!(state.fi > 0)) return "Enter the interferer's frequency.";
+      if (state.frx === state.fi) return "The interferer is on the channel: it needs no intermodulation to get in.";
+    }
+    return "";
+  }
+  const prods = () => {
+    const lo = Math.min(state.f1, state.f2), hi = Math.max(state.f1, state.f2);
+    return { lo, hi, d: hi - lo, im3: [2 * lo - hi, 2 * hi - lo], im5: [3 * lo - 2 * hi, 3 * hi - 2 * lo], im7: [4 * lo - 3 * hi, 4 * hi - 3 * lo],
+      o2: [hi - lo, lo + hi], h2: [2 * lo, 2 * hi], s3: [2 * lo + hi, lo + 2 * hi] };
+  };
+  // The partners of one interferer f1 that put a product on the channel f0.
+  const partners = () => {
+    const f0 = state.frx, f1 = state.fi;
+    return { a: 2 * f1 - f0, b: (f1 + f0) / 2, c: (3 * f1 - f0) / 2, d: (f0 + 2 * f1) / 3 };
+  };
+
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const ok = !problem();
+    let out = `<path d="M14 88 H276" stroke="${wire}" stroke-width="1.4"/>`;
+    if (state.mode === "products") {
+      const r = ok ? prods() : { lo: 100, hi: 101, d: 1 };
+      const W0 = r.lo - 3.8 * r.d, W1 = r.hi + 3.8 * r.d, X0 = 24, X1 = 266;
+      const x = (f) => X0 + ((f - W0) / (W1 - W0)) * (X1 - X0);
+      const line = (f, h, c, w = 2) => `<path d="M${x(f).toFixed(1)} 88 V${88 - h}" stroke="${c}" stroke-width="${w}"/>`;
+      out += line(r.lo, 56, part, 2.4) + line(r.hi, 56, part, 2.4);
+      out += line(2 * r.lo - r.hi, 40, calc) + line(2 * r.hi - r.lo, 40, calc);
+      out += line(3 * r.lo - 2 * r.hi, 28, grey) + line(3 * r.hi - 2 * r.lo, 28, grey);
+      out += line(4 * r.lo - 3 * r.hi, 18, grey, 1.4) + line(4 * r.hi - 3 * r.lo, 18, grey, 1.4);
+      out += lbl(x(r.lo), 28, "f1", part) + lbl(x(r.hi), 28, "f2", part);
+      out += lbl(x(2 * r.lo - r.hi), 44, "IM3", calc) + lbl(x(2 * r.hi - r.lo), 44, "IM3", calc);
+      out += lbl(x(3 * r.lo - 2 * r.hi), 56, "IM5") + lbl(x(3 * r.hi - 2 * r.lo), 56, "IM5");
+      out += lbl(x(4 * r.lo - 3 * r.hi), 66, "IM7") + lbl(x(4 * r.hi - 3 * r.lo), 66, "IM7");
+      out += lbl(145, 14, ok ? `spacing ${fq(r.d)}` : "spacing", grey);
+      out += lbl(145, 102, ok ? `f1 ${one(state.f1)} · f2 ${fq(state.f2)}` : "", grey);
+    } else {
+      const r = ok ? partners() : { a: 100.4e6, b: 100.1e6 };
+      const f0 = ok ? state.frx : 100e6, f1 = ok ? state.fi : 100.2e6;
+      const all = [f0, f1, r.a, r.b].filter((v) => v > 0);
+      const mn = Math.min(...all), mx = Math.max(...all), pad = (mx - mn) * 0.12 || 1;
+      const W0 = mn - pad, W1 = mx + pad, X0 = 24, X1 = 266;
+      const x = (f) => X0 + ((f - W0) / (W1 - W0)) * (X1 - X0);
+      const line = (f, h, c, dash) => (f > 0 ? `<path d="M${x(f).toFixed(1)} 88 V${88 - h}" stroke="${c}" stroke-width="2.2" ${dash ? 'stroke-dasharray="4 3"' : ""}/>` : "");
+      out += line(f0, 62, calc) + line(f1, 56, part) + line(r.a, 50, part, true) + line(r.b, 50, part, true);
+      out += lbl(x(f0), 22, "ch", calc) + lbl(x(f1), 22, "f1", part);
+      if (r.a > 0) out += lbl(x(r.a), 34, "A", part);
+      if (r.b > 0) out += lbl(x(r.b), 34, "B", part);
+      out += `<text x="145" y="102" font-size="11" font-weight="600" text-anchor="middle"><tspan fill="${part}">f2 at A: 2f1 − f2</tspan><tspan fill="${grey}"> · </tspan><tspan fill="${part}">at B: 2f2 − f1</tspan></text>`;
+    }
+    return `<svg width="320" height="124" viewBox="0 0 290 108" fill="none">${out}</svg>`;
+  }
+
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    if (state.mode === "products") {
+      const r = prods();
+      return `<div class="result-field">
+          <div class="result-head"><span class="label">Third-order products, 2f1 − f2 · 2f2 − f1</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${pair(r.im3[0], r.im3[1])}</span></div>
+          <div class="result-sub" data-res="sub">${fq(r.d)} outside each tone: too close for a filter to remove</div>
+        </div>
+        <div class="field notation-box">
+          ${row("Fifth order", pair(r.im5[0], r.im5[1]), "im5")}
+          ${row("Seventh order", pair(r.im7[0], r.im7[1]), "im7")}
+          ${row("Second order", pair(r.o2[0], r.o2[1]), "o2")}
+          ${row("Harmonics", pair(r.h2[0], r.h2[1]), "h2")}
+          ${row("Third-order sums", pair(r.s3[0], r.s3[1]), "s3")}
+        </div>`;
+    }
+    const r = partners();
+    const real = (v) => (v > 0 ? fq(v) : "—");
+    const haveLvl = finite(state.iip3) && finite(state.lvl);
+    const im = haveLvl ? 3 * state.lvl - 2 * state.iip3 : null;
+    const rise = im !== null && finite(state.nfl) ? 10 * Math.log10(10 ** (state.nfl / 10) + 10 ** (im / 10)) - state.nfl : null;
+    const riseTxt = rise !== null && rise < 0.05 ? "unchanged" : rise === null ? "" : `+${num(rise)} dB`;
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">A second interferer to hit ${fq(state.frx)}</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="big">${real(r.a)} or ${real(r.b)}</span></div>
+          <div class="result-sub" data-res="sub">with ${fq(state.fi)}, a third-order product lands on the channel</div>
+        </div>
+        <div class="field notation-box">
+          ${row("A, 2f1 − f2 = channel", real(r.a), "a")}
+          ${row("B, 2f2 − f1 = channel", real(r.b), "b")}
+          ${row("Fifth order", pairReal(r.c, r.d), "fifth")}
+          ${im === null ? "" : row("IM3 at the input", dbm(im), "im")}
+          ${im === null || !finite(state.nfl) ? "" : row("Against the floor", im >= state.nfl ? warn(`${num(im - state.nfl)} dB above; floor ${riseTxt}`) : `${num(state.nfl - im)} dB below; floor ${riseTxt}`, "floor")}
+        </div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "Two close tones", note: "100 and 101 MHz: the third-order products land at 99 and 102 MHz, one spacing outside the pair.",
+      apply: example({ mode: "products", fUnit: "MHz", f1: 100e6, f2: 101e6 }) },
+    { title: "Keysight's PNA-X example", note: "5.00001 and 5.00011 GHz, 100 kHz apart: IM3 at 4.99991 and 5.00021 GHz (AN 1408-17).",
+      apply: example({ mode: "products", fUnit: "GHz", f1: 5.00001e9, f2: 5.00011e9 }) },
+    { title: "Interferer near a channel", note: "With one at 100.2 MHz, a second at 100.4 or 100.1 MHz puts IM3 on 100 MHz: −100 dBm.",
+      apply: example({ mode: "find", fUnit: "MHz", frx: 100e6, fi: 100.2e6, iip3: -10, lvl: -40, nfl: -110 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((k) => `<option ${k === cur ? "selected" : ""}>${k}</option>`).join("")}</select>`;
+    const field = (attrs, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" ${attrs} value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (x) => `<span class="unit-fixed">${x}</span>`;
+    const fsel = (n) => sel(`data-funit="${n}"`, IM_F_UNITS, state.fUnit);
+    const inputs = state.mode === "products"
+      ? `<div class="field-pair">${field('data-key="f1"', "Tone f1", fsel(1), fmt(state.f1 / u()))}${field('data-key="f2"', "Tone f2", fsel(2), fmt(state.f2 / u()))}</div>`
+      : `<div class="field-pair">${field('data-key="frx"', "Channel", fsel(1), fmt(state.frx / u()))}${field('data-key="fi"', "Interferer f1", fsel(2), fmt(state.fi / u()))}</div>
+      <div class="field-pair">${field('data-key="iip3"', "Receiver IIP3", fixed("dBm"), fmt(state.iip3))}${field('data-key="lvl"', "Level, each", fixed("dBm"), fmt(state.lvl))}${field('data-key="nfl"', "Noise floor", fixed("dBm"), fmt(state.nfl))}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The products of two tones, and who lands on a channel")}
+
+      ${pillRow(Object.entries(IM_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["products: n f1 + m f2,  order |n| + |m|", "third order: 2f1 − f2,  2f2 − f1", "fifth order: 3f1 − 2f2,  3f2 − 2f1", "product on f0: f2 = 2 f1 − f0", "or f2 = (f1 + f0) / 2", "IM3 (dBm) = 2 P1 + P2 − 2 IIP3"],
+        "Two signals through anything not perfectly linear (an amplifier, a mixer, a diode, a rusty joint) come out with, besides themselves, every sum and difference of their multiples: n f1 + m f2 for whole numbers n and m, of order |n| + |m|. The odd-order ones with a difference, 2f1 − f2, 2f2 − f1, then 3f1 − 2f2 and so on, land next to the tones, at multiples of their spacing, where no filter that lets the tones through can stop them. Backwards: two interferers f1 and f2 put a product on a channel f0 when 2f1 − f2 = f0, or 2f2 − f1 = f0; given one interferer and the channel, the other is at 2f1 − f0 (beyond f1, as far again as f1 is from the channel) or halfway between the channel and f1. The level of that product at the receiver's input is 2 P1 + P2 − 2 IIP3, in dBm, for 2f1 − f2 (two of f1 and one of f2), so equal interferers 20 dB higher bring a product 60 dB higher, 3 dB per dB. It matters when it comes near the noise floor, which it then raises."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      el.oninput = () => {
+        const k = el.dataset.key, v = parseFloat(el.value);
+        state[k] = k === "f1" || k === "f2" || k === "frx" || k === "fi" ? v * u() : v;
+        show();
+      };
+    });
+    // The two frequency pickers change together.
+    app.querySelectorAll("select[data-funit]").forEach((el) => {
+      el.onchange = () => { state.fUnit = el.value; setPref(C, "fUnit", state.fUnit); paint(); };
+    });
   }
 
   paint();
