@@ -663,6 +663,17 @@ div.tool-row { cursor: default; }
 .stepper { display: flex; gap: 4px; flex-shrink: 0; }
 .stepper .slider-step { width: 26px; height: 26px; font-size: 17px; }
 .slider-step.dim { opacity: 0.3; }
+/* Coax cable standards, Compare: a cable's name, a bar for its loss and the
+   number, one cable to a line; the chosen cable in white, an estimate faded. */
+.cx-row { display: grid; grid-template-columns: 86px 1fr 66px; gap: 8px; align-items: center; padding: 3px 0; font-size: 14px; }
+.cx-name { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cx-row.sel .cx-name { color: var(--text); font-weight: 600; }
+.cx-barbox { display: block; height: 7px; }
+.cx-bar { display: block; height: 7px; border-radius: 4px; background: var(--result-text); }
+.cx-row.est .cx-bar { opacity: 0.4; }
+.cx-val { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cx-note { color: var(--text-muted); font-size: 13px; line-height: 1.35; padding: 6px 0 2px; }
+.cx-list { padding-top: 8px; padding-bottom: 8px; }
 .series-slider {
   -webkit-appearance: none;
   appearance: none;

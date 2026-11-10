@@ -97,6 +97,7 @@ will key on, since that is the id the app already holds for each tool.
 - Transmission lines → [Coax impedance](#coax)
 - Transmission lines → [Velocity factor](#velocity-factor)
 - Transmission lines → [Skin depth](#skin-depth)
+- Transmission lines → [Coax cable standards](#coax-standards)
 - Power & gain → [RF cascade](#rf-cascade)
 - Power & gain → [Attenuator](#attenuator)
 - Power & gain → [Intercept point](#intercept-point)
@@ -11485,6 +11486,222 @@ nodal analysis (input impedance and loss at 10, 20 and 30 dB):
 - 600 Ω: 312 and 422 Ω; 1 dB T: 2.88 and 433 Ω; 30 dB in one Pi pad:
   53.3 and 790 Ω, flagged;
 - mW re-expresses the power; 0 dB and over 100 dB are refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="coax-standards"></a>
+## Coax cable standards
+
+`calc: coax-standards` · RF & microwave › Transmission lines
+
+### What it computes
+
+The common RG coaxial cables and the Times Microwave LMR family: what each
+one is, and how much signal it loses. 23 cables, each from a maker's data
+sheet: 14 RG types that have a row in the M17 table (RG-174A, 316, 58C,
+142B, 223, 400, 402, 213, 214, 393 on 50 Ω; RG-59B, 6A, 11A on 75 Ω;
+RG-62A on 93 Ω), RG-8A/U and RG-8X (no M17 row), and LMR-100A, 195, 200,
+240, 400, 600 and the 75 Ω LMR-400. Three pills:
+
+- **Specs:** the cable cut across, to scale (jacket, shield, dielectric,
+  inner conductor, with their diameters). The big result is the impedance,
+  with the M17 standard's own line for that type under it (slash sheet,
+  impedance and tolerance, velocity, capacitance). In three cells: the
+  velocity, the capacitance and the diameter. Under them: the inner
+  conductor, the dielectric, the shield, the jacket, what the sheet rates
+  it for (voltage, temperature, top frequency) and its bend radius. A note
+  says what the cable is for, where a source says (L-com's guide, Times'
+  sheet for LMR-400), and where the sheet differs from the standard.
+- **Loss:** the cable, the frequency (MHz or GHz), the length (m, ft, cm or
+  in) and the power in (mW or W). The drawing is the cable's loss against
+  frequency on logarithmic axes, the sheet's figures as dots, the
+  frequency of the run marked. The big result is the loss of the run in dB,
+  with how it was read from the sheet. In three cells: dB per 100 ft, dB
+  per 100 m and the power out. Under them: the sheet's two nearest figures,
+  the output level in dBm, the largest CW power the sheet allows at that
+  frequency, the delay of the run, and a warning when the frequency is over
+  the sheet's top frequency.
+- **Compare:** every cable of one impedance (50, 75 or 93 Ω) for the
+  frequency and length you give, best first, with a bar for each. A "~"
+  marks a loss beyond the cable's sheet (an estimate); the cable you picked
+  last is in white.
+- **Remembered:** the pill, the cable, the impedance and the three units.
+
+Examples: 30 m of RG-58 at 100 MHz, LMR-400 against RG-213 at 144 MHz, a GPS
+antenna lead of RG-316, and what RG-6 is.
+
+### Terms
+
+- **RG:** the prefix of the old American military coax series. Today a loose
+  name for a cable of that size and kind, not a specification (see Sources).
+- **/U, A, B, C:** "universal", for general use; the letters are revisions
+  of the type (RG-58, RG-58A, RG-58B, RG-58C).
+- **MIL-DTL-17 (formerly MIL-C-17), M17 slash sheet:** the military
+  specification for flexible and semi-rigid coax; each cable it defines has
+  a slash sheet, M17/28-RG58 for RG-58, giving its construction and limits.
+- **Impedance Z0:** the ratio of voltage to current of a wave on the line;
+  50 Ω for radio and test gear, 75 Ω for video and cable TV, 93 Ω for some
+  data links.
+- **Velocity of propagation (VP, velocity factor):** the share of light's
+  speed at which a wave travels on the cable, 1/√εr; the dielectric sets it.
+- **Capacitance:** per metre; with Z0 it fixes the velocity, C = 1/(Z0 VP c).
+- **Loss (attenuation):** how much weaker the signal is at the far end of a
+  matched cable, in dB, for 100 ft or 100 m, rising with frequency.
+- **Typical, maximum:** a sheet's typical loss is what a sample usually
+  does; a maximum (Pasternack's RG-59B) is a limit it should stay under.
+- **CW power:** the largest continuous (not peak) power the cable can
+  carry at that frequency without overheating; it falls as the loss rises.
+- **Dielectric withstanding voltage:** the voltage the insulation survives
+  in a test (Times' sheets); not an operating voltage.
+- **Bend radius:** how tightly the cable may be bent, once when installing
+  and repeatedly.
+
+### Sources
+
+- **The standard: the M17 table (a distributor's reprint, "MIL-C-17",
+  from Sycor; no date or author; read):** each slash sheet's M17 number and
+  QPL number, conductor, dielectric, shield, jacket, impedance with its
+  tolerance, velocity, capacitance in pF/ft and pF/m, maximum operating
+  voltage, temperature range and test frequency; 14 of its rows are used.
+  It is a transcription, not the specification: it has misprints (RG-58's
+  capacitance reads 38.8 pF/ft beside 101.1 pF/m, RG-11's 20.8 beside 67.6;
+  only 30.8 and 20.6 fit), so the pF/m column is used, and every row's
+  capacitance was checked against 1/(Z0 Vp c): all within 0.5 %. The
+  abbreviations (BC, TC, SC, CCS, SCCS) are not defined in it; they are read
+  in the usual sense (bare, tinned, silver-plated copper; copper-clad steel,
+  silver-plated). The slash sheets themselves, and the DLA's qualified
+  products list, were not read.
+- **What "RG" is:** Wikipedia, "Coaxial cable" (read through a
+  text-extraction tool, the first 100 000 characters; no edit date seen):
+  RG was "originally a U.S. military designation from World War II", the
+  numbers listed in MIL-HDBK-216 (1962), "/U" for universal and A, B, C for
+  revisions, superseded by the M17 designation, and no standard guarantees
+  a cable sold as an "RG-# type". Military & Aerospace Electronics,
+  "MIL-DTL-17 Requirements for Hi-Rel/MIL-SPEC Coaxial Cable Assemblies and
+  a Note on RG Coax" (4 March 2019, no byline shown; read): MIL-DTL-17 was
+  MIL-C-17; RG is "a generalized industry term, and not a standardized set
+  of cable specifications"; a cable meets MIL-DTL-17 only if it meets every
+  category, and a MIL-DTL-17 supplier should be on the qualified products
+  list, which readily available RG coax is not.
+- **What each is for:** L-com, "RG Coax Cable Applications" (a one-page
+  technical brief, no date; read): typical use, best feature and trade-off
+  of RG174, 188A, 316, 58C, 142B, 59A/B, 6, 223, 213, 179B and 187; used,
+  paraphrased, for the cables it covers (not RG-188A, 179B, 187, 59A, which
+  are not listed here). For LMR-400, Times' own sheet ("Replacement for Air
+  Dielectric type RG8 cable").
+- **The cables, Pasternack:** the data sheets of RG174A/U-BULK,
+  RG316/U-BULK, RG58C/U-BULK, RG142B/U-BULK, RG223/U-BULK, RG400/U-BULK,
+  RG402/U-BULK, RG393/U-BULK, RG213/U-BULK, RG214/U-BULK, RG59B/U-BULK,
+  RG6A/U-BULK, RG11A/U-BULK, RG62A/U-BULK, RG8A/U-BULK and RG8X-BULK (PDFs,
+  read as text; revision 1.0 and later as printed): impedance, velocity,
+  capacitance, the typical loss at 3 to 10 frequencies (a maximum for
+  RG-59B), the largest CW power where given, construction, ratings.
+- **The cables, Times Microwave:** the LMR-100A (as Fairview Microwave's
+  LMR-100A-PVC, with its -FR and -FR-FT sheets), LMR-195, LMR-200, LMR-240,
+  LMR-400 (REV 1.3, 2020), LMR-600 and LMR-400-75 sheets as Fairview
+  Microwave prints them (read as PDF text): loss and largest CW power at ten
+  frequencies from 50 MHz, and the construction. Times' own site refused
+  automated downloads, so its sheets were not read.
+- **Not read:** the MIL-DTL-17 slash sheets; Belden's sheets again (the
+  Coax impedance tool lists seven of them); the MIL-HDBK-216 table.
+
+### Slips found in the sheets, and what was done
+
+- Pasternack RG-142B: capacitance "96.45 [316.44] pF/ft [pF/m]"; the 96.45
+  is the pF/m figure (29.4 pF/ft). Used as pF/m.
+- RG-316 and RG-400: 32 pF/ft (105 pF/m), where their 50 Ω and 69 to 70 %
+  imply 96.7 and 95.3 pF/m. RG-62A: 83 % with 47.57 pF/m, where 83 % implies
+  43.2 (the standard has 81 % and 44.3). Shown as the sheets print them, with
+  the differences from the standard pointed out in the note.
+- RG-6A and RG-62A at 10 MHz: 0.08 and 2.7 dB per 100 ft. Both break the √f
+  law and their own other figures (it gives about 0.86 and 0.82); the two
+  lines are left out and the loss below the first remaining figure goes as
+  √f.
+- LMR-100A-PVC's first line (50 MHz: 3.9 dB, 230 W) is LMR-400's 900 MHz
+  line; the -FR and -FR-FT sheets say 5.1 dB and 180 W, which are used.
+- RG-8X: no velocity on the sheet; taken from 1/(Z0 C c) = 78.2 % and starred.
+- LMR sheets give no shield diameter (except LMR-400): the shield ring is
+  drawn at a default thickness there.
+- Pasternack's RG-316 loss at 1 GHz (38 dB) sits about 10 % above the √f
+  and f law through its other figures, and RG-8A/U's 400 MHz figure about
+  9 % under it: left as printed.
+
+### How the loss is read
+
+Loss in a coax has two parts: the conductors, from the current crowded into
+their skin, which grows as √f, and the dielectric, which grows as f. Times
+prints it as K1 √f + K2 f dB per 100 ft, f in MHz (their 75 Ω LMR-400:
+0.115570 √f + 0.000260 f). The tool does not fit that law: it reads the
+maker's own figures, exactly at each, and between two figures it follows a
+straight line on logarithmic axes (a power law):
+
+    a(f) = a1 × (a2/a1)^(ln(f/f1) / ln(f2/f1))
+
+so the number at a sheet's frequency is the sheet's. Below the first figure
+the loss goes as √f from it (the conductor term dominates there); above the
+last it continues along the last segment's slope, held between 0.5 and 1
+(the two terms' limits). Those two ranges are estimates and are flagged
+("~", and a line saying so). The loss of the run is the loss per 100 ft times
+the length in feet over 100; the power out is Pin × 10^(−loss/10); the delay
+is the length over VP × c. The largest CW power is read the same way between
+the sheet's powers (a single figure is shown as one), and not outside them.
+
+Between the figures the reading differs from the K1 √f + K2 f law through
+the same figures by 4.1 % or less for 18 of the 23 cables; the other five
+scatter more in their own figures (RG-316/U 10.2 %, RG-8A/U 8.7 %, LMR-600
+6.7 %, LMR-100A 6.0 %, RG-8X 5.3 %). Against Times' own formula for the 75 Ω
+LMR-400 it stays within 3.6 % (the sheet rounds to 0.1 dB, and the formula
+and the sheet's lines differ by up to 3.8 % at their own points).
+
+### Assumptions and limits
+
+- **Typical figures, not guarantees.** A cable, even from the same maker,
+  differs between samples and batches; the standard sets maxima.
+- **The same name is not the same cable.** RG-58's loss at 100 MHz is 4.9 dB
+  per 100 ft on Pasternack's sheet, 5.4 on Belden's 8259 and 3.8 on its 9201
+  (the Coax impedance tool lists them): the plain name fixes no loss. The
+  M17 row is the only thing that does.
+- **A matched line, no connectors.** A mismatch (VSWR) adds loss and
+  connectors add some; the VSWR / Return loss tool counts the first.
+- **Power ratings** are the sheet's, for a matched load and ordinary
+  conditions; they are not derated for heat, altitude or mismatch.
+- **Frequency ranges** are the sheets': beyond a sheet's top frequency the
+  loss is an estimate and the cable may not be usable (higher modes).
+- **23 cables** only; semi-rigid RG-402 is the one tube; no connectors,
+  twin-ax, hard-line or fibre.
+
+### How it was checked
+
+31 cases. The expected values come from a Python twin of the loss maths
+and the sheets' own figures:
+- Specs: RG-58C/U (50 Ω, 65.9 %, 101 pF/m, 4.95 mm; M17/28-RG58's line;
+  construction, ratings, bend radius, use), LMR-400 (no M17 row, 85 %,
+  78.4 pF/m, a withstand voltage), RG-8X (velocity from the capacitance,
+  starred), RG-316/U and RG-62A/U (the differences from the standard named),
+  RG-6A/U (agrees), RG-402/U (a tube);
+- Loss: RG-58C/U, 10 m at 100 MHz: 4.9 dB/100 ft, 1.61 dB, 691 mW,
+  28.4 dBm, 50.6 ns; 100 ft: 4.9 dB; 100 mW in; zero length; 1 MHz (√f,
+  0.443 dB/100 ft, flagged) and 6 GHz (68 dB/100 ft, 22.3 dB, flagged);
+  LMR-400 at a sheet frequency (2.7 dB, 830 W) and at 300 MHz between two
+  (2.21 dB/100 ft, 2.18 dB over 30 m, 1.02 kW); RG-59B's maximum; RG-213/U
+  at 2 GHz over its sheet; RG-6A/U at 10 MHz without the bad line;
+  RG-316/U at 1.575 GHz over 3 m (45.3 dB/100 ft, 4.45 dB); LMR-100A at 50 MHz
+  (5.1 dB, 180 W); RG-8X (3.66 dB, 252 W, 130 ns); no frequency refused;
+- Compare: 50 Ω at 100 MHz over 10 m (LMR-600 0.254 dB first, RG-316/U
+  3.61 dB last, three estimates marked), 75 Ω, 93 Ω, 144 MHz over 30 m
+  (LMR-400 1.45 dB, RG-213/U 2.66 dB) and 1.575 GHz over 3 m;
+- the four examples.
+
+Every cable's figures were also checked before use: its loss figures against
+the K1 √f + K2 f law (19 of the 23 within 4.5 %; LMR-100A 6.4 %, LMR-600
+7.2 % because its 50 MHz line is a rounded 0.5 dB, RG-8A/U 9.0 %, RG-316/U
+9.3 %; after the slips above), its capacitance against 1/(Z0 VP c), and, for
+the M17 rows, the impedance
+recomputed from the conductor and dielectric diameters and the velocity
+(1 to 9 % under the stated impedance, as stranding and air spaces make an
+effective diameter differ: no diameter is grossly misprinted).
 
 [↑ Index](#index)
 

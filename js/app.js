@@ -664,6 +664,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "vswr") return renderVswr(domain, tool, favId);
   if (calcId === "coax") return renderCoax(domain, tool, favId);
+  if (calcId === "coax-standards") return renderCoaxStandards(domain, tool, favId);
   if (calcId === "attenuator") return renderAttenuator(domain, tool, favId);
   if (calcId === "rf-cascade") return renderCascade(domain, tool, favId);
   if (calcId === "intercept-point") return renderInterceptPoint(domain, tool, favId);
@@ -13068,6 +13069,374 @@ function renderCoax(domain, tool, favId) {
   }
 
   setMatFromEr();
+  paint();
+}
+
+// ---------- Coax cable standards ----------
+// The RG cable types and a loss calculator on real maker data. The standard:
+// MIL-DTL-17 (formerly MIL-C-17) names each cable by a slash sheet, M17/28-RG58
+// being RG-58; the table of them is a distributor's reprint (Sycor, "MIL-C-17",
+// read; it has misprints, e.g. RG-58's capacitance as 38.8 pF/ft beside
+// 101.1 pF/m, which only 30.8 fits: the pF/m column is used, and every row's
+// capacitance was checked against 1/(Z0 × Vp × c), within 0.5 %). "RG" is a
+// loose industry name today (Wikipedia, "Coaxial cable", and Military & Aerospace
+// Electronics, 2019, read): "originally a U.S. military designation from World
+// War II", listed in MIL-HDBK-216 (1962), "/U" for universal, A, B, C for
+// revisions. The products are Pasternack's data sheets (RG types) and Times
+// Microwave's LMR sheets as Fairview Microwave prints them (read as PDF
+// text): the maker's typical loss at 3 to 10 frequencies, the largest CW power
+// where the sheet gives it. Loss between the sheet's points is interpolated
+// log-log (a power law, exact at the points); below the first point it goes as
+// √f (skin effect), above the last along the last slope held between 0.5 and 1.
+// Times prints loss as K1 √f + K2 f (their 75 Ω LMR-400 sheet:
+// 0.115570 √f + 0.000260 f dB/100 ft, f in MHz), which the points follow within
+// a few percent. Sheet slips found and left out: RG-6A's and RG-62A's 10 MHz
+// lines (0.08 and 2.7 dB/100 ft, where √f says 0.86 and 0.82), LMR-100A's 50 MHz
+// line (3.9 dB, 230 W: LMR-400's 900 MHz line, the fire-rated sheets give
+// 5.1 dB, 180 W).
+const CX_MODES = { specs: "Specs", loss: "Loss", cmp: "Compare" };
+const CX_F_UNITS = { MHz: 1e6, GHz: 1e9 };
+const CX_L_UNITS = { m: 1, ft: 0.3048, cm: 0.01, in: 0.0254 };
+const CX_P_UNITS = { mW: 1e-3, W: 1 };
+const CX_LIGHT = 299792458;
+
+// The M17 table's rows: slash sheet, Z0 and tolerance, velocity %, pF/m, volts, °C range, test frequency,
+// conductor, dielectric, shield, jacket (diameters in inches).
+const CX_STD = {
+  "RG-6": { m17: "M17/2-RG6", z: 75, tol: 3, vp: 66, c: 67.6, v: 3000, t: [-40, 85], f: "3 GHz", inner: ["copper-clad steel", 0.0285], diel: ["PE", 0.185], shield: "two braids, 0.243 in", jacket: ["PVC", 0.332] },
+  "RG-11": { m17: "M17/6-RG11", z: 75, tol: 3, vp: 66, c: 67.6, v: 5000, t: [-40, 85], f: "1 GHz", inner: ["tinned copper, 7 strands", 0.0477], diel: ["PE", 0.285], shield: "braid, 0.318 in", jacket: ["PVC", 0.405] },
+  "RG-58": { m17: "M17/28-RG58", z: 50, tol: 2, vp: 66, c: 101.1, v: 1900, t: [-40, 85], f: "0.05–1 GHz", inner: ["tinned copper, 19 strands", 0.0355], diel: ["PE", 0.116], shield: "braid, 0.139 in", jacket: ["PVC", 0.195] },
+  "RG-59": { m17: "M17/29-RG59", z: 75, tol: 3, vp: 66, c: 67.6, v: 2300, t: [-40, 85], f: "1 GHz", inner: ["copper-clad steel", 0.0226], diel: ["PE", 0.146], shield: "braid, 0.175 in", jacket: ["PVC", 0.242] },
+  "RG-62": { m17: "M17/30-RG62", z: 93, tol: 5, vp: 81, c: 44.3, v: 1000, t: [-40, 80], f: "1 GHz", inner: ["copper-clad steel", 0.0253], diel: ["air-spaced PE", 0.146], shield: "braid, 0.175 in", jacket: ["PVC", 0.242] },
+  "RG-142": { m17: "M17/60-RG142", z: 50, tol: 2, vp: 69.5, c: 96.5, v: 1900, t: [-55, 200], f: "0.05–8 GHz", inner: ["silver-plated copper-clad steel", 0.037], diel: ["PTFE", 0.116], shield: "two silver-plated braids, 0.162 in", jacket: ["FEP", 0.195] },
+  "RG-174": { m17: "M17/119-RG174", z: 50, tol: 2, vp: 66, c: 101.1, v: 1500, t: [-40, 85], f: "0.05–1 GHz", inner: ["copper-clad steel, 7 strands", 0.0189], diel: ["PE", 0.06], shield: "tinned copper braid, 0.078 in", jacket: ["PVC", 0.11] },
+  "RG-213": { m17: "M17/74-RG213", z: 50, tol: 2, vp: 66, c: 101.1, v: 5000, t: [-40, 85], f: "0.05–1 GHz", inner: ["bare copper, 7 strands", 0.0888], diel: ["PE", 0.285], shield: "braid, 0.318 in", jacket: ["PVC", 0.405] },
+  "RG-214": { m17: "M17/75-RG214", z: 50, tol: 2, vp: 66, c: 101.1, v: 5000, t: [-40, 85], f: "0.05–11 GHz", inner: ["silver-plated copper, 7 strands", 0.0888], diel: ["PE", 0.285], shield: "two silver-plated braids, 0.343 in", jacket: ["PVC", 0.425] },
+  "RG-223": { m17: "M17/84-RG223", z: 50, tol: 2, vp: 66, c: 101.1, v: 1900, t: [-40, 85], f: "0.04–12.4 GHz", inner: ["silver-plated copper", 0.035], diel: ["PE", 0.116], shield: "two silver-plated braids, 0.162 in", jacket: ["PVC", 0.212] },
+  "RG-316": { m17: "M17/113-RG316", z: 50, tol: 2, vp: 69.5, c: 96.5, v: 1200, t: [-55, 200], f: "0.05–3 GHz", inner: ["silver-plated copper-clad steel, 7 strands", 0.0201], diel: ["PTFE", 0.06], shield: "silver-plated braid, 0.078 in", jacket: ["FEP", 0.098] },
+  "RG-393": { m17: "M17/127-RG393", z: 50, tol: 2, vp: 69.5, c: 96.5, v: 2500, t: [-55, 200], f: "0.05–11 GHz", inner: ["silver-plated copper, 7 strands", 0.094], diel: ["PTFE", 0.285], shield: "two silver-plated braids, 0.343 in", jacket: ["FEP", 0.39] },
+  "RG-400": { m17: "M17/128-RG400", z: 50, tol: 2, vp: 69.5, c: 96.5, v: 1900, t: [-55, 200], f: "0.05–12.4 GHz", inner: ["silver-plated copper, 19 strands", 0.0384], diel: ["PTFE", 0.116], shield: "two silver-plated braids, 0.162 in", jacket: ["FEP", 0.195] },
+  "RG-402": { m17: "M17/130-RG402", z: 50, tol: 1, vp: 69.5, c: 96.5, v: 1900, t: [-40, 125], f: "0.5–20 GHz", inner: ["silver-plated copper-clad steel", 0.0362], diel: ["PTFE", 0.1175], shield: "copper tube, 0.141 in", jacket: ["none", 0.141] },
+};
+
+// The cables: loss points [MHz, dB/100 ft] as the sheets print them ("typ" typical, "max" a maximum), cw the
+// largest CW input power [MHz, W] or a single figure, fmax the sheet's top frequency in GHz, c in pF/m as the
+// sheet prints it, d / D / Ds / od in inches (inner, dielectric, shield, jacket).
+const CX_CABLES = [
+  { key: "rg174a", name: "RG-174A/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG174A/U-BULK", rg: "RG-174", z: 50, vp: 66, c: 101.97, od: 0.11, d: 0.019, D: 0.06, Ds: 0.078, inner: "copper-clad steel, 7 strands, 0.019 in", diel: "PE, 0.060 in", shield: "tinned copper braid, 0.078 in", jacket: "PVC, black", kind: "typ", loss: [[100, 8.4], [400, 19], [1000, 32]], cw: null, fmax: 1, t: [-40, 80], v: null, bend: null, use: "Small and flexible: GPS and data links; more loss than RG-58." },
+  { key: "rg316", name: "RG-316/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG316/U-BULK", rg: "RG-316", z: 50, vp: 69, c: 104.99, od: 0.102, d: 0.02, D: 0.06, Ds: 0.081, inner: "silver-plated copper-clad steel, 7 strands, 0.020 in", diel: "PTFE, 0.060 in", shield: "silver-plated copper braid, 95 %, 0.081 in", jacket: "FEP, tan", kind: "typ", loss: [[50, 7.5], [100, 11], [400, 21], [1000, 38], [3000, 58]], cw: null, fmax: 3, t: [-55, 200], v: "900 Vrms", bend: null, use: "Small and flexible, FEP jacket for heat; more loss than RG-58." },
+  { key: "rg58c", name: "RG-58C/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG58C/U-BULK", rg: "RG-58", z: 50, vp: 65.9, c: 101.05, od: 0.195, d: 0.036, D: 0.116, Ds: 0.138, inner: "tinned copper, 19 strands, 0.036 in", diel: "PE, 0.116 in", shield: "tinned copper braid, 0.138 in", jacket: "PVC, black", kind: "typ", loss: [[10, 1.4], [100, 4.9], [1000, 20], [5000, 60]], cw: 44, fmax: 5, t: [-40, 80], v: "1900 Vrms", bend: [0.98, 1.96], use: "Antenna feeds, Ethernet backbones; less loss than RG-174, less flexible." },
+  { key: "rg142b", name: "RG-142B/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG142B/U-BULK", rg: "RG-142", z: 50, vp: 70, c: 96.45, od: 0.195, d: 0.037, D: 0.116, Ds: 0.156, inner: "silver-plated copper-clad steel, solid, 0.037 in", diel: "PTFE, 0.116 in", shield: "two silver-plated copper braids, 0.156 in", jacket: "FEP, tan", kind: "typ", loss: [[100, 3.9], [400, 7.9], [1000, 12.9], [3000, 23.9], [5000, 32.1], [6000, 36.86], [8000, 44.17]], cw: null, fmax: 8, t: [-55, 200], v: "1900 Vrms", bend: [0.98, 1.97], use: "As RG-58 where heat is a problem; less flexible, dearer than RG-58C." },
+  { key: "rg223", name: "RG-223/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG223/U-BULK", rg: "RG-223", z: 50, vp: 66, c: 101.05, od: 0.209, d: 0.035, D: 0.116, Ds: 0.156, inner: "silver-plated copper, solid, 0.035 in", diel: "PE, 0.116 in", shield: "two silver-plated copper braids, 0.156 in", jacket: "PVC, black", kind: "typ", loss: [[400, 8.19], [1000, 13.41], [3000, 24.81], [5000, 33.49], [11000, 54.1]], cw: null, fmax: 12.4, t: [-40, 80], v: "1900 Vrms", bend: [null, 1], use: "Low loss and good shielding; less flexible than RG-174." },
+  { key: "rg400", name: "RG-400/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG400/U-BULK", rg: "RG-400", z: 50, vp: 70, c: 104.99, od: 0.195, d: 0.0384, D: 0.116, Ds: 0.156, inner: "silver-plated copper, 19 strands", diel: "PTFE, 0.116 in", shield: "two silver-plated copper braids, 0.156 in", jacket: "FEP, tan", kind: "typ", loss: [[400, 9], [1000, 14.7], [3000, 26.9], [5000, 36.1], [11000, 57.9]], cw: null, fmax: 12.4, t: [-55, 200], v: "1900 Vrms", bend: [null, 1], use: null },
+  { key: "rg402", name: "RG-402/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG402/U-BULK", rg: "RG-402", z: 50, vp: 69.5, c: null, od: 0.141, d: 0.036, D: 0.118, Ds: 0.141, inner: "silver-plated copper-clad steel, solid, 0.036 in", diel: "PTFE, 0.118 in", shield: "copper tube (semi-rigid), 0.141 in", jacket: "none", kind: "typ", loss: [[500, 7.6], [1000, 11.1], [5000, 28.1], [10000, 43.4], [18000, 63.6], [26500, 82.8]], cw: [[500, 600], [1000, 450], [5000, 180], [10000, 120], [18000, 73], [26500, 70]], fmax: 34, t: [-55, 125], v: "5000 Vrms withstand", bend: [null, 0.25], use: null },
+  { key: "rg213", name: "RG-213/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG213/U-BULK", rg: "RG-213", z: 50, vp: 66, c: 101.05, od: 0.405, d: 0.09, D: 0.285, Ds: 0.309, inner: "copper, 7 strands, 0.090 in", diel: "PE, 0.285 in", shield: "copper braid, 0.309 in", jacket: "PVC, black", kind: "typ", loss: [[100, 2.2], [400, 4.8], [1000, 8]], cw: null, fmax: 1, t: [-25, 70], v: "3700 Vrms", bend: [null, 1.6], use: "Antenna feeds needing low loss and high voltage; bulkier than RG-58C." },
+  { key: "rg214", name: "RG-214/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG214/U-BULK", rg: "RG-214", z: 50, vp: 66, c: 101.05, od: 0.425, d: 0.089, D: 0.285, Ds: 0.331, inner: "silver-plated copper, 7 strands, 0.089 in", diel: "PE, 0.285 in", shield: "two silver-plated copper braids, 0.331 in", jacket: "PVC, black", kind: "typ", loss: [[10, 0.64], [100, 2.07], [1000, 7.68], [5000, 20.68], [10000, 36.51]], cw: null, fmax: 11, t: [-20, 80], v: "5000 Vrms", bend: [null, 1.6], use: null },
+  { key: "rg393", name: "RG-393/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG393/U-BULK", rg: "RG-393", z: 50, vp: 69.5, c: 96.46, od: 0.39, d: 0.094, D: 0.285, Ds: 0.341, inner: "silver-plated copper, 7 strands, 0.094 in", diel: "PTFE, 0.285 in", shield: "two silver-plated copper braids, 0.341 in", jacket: "FEP, tan", kind: "typ", loss: [[10, 0.6], [100, 2.1], [1000, 7.5], [5000, 21], [10000, 35]], cw: [[10, 25000], [100, 6300], [1000, 1700], [5000, 620], [10000, 350]], fmax: 10, t: [-55, 200], v: null, bend: [null, 3.9], use: null },
+  { key: "rg59b", name: "RG-59B/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG59B/U-BULK", rg: "RG-59", z: 75, vp: 66, c: 66.93, od: 0.242, d: 0.022, D: 0.146, Ds: 0.165, inner: "copper, solid, 0.022 in", diel: "PE, 0.146 in", shield: "copper braid, 0.165 in", jacket: "PVC, black", kind: "max", loss: [[10, 1.09], [50, 2.4], [200, 4.9], [400, 7.01], [900, 11.12], [1000, 12.04]], cw: null, fmax: 1, t: [-25, 70], v: "2300 Vrms", bend: null, use: "Video and audio (security, CATV); less loss than RG-179." },
+  { key: "rg6a", name: "RG-6A/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG6A/U-BULK", rg: "RG-6", z: 75, vp: 66, c: 67.59, od: 0.332, d: 0.029, D: 0.185, Ds: 0.248, inner: "copper-clad steel, solid, 0.029 in", diel: "PE, 0.185 in", shield: "silver-plated and copper braids, 0.248 in", jacket: "PVC, black", kind: "typ", loss: [[100, 2.9], [1000, 11]], cw: null, fmax: 1, t: [-40, 80], v: "2700 Vdc", bend: [null, 3.5], use: "Video and audio (security, CATV); less loss than RG-59." },
+  { key: "rg11a", name: "RG-11A/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG11A/U-BULK", rg: "RG-11", z: 75, vp: 66, c: 67.26, od: 0.405, d: 0.048, D: 0.285, Ds: 0.314, inner: "tinned copper, 7 strands, 0.048 in", diel: "PE, 0.285 in", shield: "copper braid, 97 %, 0.314 in", jacket: "PVC, black", kind: "typ", loss: [[100, 1.98], [200, 2.93], [400, 4.42], [800, 6.93], [1000, 8.11]], cw: null, fmax: 1, t: [-40, 80], v: null, bend: [null, 4.5], use: null },
+  { key: "rg62a", name: "RG-62A/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG62A/U-BULK", rg: "RG-62", z: 93, vp: 83, c: 47.57, od: 0.239, d: 0.025, D: 0.146, Ds: null, inner: "copper-clad steel, solid, 0.025 in", diel: "air-spaced PE, 0.146 in", shield: "copper braid, 95 %", jacket: "PVC, black", kind: "typ", loss: [[200, 3.8], [400, 5.3], [700, 7.3], [1000, 8.7]], cw: null, fmax: 1, t: [-40, 80], v: null, bend: [null, 2.5], use: null },
+  { key: "rg8a", name: "RG-8A/U", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG8A/U-BULK", rg: null, z: 50, vp: 66, c: 101.05, od: 0.405, d: 0.085, D: 0.285, Ds: 0.318, inner: "copper, 7 strands, 0.085 in", diel: "PE, 0.285 in", shield: "copper braid, 0.318 in", jacket: "PVC, black", kind: "typ", loss: [[1, 0.2], [10, 0.6], [50, 1.3], [400, 4.1], [700, 6.5], [900, 7.6], [1000, 8]], cw: null, fmax: 1, t: [-40, 80], v: null, bend: null, use: null },
+  { key: "rg8x", name: "RG-8X", maker: "Pasternack", sheet: "Pasternack sheet", code: "RG8X-BULK", rg: null, z: 50, vp: null, c: 85.3, od: 0.242, d: 0.056, D: 0.155, Ds: 0.178, inner: "copper, 19 strands, 0.056 in", diel: "foam PE, 0.155 in", shield: "copper braid, 0.178 in", jacket: "PVC, black", kind: "typ", loss: [[10, 1], [400, 8], [700, 11.1], [1000, 13.5]], cw: [[10, 1000], [400, 110], [700, 75], [1000, 60]], fmax: 1, t: [-40, 80], v: "2500 Vrms", bend: null, use: null },
+  { key: "lmr100a", name: "LMR-100A", maker: "Times Microwave", sheet: "Fairview Microwave sheet", code: "LMR-100A-PVC", rg: null, z: 50, vp: 66, c: 101.05, od: 0.11, d: 0.018, D: 0.06, Ds: null, inner: "copper-clad steel, solid, 0.018 in", diel: "PE, 0.060 in", shield: "aluminium tape and tinned copper braid", jacket: "PE, black", kind: "typ", loss: [[50, 5.1], [150, 8.9], [220, 10.9], [450, 15.8], [900, 22.8], [1500, 30.1], [1800, 33.2], [2000, 35.2], [2500, 39.8], [8000, 64.1]], cw: [[50, 180], [150, 100], [220, 83], [450, 57], [900, 39], [1500, 29], [1800, 27], [2000, 25], [2500, 22], [8000, 13]], fmax: 8, t: [-40, 85], v: "500 Vdc withstand", bend: [0.25, 1], use: null },
+  { key: "lmr195", name: "LMR-195", maker: "Times Microwave", sheet: "Fairview Microwave sheet", code: "LMR-195", rg: null, z: 50, vp: 80, c: 83.33, od: 0.195, d: 0.037, D: 0.11, Ds: null, inner: "copper, solid, 0.037 in", diel: "foam PE, 0.110 in", shield: "aluminium tape and tinned copper braid", jacket: "PE, black", kind: "typ", loss: [[50, 2.5], [150, 4.4], [220, 5.4], [450, 7.8], [900, 11.1], [1500, 14.5], [1800, 16], [2000, 16.9], [2500, 19], [5800, 29.9]], cw: [[50, 680], [150, 390], [220, 320], [450, 220], [900, 160], [1500, 120], [1800, 110], [2000, 100], [2500, 90], [5800, 60]], fmax: 8, t: [-40, 85], v: "1000 Vdc withstand", bend: [0.5, 2], use: null },
+  { key: "lmr200", name: "LMR-200", maker: "Times Microwave", sheet: "Fairview Microwave sheet", code: "LMR-200", rg: null, z: 50, vp: 83, c: 80.38, od: 0.195, d: 0.044, D: 0.116, Ds: null, inner: "copper, solid, 0.044 in", diel: "foam PE, 0.116 in", shield: "aluminium tape and tinned copper braid", jacket: "PE, black", kind: "typ", loss: [[50, 2.3], [150, 4], [220, 4.8], [450, 7], [900, 9.9], [1500, 12.9], [1800, 14.2], [2000, 15], [2500, 16.9], [5800, 26.4]], cw: [[50, 790], [150, 450], [220, 370], [450, 260], [900, 180], [1500, 140], [1800, 130], [2000, 120], [2500, 110], [5800, 70]], fmax: 8, t: [-40, 85], v: "1000 Vdc withstand", bend: [0.5, 2], use: null },
+  { key: "lmr240", name: "LMR-240", maker: "Times Microwave", sheet: "Fairview Microwave sheet", code: "LMR-240", rg: null, z: 50, vp: 84, c: 79.4, od: 0.24, d: 0.056, D: 0.15, Ds: null, inner: "copper, solid, 0.056 in", diel: "foam PE, 0.150 in", shield: "aluminium tape and tinned copper braid", jacket: "PE, black", kind: "typ", loss: [[50, 1.7], [150, 3], [220, 3.7], [450, 5.3], [900, 7.6], [1500, 9.9], [1800, 10.9], [2000, 11.5], [2500, 12.9], [5800, 20.4]], cw: [[50, 1150], [150, 660], [220, 540], [450, 380], [900, 260], [1500, 200], [1800, 180], [2000, 170], [2500, 150], [5800, 100]], fmax: 8, t: [-40, 85], v: "1500 Vdc withstand", bend: [0.75, 2.5], use: null },
+  { key: "lmr400", name: "LMR-400", maker: "Times Microwave", sheet: "Fairview Microwave sheet", code: "LMR-400", rg: null, z: 50, vp: 85, c: 78.41, od: 0.405, d: 0.108, D: 0.285, Ds: 0.32, inner: "copper-clad aluminium, solid, 0.108 in", diel: "foam PE, 0.285 in", shield: "aluminium tape and tinned copper braid", jacket: "PE, black", kind: "typ", loss: [[50, 0.9], [150, 1.5], [220, 1.9], [450, 2.7], [900, 3.9], [1500, 5.1], [1800, 5.7], [2000, 6], [2500, 6.8], [5800, 10.8]], cw: [[50, 2570], [150, 1470], [220, 1200], [450, 830], [900, 580], [1500, 440], [1800, 400], [2000, 370], [2500, 330], [5800, 210]], fmax: 6, t: [-40, 85], v: "2500 Vdc withstand", bend: [1, 4], use: "Low-loss flexible replacement for air-dielectric RG-8 cable." },
+  { key: "lmr600", name: "LMR-600", maker: "Times Microwave", sheet: "Fairview Microwave sheet", code: "LMR-600", rg: null, z: 50, vp: 87, c: 76.77, od: 0.59, d: 0.176, D: 0.455, Ds: null, inner: "copper-clad aluminium, solid, 0.176 in", diel: "foam PE, 0.455 in", shield: "aluminium tape and tinned copper braid", jacket: "PE, black", kind: "typ", loss: [[50, 0.5], [150, 1], [220, 1.2], [450, 1.7], [900, 2.5], [1500, 3.3], [1800, 3.7], [2000, 3.9], [2500, 4.4], [5800, 7.3]], cw: [[50, 4240], [150, 2410], [220, 1970], [450, 1350], [900, 930], [1500, 700], [1800, 630], [2000, 590], [2500, 520], [5800, 320]], fmax: 8, t: [-40, 85], v: "4000 Vdc withstand", bend: [1.5, 6], use: null },
+  { key: "lmr400_75", name: "LMR-400-75", maker: "Times Microwave", sheet: "Fairview Microwave sheet", code: "LMR-400-75", rg: null, z: 75, vp: 85, c: 52.17, od: 0.405, d: 0.065, D: 0.285, Ds: null, inner: "copper, solid, 0.065 in", diel: "foam PE, 0.285 in", shield: "aluminium tape and tinned copper braid", jacket: "PE, black", kind: "typ", loss: [[50, 0.8], [150, 1.5], [220, 1.8], [450, 2.6], [900, 3.7], [1500, 4.9], [1800, 5.4], [2000, 5.7], [2500, 6.4]], cw: [[50, 2310], [150, 1320], [220, 1080], [450, 740], [900, 520], [1500, 390], [1800, 350], [2000, 330], [2500, 300]], fmax: 8, t: [-40, 85], v: "2000 Vdc withstand", bend: [1, 4], use: null },
+];
+
+
+// Loss in dB per 100 ft at f MHz: log-log between the sheet's points; below the
+// first it goes as √f, above the last along the last slope (held in 0.5 to 1).
+function cxAtt(c, f) {
+  const pts = c.loss, n = pts.length;
+  if (f < pts[0][0]) return { a: pts[0][1] * Math.sqrt(f / pts[0][0]), ex: "low", i: 0 };
+  if (f > pts[n - 1][0]) {
+    const [f1, a1] = pts[n - 2], [f2, a2] = pts[n - 1];
+    const s = Math.min(1, Math.max(0.5, Math.log(a2 / a1) / Math.log(f2 / f1)));
+    return { a: a2 * (f / f2) ** s, ex: "high", i: n - 2 };
+  }
+  let i = 0;
+  while (i < n - 2 && f > pts[i + 1][0]) i++;
+  const [f1, a1] = pts[i], [f2, a2] = pts[i + 1];
+  return { a: a1 * (a2 / a1) ** (Math.log(f / f1) / Math.log(f2 / f1)), ex: null, i };
+}
+
+// The largest CW input power at f MHz: a single figure, a log-log reading of the
+// sheet's table, or null outside the table.
+function cxPower(c, f) {
+  const p = c.cw;
+  if (p === null) return null;
+  if (typeof p === "number") return { w: p, single: true };
+  const n = p.length;
+  if (f < p[0][0] * 0.999 || f > p[n - 1][0] * 1.001) return null;
+  let i = 0;
+  while (i < n - 2 && f > p[i + 1][0]) i++;
+  const [f1, w1] = p[i], [f2, w2] = p[i + 1];
+  return { w: w1 * (w2 / w1) ** (Math.log(f / f1) / Math.log(f2 / f1)), single: false };
+}
+
+// The velocity of propagation, from the sheet or, when it has none, 1/(Z0 C c).
+function cxVp(c) {
+  return c.vp !== null ? { v: c.vp / 100, derived: false } : { v: 1 / (c.z * c.c * 1e-12 * CX_LIGHT), derived: true };
+}
+
+function renderCoaxStandards(domain, tool, favId) {
+  const C = "coax-standards";
+  const state = {
+    mode: pref(C, "mode", "specs", Object.keys(CX_MODES)),
+    cable: pref(C, "cable", "rg58c", CX_CABLES.map((c) => c.key)),
+    imp: pref(C, "imp", "50", ["50", "75", "93"]),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(CX_F_UNITS)),
+    lUnit: pref(C, "lUnit", "m", Object.keys(CX_L_UNITS)),
+    pUnit: pref(C, "pUnit", "W", Object.keys(CX_P_UNITS)),
+    // f in Hz, length in metres, power in watts.
+    si: { f: 100e6, len: 10, pin: 1 },
+  };
+  const n3 = (v) => String(Number(v.toPrecision(3)));
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const mm = (inch) => `${n3(inch * 25.4)} mm`;
+  const n4 = (v) => String(Number(v.toPrecision(4)));
+  const fTxt = (mhz) => (mhz >= 1000 ? `${n4(mhz / 1000)} GHz` : `${n4(mhz)} MHz`);
+  const watts = (v) => siFormat(Number(v.toPrecision(3)), "W", 3);
+  const dbm = (w) => (w > 0 ? `${n3(Math.round(10 * Math.log10(w / 1e-3) * 1e6) / 1e6)} dBm` : "—");
+  const lenTxt = (m) => `${n3(m)} m · ${n3(m / 0.3048)} ft`;
+  const cable = () => CX_CABLES.find((c) => c.key === state.cable);
+  const stdOf = (c) => (c.rg ? CX_STD[c.rg] : null);
+  // A material text without its trailing diameter, "PE, 0.116 in" → "PE".
+  const bare = (t) => t.replace(/,? ?\d*\.\d+ in$/, "");
+  const minus = (v) => String(v).replace("-", "−");
+
+  function problem() {
+    const s = state.si;
+    if (state.mode === "specs") return "";
+    if (!(s.f > 0)) return "Enter the frequency.";
+    if (!(s.len >= 0)) return "Enter the cable's length, zero or more.";
+    if (state.mode === "loss" && !(s.pin >= 0)) return "Enter the input power, zero or more.";
+    return "";
+  }
+
+  // The run: loss in dB, per 100 ft and per 100 m, from the sheet's table.
+  function run(c) {
+    const f = state.si.f / 1e6, att = cxAtt(c, f);
+    return { f, att, per100ft: att.a, per100m: (att.a * 100) / 30.48, total: (att.a * state.si.len) / 0.3048 / 100 };
+  }
+
+  // ---------------- drawings ----------------
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "start") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const c = cable();
+    if (state.mode === "specs") {
+      // The cable cut across, to scale: jacket, shield (a ring, not to scale in thickness), dielectric, inner conductor.
+      const cx = 62, cy = 56, R = 46;
+      const rD = (R * c.D) / c.od, rd = Math.max(1.8, (R * c.d) / c.od);
+      const rs = c.Ds ? (R * c.Ds) / c.od : rD + (R - rD) * 0.4;
+      const jacket = c.jacket === "none";
+      return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+        <circle cx="${cx}" cy="${cy}" r="${R}" stroke="${grey}" stroke-width="1.4"/>
+        <circle cx="${cx}" cy="${cy}" r="${rs.toFixed(1)}" stroke="${part}" stroke-width="3" stroke-opacity="0.85"/>
+        <circle cx="${cx}" cy="${cy}" r="${rD.toFixed(1)}" stroke="${grey}" stroke-width="1"/>
+        <circle cx="${cx}" cy="${cy}" r="${rd.toFixed(1)}" fill="${part}"/>
+        ${lbl(124, 24, `${jacket ? "tube" : "jacket"} ${mm(c.od)}`, grey)}
+        ${lbl(124, 47, `shield${c.Ds ? " " + mm(c.Ds) : ""}`, part)}
+        ${lbl(124, 70, `dielectric ${mm(c.D)}`, grey)}
+        ${lbl(124, 93, `inner ${mm(c.d)}`, part)}
+      </svg>`;
+    }
+    if (state.mode === "loss") {
+      // dB per 100 ft against frequency, both log; the sheet's points dotted, the run's frequency marked.
+      const X0 = 36, X1 = 278, Y0 = 14, Y1 = 86, fa = 10, fb = 30000, la = -1, lb = 2;
+      const px = (f) => X0 + ((Math.log10(Math.min(fb, Math.max(fa, f))) - Math.log10(fa)) / (Math.log10(fb) - Math.log10(fa))) * (X1 - X0);
+      const py = (a) => Y1 - ((Math.log10(Math.min(10 ** lb, Math.max(10 ** la, a))) - la) / (lb - la)) * (Y1 - Y0);
+      let out = "";
+      for (const a of [0.1, 1, 10, 100]) out += `<path d="M${X0} ${py(a).toFixed(1)} H${X1}" stroke="${wire}" stroke-width="0.6" stroke-opacity="0.5"/>${lbl(X0 - 4, (py(a) + 4).toFixed(1), String(a), grey, "end")}`;
+      for (const [f, t] of [[10, "10M"], [100, "100M"], [1000, "1G"], [10000, "10G"]]) out += `<path d="M${px(f).toFixed(1)} ${Y0} V${Y1}" stroke="${wire}" stroke-width="0.6" stroke-opacity="0.5"/>${lbl(px(f).toFixed(1), 100, t, grey, "middle")}`;
+      out += `<path d="M${X0} ${Y0} V${Y1} H${X1}" stroke="${wire}" stroke-width="1.2"/>${lbl(X0 + 4, 10, "dB per 100 ft", grey)}`;
+      const pts = c.loss, f1 = pts[0][0], f2 = pts[pts.length - 1][0];
+      // Only what lies inside the plot: an estimate that runs off the top stops there.
+      const path = (from, to) => {
+        const seg = [];
+        for (let i = 0; i <= 40; i++) {
+          const f = from * (to / from) ** (i / 40), a = cxAtt(c, f).a;
+          if (a > 10 ** lb || a < 10 ** la) continue;
+          seg.push(`${seg.length ? "L" : "M"}${px(f).toFixed(1)} ${py(a).toFixed(1)}`);
+        }
+        return seg.join(" ");
+      };
+      if (f1 > fa) out += `<path d="${path(fa, f1)}" stroke="${part}" stroke-width="1.4" stroke-dasharray="3 3"/>`;
+      out += `<path d="${path(Math.max(fa, f1), Math.min(fb, f2))}" stroke="${part}" stroke-width="1.8"/>`;
+      if (f2 < fb) out += `<path d="${path(f2, fb)}" stroke="${part}" stroke-width="1.4" stroke-dasharray="3 3"/>`;
+      for (const [f, a] of pts) out += `<circle cx="${px(f).toFixed(1)}" cy="${py(a).toFixed(1)}" r="2.2" fill="${part}"/>`;
+      if (!problem()) {
+        const f = state.si.f / 1e6, a = cxAtt(c, f).a;
+        if (f >= fa && f <= fb && a >= 10 ** la && a <= 10 ** lb) out += `<path d="M${px(f).toFixed(1)} ${Y1} V${py(a).toFixed(1)}" stroke="${calc}" stroke-width="1.2" stroke-dasharray="3 3"/><circle cx="${px(f).toFixed(1)}" cy="${py(a).toFixed(1)}" r="3.4" fill="${calc}"/>`;
+      }
+      return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
+    }
+    return "";
+  }
+
+  // ---------------- results ----------------
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const c = cable(), s = state.si;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+    const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const std = stdOf(c), vp = cxVp(c);
+
+    if (state.mode === "specs") {
+      const sub = std ? `${std.m17}: ${std.z} ±${std.tol} Ω, ${std.vp} %, ${std.c} pF/m` : "no M17 sheet in the table read";
+      const diffs = [];
+      if (std) {
+        if (c.z !== std.z) diffs.push(`Z0 ${c.z} against ${std.z} Ω`);
+        if (c.vp !== null && Math.abs(c.vp - std.vp) > 0.5) diffs.push(`velocity ${c.vp} against ${std.vp} %`);
+        if (c.c !== null && Math.abs(c.c / std.c - 1) > 0.02) diffs.push(`${n3(c.c)} against ${n3(std.c)} pF/m`);
+        if (Math.abs(c.od - std.jacket[1]) > 0.0015) diffs.push(`${n3(c.od * 25.4)} against ${n3(std.jacket[1] * 25.4)} mm across`);
+      }
+      const bend = c.bend ? `${c.bend[0] ? `${mm(c.bend[0])} installing, ` : ""}${mm(c.bend[1])} repeated` : null;
+      const rated = `${c.v ? `${c.v} · ` : ""}${minus(c.t[0])} to ${c.t[1]} °C · DC–${c.fmax} GHz`;
+      const notes = [c.use ? c.use : "", diffs.length ? `This sheet differs from the standard: ${diffs.join(", ")}.` : ""].filter(Boolean);
+      return `${head(`${c.name} · ${c.maker} ${c.code}`, `${c.z} Ω`, sub)}
+        ${grid([cell("Velocity", `${n3(vp.v * 100)} %${vp.derived ? "*" : ""}`, "vp"), cell("Capacitance", c.c !== null ? `${n3(c.c)} pF/m` : "—", "cap"), cell("Diameter", mm(c.od), "dia")])}
+        <div class="field notation-box">
+          ${row("Inner conductor", bare(c.inner), "inner")}
+          ${row("Dielectric", bare(c.diel), "diel")}
+          ${row("Shield", bare(c.shield), "shield")}
+          ${row("Jacket", c.jacket, "jacket")}
+          ${row("Rated", rated, "rated")}
+          ${bend ? row("Bend radius", bend, "bend") : ""}
+          ${notes.length ? `<div class="cx-note" data-res="note">${notes.join(" ")}${vp.derived ? " * From the capacitance: the sheet gives no velocity." : ""}</div>` : (vp.derived ? `<div class="cx-note" data-res="note">* From the capacitance: the sheet gives no velocity.</div>` : "")}
+        </div>`;
+    }
+
+    if (state.mode === "loss") {
+      const r = run(c), a = r.att, f = r.f;
+      const pts = c.loss, ptsTxt = (k) => `${fTxt(pts[k][0])} ${n3(pts[k][1])}`;
+      const atPoint = pts.findIndex((p) => Math.abs(p[0] - f) < f * 1e-9);
+      const sub = atPoint >= 0 ? `the ${c.kind === "max" ? "maximum" : "typical"} figure on the sheet at ${fTxt(f)}`
+        : a.ex === "low" ? `${fTxt(f)} is under the sheet's first figure: scaled as √f, an estimate`
+        : a.ex === "high" ? `${fTxt(f)} is over the sheet's last figure (${fTxt(pts[pts.length - 1][0])}): an estimate`
+        : `between the sheet's ${fTxt(pts[a.i][0])} and ${fTxt(pts[a.i + 1][0])} figures`;
+      const pout = s.pin * Math.pow(10, -r.total / 10);
+      const cw = cxPower(c, f);
+      const delay = (s.len / (vp.v * CX_LIGHT)) * 1e9;
+      const over = f > c.fmax * 1000 * 1.0000001;
+      return `${head(`${c.name}, ${lenTxt(s.len)} at ${fTxt(f)}`, `${n3(r.total)} dB`, sub)}
+        ${grid([cell("dB per 100 ft", n3(r.per100ft), "a100ft"), cell("dB per 100 m", n3(r.per100m), "a100m"), cell("Power out", `${watts(pout)}`, "pout")])}
+        <div class="field notation-box">
+          ${row("Sheet, nearest figures", a.ex === "low" ? ptsTxt(0) : a.ex === "high" ? ptsTxt(pts.length - 1) : `${ptsTxt(a.i)} · ${ptsTxt(a.i + 1)}`, "table")}
+          ${row("Output level", `${dbm(pout)} for ${dbm(s.pin)} in`, "dbm")}
+          ${row("Largest CW power", cw ? (cw.single ? `${watts(cw.w)} (the sheet's one figure)` : `${watts(cw.w)} at ${fTxt(f)}`) : "not on the sheet here", "cw")}
+          ${row("Delay of the run", `${n3(delay)} ns`, "delay")}
+          ${over ? row("Range", warn(`over the sheet's ${c.fmax} GHz`), "warn") : ""}
+        </div>`;
+    }
+
+    // Compare
+    const group = CX_CABLES.filter((x) => String(x.z) === state.imp);
+    const rows = group.map((x) => { const q = run(x); return { x, total: q.total, ex: q.att.ex }; }).sort((p, q) => p.total - q.total);
+    const worst = Math.max(...rows.map((q) => q.total), 1e-12);
+    const list = rows.map((q, i) => `<div class="cx-row${q.x.key === state.cable ? " sel" : ""}${q.ex ? " est" : ""}">
+          <span class="cx-name" data-res="n${i}">${q.x.name}</span>
+          <span class="cx-barbox"><span class="cx-bar" style="width:${Math.max(2, (q.total / worst) * 100).toFixed(1)}%"></span></span>
+          <span class="cx-val" data-res="v${i}">${q.ex ? "~" : ""}${n3(q.total)} dB</span>
+        </div>`).join("");
+    return `<div class="field notation-box cx-list">${list}
+          <div class="cx-note">${lenTxt(s.len)} at ${fTxt(s.f / 1e6)}, the sheets' typical loss${rows.some((q) => q.ex) ? "; ~ is beyond a sheet's table: an estimate" : ""}.</div>
+        </div>`;
+  }
+
+  function show() {
+    const box = app.querySelector(".diagram-box");
+    if (box) box.innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); paint(); };
+  useExamples([
+    { title: "A run of RG-58", note: "30 m of RG-58C/U at 100 MHz loses 4.82 dB: Pasternack's 4.9 dB per 100 ft.",
+      apply: example({ top: { mode: "loss", cable: "rg58c", fUnit: "MHz", lUnit: "m" }, si: { f: 100e6, len: 30, pin: 1 } }) },
+    { title: "LMR-400 against RG-213", note: "At 144 MHz over 30 m: LMR-400 loses 1.45 dB, RG-213 2.66 dB.",
+      apply: example({ top: { mode: "cmp", cable: "lmr400", imp: "50", fUnit: "MHz", lUnit: "m" }, si: { f: 144e6, len: 30 } }) },
+    { title: "A GPS antenna lead", note: "3 m of RG-316 at 1.575 GHz: 4.45 dB, read between the sheet's 1 and 3 GHz figures.",
+      apply: example({ top: { mode: "loss", cable: "rg316", fUnit: "GHz", lUnit: "m" }, si: { f: 1.575e9, len: 3, pin: 1 } }) },
+    { title: "What RG-6 is", note: "75 Ω, 66 %, 67.6 pF/m; M17/2-RG6 and Pasternack's RG6A/U agree.",
+      apply: example({ top: { mode: "specs", cable: "rg6a" } }) },
+  ]);
+
+  function paint() {
+    const s = state.si, c = cable();
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const opt = (x) => `<option value="${x.key}" ${x.key === state.cable ? "selected" : ""}>${x.name} · ${x.z} Ω</option>`;
+    const cabSel = `<div class="field-pair"><div class="field"><label>Cable</label><select id="cx-cable">
+          <optgroup label="RG types, Pasternack sheets">${CX_CABLES.filter((x) => x.rg).map(opt).join("")}</optgroup>
+          <optgroup label="Other RG names, Pasternack sheets">${CX_CABLES.filter((x) => !x.rg && x.maker === "Pasternack").map(opt).join("")}</optgroup>
+          <optgroup label="Times Microwave LMR, Fairview sheets">${CX_CABLES.filter((x) => x.maker !== "Pasternack").map(opt).join("")}</optgroup>
+        </select></div></div>`;
+    const fBox = field("f", "Frequency", sel('data-cf="1"', CX_F_UNITS, state.fUnit), fmt(s.f / CX_F_UNITS[state.fUnit]));
+    const lBox = field("len", "Length", sel('data-cl="1"', CX_L_UNITS, state.lUnit), fmt(s.len / CX_L_UNITS[state.lUnit]));
+    const pBox = field("pin", "Power in", sel('data-cp="1"', CX_P_UNITS, state.pUnit), fmt(s.pin / CX_P_UNITS[state.pUnit]));
+    const impBox = `<div class="field"><label>Impedance</label><select id="cx-imp">${["50", "75", "93"].map((z) => `<option value="${z}" ${state.imp === z ? "selected" : ""}>${z} Ω</option>`).join("")}</select></div>`;
+    const inputs = state.mode === "specs" ? cabSel
+      : state.mode === "loss" ? `${cabSel}<div class="field-pair">${fBox}${lBox}${pBox}</div>`
+      : `<div class="field-pair">${fBox}${lBox}${impBox}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Specifications and loss of RG and LMR cables")}
+
+      ${pillRow(Object.entries(CX_MODES), state.mode, domain.bg)}
+
+      ${state.mode === "cmp" ? "" : `<div class="diagram-box">${diagram()}</div>`}
+
+      ${inputs}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["loss = dB per 100 ft × feet / 100", "between the sheet's points: log-log", "α ≈ K1 √f + K2 f  (dB per 100 ft)", "Pout = Pin × 10^(−loss / 10)", "VP = 1 / √εr,  C = 1 / (Z0 VP c)", "delay = length / (VP c)"],
+        "\"RG\" began as a series of American military cable types in the Second World War (the numbers were listed in MIL-HDBK-216 in 1962); /U meant universal, general use, and the letters A, B, C revisions. Today the military specification, MIL-DTL-17, defines each cable on a slash sheet, M17/28-RG58 for RG-58, and a cable sold as \"RG-58\" need not meet it: there is no standard behind the plain name. So the tool shows both, the standard's figures and a real maker's sheet, and where they differ. A cable's loss grows with the square root of the frequency (the current crowds into the skin of the conductors) and, at high frequency, with the frequency itself (the dielectric); the makers give it at a few frequencies and the tool reads between them, exactly at their figures. Larger cable, and foam dielectric, lose less; PTFE and silver stand heat. The largest power falls with frequency because the loss heats the cable."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "f") state.si.f = v * CX_F_UNITS[state.fUnit];
+        else if (key === "len") state.si.len = v * CX_L_UNITS[state.lUnit];
+        else if (key === "pin") state.si.pin = v * CX_P_UNITS[state.pUnit];
+        show();
+      };
+    });
+    const cs = document.getElementById("cx-cable");
+    if (cs) cs.onchange = (e) => { state.cable = e.target.value; setPref(C, "cable", state.cable); paint(); };
+    const ip = document.getElementById("cx-imp");
+    if (ip) ip.onchange = (e) => { state.imp = e.target.value; setPref(C, "imp", state.imp); paint(); };
+    const unit = (attr, key, name) => { const el = app.querySelector(`select[${attr}]`); if (el) el.onchange = (e) => { state[name] = e.target.value; setPref(C, name, state[name]); paint(); }; };
+    unit("data-cf", "f", "fUnit"); unit("data-cl", "len", "lUnit"); unit("data-cp", "pin", "pUnit");
+  }
+
   paint();
 }
 

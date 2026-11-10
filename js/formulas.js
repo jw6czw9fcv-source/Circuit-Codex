@@ -429,6 +429,12 @@ const FORMULAS = [
     note: "Ian Poole (Electronics Notes) and Kuphaldt for the T and Pi pads; the bridged T is derived and checked by circuit analysis. Not more than about 20 dB per section.",
   },
   {
+    tool: "Coax cable standards",
+    domain: "rf",
+    formulas: ["loss = dB per 100 ft × feet / 100", "between sheet points: log-log", "α ≈ K1 √f + K2 f  (dB/100 ft)", "Pout = Pin × 10^(−loss / 10)", "VP = 1 / √εr,  C = 1 / (Z0 VP c)", "delay = length / (VP c)"],
+    note: "Loss from the makers' sheets (Pasternack's RG types, Times Microwave's LMR as Fairview prints them), read between their figures; the RG types against the MIL-DTL-17 (M17) table.",
+  },
+  {
     tool: "Velocity factor",
     domain: "rf",
     formulas: ["VF = v / c = 1 / √εr", "λg = VF × c / f", "quarter wave: l = λg / 4", "measured: VF = l / (c t) = 4 l f / c"],
