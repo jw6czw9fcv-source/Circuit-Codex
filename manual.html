@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=8d8b2de31b" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=a2822daf55" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -7275,7 +7275,7 @@ copper on a PCB.</p>
 <section class="tool" id="attenuator" style="--accent:#E08585">
   <div class="crumb">RF &amp; microwave › Power &amp; gain</div>
   <h2>Attenuator</h2>
-  <figure class="shot"><img src="manual/img/attenuator.jpg?h=1512328eeb" loading="lazy" alt="Attenuator as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/attenuator.jpg?h=257d3260a6" loading="lazy" alt="Attenuator as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The resistors of a pad that cuts a signal by a set number of dB while
 looking like the line's impedance Z0 from both ends:</p>
@@ -7284,11 +7284,12 @@ looking like the line's impedance Z0 from both ends:</p>
   at each end), T (a series resistor in each arm and one to ground) and
   Bridged T (two arms of Z0, a bridge across them and a shunt).</li>
 <li><strong>Inputs:</strong> the attenuation (dB), the impedance Z0 (50, 75 or 600 Ω
-  typically), the input power (mW or W) and the resistor values (Exact,
-  E24 or E96).</li>
+  typically) and the input power (mW or W). The resistor values are
+  picked in the Output heading, as in LED series resistor: exact values,
+  or any E series from E6 to E192.</li>
 <li><strong>The big result:</strong> the two values that define the pad (T: R1 and R2,
   Pi: R3 and R4, Bridged T: Rb and Rs, whose two arms are Z0).</li>
-<li><strong>With E24 or E96:</strong> the ideal values, then the pad's real loss and
+<li><strong>With an E series:</strong> the ideal values, then the pad's real loss and
   its input return loss with the standard parts (the analysis of the
   actual circuit); the bridged T's arms of Z0 are rounded too.</li>
 <li><strong>Below it:</strong> the output power in W and dBm, the hottest resistor and

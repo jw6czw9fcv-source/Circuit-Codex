@@ -11372,11 +11372,12 @@ looking like the line's impedance Z0 from both ends:
   at each end), T (a series resistor in each arm and one to ground) and
   Bridged T (two arms of Z0, a bridge across them and a shunt).
 - **Inputs:** the attenuation (dB), the impedance Z0 (50, 75 or 600 Ω
-  typically), the input power (mW or W) and the resistor values (Exact,
-  E24 or E96).
+  typically) and the input power (mW or W). The resistor values are
+  picked in the Output heading, as in LED series resistor: exact values,
+  or any E series from E6 to E192.
 - **The big result:** the two values that define the pad (T: R1 and R2,
   Pi: R3 and R4, Bridged T: Rb and Rs, whose two arms are Z0).
-- **With E24 or E96:** the ideal values, then the pad's real loss and
+- **With an E series:** the ideal values, then the pad's real loss and
   its input return loss with the standard parts (the analysis of the
   actual circuit); the bridged T's arms of Z0 are rounded too.
 - **Below it:** the output power in W and dBm, the hottest resistor and

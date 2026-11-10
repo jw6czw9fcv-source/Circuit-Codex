@@ -13534,7 +13534,9 @@ function renderSkinDepth(domain, tool, favId) {
 // coupling lets the signal bypass a high-loss pad.
 const ATT_MODES = { pi: "Pi", t: "T", bt: "Bridged T" };
 const ATT_P_UNITS = { mW: 1e-3, W: 1 };
-const ATT_SERIES = { exact: "Exact", E24: "E24", E96: "E96" };
+// The E series is picked in the Output heading, as in LED series resistor:
+// exact values, or any E series from E6 to E192.
+const ATT_SERIES = ["exact", ...Object.keys(E_TOLERANCE)];
 
 // The pad as a circuit: resistors rs for a kind, a Z0 load, input power Pin
 // → input impedance, voltage ratio out/in, each resistor's power, output power.
@@ -13575,7 +13577,7 @@ function renderAttenuator(domain, tool, favId) {
   const state = {
     mode: pref(C, "mode", "pi", Object.keys(ATT_MODES)),
     pUnit: pref(C, "pUnit", "W", Object.keys(ATT_P_UNITS)),
-    series: pref(C, "series", "exact", Object.keys(ATT_SERIES)),
+    series: pref(C, "series", "exact", ATT_SERIES),
     si: { a: 10, z0: 50, pin: 1 },
   };
   const n3 = (v) => String(Number(v.toPrecision(3)));
@@ -13707,7 +13709,6 @@ function renderAttenuator(domain, tool, favId) {
           <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
-    const serSel = `<select id="att-series">${Object.entries(ATT_SERIES).map(([k, n]) => `<option value="${k}" ${k === state.series ? "selected" : ""}>${n}</option>`).join("")}</select>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "Resistor pads that cut a signal and keep Z0")}
 
@@ -13716,9 +13717,12 @@ function renderAttenuator(domain, tool, favId) {
       <div class="diagram-box">${diagram()}</div>
 
       <div class="field-pair">${field("a", "Attenuation", fixed("dB"), fmt(s.a))}${field("z0", "Impedance, Z0", fixed("Ω"), fmt(s.z0))}${field("pin", "Power in", sel('data-punit="1"', ATT_P_UNITS, state.pUnit), fmt(s.pin / ATT_P_UNITS[state.pUnit]))}</div>
-      <div class="field-pair"><div class="field"><label>Resistor values</label>${serSel}</div></div>
 
-      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div class="section-label" style="color:#5DCAA5">Output
+        <select id="att-series" class="label-select">
+          ${ATT_SERIES.map((k) => `<option value="${k}" ${state.series === k ? "selected" : ""}>${k === "exact" ? "Exact values" : `${k} (${E_TOLERANCE[k]})`}</option>`).join("")}
+        </select>
+      </div>
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
