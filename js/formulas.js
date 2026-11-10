@@ -350,12 +350,6 @@ const FORMULAS = [
     note: "c = 299 792 458 m/s. In a cable or a trace, multiply λ by the velocity factor.",
   },
   {
-    tool: "VSWR / Return loss",
-    domain: "rf",
-    formulas: ["VSWR = (1 + |Γ|) / (1 − |Γ|)", "Return loss (dB) = −20 log₁₀|Γ|"],
-    note: "Γ is the reflection coefficient, 0 (perfect match) to 1 (total reflection).",
-  },
-  {
     tool: "Antenna length",
     domain: "rf",
     formulas: ["Half wave: L = k × c / (2f)", "f in MHz: 142.5 / f m, 468 / f ft", "Quarter wave: L = k × c / (4f)", "Long wire: L = c × (N − 0.05) / (2f)"],
@@ -403,6 +397,12 @@ const FORMULAS = [
     domain: "pcb",
     formulas: ["S = C / ε0 = Σ ε (Δφ)² over the grid", "Zodd = η0 / √(S × S_air),  Zdiff = 2 Zodd"],
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
+  },
+  {
+    tool: "Coax impedance",
+    domain: "rf",
+    formulas: ["Z0 = η0 / (2π √εr) × ln(D / d)", "C = 2π ε0 εr / ln(D / d)", "L = μ0/(2π) × ln(D / d)", "TE11 from λ ≈ π (D + d) / 2", "α ≈ Rs (1/πd + 1/πD) / (2 Z0)"],
+    note: "Wadell §3.2.1 (exact for a uniform line) and §2.7.1 for the loss of smooth copper; Belden's cables listed with their own figures.",
   },
   {
     tool: "VSWR / Return loss",

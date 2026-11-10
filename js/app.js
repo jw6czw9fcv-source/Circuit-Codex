@@ -663,6 +663,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "laminates") return renderLaminates(domain, tool, favId);
   if (calcId === "antenna-length") return renderAntennaLength(domain, tool, favId);
   if (calcId === "vswr") return renderVswr(domain, tool, favId);
+  if (calcId === "coax") return renderCoax(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
   if (calcId === "thermal-vias") return renderThermalVias(domain, tool, favId);
   if (calcId === "via-current") return renderViaCurrent(domain, tool, favId);
@@ -12790,6 +12791,243 @@ function renderVswr(domain, tool, favId) {
     app.querySelector("select[data-punit]").onchange = (e) => { state.pUnit = e.target.value; setPref(C, "pUnit", state.pUnit); paint(); };
   }
 
+  paint();
+}
+
+// ---------- Coax impedance ----------
+// A round coaxial line, Wadell, Transmission Line Design Handbook (1991,
+// Pierre's copy), §3.2.1 (p47–49, read): Z0 = η0/(2π √εr) ln(D/d), "exact
+// for the case of an infinitely long line"; the first higher mode, TE11,
+// starts near λc ≈ π (D + d)/2 in the dielectric (3.2.1.12, "generally
+// accurate to 3% for 50 Ω lines"); his example (§3.2.1.1): a 0.040 in pin
+// needs D = 0.092 in in air, 0.134 in in PTFE (εr 2.1) for 50 Ω. Per
+// length C = 2π ε0 εr / ln(D/d) and L = μ0/(2π) ln(D/d). The conductor
+// loss of smooth copper from his §2.7.1 (p25): Rs = √(π f μ / σ), α ≈
+// R/(2 Z0) (2.7.6), R = Rs (1/(πd) + 1/(πD)); copper at IACS (1/58
+// Ω·mm²/m). His printed skin depth 1/√(ωμσ) is √2 short of his own Rs
+// (1/(σδ)); the tool uses Rs. Real cables lose more: braid, stranding,
+// plating and the dielectric. The cables: Belden's technical data sheets
+// (read, revisions of 2026): nominal conductor and insulation diameters,
+// impedance, velocity of propagation, capacitance and attenuation.
+const COAX_C = 299792458, COAX_ETA = 376.730313668;
+const COAX_LEN_UNITS = { mm: 1e-3, in: 0.0254 };
+const COAX_F_UNITS = { MHz: 1e6, GHz: 1e9 };
+// εr: air, PTFE as Wadell's example, solid and foam PE from Belden's
+// velocities of propagation (66 % and 82 %: 1/VF²).
+const COAX_MATERIALS = { air: ["Air", 1], ptfe: ["PTFE", 2.1], pe: ["Solid PE", 1 / 0.66 ** 2], foam: ["Foam PE", 1 / 0.82 ** 2], custom: ["Custom", null] };
+// Belden's cables: diameters in inches as the sheets give them, the
+// maker's Z0, VF, pF/m, and attenuation in dB/100 ft at 100 MHz and 1 GHz.
+const COAX_CABLES = [
+  { key: "8259", name: "RG-58, Belden 8259", fits: "50 Ω, 19×33 tinned copper, PE, 95 % tinned braid", d: 0.035, D: 0.117, z: 50, vf: 0.66, c: 101, att: [5.4, 22.8] },
+  { key: "9201", name: "RG-58, Belden 9201", fits: "52 Ω, solid copper, PE, 80 % braid", d: 0.033, D: 0.116, z: 52, vf: 0.66, c: 93.5, att: [3.8, 14.5] },
+  { key: "8216", name: "RG-174, Belden 8216", fits: "50 Ω, 7×34 copper-covered steel, PE, 90 % tinned braid", d: 0.019, D: 0.060, z: 50, vf: 0.66, c: 101, att: [8.4, 34.0] },
+  { key: "83284", name: "RG-316, Belden 83284", fits: "50 Ω, 7×34 silvered copper-covered steel, PTFE, 95 % silvered braid", d: 0.020, D: 0.060, z: 50, vf: 0.70, c: 95, att: [8.3, 29.0] },
+  { key: "8267", name: "RG-213, Belden 8267", fits: "50 Ω, 7×21 copper, PE, 95 % braid", d: 0.089, D: 0.285, z: 50, vf: 0.66, c: 101, att: [1.9, 8.0] },
+  { key: "8241", name: "RG-59, Belden 8241", fits: "75 Ω, solid copper-covered steel, PE, 95 % braid", d: 0.023, D: 0.146, z: 75, vf: 0.66, c: 66.9, att: null },
+  { key: "1694A", name: "RG-6, Belden 1694A", fits: "75 Ω, solid copper, foam PE, foil + 95 % tinned braid", d: 0.040, D: 0.180, z: 75, vf: 0.82, c: 53.1, att: [1.95, 6.3] },
+];
+
+function renderCoax(domain, tool, favId) {
+  const C = "coax";
+  const state = {
+    lUnit: pref(C, "lUnit", "mm", Object.keys(COAX_LEN_UNITS)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(COAX_F_UNITS)),
+    mat: "pe", cable: "8259",
+    si: { d: 0.035 * 0.0254, D: 0.117 * 0.0254, er: 1 / 0.66 ** 2, f: 100e6 },
+    // An impedance typed in its box: D is set to give it.
+    target: null,
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(4)) : "");
+  const n3 = (v) => String(Number(v.toPrecision(3)));
+  const cable = () => COAX_CABLES.find((c) => c.key === state.cable);
+  const zOf = (d, D, er) => COAX_ETA / (2 * Math.PI * Math.sqrt(er)) * Math.log(D / d);
+  const dFor = (z) => state.si.d * Math.exp(z * 2 * Math.PI * Math.sqrt(state.si.er) / COAX_ETA);
+
+  function problem() {
+    const s = state.si;
+    if (!(s.d > 0)) return "Enter the inner conductor's diameter.";
+    if (!(s.er >= 1)) return "Enter the dielectric constant, 1 or more.";
+    if (state.target !== null && !(state.target > 0)) return "Enter the impedance wanted, above zero.";
+    if (!(s.D > s.d)) return "The dielectric's diameter D must be larger than the inner conductor's d.";
+    if (!(s.f > 0)) return "Enter the frequency.";
+    return "";
+  }
+
+  function values() {
+    const { d, D, er, f } = state.si, ln = Math.log(D / d);
+    const z = zOf(d, D, er), vf = 1 / Math.sqrt(er);
+    const rs = Math.sqrt(Math.PI * f * 4e-7 * Math.PI * (1 / 58) * 1e-6);
+    const alpha = rs / (2 * z) * (1 / (Math.PI * d) + 1 / (Math.PI * D)) * 8.685889638;   // dB/m
+    return {
+      z, vf, ratio: D / d,
+      c: 2 * Math.PI * 8.8541878128e-12 * er / ln, l: 2e-7 * ln,
+      delay: 1 / (vf * COAX_C), fc: COAX_C / (Math.sqrt(er) * Math.PI * (D + d) / 2), alpha,
+    };
+  }
+
+  // The cable cut across: the shield (blue ring), the dielectric, the inner
+  // conductor (blue), d and D dimensioned; D green when an impedance set it.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const s = state.si, ok = !problem();
+    const both = (v) => {
+      const mm = `${n3(v * 1e3)} mm`, inch = `${n3(v / 0.0254)} in`;
+      return state.lUnit === "in" ? `${inch} · ${mm}` : `${mm} · ${inch}`;
+    };
+    // Drawn to scale for D/d between 1.5 and 8.
+    const R = 42, r = Math.max(R / 8, Math.min(R / 1.5, ok ? R * s.d / s.D : R / 3.3));
+    const tone = state.target !== null ? calc : part;
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">
+      <circle cx="80" cy="56" r="${R + 2}" stroke="${tone}" stroke-width="4" stroke-opacity="0.85"/>
+      <circle cx="80" cy="56" r="${R}" stroke="${wire}" stroke-width="1.2"/>
+      <circle cx="80" cy="56" r="${r.toFixed(1)}" fill="${part}"/>
+      <path d="M150 ${56 - R} V${56 + R} M146 ${56 - R} H154 M146 ${56 + R} H154" stroke="${tone}" stroke-width="1.2"/>
+      <path d="M80 ${56 - R} H150 M80 ${56 + R} H150" stroke="${wire}" stroke-width="0.8" stroke-dasharray="2 3"/>
+      ${lbl(158, 42, ok ? `D ${both(s.D)}` : "D", tone, "start")}
+      ${lbl(158, 60, ok ? `d ${both(s.d)}` : "d", part, "start")}
+      ${lbl(158, 78, `εr ${n3(s.er)}`, grey, "start")}
+      ${lbl(158, 96, "shield, dielectric, inner", grey, "start")}
+    </svg>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = state.si, k = values(), cb = cable();
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const fTxt = siFormat(Number(s.f.toPrecision(4)), "Hz", 4);
+    // The maker's attenuation at 100 MHz or 1 GHz, when the frequency is one.
+    const att = cb && cb.att ? (Math.abs(s.f - 1e8) < 1 ? cb.att[0] : Math.abs(s.f - 1e9) < 1 ? cb.att[1] : null) : null;
+    const main = state.target !== null
+      ? `<div class="result-field">
+          <div class="result-head"><span class="label">Dielectric diameter D for ${n3(state.target)} Ω</span></div>
+          <div class="result-value"><span class="num" data-res="big">${n3(s.D / COAX_LEN_UNITS[state.lUnit])} ${state.lUnit}</span></div>
+          <div class="result-sub" data-res="sub">D/d ${n3(k.ratio)}, εr ${n3(s.er)}</div>
+        </div>`
+      : `<div class="result-field">
+          <div class="result-head"><span class="label">Characteristic impedance</span></div>
+          <div class="result-value"><span class="num" data-res="big">${n3(k.z)} Ω</span></div>
+          <div class="result-sub" data-res="sub">D/d ${n3(k.ratio)}, εr ${n3(s.er)}</div>
+        </div>`;
+    return `${main}
+        <div class="field notation-box">
+          ${cb ? `<div class="notation-row"><span data-res="fits">${cb.name.replace(/^[^,]*, /, "")}: ${cb.fits.replace(/^\d+ Ω, /, "")}</span></div>` : ""}
+          ${cb ? row("Belden's figures", `${cb.z} Ω, VF ${Math.round(cb.vf * 100)} %, ${cb.c} pF/m`, "maker") : ""}
+          ${row("Capacitance, inductance", `${n3(k.c * 1e12)} pF/m, ${n3(k.l * 1e9)} nH/m`, "lc")}
+          ${row("Velocity factor, delay", `${n3(k.vf)}, ${n3(k.delay * 1e9)} ns/m`, "vf")}
+          ${row("Next mode (TE11) from", siFormat(Number(k.fc.toPrecision(3)), "Hz", 3), "fc")}
+          ${row(`Smooth copper loss, ${fTxt}`, att !== null || state.lUnit === "in" ? `${n3(k.alpha * 30.48)} dB/100 ft` : `${n3(k.alpha * 100)} dB/100 m`, "loss")}
+          ${att !== null ? row(`Belden's loss, ${fTxt}`, `${att} dB/100 ft`, "makerloss") : ""}
+        </div>`;
+  }
+
+  function syncBoxes() {
+    const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
+    const ok = !problem();
+    set("D", fmt(state.si.D / COAX_LEN_UNITS[state.lUnit]));
+    set("z", ok ? fmt(zOf(state.si.d, state.si.D, state.si.er)) : "");
+    set("vf", fmt(1 / Math.sqrt(state.si.er)));
+    set("er", fmt(state.si.er));
+  }
+  function show() {
+    if (state.target !== null && state.target > 0 && state.si.d > 0 && state.si.er >= 1) state.si.D = dFor(state.target);
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    syncBoxes();
+  }
+  // A typed dimension or εr leaves the listed cable for Custom.
+  function leaveCable() {
+    if (state.cable !== "custom") { state.cable = "custom"; const el = document.getElementById("coax-cable"); if (el) el.value = "custom"; }
+  }
+  function setMatFromEr() {
+    const m = Object.keys(COAX_MATERIALS).find((x) => COAX_MATERIALS[x][1] !== null && Math.abs(COAX_MATERIALS[x][1] - state.si.er) < 1e-9) || "custom";
+    state.mat = m;
+    const el = document.getElementById("coax-mat");
+    if (el) el.value = m;
+  }
+
+  const example = (si, extra) => () => {
+    Object.assign(state, { target: null, cable: "custom" }, extra);
+    Object.assign(state.si, si);
+    setMatFromEr();
+    paint();
+  };
+  useExamples([
+    { title: "Wadell's pogo pin, air", note: "A 0.040 in pin in a 0.092 in tube of air: 49.9 Ω (Wadell §3.2.1.1).",
+      apply: example({ d: 0.040 * 0.0254, D: 0.092 * 0.0254, er: 1, f: 100e6 }, { lUnit: "in" }) },
+    { title: "The same pin in PTFE", note: "εr 2.1 needs D = 0.134 in for 50 Ω: 50.0 Ω (Wadell's example).",
+      apply: example({ d: 0.040 * 0.0254, D: 0.134 * 0.0254, er: 2.1, f: 100e6 }, { lUnit: "in" }) },
+    { title: "RG-213 at 1 GHz", note: "Belden 8267: 46.1 Ω from its nominal sizes (50 Ω rated); smooth copper 4.38 dB/100 ft against Belden's 8.0.",
+      apply: example({ d: 0.089 * 0.0254, D: 0.285 * 0.0254, er: 1 / 0.66 ** 2, f: 1e9 }, { cable: "8267", fUnit: "GHz" }) },
+  ]);
+
+  function paint() {
+    const s = state.si;
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const lf = (key, label, n) => field(key, label, sel(`data-cl="${n}"`, COAX_LEN_UNITS, state.lUnit), fmt(s[key] / COAX_LEN_UNITS[state.lUnit]));
+    const matSel = `<select id="coax-mat">${Object.entries(COAX_MATERIALS).map(([k, [n]]) => `<option value="${k}" ${k === state.mat ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    const cabSel = `<select id="coax-cable"><option value="custom" ${state.cable === "custom" ? "selected" : ""}>Custom</option>${COAX_CABLES.map((c) => `<option value="${c.key}" ${c.key === state.cable ? "selected" : ""}>${c.name}</option>`).join("")}</select>`;
+    const cb = cable();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The impedance of a round coaxial line")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${lf("d", "Inner, d", 1)}${lf("D", "Dielectric, D", 2)}${field("z", "Impedance", fixed("Ω"), "")}</div>
+      <div class="field-pair"><div class="field"><label>Material</label>${matSel}</div>${field("er", "εr", fixed(""), fmt(s.er))}${field("vf", "Velocity factor", fixed(""), fmt(1 / Math.sqrt(s.er)))}</div>
+      <div class="field-pair"><div class="field"><label>Cable</label>${cabSel}</div>${field("f", "Frequency", sel('data-funit="1"', COAX_F_UNITS, state.fUnit), fmt(s.f / COAX_F_UNITS[state.fUnit]))}</div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Z0 = η0 / (2π √εr) × ln(D / d)", "C = 2π ε0 εr / ln(D / d),  L = μ0/(2π) ln(D / d)", "VF = 1 / √εr", "TE11 from λ ≈ π (D + d) / 2", "α ≈ Rs (1/πd + 1/πD) / (2 Z0),  Rs = √(π f μ0 ρ)"],
+        "A coaxial line is a round inner conductor of diameter d inside a round shield whose inside diameter is D, the space between filled with a dielectric of constant εr. Its impedance depends only on the ratio D/d and on εr (η0, about 377 Ω, is the impedance of free space), and the formula is exact for a uniform line. The dielectric slows the wave to VF = 1/√εr of the speed of light. Above a certain frequency a second kind of wave, TE11, can travel too, which spoils the line: it starts roughly where the circumference at mid-radius, π(D + d)/2, equals one wavelength in the dielectric. The loss estimate is for smooth, solid copper conductors with current in a thin skin; a real cable's braid, stranding, plating and dielectric loss add to it, as the makers' figures show."
+      )}
+      ${calcFooter("")}
+    `;
+    syncBoxes();
+    wireCalc(favId, paint);
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "z") { state.target = el.value === "" ? null : v; if (state.target !== null) leaveCable(); }
+        else if (key === "d" || key === "D") { state.si[key] = v * COAX_LEN_UNITS[state.lUnit]; if (key === "D") state.target = null; leaveCable(); }
+        else if (key === "er") { state.si.er = v; setMatFromEr(); leaveCable(); }
+        else if (key === "vf") { state.si.er = v > 0 ? 1 / (v * v) : NaN; setMatFromEr(); leaveCable(); }
+        else if (key === "f") state.si.f = v * COAX_F_UNITS[state.fUnit];
+        show();
+      };
+      el.onblur = () => { if (key === "z") { state.target = null; show(); } };
+    });
+    document.getElementById("coax-mat").onchange = (e) => {
+      state.mat = e.target.value;
+      const er = COAX_MATERIALS[state.mat][1];
+      if (er) { state.si.er = er; leaveCable(); }
+      paint();
+    };
+    document.getElementById("coax-cable").onchange = (e) => {
+      state.cable = e.target.value;
+      const c = cable();
+      if (c) { Object.assign(state.si, { d: c.d * 0.0254, D: c.D * 0.0254, er: 1 / c.vf ** 2 }); state.target = null; setMatFromEr(); }
+      paint();
+    };
+    // Every length picker changes them all.
+    app.querySelectorAll("select[data-cl]").forEach((el) => {
+      el.onchange = () => { state.lUnit = el.value; setPref(C, "lUnit", state.lUnit); paint(); };
+    });
+    app.querySelector("select[data-funit]").onchange = (e) => { state.fUnit = e.target.value; setPref(C, "fUnit", state.fUnit); paint(); };
+  }
+
+  setMatFromEr();
   paint();
 }
 

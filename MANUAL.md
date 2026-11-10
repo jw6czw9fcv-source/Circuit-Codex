@@ -94,6 +94,7 @@ will key on, since that is the id the app already holds for each tool.
 - Antennas & propagation → [Radio wavelength](#radio-wavelength)
 - Antennas & propagation → [Antenna length](#antenna-length)
 - Transmission lines → [VSWR / Return loss](#vswr)
+- Transmission lines → [Coax impedance](#coax)
 
 ### Power electronics
 
@@ -11045,6 +11046,126 @@ short antenna of 25 − j50 Ω.
   4.27, return loss 4.15 dB, 38.5 W;
 - a short: |Γ| 1 at 180°, VSWR ∞, return loss 0 dB, 100 W back;
 - kW re-expresses the forward power.
+
+[↑ Index](#index)
+
+---
+
+<a id="coax"></a>
+## Coax impedance
+
+`calc: coax` · RF & microwave › Transmission lines
+
+### What it computes
+
+The impedance and the other line constants of a round coaxial cable,
+from its dimensions, or the dimensions for an impedance:
+
+- **Inputs:** the inner conductor's diameter d, the dielectric's
+  diameter D (the inside of the shield), the dielectric (Material picker,
+  εr or the velocity factor, linked: typing either sets the other), a
+  listed cable, and a frequency for the loss.
+- **Impedance is a live box:** type an impedance and D is set to give it
+  (d and εr kept), D drawn green; leave the box and it shows Z0 again.
+- **Cable picker:** seven Belden cables; picking one sets d, D and εr
+  (1/VF², the maker's velocity of propagation), and the results add its
+  construction and Belden's own impedance, velocity and capacitance, and
+  at 100 MHz or 1 GHz its attenuation. Typing a dimension or εr returns
+  the picker to Custom.
+- **The big result:** Z0 (or D for the impedance typed); below it D/d and
+  εr.
+- **Below it:** C and L per metre, the velocity factor and the delay per
+  metre, the frequency where TE11 starts, the loss of smooth copper (per
+  100 m, or per 100 ft in inches or beside Belden's figure).
+- **Units:** mm or in for the diameters, linked; MHz or GHz.
+- **Drawing:** the cable cut across: shield, dielectric, inner
+  conductor, drawn to the D/d entered (kept between 1.5 and 8), with D
+  and d in mm and in.
+- **Remembered:** the units.
+
+| Cable (Belden) | d, D (in) | Belden Z0, VF, pF/m | from the sizes | dB/100 ft at 100 MHz, 1 GHz |
+|---|---|---|---|---|
+| RG-58, 8259 | 0.035 (19×33), 0.117 PE | 50, 66 %, 101 | 47.8 Ω, 106 pF/m | 5.4, 22.8 |
+| RG-58, 9201 | 0.033 solid, 0.116 PE | 52, 66 %, 93.5 | 49.7 Ω, 102 pF/m | 3.8, 14.5 |
+| RG-174, 8216 | 0.019 (7×34), 0.060 PE | 50, 66 %, 101 | 45.5 Ω, 111 pF/m | 8.4, 34.0 |
+| RG-316, 83284 | 0.020 (7×34), 0.060 PTFE | 50, 70 %, 95 | 46.1 Ω, 103 pF/m | 8.3, 29.0 |
+| RG-213, 8267 | 0.089 (7×21), 0.285 PE | 50, 66 %, 101 | 46.1 Ω, 110 pF/m | 1.9, 8.0 |
+| RG-59, 8241 | 0.023 solid, 0.146 PE | 75, 66 %, 66.9 | 73.1 Ω, 69.1 pF/m | (sheet's table empty) |
+| RG-6, 1694A | 0.040 solid, 0.180 foam PE | 75, 82 %, 53.1 | 73.9 Ω, 55.0 pF/m | 1.95, 6.3 |
+
+The formula, exact for a smooth line, reads 1 to 9 % low from the
+nominal sizes, most with stranded conductors: a stranded conductor's
+outline is larger than its effective diameter, and a braid's inside
+diameter is not the insulation's nominal one. Belden's figures are the
+measured truth for its cables; the formula is the one to design with.
+
+### Terms
+
+- **d, D:** the inner conductor's outside diameter, and the dielectric's
+  diameter, which is the inside diameter of the shield.
+- **Characteristic impedance Z0:** the ratio of voltage to current of a
+  wave on the line; set by D/d and εr only.
+- **Velocity factor VF:** the wave's speed as a share of light's, 1/√εr;
+  makers give it as "velocity of propagation", 66 % for solid PE.
+- **TE11:** the first wave pattern other than the normal (TEM) one; above
+  its cutoff a cable can carry two kinds of wave at different speeds,
+  which spoils it.
+- **Skin effect:** at high frequency current flows in a thin skin at the
+  conductors' surface, so their resistance, and the loss, rise with √f.
+- **Solid, foam PE, PTFE:** the usual dielectrics: polyethylene solid or
+  foamed with gas (lower εr, faster), and PTFE for heat and high
+  frequency.
+
+### Sources
+
+- **Brian C. Wadell, Transmission Line Design Handbook, Artech House,
+  1991** (Pierre's scanned copy, read):
+  - §3.2.1 (p47–49): Z0 = η0/(2.0 π √εr) ln(D/d) (3.2.1.1), "exact for
+    the case of an infinitely long line"; the TE11 cutoff λc ≈ π (D +
+    d)/2.0 (3.2.1.12), "generally accurate to 3% for 50 Ω lines"; the
+    example (§3.2.1.1): 50 Ω around a 0.040 in pogo pin needs D = 0.092
+    in in air and 0.134 in in PTFE (εr 2.1);
+  - §2.7.1 (p25): Rs = 1/(σδ) = √(π f μ/σ) (2.7.1.3) and α ≈ R/(2.0 Z0)
+    (2.7.6); its printed δ = 1/√(ωμσ) (2.7.1.5) is √2 short of the δ its
+    own Rs implies, 1/√(π f μ σ); the tool works from Rs. Its coax loss
+    shortcuts (3.2.1.2 and 3.2.1.3) do not state their units, so the tool
+    does not use them.
+- **Copper:** IACS, 1/58 Ω·mm²/m at 20 °C, as in Wire sizing (NBS
+  Handbook 100).
+- **The cables:** Belden technical data sheets 8259, 9201, 8216, 83284,
+  8267, 8241 and 1694A (catalog.belden.com, read, revisions dated
+  February to May 2026): nominal conductor and insulation diameters,
+  materials, impedance, velocity of propagation, capacitance, attenuation
+  in dB/100 ft. 8241's attenuation table is printed empty. Times
+  Microwave's LMR-400 sheet could not be downloaded, so LMR cables are
+  not listed.
+- **Solid and foam PE's εr:** 1/VF² from Belden's 66 % and 82 %: 2.30 and
+  1.49; PTFE 2.1 as Wadell's example.
+
+### Assumptions and limits
+
+- **Smooth, round, concentric, uniform:** the formula; eccentric or
+  partly filled lines (Wadell 3.2.2, 3.2.3) differ.
+- **Loss:** solid smooth copper only, no dielectric loss, no braid,
+  plating or stranding: a lower bound, often half a real cable's.
+- **TE11:** the simple estimate, within about 3 % (Wadell).
+
+### How it was checked
+
+9 cases, the expected values from the formulas above (a Python check of
+the same formulas):
+- RG-58, Belden 8259: 47.8 Ω, 106 pF/m, 241 nH/m, VF 0.66, 5.05 ns/m,
+  TE11 from 32.6 GHz, smooth copper 3.36 dB/100 ft at 100 MHz against
+  Belden's 5.4;
+- Wadell's pin: 49.9 Ω in air, 50.0 Ω in PTFE; 50 Ω typed gives D =
+  0.0921 in (his 0.092);
+- RG-213 at 1 GHz: 46.1 Ω, TE11 from 13.3 GHz, 4.38 against 8.0 dB/100
+  ft;
+- RG-6: foam PE, 73.9 Ω, 4.07 ns/m;
+- inches re-express both diameters;
+- at 50 MHz the maker's loss row goes and the copper loss reads 7.8
+  dB/100 m;
+- D smaller than d is refused.
 
 [↑ Index](#index)
 
