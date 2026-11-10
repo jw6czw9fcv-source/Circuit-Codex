@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=db4492ff0f" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=c465b202dd" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -7839,7 +7839,7 @@ nodal analysis (input impedance and loss at 10, 20 and 30 dB):
 <section class="tool" id="power-divider" style="--accent:#E08585">
   <div class="crumb">RF &amp; microwave › Power &amp; gain</div>
   <h2>Power divider</h2>
-  <figure class="shot"><img src="manual/img/power-divider.jpg?h=19269768e0" loading="lazy" alt="Power divider as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/power-divider.jpg?h=6b08e3f8f9" loading="lazy" alt="Power divider as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>How to split one signal into two or more shares, and combine them back,
 with every port matched to Z0. Three pills:</p>
@@ -7865,9 +7865,12 @@ with every port matched to Z0. Three pills:</p>
   and the two output lines Z04 and Z05 that bring each output back to Z0;
   under them: the loss to each port, the match and isolation, the 20 dB
   band and the heat as above.</li>
-<li><strong>Inputs:</strong> the number of outputs (or the split), Z0, the power in (mW or
+<li><strong>Inputs:</strong> the number of outputs (type it, or step it with the − and +
+  in its box; hold to repeat; a Wilkinson takes 8 at most, so a larger count
+  comes down to 8 when you change pill) or the split, Z0, the power in (mW or
   W) and, for the two quarter-wave pills, the frequency (kHz to GHz) and the
-  line's εeff and velocity factor (linked boxes: VF = 1/√εeff). The tolerance
+  line's εeff and velocity factor (linked boxes: VF = 1/√εeff). To combine
+  signals instead of splitting one, the outputs are the inputs. The tolerance
   at the top of the inputs picks the E series for the resistors: "Exact
   values" shows the ideal ones, any series shows the loss, the match and the
   isolation the standard resistor really gives.</li>
@@ -8027,7 +8030,7 @@ for 3 dB, ±9.4 % for 6 dB, ±2.3 % for 20 dB).</p>
   "leveling" splitter of test equipment.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>27 cases. The expected values come from a Python S-parameter solver (numpy,
+<p>32 cases. The expected values come from a Python S-parameter solver (numpy,
 nodal analysis with quarter-wave line matrices) and the app's own solver
 agreed with it to the digits shown:
 - Resistive: 2 outputs on 50 Ω, 16.7 Ω, 6.02 dB (loss and isolation),
@@ -8045,6 +8048,8 @@ agreed with it to the digits shown:
   0.852 to 1.15 GHz, 222 mW; 4:1: 158 and 39.5 Ω, 125 Ω, 70.7 and 35.4 Ω,
   160 mW; 0 dB: the equal Wilkinson; 20 dB; 6 dB in E24 (120 Ω for 125 Ω: a
   36.1 dB match, 42.1 dB isolation); 25 dB refused;
+- the outputs' − and + (to 4, stopping at 2 and at 16 and, for a Wilkinson,
+  at 8, and a count of 12 coming down to 8 on changing pill);
 - three of the examples.</p>
 <p>The solver also confirmed, to numerical zero at the centre frequency, the
 equal and N-way Wilkinson (every port matched, every pair of outputs

@@ -14736,13 +14736,13 @@ function renderPowerDivider(domain, tool, favId) {
     return `${metric} · ${imp}`;
   };
   const std = (v) => (state.tol === 0 ? v : nearestESeries(v, series()).value);
+  // The most outputs a pill takes: a resistive star 16, a Wilkinson 8.
+  const nMax = () => (state.mode === "wilk" ? 8 : 16);
 
   function problem() {
     const s = state.si;
-    if (state.mode === "res") {
-      if (!(Number.isInteger(s.n) && s.n >= 2 && s.n <= 16)) return "Enter a whole number of outputs, 2 to 16.";
-    } else if (state.mode === "wilk") {
-      if (!(Number.isInteger(s.n) && s.n >= 2 && s.n <= 8)) return "Enter a whole number of outputs, 2 to 8.";
+    if (state.mode !== "uneq") {
+      if (!(Number.isInteger(s.n) && s.n >= 2 && s.n <= nMax())) return `Enter a whole number of outputs, 2 to ${nMax()}.`;
     } else if (!(s.split >= 0 && s.split <= 20)) return "Enter a split from 0 to 20 dB (port 3 gets the larger share).";
     if (!(s.z0 > 0)) return "Enter the line's impedance Z0.";
     if (!(s.pin >= 0)) return "Enter the input power, zero or more.";
@@ -14900,10 +14900,18 @@ function renderPowerDivider(domain, tool, favId) {
     const set = (key, v) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el && el !== document.activeElement) el.value = v; };
     set("er", fmt(state.si.er)); set("vf", fmt(1 / Math.sqrt(state.si.er)));
   }
+  // − and + beside the outputs count look dim at the ends (not disabled: a held
+  // button that turns disabled would never see its release).
+  function syncSteppers() {
+    const dec = app.querySelector('[data-nstep="-1"]'), inc = app.querySelector('[data-nstep="1"]');
+    if (dec) dec.classList.toggle("dim", !(state.si.n > 2));
+    if (inc) inc.classList.toggle("dim", !(state.si.n < nMax()));
+  }
   function show() {
     app.querySelector(".diagram-box").innerHTML = diagram();
     app.querySelector('[data-res="result"]').innerHTML = resultHTML();
     syncBoxes();
+    syncSteppers();
   }
 
   const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); paint(); };
@@ -14929,7 +14937,8 @@ function renderPowerDivider(domain, tool, favId) {
           <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
         </div>`;
     const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
-    const first = state.mode === "uneq" ? field("split", "Split, P3 / P2", fixed("dB"), fmt(s.split)) : field("n", "Outputs", fixed(""), fmt(s.n));
+    const steps = `<span class="stepper"><button type="button" class="slider-step" data-nstep="-1" aria-label="Fewer outputs">−</button><button type="button" class="slider-step" data-nstep="1" aria-label="More outputs">+</button></span>`;
+    const first = state.mode === "uneq" ? field("split", "Split, P3 / P2", fixed("dB"), fmt(s.split)) : field("n", "Outputs", steps, fmt(s.n));
     const row1 = `<div class="field-pair">${first}${field("z0", "Impedance, Z0", fixed("Ω"), fmt(s.z0))}${field("pin", "Power in", sel('data-pu="1"', DIV_P_UNITS, state.pUnit), fmt(s.pin / DIV_P_UNITS[state.pUnit]))}</div>`;
     const row2 = state.mode === "res" ? "" : `<div class="field-pair">${field("f", "Frequency", sel('data-pf="1"', DIV_F_UNITS, state.fUnit), fmt(s.f / DIV_F_UNITS[state.fUnit]))}${field("er", "εeff", fixed(""), fmt(s.er))}${field("vf", "Velocity factor", fixed(""), fmt(1 / Math.sqrt(s.er)))}</div>`;
     app.innerHTML = `
@@ -14957,9 +14966,14 @@ function renderPowerDivider(domain, tool, favId) {
       ${calcFooter("")}
     `;
     syncBoxes();
+    syncSteppers();
     wireCalc(favId, paint);
     app.querySelectorAll(".pill").forEach((btn) => {
-      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+      btn.onclick = () => {
+        state.mode = btn.dataset.pill; setPref(C, "mode", state.mode);
+        if (state.mode === "wilk" && state.si.n > 8) state.si.n = 8;
+        paint();
+      };
     });
     app.querySelectorAll("input[data-key]").forEach((el) => {
       const key = el.dataset.key;
@@ -14971,6 +14985,29 @@ function renderPowerDivider(domain, tool, favId) {
         else state.si[key] = v;
         show();
       };
+    });
+    app.querySelectorAll("[data-nstep]").forEach((btn) => {
+      const dir = +btn.dataset.nstep;
+      let hold = null, rep = null;
+      const stop = () => { clearTimeout(hold); clearInterval(rep); };
+      const step = () => {
+        const base = Number.isFinite(state.si.n) ? Math.round(state.si.n) : 2;
+        const next = Math.min(nMax(), Math.max(2, base + dir));
+        if (next === state.si.n) { stop(); return; }
+        state.si.n = next;
+        const box = app.querySelector('input[data-key="n"]');
+        if (box) box.value = fmt(next);
+        show();
+      };
+      const start = () => { stop(); step(); hold = setTimeout(() => { rep = setInterval(step, 90); }, 420); };
+      btn.onmousedown = start;
+      btn.onmouseup = stop;
+      btn.onmouseleave = stop;
+      btn.ontouchstart = (e) => { e.preventDefault(); start(); };
+      btn.ontouchend = stop;
+      btn.ontouchcancel = stop;
+      // A keyboard press arrives as a click with no mouse down before it.
+      btn.onclick = (e) => { if (e.detail === 0) step(); };
     });
     document.getElementById("pd-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
     app.querySelector("select[data-pu]").onchange = (e) => { state.pUnit = e.target.value; setPref(C, "pUnit", state.pUnit); paint(); };

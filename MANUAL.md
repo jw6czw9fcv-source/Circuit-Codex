@@ -11986,9 +11986,12 @@ with every port matched to Z0. Three pills:
   and the two output lines Z04 and Z05 that bring each output back to Z0;
   under them: the loss to each port, the match and isolation, the 20 dB
   band and the heat as above.
-- **Inputs:** the number of outputs (or the split), Z0, the power in (mW or
+- **Inputs:** the number of outputs (type it, or step it with the − and +
+  in its box; hold to repeat; a Wilkinson takes 8 at most, so a larger count
+  comes down to 8 when you change pill) or the split, Z0, the power in (mW or
   W) and, for the two quarter-wave pills, the frequency (kHz to GHz) and the
-  line's εeff and velocity factor (linked boxes: VF = 1/√εeff). The tolerance
+  line's εeff and velocity factor (linked boxes: VF = 1/√εeff). To combine
+  signals instead of splitting one, the outputs are the inputs. The tolerance
   at the top of the inputs picks the E series for the resistors: "Exact
   values" shows the ideal ones, any series shows the loss, the match and the
   isolation the standard resistor really gives.
@@ -12156,7 +12159,7 @@ for 3 dB, ±9.4 % for 6 dB, ±2.3 % for 20 dB).
 
 ### How it was checked
 
-27 cases. The expected values come from a Python S-parameter solver (numpy,
+32 cases. The expected values come from a Python S-parameter solver (numpy,
 nodal analysis with quarter-wave line matrices) and the app's own solver
 agreed with it to the digits shown:
 - Resistive: 2 outputs on 50 Ω, 16.7 Ω, 6.02 dB (loss and isolation),
@@ -12174,6 +12177,8 @@ agreed with it to the digits shown:
   0.852 to 1.15 GHz, 222 mW; 4:1: 158 and 39.5 Ω, 125 Ω, 70.7 and 35.4 Ω,
   160 mW; 0 dB: the equal Wilkinson; 20 dB; 6 dB in E24 (120 Ω for 125 Ω: a
   36.1 dB match, 42.1 dB isolation); 25 dB refused;
+- the outputs' − and + (to 4, stopping at 2 and at 16 and, for a Wilkinson,
+  at 8, and a count of 12 coming down to 8 on changing pill);
 - three of the examples.
 
 The solver also confirmed, to numerical zero at the centre frequency, the

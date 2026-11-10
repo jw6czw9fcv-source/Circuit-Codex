@@ -657,6 +657,12 @@ div.tool-row { cursor: default; }
   user-select: none;
   -webkit-user-select: none;
 }
+/* A count with its own − and + inside the field's box (the Power divider's
+   outputs): a little bigger than the slider's, as there is no slider to drag.
+   Dim at the ends of the range, still pressable. */
+.stepper { display: flex; gap: 4px; flex-shrink: 0; }
+.stepper .slider-step { width: 26px; height: 26px; font-size: 17px; }
+.slider-step.dim { opacity: 0.3; }
 .series-slider {
   -webkit-appearance: none;
   appearance: none;
