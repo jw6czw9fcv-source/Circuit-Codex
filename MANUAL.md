@@ -97,6 +97,7 @@ will key on, since that is the id the app already holds for each tool.
 - Transmission lines → [Coax impedance](#coax)
 - Transmission lines → [Velocity factor](#velocity-factor)
 - Transmission lines → [Skin depth](#skin-depth)
+- Power & gain → [RF cascade](#rf-cascade)
 - Power & gain → [Attenuator](#attenuator)
 
 ### Power electronics
@@ -11481,6 +11482,136 @@ nodal analysis (input impedance and loss at 10, 20 and 30 dB):
 - 600 Ω: 312 and 422 Ω; 1 dB T: 2.88 and 433 Ω; 30 dB in one Pi pad:
   53.3 and 790 Ω, flagged;
 - mW re-expresses the power; 0 dB and over 100 dB are refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="rf-cascade"></a>
+## RF cascade
+
+`calc: rf-cascade` · RF & microwave › Power & gain
+
+### What it computes
+
+The gain, noise figure and compression of a chain of amplifiers and
+losses, seen from its input (it takes the place of the planned "Cascade
+gain, noise figure, P1dB"):
+
+- **Stages:** up to five, each a row: Amp (gain in dB, noise figure in dB,
+  OP1dB in dBm, left blank when unknown) or Loss (an attenuator, a filter
+  or a cable: its loss in dB; its noise figure is its loss and it does not
+  compress). "+ add stage" adds one, × removes one. A mixer is an Amp
+  with a negative gain (its conversion loss) and its noise figure.
+- **System:** the input level (dBm) and the bandwidth (Hz to GHz).
+- **The big result:** the chain's noise figure, with its noise temperature
+  and the stage that adds most of the noise and its share.
+- **Three cells:** the chain's gain, its OP1dB (output-referred 1 dB
+  compression point) and its IP1dB (input-referred).
+- **Below them:** the noise floor at the input in that bandwidth, the
+  dynamic range from the floor to the input P1dB, the output level for the
+  input level, and the stage closest to compressing with its margin, or a
+  warning when one is over its OP1dB.
+- **Drawing:** the chain as boxes, each stage's own gain inside (dashed for
+  a loss), and under each, the cumulative gain (blue), noise figure
+  (green) and OP1dB (grey) up to and including that stage.
+- **Remembered:** the bandwidth unit.
+
+Examples: Rohde & Schwarz's two amplifiers, a 3 dB cable before and after
+a low-noise amplifier, and a receiver front end.
+
+### Terms
+
+- **Noise factor F, noise figure NF:** F is how much a stage worsens the
+  signal-to-noise ratio, as a ratio; NF = 10 log F, in dB. A noiseless
+  stage has NF 0 dB.
+- **Gain G:** output over input power; in a chain, gains multiply (their
+  dB add). A loss L dB is a gain of −L dB.
+- **Friis equation:** how the stages' noise factors combine: each is
+  divided by the gain ahead of it, so the first stage dominates.
+- **Noise temperature Te:** the same noise as a temperature, Te = 290 K ×
+  (F − 1); unlike F it adds across stages.
+- **Noise floor:** the thermal noise k T B in the bandwidth, raised by the
+  noise figure, referred to the input (−174 dBm/Hz + 10 log B + NF).
+- **P1dB:** the power at which gain has dropped by 1 dB. OP1dB is measured
+  at the output, IP1dB at the input: OP1dB = IP1dB + G − 1 dB.
+- **Dynamic range:** here, from the noise floor up to the input P1dB.
+
+### Sources
+
+- **Rohde & Schwarz, application note 1SL378, "The Cold Source Technique
+  for Noise Figure Measurements", Mike Leffel and Christopher Stumpf,
+  version 0e, December 2021** (read): the Friis cascade equation (39),
+  F = F1 + (F2 − 1)/G1 + … + (FN − 1)/(G1 … GN−1), in linear noise factor
+  and gain; the noise-temperature form Te = T1 + T2/G1 + … (40) and Te =
+  T0 (F − 1) (9) with T0 = 290 K; NF = 10 log F (3); the noise density
+  −174 dBm/Hz (21); "a 3 dB attenuator has −3 dB of gain, or +3 dB of
+  loss" (8); and its example 3.7.2, 20 dB at 2 dB then 20 dB at 11 dB,
+  2.31 dB, which the tool reproduces. It also notes that equations (38)
+  and (39) hold only when the input noise is the standard N0 = k T0 B.
+- **A loss's noise figure:** the note says a passive device's noise
+  temperature is its physical temperature (so at 290 K, Te = T0 (L − 1),
+  and F = L): the equality NF = loss is derived from it, not quoted.
+- **The P1dB cascade:** RF Essentials, "What is Cascaded P1dB?" (a web
+  glossary page, no author or date shown; read): the reciprocal sum of the
+  stages' output compression points, each divided by the gains after it,
+  "≈", for "worst-case in-phase compression", the last stages dominating,
+  and OP1dB = IP1dB + Gain − 1 dB; RF Cafe, "Cascaded P1dB" (undated;
+  read, its formula is an image): apply the cascaded intercept-point
+  equation to each device's P1dB as an estimate, the same conversion, and
+  "a well-known rule-of-thumb is to subtract 10 to 15 dB to the IP3 value
+  to estimate the P1dB value". These are website pages, not standards or
+  application notes: the formula is the standard cascaded-intercept sum.
+- **Not read:** Friis's original paper (1944), and Analog Devices'
+  "System Noise-Figure Analysis for Modern Radio Receivers" (gated; only
+  its summary, which warns that the cascade equation changes with mixers).
+
+### Why the compression formula is this one
+
+Taking the chain stage by stage from the input, with Gk the linear gain of
+stage k and OPk its OP1dB in mW:
+
+    1/OP(1) = 1/OP1
+    1/OP(k) = 1/OPk + 1/(OP(k−1) × Gk)
+
+so an earlier stage's limit counts for less when the stages after it have
+gain (it is referred to the output, 1/(OP(k−1) × Gk)), and a stage with no
+limit (a loss, or a blank) adds nothing but still scales the earlier ones.
+
+### Assumptions and limits
+
+- **Matched, linear in the small-signal sense:** gains and noise figures are
+  the available gains and noise figures into 50 Ω with the source at
+  290 K; mismatch between stages changes them.
+- **A loss is at 290 K.** A warmer pad adds more noise.
+- **The noise figure of a mixer** depends on whether the image is filtered
+  (single-sideband) or not (double-sideband, 3 dB lower): enter the one that
+  matches your receiver.
+- **The P1dB cascade is an estimate,** pessimistic by assuming every stage
+  compresses in phase; it holds only when none of the stages operates far
+  into compression. Check each stage's own margin (the last row).
+- **Dynamic range** here is to P1dB; spur-free dynamic range uses the
+  third-order intercept (see Intercept point).
+
+### How it was checked
+
+12 cases, the expected values from a Python implementation of the same
+formulas, and Rohde & Schwarz's example:
+- the default chain, an LNA (15 dB, 1.5 dB, +10 dBm), a 3 dB loss and an
+  amplifier (20 dB, 6 dB, +20 dBm): NF 2.13 dB (2.1275), 183 K, 32 dB,
+  OP1dB +19.21 dBm, IP1dB −11.79 dBm, floor −111.8 dBm in 1 MHz, 100 dB
+  range, +2 dBm out for −30 in, stage 3 18 dB below its OP1dB;
+- Rohde & Schwarz's two amplifiers: 2.31 dB, 40 dB;
+- a 3 dB cable before a 1 dB LNA, 4.0 dB; after it, 1.03 dB (1.0342);
+- LNA, 3 dB pad, mixer (−6 dB, 6 dB, +5 dBm), IF amplifier (18 dB, 4 dB,
+  +15 dBm): NF 3.04 dB, 24 dB, OP1dB +13.08 dBm and IP1dB −9.92 dBm. RF
+  Essentials' table for the compression of the same chain reads +10.00,
+  +7.00, −0.55 and +13.15 dBm per stage where the sum gives +10.00, +7.00,
+  −0.455 and +13.08: a rounding difference of under 0.1 dB;
+- a first-stage noise figure of 3 dB: 3.45 dB; 0 dBm in flags stage 3, 12
+  dB over its OP1dB; adding then removing a stage; a blank gain, a noise
+  figure under 0 dB and a zero bandwidth refused; kHz re-expresses the
+  bandwidth.
 
 [↑ Index](#index)
 

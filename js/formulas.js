@@ -399,6 +399,12 @@ const FORMULAS = [
     note: "A field solver: the pair at ±1 V between its side grounds (and the plane below, if any). Wadell lists the structure, but his formulas are incomplete as printed.",
   },
   {
+    tool: "RF cascade",
+    domain: "rf",
+    formulas: ["F = F1 + (F2 − 1)/G1 + (F3 − 1)/(G1 G2) + …", "NF = 10 log F,  Te = 290 K × (F − 1)", "1/OP(k) = 1/OP,k + 1/(OP(k−1) × Gk)", "OP1dB = IP1dB + G − 1 dB", "Noise floor = −174 dBm/Hz + 10 log B + NF"],
+    note: "Friis, from Rohde & Schwarz 1SL378; a loss's noise figure is its loss. The P1dB cascade is the reciprocal sum used for intercept points, an estimate.",
+  },
+  {
     tool: "Attenuator",
     domain: "rf",
     formulas: ["N = Vin / Vout = 10^(A / 20)", "T:  R1 = Z0 (N − 1) / (N + 1)", "    R2 = 2 N Z0 / (N² − 1)", "Pi: R3 = Z0 (N + 1) / (N − 1)", "    R4 = Z0 (N² − 1) / (2 N)", "Bridged T: R0 = Z0, Rb = Z0 (N − 1),", "    Rs = Z0 / (N − 1)"],

@@ -665,6 +665,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "vswr") return renderVswr(domain, tool, favId);
   if (calcId === "coax") return renderCoax(domain, tool, favId);
   if (calcId === "attenuator") return renderAttenuator(domain, tool, favId);
+  if (calcId === "rf-cascade") return renderCascade(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -13781,6 +13782,258 @@ function renderAttenuator(domain, tool, favId) {
     });
     document.getElementById("att-tol").onchange = (e) => { state.tol = parseFloat(e.target.value); setPref(C, "tol", state.tol); paint(); };
     app.querySelector("select[data-punit]").onchange = (e) => { state.pUnit = e.target.value; setPref(C, "pUnit", state.pUnit); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- RF cascade ----------
+// A chain of stages (amplifiers, and losses such as attenuators, filters and
+// cables), seen from its input. Noise: the Friis cascade equation, Rohde &
+// Schwarz application note 1SL378 "The Cold Source Technique for Noise
+// Figure Measurements" (Leffel and Stumpf, version 0e, December 2021, read):
+//   F = F1 + (F2 − 1)/G1 + (F3 − 1)/(G1 G2) + … + (FN − 1)/(G1 … GN−1)  (39)
+// in linear noise factor F = 10^(NF/10) and gain G = 10^(GdB/10), the noise
+// temperature Te = T0 (F − 1) with T0 = 290 K (9, 40), the noise density
+// k T0 = −174 dBm/Hz (21), "a 3 dB attenuator has −3 dB of gain, or +3 dB of
+// loss" (8); its example 3.7.2: 20 dB / 2 dB then 20 dB / 11 dB gives
+// 2.31 dB, which this reproduces. A loss stage, matched and at T0 = 290 K,
+// has NF equal to its loss (the note says a passive device's noise
+// temperature is its physical temperature, and Te = T0 (F − 1) then gives
+// F = L). Compression: the same reciprocal sum as the cascaded intercept
+// point, in linear power referred to the output, running from the first stage:
+//   1/OP1dB(k) = 1/OP1dB,k + 1/(OP1dB(k−1) × Gk),  OP1dB = IP1dB + G − 1 dB
+// from RF Essentials' "What is Cascaded P1dB?" (no author or date shown) and
+// RF Cafe's "Cascaded P1dB" (undated), both read: an approximation for
+// worst-case in-phase compression, dominated by the last stages. A stage with
+// no OP1dB entered, and every loss, is taken as not compressing.
+const CASC_MAX = 5;
+const CASC_B_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const CASC_K = 1.380649e-23;
+const casc = { lin: (db) => 10 ** (db / 10), db: (x) => 10 * Math.log10(x) };
+
+// The chain's numbers from its stages: [{ type: "amp" | "loss", g, nf, op }],
+// g in dB (a loss in dB, positive), op in dBm or null. Per stage and total.
+function cascadeOf(stages, pin, bw) {
+  const per = [];
+  let gc = 1, fc = 1, inv = 0;
+  const excess = [];
+  stages.forEach((st, i) => {
+    const G = st.type === "loss" ? casc.lin(-st.g) : casc.lin(st.g);
+    const F = st.type === "loss" ? casc.lin(st.g) : casc.lin(st.nf);
+    const op = st.type === "loss" || st.op === null ? Infinity : casc.lin(st.op);
+    excess.push((F - 1) / gc);
+    fc = i === 0 ? F : fc + (F - 1) / gc;
+    inv = (op === Infinity ? 0 : 1 / op) + inv / G;
+    gc *= G;
+    per.push({ g: casc.db(gc), nf: casc.db(fc), op: inv > 0 ? casc.db(1 / inv) : null, level: pin + casc.db(gc),
+      own: st.type === "loss" ? null : st.op });
+  });
+  const last = per[per.length - 1];
+  const gDb = last.g, nfDb = last.nf, F = fc;
+  const opDb = last.op;
+  return {
+    per, gDb, nfDb, F, te: 290 * (F - 1),
+    opDb, ipDb: opDb === null ? null : opDb - gDb + 1,
+    floor: casc.db(CASC_K * 290 * bw / 1e-3) + nfDb,
+    share: F > 1 ? excess.map((x) => (x / (F - 1)) * 100) : null,
+  };
+}
+
+function renderCascade(domain, tool, favId) {
+  const C = "rf-cascade";
+  const state = {
+    bUnit: pref(C, "bUnit", "MHz", Object.keys(CASC_B_UNITS)),
+    stages: [
+      { type: "amp", g: 15, nf: 1.5, op: 10 },
+      { type: "loss", g: 3, nf: 3, op: null },
+      { type: "amp", g: 20, nf: 6, op: 20 },
+    ],
+    pin: -30, bw: 1e6,
+  };
+  const num = (v, d = 3) => String(Number(v.toPrecision(d))).replace("-", "−");
+  const fmt = (v) => (v === null || !isFinite(v) ? "" : String(+v.toPrecision(4)));
+  const dbm = (v) => `${v >= 0 ? "+" : "−"}${num(Math.abs(v), 4)} dBm`;
+  const gdb = (v) => `${v >= 0 ? "" : "−"}${num(Math.abs(v), 3)} dB`;
+
+  function problem() {
+    const st = state.stages;
+    for (let i = 0; i < st.length; i++) {
+      const s = st[i], k = i + 1;
+      if (!isFinite(s.g)) return s.type === "loss" ? `Stage ${k}: enter the loss in dB.` : `Stage ${k}: enter the gain in dB.`;
+      if (s.type === "loss" && !(s.g >= 0)) return `Stage ${k}: a loss is zero or more dB (a gain is an amplifier).`;
+      if (s.type === "amp" && !(s.nf >= 0)) return `Stage ${k}: a noise figure is 0 dB or more.`;
+    }
+    if (!isFinite(state.pin)) return "Enter the input level in dBm.";
+    if (!(state.bw > 0)) return "Enter the bandwidth.";
+    return "";
+  }
+
+  // The chain as boxes: each stage's gain inside, then under it the
+  // cumulative gain, noise figure and OP1dB up to and including it.
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "middle") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const st = state.stages, n = st.length, ok = !problem();
+    const r = ok ? cascadeOf(st, state.pin, state.bw) : null;
+    const w = 40, gap = 14, total = n * w + (n - 1) * gap, x0 = (290 - total) / 2;
+    let out = `<path d="M${(x0 - 14).toFixed(1)} 31 H${x0.toFixed(1)} M${(x0 + total).toFixed(1)} 31 H${(x0 + total + 14).toFixed(1)}" stroke="${wire}" stroke-width="1.4"/>`;
+    for (let i = 0; i < n; i++) {
+      const x = x0 + i * (w + gap), loss = st[i].type === "loss";
+      if (i) out += `<path d="M${(x - gap).toFixed(1)} 31 H${x.toFixed(1)}" stroke="${wire}" stroke-width="1.4"/>`;
+      out += `<rect x="${x.toFixed(1)}" y="18" width="${w}" height="26" rx="3" stroke="${part}" stroke-width="1.6" ${loss ? 'stroke-dasharray="4 3"' : ""}/>`;
+      out += lbl(x + w / 2, 14, `${i + 1}`, grey);
+      out += lbl(x + w / 2, 35, ok ? (loss ? `−${num(st[i].g)}` : `${st[i].g >= 0 ? "+" : "−"}${num(Math.abs(st[i].g))}`) : "", part);
+      if (r) {
+        const c = r.per[i];
+        out += lbl(x + w / 2, 60, `${c.g >= 0 ? "+" : "−"}${num(Math.abs(c.g))}`, part);
+        out += lbl(x + w / 2, 75, num(c.nf), calc);
+        out += lbl(x + w / 2, 90, c.op === null ? "—" : `${c.op >= 0 ? "+" : "−"}${num(Math.abs(c.op))}`, grey);
+      }
+    }
+    out += `<text x="145" y="109" font-size="11" font-weight="600" text-anchor="middle"><tspan fill="${part}">cumulative gain dB</tspan><tspan fill="${grey}"> · </tspan><tspan fill="${calc}">NF dB</tspan><tspan fill="${grey}"> · </tspan><tspan fill="${grey}">OP1dB dBm</tspan></text>`;
+    return `<svg width="320" height="126" viewBox="0 0 290 114" fill="none">${out}</svg>`;
+  }
+
+  function cell(label, value, key) {
+    return `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  }
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const st = state.stages, r = cascadeOf(st, state.pin, state.bw);
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const top = r.share ? r.share.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0])[0] : null;
+    const kind = (i) => (st[i].type === "loss" ? "loss" : "amplifier");
+    const noiseSub = `${num(r.te, 3)} K${top ? `; most of it from stage ${top[1] + 1}, the ${kind(top[1])} (${num(top[0], 3)} %)` : ""}`;
+    // Each stage's own output against its own OP1dB.
+    const margins = r.per.map((c, i) => (c.own === null || c.own === undefined ? null : [i, c.own - c.level])).filter(Boolean);
+    let tight;
+    if (!margins.length) tight = "no OP1dB entered";
+    else {
+      const m = margins.sort((a, b) => a[1] - b[1])[0];
+      tight = m[1] < 0 ? warn(`stage ${m[0] + 1} compresses: ${num(-m[1])} dB over its OP1dB`) : `stage ${m[0] + 1}, ${num(m[1])} dB below its OP1dB`;
+    }
+    const dr = r.ipDb === null ? null : r.ipDb - r.floor;
+    const bwTxt = siFormat(Number(state.bw.toPrecision(4)), "Hz", 4);
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Noise figure of the chain</span><span class="badge-calc">${ICONS.bolt2}Calculated</span></div>
+          <div class="result-value"><span class="num" data-res="nf">${num(r.nfDb)} dB</span></div>
+          <div class="result-sub" data-res="sub">${noiseSub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">
+          ${cell("Gain", gdb(r.gDb), "gain")}
+          ${cell("OP1dB", r.opDb === null ? "—" : dbm(r.opDb), "op")}
+          ${cell("IP1dB", r.ipDb === null ? "—" : dbm(r.ipDb), "ip")}
+        </div>
+        <div class="field notation-box">
+          ${row(`Noise floor, ${bwTxt}`, dbm(r.floor), "floor")}
+          ${row("Dynamic range, to P1dB", dr === null ? "—" : `${num(dr, 3)} dB`, "dr")}
+          ${row(`Output for ${dbm(state.pin).replace(" dBm", "")} in`, dbm(r.per[r.per.length - 1].level), "pout")}
+          ${row("Closest to compressing", tight, "tight")}
+        </div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (stages, extra) => () => {
+    state.stages = stages.map((x) => ({ type: "amp", g: 0, nf: 0, op: null, ...x }));
+    Object.assign(state, { pin: -30, bw: 1e6, bUnit: "MHz" }, extra || {});
+    paint();
+  };
+  useExamples([
+    { title: "Rohde & Schwarz's example", note: "20 dB / 2 dB then 20 dB / 11 dB: 2.31 dB; stage 2's noise is cut by stage 1's gain.",
+      apply: example([{ g: 20, nf: 2 }, { g: 20, nf: 11 }]) },
+    { title: "A 3 dB cable before the LNA", note: "The loss comes first: NF 4.0 dB, its 3 dB plus the LNA's 1 dB.",
+      apply: example([{ type: "loss", g: 3 }, { g: 20, nf: 1 }]) },
+    { title: "The same cable after the LNA", note: "Behind 20 dB of gain the cable barely counts: NF 1.03 dB.",
+      apply: example([{ g: 20, nf: 1 }, { type: "loss", g: 3 }]) },
+    { title: "A receiver front end", note: "LNA, 3 dB pad, mixer (−6 dB), IF amplifier: NF 3.04 dB, OP1dB +13.1 dBm.",
+      apply: example([{ g: 15, nf: 1.5, op: 10 }, { type: "loss", g: 3 }, { g: -6, nf: 6, op: 5 }, { g: 18, nf: 4, op: 15 }], { pin: -40 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (attrs, label, unitHTML, value) => `
+        <div class="field">
+          <label>${label}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" ${attrs} value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const stat = (label, text) => `<div class="field"><label>${label}</label><div class="field-row"><span class="unit-fixed">${text}</span></div></div>`;
+    const stageHTML = (st, i) => {
+      const loss = st.type === "loss";
+      const inp = (f, v, ph) => `<input type="number" inputmode="decimal" step="any" data-stage="${i}" data-f="${f}" value="${fmt(v)}" ${ph ? `placeholder="${ph}"` : ""} />`;
+      return `
+      <div class="r-item"><div class="r-line cc-grid">
+        <span class="r-index">${i + 1}</span>
+        <select data-type="${i}" aria-label="Stage ${i + 1} kind">
+          <option value="amp" ${loss ? "" : "selected"}>Amp</option>
+          <option value="loss" ${loss ? "selected" : ""}>Loss</option>
+        </select>
+        ${inp("g", st.g)}
+        ${loss ? `<span class="r-hint">= loss</span>` : inp("nf", st.nf)}
+        ${loss ? `<span class="r-hint">no limit</span>` : inp("op", st.op, "none")}
+        <button class="r-drop" data-drop="${i}" aria-label="Remove stage ${i + 1}" ${state.stages.length <= 1 ? "disabled" : ""}>×</button>
+      </div></div>`;
+    };
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Gain, noise figure and compression of a chain")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5">
+        <span>Stages</span>
+        <button class="label-btn" id="cc-add" ${state.stages.length >= CASC_MAX ? "disabled" : ""}>+ add stage</button>
+        <span></span>
+      </div>
+      <div class="cc-grid cc-cols"><span></span><span></span><span>Gain, loss dB</span><span>NF dB</span><span>OP1dB dBm</span><span></span></div>
+      <div class="r-list">${state.stages.map(stageHTML).join("")}</div>
+      <div class="field-pair">
+        ${field('data-sys="pin"', "Input level", fixed("dBm"), fmt(state.pin))}
+        ${field('data-sys="bw"', "Bandwidth", sel('data-bunit="1"', CASC_B_UNITS, state.bUnit), fmt(state.bw / CASC_B_UNITS[state.bUnit]))}
+      </div>
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["F = F1 + (F2 − 1)/G1 + (F3 − 1)/(G1 G2) + …", "NF = 10 log F,  Te = 290 K × (F − 1)", "1/OP(k) = 1/OP,k + 1/(OP(k−1) × Gk)", "OP1dB = IP1dB + G − 1 dB", "Noise floor = −174 dBm/Hz + 10 log B + NF"],
+        "A receiver or transmitter chain is amplifiers and losses in a row. Each adds noise: the first stage's noise figure counts in full, the second's is divided by the first's gain, the third's by the first two, and so on, so a low-noise amplifier first makes the rest almost irrelevant, and a loss first (a cable, a filter) adds its whole loss to the noise figure. A passive loss at room temperature has a noise figure equal to its loss. Gains and noise factors are multiplied and added as ratios, not as dB. The 1 dB compression point (P1dB) is the output power where a stage's gain has dropped by 1 dB: the chain's is found by the same reciprocal sum as for intercept points, with each stage's OP1dB referred to the chain's output through the gains after it, so the last stages dominate. It is an estimate: it assumes the worst case, where every stage's compression adds in phase. The noise floor is the thermal noise kTB in the bandwidth, raised by the noise figure, referred to the input; the dynamic range is the span from it to the input P1dB."
+      )}
+      ${calcFooter("")}
+    `;
+
+    wireCalc(favId, paint);
+    app.querySelectorAll("input[data-stage]").forEach((el) => {
+      el.oninput = () => {
+        const st = state.stages[+el.dataset.stage], k = el.dataset.f, v = parseFloat(el.value);
+        st[k] = k === "op" ? (el.value === "" || !isFinite(v) ? null : v) : v;
+        show();
+      };
+    });
+    app.querySelectorAll("select[data-type]").forEach((el) => {
+      el.onchange = () => {
+        const st = state.stages[+el.dataset.type];
+        st.type = el.value;
+        // A change of kind starts from sensible values.
+        Object.assign(st, el.value === "loss" ? { g: 3 } : { g: 15, nf: 3, op: null });
+        paint();
+      };
+    });
+    app.querySelectorAll("[data-drop]").forEach((btn) => {
+      btn.onclick = () => { if (state.stages.length > 1) { state.stages.splice(+btn.dataset.drop, 1); paint(); } };
+    });
+    document.getElementById("cc-add").onclick = () => {
+      if (state.stages.length < CASC_MAX) { state.stages.push({ type: "amp", g: 10, nf: 3, op: null }); paint(); }
+    };
+    app.querySelector('input[data-sys="pin"]').oninput = (e) => { state.pin = parseFloat(e.target.value); show(); };
+    app.querySelector('input[data-sys="bw"]').oninput = (e) => { state.bw = parseFloat(e.target.value) * CASC_B_UNITS[state.bUnit]; show(); };
+    app.querySelector("select[data-bunit]").onchange = (e) => { state.bUnit = e.target.value; setPref(C, "bUnit", state.bUnit); paint(); };
   }
 
   paint();
