@@ -672,6 +672,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "power-divider") return renderPowerDivider(domain, tool, favId);
   if (calcId === "path-loss") return renderPathLoss(domain, tool, favId);
   if (calcId === "fresnel") return renderFresnel(domain, tool, favId);
+  if (calcId === "beamwidth") return renderBeamwidth(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -15442,7 +15443,7 @@ function renderPathLoss(domain, tool, favId) {
   // A result in the unit worked in, except metres and kilometres, which take whichever reads better.
   const dRes = (m) => (["m", "km"].includes(state.dUnit) ? dFmt(m) : dUser(m));
   const lamTxt = (l) => (l >= 1 ? `${n3(l)} m` : l >= 0.01 ? `${n3(l * 100)} cm` : `${n3(l * 1000)} mm`);
-  const fTxt = (hz) => (hz >= 1e9 ? `${n4(hz / 1e9)} GHz` : hz >= 1e6 ? `${n4(hz / 1e6)} MHz` : `${n4(hz / 1e3)} kHz`);
+  const fTxt = (hz) => (hz >= 1e9 ? `${+(hz / 1e9).toPrecision(5)} GHz` : hz >= 1e6 ? `${+(hz / 1e6).toPrecision(5)} MHz` : `${+(hz / 1e3).toPrecision(5)} kHz`);
 
   // The maths. Distances in metres, levels in dBm.
   const lambda = () => PL_LIGHT / s.f;
@@ -15699,7 +15700,7 @@ function renderFresnel(domain, tool, favId) {
   const pct = (x) => `${n3(x * 100)} %`;
   const dUser = (m) => `${n3(m / FZ_D_UNITS[state.dUnit])} ${state.dUnit}`;
   const lamTxt = (l) => (l >= 1 ? `${n3(l)} m` : l >= 0.01 ? `${n3(l * 100)} cm` : `${n3(l * 1000)} mm`);
-  const fTxt = (hz) => (hz >= 1e9 ? `${n4(hz / 1e9)} GHz` : hz >= 1e6 ? `${n4(hz / 1e6)} MHz` : `${n4(hz / 1e3)} kHz`);
+  const fTxt = (hz) => (hz >= 1e9 ? `${+(hz / 1e9).toPrecision(5)} GHz` : hz >= 1e6 ? `${+(hz / 1e6).toPrecision(5)} MHz` : `${+(hz / 1e3).toPrecision(5)} kHz`);
 
   // The maths. Lengths in metres.
   const lambda = () => FZ_LIGHT / s.f;
@@ -15929,6 +15930,333 @@ function renderFresnel(domain, tool, favId) {
     app.querySelectorAll("select[data-uh]").forEach((el) => {
       el.onchange = () => { state.hUnit = el.value; const nd = FZ_H_TO_D[el.value][state.dUnit]; if (nd) state.dUnit = nd; keep(); };
     });
+  }
+
+  paint();
+}
+
+// ---------- Beamwidth & gain ----------
+// Recommendation ITU-R F.699-9 (02/2026, read as PDF text; the equations of
+// pages 5 and 6 were rendered and read as printed): the maximum gain of a
+// circular antenna from its diameter, Gmax ≈ 20 log (D/λ) + 7.7 dBi (recommends
+// 3: 48 dBi at D/λ = 100), D/λ ≈ 70/θ and Gmax ≈ 44.5 − 20 log θ for the −3 dB
+// beamwidth θ in degrees (4.1, 4.2), and the reference pattern of the side
+// lobe peaks (2): the main lobe Gmax − 2.5×10⁻³ (D φ/λ)² to φm = (20 λ/D)
+// √(Gmax − G1) with G1 = 2 + 15 log (D/λ), then G1 to φr = 15.85 (D/λ)^−0.6 (D/λ
+// over 100) or to 100 λ/D (up to 100), then 32 − 25 log φ or 52 − 10 log (D/λ) −
+// 25 log φ, to a floor (−10 dBi to 48°, 10 − 10 log (D/λ) for D/λ up to 100;
+// −20 and −10 log (D/λ) from 70 GHz, to 120°; 100 MHz to 1 GHz with
+// φs = 144.5 (D/λ)^−0.2 and −2 − 5 log (D/λ)), for 100 MHz to 174.8 GHz. Its ranges overlap
+// below D/λ = 100/48 (and 100/120 from 70 GHz, 0.63 under 1 GHz, the limit F.699 states), so the tool draws the main lobe only there. The 7.7
+// is 20 log π less 2.24 dB, an aperture efficiency of 59.7 %; the main lobe's
+// parabola is 12 (φ/θ)² dB with θ = 69.3 λ/D, which the tool writes with the
+// beamwidth in use. Aperture relations (Condon and Ransom, Essential Radio
+// Astronomy ch. 3, read through a text-extraction tool): Ω_A = 4π/G (3.34), Ae =
+// G λ²/4π (3.41, 3.46), η_A = A/A_geom (3.111), ≤ 70 % for most telescopes, far
+// field R ≈ 2D²/λ from a path error of λ/16 at the edge (3.64); Wikipedia
+// "Parabolic antenna": G = e_A (π d/λ)², e_A 0.55 to 0.70, θ = k λ/d with k ≈ 70.
+// The uniform aperture's k = 58.96° is the exact half-power point of 2 J1(u)/u
+// (u = 1.6163, checked). 41253 = 4π (180/π)² square degrees, the ideal
+// 41253/(θH θV) of a beam taken as a rectangle (Kraus, not read).
+const BW_MODES = { dia: "Diameter", gain: "Gain", beams: "Beamwidths" };
+const BW_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const BW_D_UNITS = { m: 1, cm: 0.01, ft: 0.3048, in: 0.0254 };
+
+function renderBeamwidth(domain, tool, favId) {
+  const C = "beamwidth";
+  const state = {
+    mode: pref(C, "mode", "dia", Object.keys(BW_MODES)),
+    fUnit: pref(C, "fUnit", "GHz", Object.keys(BW_F_UNITS)),
+    dUnit: pref(C, "dUnit", "m", Object.keys(BW_D_UNITS)),
+    gUnit: pref(C, "gUnit", "dBi", Object.keys(PL_G_UNITS)),
+    // f in Hz, D in metres, G in dBi, angles in degrees, η a fraction, k in degrees.
+    si: { f: 5.8e9, D: 0.6, G: 30, eta: 0.6, k: 70, psi: 1, thH: 90, thV: 30 },
+  };
+  const s = state.si;
+  const n3 = (v) => String(Number(v.toPrecision(3))).replace("-", "−");
+  const n4 = (v) => String(Number(v.toPrecision(4))).replace("-", "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(5)) : "");
+  const g1 = (v) => v.toFixed(1).replace("-", "−");
+  const db2 = (v) => (Math.round(v * 100) / 100 === 0 ? 0 : v).toFixed(2).replace("-", "−");
+  const deg = (v) => `${n3(v)}°`;
+  const log10 = Math.log10;
+  const du = () => BW_D_UNITS[state.dUnit];
+  const imperial = () => state.dUnit === "ft" || state.dUnit === "in";
+  const dOut = (m) => `${n3(m / du())} ${state.dUnit}`;
+  const lenOut = (m) => {
+    if (imperial()) { const ft = m / 0.3048; return ft >= 5280 ? `${n3(ft / 5280)} mi` : ft >= 1 ? `${n3(ft)} ft` : `${n3(ft * 12)} in`; }
+    return m >= 1000 ? `${n3(m / 1000)} km` : m >= 1 ? `${n3(m)} m` : m >= 0.01 ? `${n3(m * 100)} cm` : `${n3(m * 1000)} mm`;
+  };
+  const areaOut = (a) => `${n3(a / (du() * du()))} ${state.dUnit}²`;
+  const fTxt = (hz) => (hz >= 1e9 ? `${+(hz / 1e9).toPrecision(5)} GHz` : hz >= 1e6 ? `${+(hz / 1e6).toPrecision(5)} MHz` : `${+(hz / 1e3).toPrecision(5)} kHz`);
+  const gUser = (dbi) => `${g1(dbi + PL_G_UNITS[state.gUnit])} ${state.gUnit}`;
+
+  // The maths. Lengths in metres, gains in dBi, angles in degrees.
+  const lambda = () => PL_LIGHT / s.f;
+  const g1of = (dl) => 2 + 15 * log10(dl);
+  // The circular aperture the Diameter and Gain pills describe.
+  function dish() {
+    const lam = lambda();
+    const dl = state.mode === "gain" ? Math.sqrt(10 ** (s.G / 10) / s.eta) / Math.PI : s.D / lam;
+    const D = dl * lam, glin = s.eta * (Math.PI * dl) ** 2;
+    return { lam, dl, D, glin, g: state.mode === "gain" ? s.G : 10 * log10(glin), theta: s.k / dl, ae: (glin * lam * lam) / (4 * Math.PI), rff: (2 * D * D) / lam };
+  }
+  // ITU-R F.699 recommends 2: the reference pattern, dBi at φ degrees off axis; null where it is not defined.
+  function f699(phi, dl, gmax, fg) {
+    const G1 = g1of(dl), phim = (20 / dl) * Math.sqrt(Math.max(gmax - G1, 0));
+    const main = gmax - 2.5e-3 * (dl * phi) ** 2;
+    if (fg >= 1 && fg <= 174.8) {
+      const high = fg > 70;
+      // The printed ranges only follow one another above 100 λ/D = 48° (1 to 70 GHz) or 120° (above): below that D/λ, no pattern.
+      if (dl <= 100 / (high ? 120 : 48)) return null;
+      if (dl > 100) {
+        if (phi < phim) return main;
+        if (phi < 15.85 * dl ** -0.6) return G1;
+        if (phi < (high ? 120 : 48)) return 32 - 25 * log10(phi);
+        return high ? -20 : -10;
+      }
+      if (phi < phim) return main;
+      if (phi < 100 / dl) return G1;
+      if (phi < (high ? 120 : 48)) return 52 - 10 * log10(dl) - 25 * log10(phi);
+      return high ? -10 * log10(dl) : 10 - 10 * log10(dl);
+    }
+    if (fg >= 0.1 && fg < 1 && dl > 0.63) {
+      if (phi < phim) return main;
+      if (phi < 100 / dl) return G1;
+      if (phi < 144.5 * dl ** -0.2) return 52 - 10 * log10(dl) - 25 * log10(phi);
+      return -2 - 5 * log10(dl);
+    }
+    return null;
+  }
+  // The tool's pattern: the main lobe is the parabola through the −3 dB point in use, then F.699.
+  function pattern(phi, d) {
+    const G1 = g1of(d.dl), phim = d.theta * Math.sqrt(Math.max(d.g - G1, 0) / 12);
+    if (d.g <= G1 || phi < phim) return d.g - 12 * (phi / d.theta) ** 2;
+    const v = f699(phi, d.dl, d.g, s.f / 1e9);
+    return v === null ? null : Math.min(v, d.g);
+  }
+  // Two beamwidths: the circular rule with θ = √(θH θV), and the ideal rectangle.
+  function beams() {
+    const th = Math.sqrt(s.thH * s.thV);
+    return { th, gI: 44.5 - 20 * log10(th), gK: 10 * log10(41253 / (s.thH * s.thV)), dl: 70 / th };
+  }
+
+  function problem() {
+    if (state.mode === "beams") {
+      if (!(s.thH > 0 && s.thH <= 180)) return "Enter the horizontal beamwidth, above 0 and at most 180°.";
+      if (!(s.thV > 0 && s.thV <= 180)) return "Enter the vertical beamwidth, above 0 and at most 180°.";
+      return "";
+    }
+    if (!(s.f > 0)) return "Enter the frequency.";
+    if (state.mode === "dia" && !(s.D > 0)) return "Enter the diameter, above zero.";
+    if (state.mode === "gain" && !isFinite(s.G)) return "Enter the gain, in dBi or dBd.";
+    if (!(s.eta > 0 && s.eta <= 1)) return "Enter the efficiency, above 0 and at most 100 %.";
+    if (!(s.k > 0)) return "Enter the beam constant k, above zero (70 is typical).";
+    return "";
+  }
+  const offOk = () => isFinite(s.psi) && s.psi >= 0 && s.psi <= 180;
+
+  // ---------------- the drawing ----------------
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "start") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const ok = !problem();
+    if (state.mode === "beams") {
+      // Two sectors, each as wide as its beamwidth: the horizontal one from above, the vertical one from the side.
+      const sector = (cx, th, cap) => {
+        const r = 46, cy = 52, a = (Math.min(180, th) / 2) * (Math.PI / 180);
+        const x = cx + r * Math.cos(a), y1 = cy - r * Math.sin(a), y2 = cy + r * Math.sin(a);
+        return `<path d="M${cx} ${cy} L${x.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x.toFixed(1)} ${y2.toFixed(1)} Z" fill="${part}" fill-opacity="0.28" stroke="${part}" stroke-width="1.6" stroke-linejoin="round"/>`
+          + `<path d="M${cx} ${cy} H${cx + r}" stroke="${wire}" stroke-width="1" stroke-dasharray="3 3"/><circle cx="${cx}" cy="${cy}" r="3" fill="${part}"/>`
+          + lbl(cx + r + 5, cy + 4, deg(th), calc) + lbl(cx + r / 2, 108, cap, grey, "middle");
+      };
+      const out = ok ? sector(34, s.thH, "H, top view") + sector(176, s.thV, "V, side view") : "";
+      return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
+    }
+    // The gain against the angle off axis, the angle on a log scale: the main lobe, then the ITU side lobe peaks.
+    const X0 = 36, X1 = 280, Y0 = 18, Y1 = 82;
+    const d = ok ? dish() : null;
+    const th = ok ? d.theta : 6, gmax = ok ? d.g : 30;
+    const pmin = Math.max(1e-3, 10 ** Math.floor(log10(th / 8)));
+    const lx = (p) => X0 + ((log10(Math.min(180, Math.max(pmin, p))) - log10(pmin)) / (log10(180) - log10(pmin))) * (X1 - X0);
+    let pts = [];
+    if (ok) {
+      const G1 = g1of(d.dl), marks = [d.theta / 2, d.theta * Math.sqrt(Math.max(d.g - G1, 0) / 12), 100 / d.dl, 15.85 * d.dl ** -0.6, 48, 120, 144.5 * d.dl ** -0.2];
+      const angles = new Set(marks.filter((m) => m > pmin && m < 180));
+      for (let i = 0; i <= 120; i++) angles.add(pmin * (180 / pmin) ** (i / 120));
+      pts = [...angles].sort((a, b) => a - b).map((p) => [p, pattern(p, d)]).filter(([, v]) => v !== null);
+    }
+    const vmin = Math.max(-20, pts.length ? Math.min(...pts.map(([, v]) => v)) : -10);
+    const hi = Math.ceil((gmax + 0.01) / 10) * 10;
+    let lo = Math.floor(vmin / 10) * 10;
+    if (hi - lo < 30) lo = hi - 30;
+    const step = hi - lo > 50 ? 20 : 10;
+    const py = (v) => Y1 - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (Y1 - Y0);
+    let out = "";
+    for (let v = lo; v <= hi + 1e-9; v += step) out += `<path d="M${X0} ${py(v).toFixed(1)} H${X1}" stroke="${wire}" stroke-width="0.6" stroke-opacity="0.5"/>${lbl(X0 - 4, (py(v) + 4).toFixed(1), String(v).replace("-", "−"), grey, "end")}`;
+    for (let e = Math.round(log10(pmin)); e <= 2; e++) {
+      const p = 10 ** e;
+      out += `<path d="M${lx(p).toFixed(1)} ${Y0} V${Y1}" stroke="${wire}" stroke-width="0.6" stroke-opacity="0.5"/>${lbl(lx(p).toFixed(1), 107, `${n3(p)}°`, grey, "middle")}`;
+    }
+    out += `<path d="M${X0} ${Y0} V${Y1} H${X1}" stroke="${wire}" stroke-width="1.2"/>` + lbl(X0 + 4, 11, "gain, dBi", grey);
+    if (!ok) return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
+    out += `<path d="${pts.map(([p, v], i) => `${i ? "L" : "M"}${lx(p).toFixed(1)} ${py(v).toFixed(1)}`).join(" ")}" stroke="${part}" stroke-width="1.8" stroke-linejoin="round"/>`;
+    if (pattern(1e9, d) === null) out += lbl(X1 - 4, Y1 - 5, "main lobe only", grey, "end");
+    // The −3 dB point, half the beamwidth off axis, and the aiming error: marked on the curve, named in the legend row.
+    const key = [];
+    const hx = lx(d.theta / 2), hy = py(d.g - 3);
+    key.push({ t: d.theta > 180 ? "over 180° wide" : `${deg(d.theta)} wide`, solid: true });
+    if (d.theta / 2 >= pmin) out += `<path d="M${hx.toFixed(1)} ${hy.toFixed(1)} V${Y1}" stroke="${calc}" stroke-width="1" stroke-dasharray="3 3"/><circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="3.4" fill="${calc}"/>`;
+    if (offOk() && s.psi >= pmin && s.psi > 0) {
+      const pv = pattern(s.psi, d);
+      if (pv !== null) {
+        out += `<circle cx="${lx(s.psi).toFixed(1)}" cy="${py(pv).toFixed(1)}" r="3.4" fill="none" stroke="${calc}" stroke-width="1.6"/>`;
+        key.push({ t: `${d.g - pv < 0.005 ? "0" : "−" + db2(d.g - pv)} dB`, solid: false });
+      }
+    }
+    let xr = X1;
+    for (let i = key.length - 1; i >= 0; i--) {
+      const tw = key[i].t.length * 5.9;
+      out += lbl(xr.toFixed(1), 11, key[i].t, calc, "end") + `<circle cx="${(xr - tw - 8).toFixed(1)}" cy="7.5" r="3.4" ${key[i].solid ? `fill="${calc}"` : `fill="none" stroke="${calc}" stroke-width="1.6"`}/>`;
+      xr -= tw + 8 + 16;
+    }
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
+  }
+
+  // ---------------- results ----------------
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+    const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const offLabel = `Loss ${n3(s.psi)}° off axis`;
+
+    if (state.mode === "beams") {
+      const b = beams();
+      const eq = s.f > 0 ? dOut(b.dl * lambda()) : "enter the frequency";
+      const plane = (th) => (s.psi <= th ? `${db2(12 * (s.psi / th) ** 2)} dB` : "beyond the beam");
+      return `${head(`Gain from ${deg(s.thH)} by ${deg(s.thV)}`, `${g1(b.gI)} dBi`, "ITU-R F.699: 44.5 − 20 log θ, θ = √(θH × θV)")}
+        ${grid([cell("Ideal estimate", `${g1(b.gK)} dBi`, "ideal"), cell("Same in dBd", `${g1(b.gI + PL_G_UNITS.dBd)} dBd`, "dbd"), cell("Equivalent D / λ", n3(b.dl), "dleq")])}
+        <div class="field notation-box">
+          ${row("Equivalent dish", eq, "eqd")}
+          ${row("Sphere covered", `about ${n3((100 * s.thH * s.thV) / 41253)} %`, "sphere")}
+          ${offOk() ? row(offLabel, `H ${plane(s.thH)} · V ${plane(s.thV)}`, "off") : ""}
+          ${b.th > 70 ? row("Beams", warn("this wide, the rules are rough"), "warn") : ""}
+        </div>`;
+    }
+
+    const d = dish();
+    const G1 = g1of(d.dl);
+    const off = (() => {
+      if (!offOk()) return "";
+      const pv = pattern(s.psi, d);
+      if (pv === null) return row(offLabel, "beyond the main lobe", "off");
+      const loss = d.g - pv;
+      return row(offLabel, `${loss < 0.005 ? "0" : `−${db2(loss)}`} dB → ${g1(pv)} dBi`, "off");
+    })();
+    const side = d.dl >= 1 && d.g > G1 ? row("Side lobe peaks",`≤ ${g1(G1)} dBi, ${g1(d.g - G1)} dB down`, "side") : "";
+    const small = d.dl < 1 ? row("Aperture", warn("under one wavelength across: the dish formulas do not hold"), "warn") : "";
+    const rows = (itu) => `<div class="field notation-box">
+          ${row("D / λ", n3(d.dl), "dl")}
+          ${row("ITU-R F.699 rules", itu, "itu")}
+          ${off}
+          ${side}
+          ${small}
+        </div>`;
+
+    if (state.mode === "dia") {
+      return `${head(`Gain, ${dOut(s.D)} at ${fTxt(s.f)}`, `${g1(d.g)} dBi`, `a power ratio of ${n3(d.glin)} · ${g1(d.g + PL_G_UNITS.dBd)} dBd`)}
+        ${grid([cell("Beamwidth", deg(d.theta), "beam"), cell("Effective area", areaOut(d.ae), "ae"), cell("Far field from", lenOut(d.rff), "rff")])}
+        ${rows(`${g1(20 * log10(d.dl) + 7.7)} dBi · ${deg(70 / d.dl)}`)}`;
+    }
+    const itu = 10 ** ((s.G - 7.7) / 20);
+    return `${head(`Beamwidth for ${gUser(s.G)} at ${fTxt(s.f)}`, deg(d.theta), `k λ / D with D = ${dOut(d.D)} · η ${n3(s.eta * 100)} %`)}
+        ${grid([cell("Diameter", dOut(d.D), "dia"), cell("Effective area", areaOut(d.ae), "ae"), cell("Far field from", lenOut(d.rff), "rff")])}
+        ${rows(`${dOut(itu * d.lam)} · ${deg(10 ** ((44.5 - s.G) / 20))}`)}`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); paint(); };
+  useExamples([
+    { title: "A 2 ft dish at 13 GHz", note: "CommScope's VHLP2-13 sheet lists 36.0 dBi and 2.7° at mid-band: this gives 36.0 dBi and 2.7°.",
+      apply: example({ top: { mode: "dia", fUnit: "GHz", dUnit: "m" }, si: { f: 12.975e9, D: 0.6, eta: 0.6, k: 70, psi: 1 } }) },
+    { title: "A 2° miss on a 1.2 m dish", note: "At 5.8 GHz: 35.0 dBi and 3.02° wide, so 2° off axis costs 5.28 dB.",
+      apply: example({ top: { mode: "dia", fUnit: "GHz", dUnit: "m" }, si: { f: 5.8e9, D: 1.2, eta: 0.6, k: 70, psi: 2 } }) },
+    { title: "How big is a 30 dBi antenna?", note: "At 5.8 GHz, as a dish: 0.672 m across and 5.39° wide, at 60 % efficiency.",
+      apply: example({ top: { mode: "gain", fUnit: "GHz", gUnit: "dBi", dUnit: "m" }, si: { f: 5.8e9, G: 30, eta: 0.6, k: 70, psi: 1 } }) },
+    { title: "A 90° by 30° sector panel", note: "ITU-R F.699 gives 10.2 dBi (8.0 dBd); the ideal 41 253 / (90 × 30) is 11.8 dBi.",
+      apply: example({ top: { mode: "beams", fUnit: "GHz" }, si: { f: 5.8e9, thH: 90, thV: 30, psi: 1 } }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value, hint = "") => `
+        <div class="field">
+          <label><span class="field-name">${label}</span>${hint}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const fr = field("f", "Frequency", sel('data-uf="1"', BW_F_UNITS, state.fUnit), fmt(s.f / BW_F_UNITS[state.fUnit]), state.mode === "beams" ? '<span class="field-hint">optional</span>' : "");
+    const dd = field("D", "Diameter", sel('data-ud="1"', BW_D_UNITS, state.dUnit), fmt(s.D / du()));
+    const gg = field("G", "Gain", sel('data-ug="1"', PL_G_UNITS, state.gUnit), fmt(s.G + PL_G_UNITS[state.gUnit]));
+    const ee = field("eta", "Efficiency", fixed("%"), fmt(s.eta * 100));
+    const kk = field("k", "Beamwidth k", fixed("°"), fmt(s.k));
+    const pp = field("psi", "Off axis", fixed("°"), fmt(s.psi));
+    const hh = field("thH", "Horizontal", fixed("°"), fmt(s.thH));
+    const vv = field("thV", "Vertical", fixed("°"), fmt(s.thV));
+    const inputs = state.mode === "dia" ? `<div class="field-pair">${dd}${fr}</div><div class="field-pair">${ee}${kk}${pp}</div>`
+      : state.mode === "gain" ? `<div class="field-pair">${gg}${fr}</div><div class="field-pair">${ee}${kk}${pp}</div>`
+        : `<div class="field-pair">${hh}${vv}</div><div class="field-pair">${fr}${pp}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Gain and beamwidth of an antenna")}
+
+      ${pillRow(Object.entries(BW_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label split" style="color:#5DCAA5">
+        <span>Output</span><span></span>
+        <span><span class="r-hint">lengths in</span> ${sel('class="label-select" data-ud="2"', BW_D_UNITS, state.dUnit)}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["G = η (π D / λ)²", "G dBi = 20 log (D / λ) + 7.7 (ITU)", "θ = k λ / D, k ≈ 70°", "G dBi ≈ 44.5 − 20 log θ (ITU)", "G ≈ 41253 / (θH θV) (ideal)", "Ae = G λ² / 4π, far field 2 D² / λ"],
+        "An antenna does not radiate evenly: it concentrates power into a beam, and its gain says how much more strongly than an isotropic antenna (one that radiates equally in every direction: dBi) it does so in the best direction. The beamwidth is the angle between the two directions where the power has fallen to half, 3 dB, of the peak. A bigger aperture, the area that collects the waves, gives a narrower beam and more gain: a dish of diameter D has the gain η (π D / λ)² and a beamwidth of about 70 λ / D degrees. η, the aperture efficiency, is how much of the dish's area counts, usually 55 to 70 %; the ITU's rules of thumb match η = 60 %. The effective area Ae = G λ² / 4π is the wavefront area the antenna catches. The far field, where these gains hold for a distant receiver, starts at about 2 D² / λ. Aiming off by ψ costs about 12 (ψ / θ)² dB inside the beam: 3 dB at half the beamwidth. An antenna known only by its horizontal and vertical beamwidths has at best 41253 / (θH θV), since a sphere is 41253 square degrees, and a dB or two less in practice."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "f") s.f = v * BW_F_UNITS[state.fUnit];
+        else if (key === "D") s.D = v * du();
+        else if (key === "G") s.G = v - PL_G_UNITS[state.gUnit];
+        else if (key === "eta") s.eta = v / 100;
+        else s[key] = v;
+        show();
+      };
+    });
+    const unit = (attr, name) => app.querySelectorAll(`select[${attr}]`).forEach((el) => { el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); paint(); }; });
+    unit("data-uf", "fUnit"); unit("data-ud", "dUnit"); unit("data-ug", "gUnit");
   }
 
   paint();

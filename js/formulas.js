@@ -350,6 +350,12 @@ const FORMULAS = [
     note: "ITU-R P.526-15 (read): keep 60 % of the first zone clear; J is the loss of a thin obstacle (knife-edge), nil from 55.2 % of r1. k = 4/3 is the usual allowance for the atmosphere bending rays.",
   },
   {
+    tool: "Beamwidth & gain",
+    domain: "rf",
+    formulas: ["G = η (π D / λ)²", "G dBi = 20 log (D / λ) + 7.7 (ITU)", "θ = k λ / D, k ≈ 70°", "G dBi ≈ 44.5 − 20 log θ (ITU)", "G ≈ 41253 / (θH θV) (ideal)", "Ae = G λ² / 4π, far field 2 D² / λ"],
+    note: "ITU-R F.699-9 (read) for the 7.7 and 44.5 rules, which match η = 60 %; aperture relations from NRAO's Essential Radio Astronomy ch. 3 and Wikipedia. θ is the −3 dB beamwidth in degrees.",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],
