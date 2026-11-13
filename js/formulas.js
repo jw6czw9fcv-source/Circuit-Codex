@@ -352,8 +352,8 @@ const FORMULAS = [
   {
     tool: "Beamwidth & gain",
     domain: "rf",
-    formulas: ["G = η (π D / λ)²", "G dBi = 20 log (D / λ) + 7.7 (ITU)", "θ = k λ / D, k ≈ 70°", "G dBi ≈ 44.5 − 20 log θ (ITU)", "G ≈ 41253 / (θH θV) (ideal)", "Ae = G λ² / 4π, far field 2 D² / λ"],
-    note: "ITU-R F.699-9 (read) for the 7.7 and 44.5 rules, which match η = 60 %; aperture relations from NRAO's Essential Radio Astronomy ch. 3 and Wikipedia. θ is the −3 dB beamwidth in degrees.",
+    formulas: ["G = η (π D / λ)²", "G dBi = 20 log (D / λ) + 7.7 (ITU)", "θ = k λ / D, k ≈ 70°", "G dBi ≈ 44.5 − 20 log θ (ITU)", "Sector: G = 10 log (31000 / (θH θV))", "Omni: D = 107.64 e^(θ²/36400) / θ", "Ae = G λ² / 4π, far field 2 D² / λ"],
+    note: "ITU-R F.699-9 (read) for the dish rules, which match η = 60 %; ITU-R F.1336-5 (read) for sector and omnidirectional antennas; aperture relations from NRAO's Essential Radio Astronomy ch. 3 and Wikipedia. θ is the −3 dB beamwidth in degrees.",
   },
   {
     tool: "Radio wavelength",

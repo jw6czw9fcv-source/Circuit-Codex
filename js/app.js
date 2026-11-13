@@ -15947,18 +15947,26 @@ function renderFresnel(domain, tool, favId) {
 // 25 log φ, to a floor (−10 dBi to 48°, 10 − 10 log (D/λ) for D/λ up to 100;
 // −20 and −10 log (D/λ) from 70 GHz, to 120°; 100 MHz to 1 GHz with
 // φs = 144.5 (D/λ)^−0.2 and −2 − 5 log (D/λ)), for 100 MHz to 174.8 GHz. Its ranges overlap
-// below D/λ = 100/48 (and 100/120 from 70 GHz, 0.63 under 1 GHz, the limit F.699 states), so the tool draws the main lobe only there. The 7.7
-// is 20 log π less 2.24 dB, an aperture efficiency of 59.7 %; the main lobe's
+// below D/λ = 100/48 (and 100/120 from 70 GHz, 0.63 under 1 GHz, the limit F.699 states), so the tool draws the main lobe only there.
+// The 7.7 is 20 log π less 2.24 dB, an aperture efficiency of 59.7 %; the main lobe's
 // parabola is 12 (φ/θ)² dB with θ = 69.3 λ/D, which the tool writes with the
-// beamwidth in use. Aperture relations (Condon and Ransom, Essential Radio
+// beamwidth in use. Recommendation ITU-R F.1336-5 (01/2019, read as PDF text; pages 4, 9, 12 and 29 rendered
+// and read as printed): omnidirectional antennas, recommends 2.1: the elevation pattern G0 − 12 (θ/θ3)² to
+// θ4 = θ3 √(1 − log (k + 1)/1.2), G0 − 12 + 10 log (k + 1) to θ3, then
+// G0 − 12 + 10 log ((θ/θ3)^−1.5 + k) to 90°, θ3 = 107.6 × 10^(−0.1 G0), k = 0.7 for typical antennas from
+// 400 MHz to 3 GHz and 0 for improved side lobes and for 3 to 70 GHz (2.3, 2.4), stated for 8 to 13 dBi (Annex 1);
+// Annex 2: the directivity of an omnidirectional antenna D = 107.64 e^(θ3²/36400) / θ3 (23a, θ3 in degrees; Table 2 compares it
+// with the cos^2N model to 0.062 dB at most), equal to the gain at 100 % efficiency, and 107.64/θ3 with the exponential at 1 (23b, under 6 %
+// error below 45°); for sectoral antennas D = k e^(θ3²/36400) / (φs θ3) with k = 36400 up to φs = 120° and 38750 above (34, 35), and
+// recommends 3.3 / (28a), provisionally, G0 = 10 log (31000 / (φs θ3)) for a sector of about 120° or less and an elevation beamwidth
+// under about 45°. Aperture relations (Condon and Ransom, Essential Radio
 // Astronomy ch. 3, read through a text-extraction tool): Ω_A = 4π/G (3.34), Ae =
 // G λ²/4π (3.41, 3.46), η_A = A/A_geom (3.111), ≤ 70 % for most telescopes, far
 // field R ≈ 2D²/λ from a path error of λ/16 at the edge (3.64); Wikipedia
 // "Parabolic antenna": G = e_A (π d/λ)², e_A 0.55 to 0.70, θ = k λ/d with k ≈ 70.
 // The uniform aperture's k = 58.96° is the exact half-power point of 2 J1(u)/u
-// (u = 1.6163, checked). 41253 = 4π (180/π)² square degrees, the ideal
-// 41253/(θH θV) of a beam taken as a rectangle (Kraus, not read).
-const BW_MODES = { dia: "Diameter", gain: "Gain", beams: "Beamwidths" };
+// (u = 1.6163, checked).
+const BW_MODES = { dia: "Diameter", gain: "Gain", beams: "Beamwidths", omni: "Omni" };
 const BW_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
 const BW_D_UNITS = { m: 1, cm: 0.01, ft: 0.3048, in: 0.0254 };
 
@@ -15969,8 +15977,10 @@ function renderBeamwidth(domain, tool, favId) {
     fUnit: pref(C, "fUnit", "GHz", Object.keys(BW_F_UNITS)),
     dUnit: pref(C, "dUnit", "m", Object.keys(BW_D_UNITS)),
     gUnit: pref(C, "gUnit", "dBi", Object.keys(PL_G_UNITS)),
-    // f in Hz, D in metres, G in dBi, angles in degrees, η a fraction, k in degrees.
-    si: { f: 5.8e9, D: 0.6, G: 30, eta: 0.6, k: 70, psi: 1, thH: 90, thV: 30 },
+    // The Omni pill's gain and beamwidth are linked: the one typed last is the known one.
+    omniKnown: "beam",
+    // f in Hz, D in metres, G in dBi, angles in degrees, η a fraction, k in degrees; thO, GO, etaO, kO and elev are the Omni pill's.
+    si: { f: 5.8e9, D: 0.6, G: 30, eta: 0.6, k: 70, psi: 1, thH: 90, thV: 30, thO: 14, GO: 9, etaO: 1, kO: 0.7, elev: 5 },
   };
   const s = state.si;
   const n3 = (v) => String(Number(v.toPrecision(3))).replace("-", "−");
@@ -16035,16 +16045,47 @@ function renderBeamwidth(domain, tool, favId) {
     const v = f699(phi, d.dl, d.g, s.f / 1e9);
     return v === null ? null : Math.min(v, d.g);
   }
-  // Two beamwidths: the circular rule with θ = √(θH θV), and the ideal rectangle.
+  // A sectoral antenna from its two beamwidths, ITU-R F.1336: the directivity (34, 35) and the gain (3.3).
   function beams() {
-    const th = Math.sqrt(s.thH * s.thV);
-    return { th, gI: 44.5 - 20 * log10(th), gK: 10 * log10(41253 / (s.thH * s.thV)), dl: 70 / th };
+    const phi = s.thH, t3 = s.thV;
+    const D = ((phi <= 120 ? 36400 : 38750) * Math.exp((t3 * t3) / 36400)) / (phi * t3);
+    const g = 10 * log10(31000 / (phi * t3));
+    return { D, Ddb: 10 * log10(D), g, dl: 10 ** ((g - 7.7) / 20) };
+  }
+  // An omnidirectional antenna, ITU-R F.1336 Annex 2: D = 107.64 e^(θ3²/36400) / θ3 (23a), the gain η D, and its elevation pattern (2.1).
+  const dOmni = (t3) => (107.64 * Math.exp((t3 * t3) / 36400)) / t3;
+  const t3Of = (d) => {
+    if (!isFinite(d) || d < dOmni(90)) return null;
+    let lo = 1e-6, hi = 90;
+    for (let i = 0; i < 100; i++) { const mid = (lo + hi) / 2; if (dOmni(mid) > d) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  };
+  function omni() {
+    const t3 = state.omniKnown === "gain" ? t3Of(10 ** (s.GO / 10) / s.etaO) : s.thO;
+    if (t3 === null || !(t3 > 0)) return null;
+    const D = dOmni(t3);
+    return { t3, D, Ddb: 10 * log10(D), g: state.omniKnown === "gain" ? s.GO : 10 * log10(s.etaO * D) };
+  }
+  function omniPattern(t, o) {
+    t = Math.abs(t);
+    const k = s.kO, t4 = o.t3 * Math.sqrt(Math.max(0, 1 - log10(k + 1) / 1.2));
+    if (t < t4) return o.g - 12 * (t / o.t3) ** 2;
+    if (t < o.t3) return o.g - 12 + 10 * log10(k + 1);
+    return o.g - 12 + 10 * log10((t / o.t3) ** -1.5 + k);
   }
 
   function problem() {
     if (state.mode === "beams") {
       if (!(s.thH > 0 && s.thH <= 180)) return "Enter the horizontal beamwidth, above 0 and at most 180°.";
       if (!(s.thV > 0 && s.thV <= 180)) return "Enter the vertical beamwidth, above 0 and at most 180°.";
+      return "";
+    }
+    if (state.mode === "omni") {
+      if (state.omniKnown === "beam" && !(s.thO > 0 && s.thO <= 90)) return "Enter the vertical beamwidth, above 0 and at most 90°.";
+      if (state.omniKnown === "gain" && !isFinite(s.GO)) return "Enter the gain, in dBi or dBd.";
+      if (!(s.etaO > 0 && s.etaO <= 1)) return "Enter the efficiency, above 0 and at most 100 %.";
+      if (!(s.kO >= 0 && s.kO <= 10)) return "Enter the side lobe parameter k, 0 to 10 (0.7 is typical, 0 for improved side lobes).";
+      if (omni() === null) return "At this gain the beam would be wider than 90°, where the omnidirectional rules end: enter a higher gain.";
       return "";
     }
     if (!(s.f > 0)) return "Enter the frequency.";
@@ -16055,6 +16096,7 @@ function renderBeamwidth(domain, tool, favId) {
     return "";
   }
   const offOk = () => isFinite(s.psi) && s.psi >= 0 && s.psi <= 180;
+  const elevOk = () => isFinite(s.elev) && s.elev >= 0 && s.elev <= 90;
 
   // ---------------- the drawing ----------------
   function diagram() {
@@ -16073,18 +16115,24 @@ function renderBeamwidth(domain, tool, favId) {
       const out = ok ? sector(34, s.thH, "H, top view") + sector(176, s.thV, "V, side view") : "";
       return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
     }
-    // The gain against the angle off axis, the angle on a log scale: the main lobe, then the ITU side lobe peaks.
-    const X0 = 36, X1 = 280, Y0 = 18, Y1 = 82;
-    const d = ok ? dish() : null;
-    const th = ok ? d.theta : 6, gmax = ok ? d.g : 30;
+    // The gain against the angle off axis (off the horizon for an omnidirectional antenna), the angle on a log scale:
+    // the main lobe, then the ITU side lobe peaks.
+    const omniMode = state.mode === "omni";
+    const X0 = 36, X1 = 280, Y0 = 18, Y1 = 82, xmax = omniMode ? 90 : 180;
+    const d = ok ? (omniMode ? omni() : dish()) : null;
+    const th = ok ? (omniMode ? d.t3 : d.theta) : 6, gmax = ok ? d.g : 30;
+    const fn = omniMode ? (p) => omniPattern(p, d) : (p) => pattern(p, d);
+    const psi = omniMode ? s.elev : s.psi, psiOk = omniMode ? elevOk() : offOk();
     const pmin = Math.max(1e-3, 10 ** Math.floor(log10(th / 8)));
-    const lx = (p) => X0 + ((log10(Math.min(180, Math.max(pmin, p))) - log10(pmin)) / (log10(180) - log10(pmin))) * (X1 - X0);
+    const lx = (p) => X0 + ((log10(Math.min(xmax, Math.max(pmin, p))) - log10(pmin)) / (log10(xmax) - log10(pmin))) * (X1 - X0);
     let pts = [];
     if (ok) {
-      const G1 = g1of(d.dl), marks = [d.theta / 2, d.theta * Math.sqrt(Math.max(d.g - G1, 0) / 12), 100 / d.dl, 15.85 * d.dl ** -0.6, 48, 120, 144.5 * d.dl ** -0.2];
-      const angles = new Set(marks.filter((m) => m > pmin && m < 180));
-      for (let i = 0; i <= 120; i++) angles.add(pmin * (180 / pmin) ** (i / 120));
-      pts = [...angles].sort((a, b) => a - b).map((p) => [p, pattern(p, d)]).filter(([, v]) => v !== null);
+      let marks;
+      if (omniMode) marks = [d.t3 / 2, d.t3 * Math.sqrt(Math.max(0, 1 - log10(s.kO + 1) / 1.2)), d.t3];
+      else { const G1 = g1of(d.dl); marks = [d.theta / 2, d.theta * Math.sqrt(Math.max(d.g - G1, 0) / 12), 100 / d.dl, 15.85 * d.dl ** -0.6, 48, 120, 144.5 * d.dl ** -0.2]; }
+      const angles = new Set(marks.filter((m) => m > pmin && m < xmax));
+      for (let i = 0; i <= 120; i++) angles.add(pmin * (xmax / pmin) ** (i / 120));
+      pts = [...angles].sort((a, b) => a - b).map((p) => [p, fn(p)]).filter(([, v]) => v !== null);
     }
     const vmin = Math.max(-20, pts.length ? Math.min(...pts.map(([, v]) => v)) : -10);
     const hi = Math.ceil((gmax + 0.01) / 10) * 10;
@@ -16094,23 +16142,24 @@ function renderBeamwidth(domain, tool, favId) {
     const py = (v) => Y1 - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (Y1 - Y0);
     let out = "";
     for (let v = lo; v <= hi + 1e-9; v += step) out += `<path d="M${X0} ${py(v).toFixed(1)} H${X1}" stroke="${wire}" stroke-width="0.6" stroke-opacity="0.5"/>${lbl(X0 - 4, (py(v) + 4).toFixed(1), String(v).replace("-", "−"), grey, "end")}`;
-    for (let e = Math.round(log10(pmin)); e <= 2; e++) {
+    for (let e = Math.round(log10(pmin)); 10 ** e <= xmax; e++) {
       const p = 10 ** e;
       out += `<path d="M${lx(p).toFixed(1)} ${Y0} V${Y1}" stroke="${wire}" stroke-width="0.6" stroke-opacity="0.5"/>${lbl(lx(p).toFixed(1), 107, `${n3(p)}°`, grey, "middle")}`;
     }
+    if (omniMode) out += lbl(X1, 107, "90°", grey, "end");
     out += `<path d="M${X0} ${Y0} V${Y1} H${X1}" stroke="${wire}" stroke-width="1.2"/>` + lbl(X0 + 4, 11, "gain, dBi", grey);
     if (!ok) return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
     out += `<path d="${pts.map(([p, v], i) => `${i ? "L" : "M"}${lx(p).toFixed(1)} ${py(v).toFixed(1)}`).join(" ")}" stroke="${part}" stroke-width="1.8" stroke-linejoin="round"/>`;
-    if (pattern(1e9, d) === null) out += lbl(X1 - 4, Y1 - 5, "main lobe only", grey, "end");
+    if (!omniMode && pattern(1e9, d) === null) out += lbl(X1 - 4, Y1 - 5, "main lobe only", grey, "end");
     // The −3 dB point, half the beamwidth off axis, and the aiming error: marked on the curve, named in the legend row.
     const key = [];
-    const hx = lx(d.theta / 2), hy = py(d.g - 3);
-    key.push({ t: d.theta > 180 ? "over 180° wide" : `${deg(d.theta)} wide`, solid: true });
-    if (d.theta / 2 >= pmin) out += `<path d="M${hx.toFixed(1)} ${hy.toFixed(1)} V${Y1}" stroke="${calc}" stroke-width="1" stroke-dasharray="3 3"/><circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="3.4" fill="${calc}"/>`;
-    if (offOk() && s.psi >= pmin && s.psi > 0) {
-      const pv = pattern(s.psi, d);
+    const hx = lx(th / 2), hy = py(d.g - 3);
+    key.push({ t: th > 180 ? "over 180° wide" : `${deg(th)} wide`, solid: true });
+    if (th / 2 >= pmin) out += `<path d="M${hx.toFixed(1)} ${hy.toFixed(1)} V${Y1}" stroke="${calc}" stroke-width="1" stroke-dasharray="3 3"/><circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="3.4" fill="${calc}"/>`;
+    if (psiOk && psi >= pmin && psi > 0) {
+      const pv = fn(psi);
       if (pv !== null) {
-        out += `<circle cx="${lx(s.psi).toFixed(1)}" cy="${py(pv).toFixed(1)}" r="3.4" fill="none" stroke="${calc}" stroke-width="1.6"/>`;
+        out += `<circle cx="${lx(psi).toFixed(1)}" cy="${py(pv).toFixed(1)}" r="3.4" fill="none" stroke="${calc}" stroke-width="1.6"/>`;
         key.push({ t: `${d.g - pv < 0.005 ? "0" : "−" + db2(d.g - pv)} dB`, solid: false });
       }
     }
@@ -16136,19 +16185,38 @@ function renderBeamwidth(domain, tool, favId) {
           <div class="result-value"><span class="num" data-res="big">${value}</span></div>
           <div class="result-sub" data-res="sub">${sub}</div>
         </div>`;
-    const offLabel = `Loss ${n3(s.psi)}° off axis`;
+    const lossText = (loss) => (loss < 0.005 ? "0" : `−${db2(loss)}`);
 
     if (state.mode === "beams") {
       const b = beams();
       const eq = s.f > 0 ? dOut(b.dl * lambda()) : "enter the frequency";
       const plane = (th) => (s.psi <= th ? `${db2(12 * (s.psi / th) ** 2)} dB` : "beyond the beam");
-      return `${head(`Gain from ${deg(s.thH)} by ${deg(s.thV)}`, `${g1(b.gI)} dBi`, "ITU-R F.699: 44.5 − 20 log θ, θ = √(θH × θV)")}
-        ${grid([cell("Ideal estimate", `${g1(b.gK)} dBi`, "ideal"), cell("Same in dBd", `${g1(b.gI + PL_G_UNITS.dBd)} dBd`, "dbd"), cell("Equivalent D / λ", n3(b.dl), "dleq")])}
+      const wide = s.thH > 120 ? row("Azimuth", warn("over about 120°: outside the ITU rule"), "warn")
+        : s.thV > 45 ? row("Elevation", warn("over about 45°: the rule is rougher"), "warn") : "";
+      return `${head(`Gain from ${deg(s.thH)} by ${deg(s.thV)}`, `${g1(b.g)} dBi`, "ITU-R F.1336: 31 000 / (θH × θV)")}
+        ${grid([cell("Directivity", `${g1(b.Ddb)} dBi`, "dir"), cell("Same in dBd", `${g1(b.g + PL_G_UNITS.dBd)} dBd`, "dbd"), cell("Equivalent D / λ", n3(b.dl), "dleq")])}
         <div class="field notation-box">
           ${row("Equivalent dish", eq, "eqd")}
-          ${row("Sphere covered", `about ${n3((100 * s.thH * s.thV) / 41253)} %`, "sphere")}
-          ${offOk() ? row(offLabel, `H ${plane(s.thH)} · V ${plane(s.thV)}`, "off") : ""}
-          ${b.th > 70 ? row("Beams", warn("this wide, the rules are rough"), "warn") : ""}
+          ${row("Sphere covered", `about ${n3(100 / b.D)} %`, "sphere")}
+          ${offOk() ? row(`Loss ${n3(s.psi)}° off axis`, `H ${plane(s.thH)} · V ${plane(s.thV)}`, "off") : ""}
+          ${wide}
+        </div>`;
+    }
+
+    if (state.mode === "omni") {
+      const o = omni(), known = state.omniKnown === "beam";
+      const rule = known ? `${g1(10 * log10(107.6 / o.t3))} dBi` : deg(107.6 * 10 ** (-0.1 * s.GO));
+      const lossRow = elevOk() ? (() => { const pv = omniPattern(s.elev, o); return row(`Loss ${n3(s.elev)}° off horizon`, `${lossText(o.g - pv)} dB → ${g1(pv)} dBi`, "off"); })() : "";
+      const far = s.kO > 0 ? `${n3(12 - 10 * log10(s.kO))} dB down` : "falling away";
+      return `${head(known ? `Gain, omnidirectional, ${deg(o.t3)} vertical beam` : `Vertical beamwidth for ${gUser(o.g)}`,
+        known ? `${g1(o.g)} dBi` : deg(o.t3),
+        known ? "D = 107.64 e^(θ² / 36400) / θ, G = η D" : "solved from D = 107.64 e^(θ² / 36400) / θ")}
+        ${grid([cell("Directivity", `${g1(o.Ddb)} dBi`, "dir"), cell("Gain in dBd", `${g1(o.g + PL_G_UNITS.dBd)} dBd`, "dbd"), cell("Sphere covered", `about ${n3(100 / o.D)} %`, "sphere")])}
+        <div class="field notation-box">
+          ${row("ITU-R F.1336 rule", rule, "itu")}
+          ${lossRow}
+          ${row("Far side lobes", far, "far")}
+          ${o.g < 8 || o.g > 13 ? row("Pattern", warn("F.1336 states it for 8 to 13 dBi"), "warn") : ""}
         </div>`;
     }
 
@@ -16157,11 +16225,10 @@ function renderBeamwidth(domain, tool, favId) {
     const off = (() => {
       if (!offOk()) return "";
       const pv = pattern(s.psi, d);
-      if (pv === null) return row(offLabel, "beyond the main lobe", "off");
-      const loss = d.g - pv;
-      return row(offLabel, `${loss < 0.005 ? "0" : `−${db2(loss)}`} dB → ${g1(pv)} dBi`, "off");
+      if (pv === null) return row(`Loss ${n3(s.psi)}° off axis`, "beyond the main lobe", "off");
+      return row(`Loss ${n3(s.psi)}° off axis`, `${lossText(d.g - pv)} dB → ${g1(pv)} dBi`, "off");
     })();
-    const side = d.dl >= 1 && d.g > G1 ? row("Side lobe peaks",`≤ ${g1(G1)} dBi, ${g1(d.g - G1)} dB down`, "side") : "";
+    const side = d.dl >= 1 && d.g > G1 ? row("Side lobe peaks", `≤ ${g1(G1)} dBi, ${g1(d.g - G1)} dB down`, "side") : "";
     const small = d.dl < 1 ? row("Aperture", warn("under one wavelength across: the dish formulas do not hold"), "warn") : "";
     const rows = (itu) => `<div class="field notation-box">
           ${row("D / λ", n3(d.dl), "dl")}
@@ -16195,9 +16262,24 @@ function renderBeamwidth(domain, tool, favId) {
       apply: example({ top: { mode: "dia", fUnit: "GHz", dUnit: "m" }, si: { f: 5.8e9, D: 1.2, eta: 0.6, k: 70, psi: 2 } }) },
     { title: "How big is a 30 dBi antenna?", note: "At 5.8 GHz, as a dish: 0.672 m across and 5.39° wide, at 60 % efficiency.",
       apply: example({ top: { mode: "gain", fUnit: "GHz", gUnit: "dBi", dUnit: "m" }, si: { f: 5.8e9, G: 30, eta: 0.6, k: 70, psi: 1 } }) },
-    { title: "A 90° by 30° sector panel", note: "ITU-R F.699 gives 10.2 dBi (8.0 dBd); the ideal 41 253 / (90 × 30) is 11.8 dBi.",
+    { title: "A 90° by 30° sector panel", note: "ITU-R F.1336: 31 000 / (90 × 30) is 10.6 dBi (8.4 dBd); its directivity formula gives 11.4 dBi.",
       apply: example({ top: { mode: "beams", fUnit: "GHz" }, si: { f: 5.8e9, thH: 90, thV: 30, psi: 1 } }) },
+    { title: "The ITU's measured 5.8 GHz omni", note: "F.1336's 9.4 dBi antenna has an 8.7° beam: at 70 % efficiency this gives 8.67°.",
+      apply: example({ top: { mode: "omni", gUnit: "dBi", omniKnown: "gain" }, si: { GO: 9.4, etaO: 0.7, kO: 0, elev: 5 } }) },
   ]);
+
+  // The Omni pill's boxes: the known one is as typed, the other is calculated and follows.
+  const shownBeam = () => { if (state.omniKnown === "beam") return s.thO; const o = omni(); return o ? o.t3 : NaN; };
+  const shownGain = () => { if (state.omniKnown === "gain") return s.GO; const o = omni(); return o ? o.g : NaN; };
+  const hintHTML = (which) => (state.omniKnown === which ? "" : '<span class="field-hint">result</span>');
+  function syncOmni() {
+    if (state.mode !== "omni" || problem()) return;
+    const el = app.querySelector(state.omniKnown === "beam" ? 'input[data-key="GO"]' : 'input[data-key="thO"]');
+    if (el && el !== document.activeElement) el.value = fmt(state.omniKnown === "beam" ? shownGain() + PL_G_UNITS[state.gUnit] : shownBeam());
+  }
+  function hintsOmni() {
+    ["beam", "gain"].forEach((w) => { const el = app.querySelector(`[data-res="hint-${w}"]`); if (el) el.innerHTML = hintHTML(w); });
+  }
 
   function paint() {
     const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
@@ -16215,9 +16297,15 @@ function renderBeamwidth(domain, tool, favId) {
     const pp = field("psi", "Off axis", fixed("°"), fmt(s.psi));
     const hh = field("thH", "Horizontal", fixed("°"), fmt(s.thH));
     const vv = field("thV", "Vertical", fixed("°"), fmt(s.thV));
+    const ob = field("thO", "Vertical beam", fixed("°"), fmt(shownBeam()), `<span data-res="hint-beam">${hintHTML("beam")}</span>`);
+    const og = field("GO", "Gain", sel('data-ug="2"', PL_G_UNITS, state.gUnit), fmt(shownGain() + PL_G_UNITS[state.gUnit]), `<span data-res="hint-gain">${hintHTML("gain")}</span>`);
+    const oe = field("etaO", "Efficiency", fixed("%"), fmt(s.etaO * 100));
+    const ok_ = field("kO", "Side-lobe k", fixed(""), fmt(s.kO));
+    const ov = field("elev", "Elevation", fixed("°"), fmt(s.elev));
     const inputs = state.mode === "dia" ? `<div class="field-pair">${dd}${fr}</div><div class="field-pair">${ee}${kk}${pp}</div>`
       : state.mode === "gain" ? `<div class="field-pair">${gg}${fr}</div><div class="field-pair">${ee}${kk}${pp}</div>`
-        : `<div class="field-pair">${hh}${vv}</div><div class="field-pair">${fr}${pp}</div>`;
+        : state.mode === "omni" ? `<div class="field-pair">${ob}${og}</div><div class="field-pair">${oe}${ok_}${ov}</div>`
+          : `<div class="field-pair">${hh}${vv}</div><div class="field-pair">${fr}${pp}</div>`;
     app.innerHTML = `
       ${calcHeader(tool, favId, "Gain and beamwidth of an antenna")}
 
@@ -16234,8 +16322,8 @@ function renderBeamwidth(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["G = η (π D / λ)²", "G dBi = 20 log (D / λ) + 7.7 (ITU)", "θ = k λ / D, k ≈ 70°", "G dBi ≈ 44.5 − 20 log θ (ITU)", "G ≈ 41253 / (θH θV) (ideal)", "Ae = G λ² / 4π, far field 2 D² / λ"],
-        "An antenna does not radiate evenly: it concentrates power into a beam, and its gain says how much more strongly than an isotropic antenna (one that radiates equally in every direction: dBi) it does so in the best direction. The beamwidth is the angle between the two directions where the power has fallen to half, 3 dB, of the peak. A bigger aperture, the area that collects the waves, gives a narrower beam and more gain: a dish of diameter D has the gain η (π D / λ)² and a beamwidth of about 70 λ / D degrees. η, the aperture efficiency, is how much of the dish's area counts, usually 55 to 70 %; the ITU's rules of thumb match η = 60 %. The effective area Ae = G λ² / 4π is the wavefront area the antenna catches. The far field, where these gains hold for a distant receiver, starts at about 2 D² / λ. Aiming off by ψ costs about 12 (ψ / θ)² dB inside the beam: 3 dB at half the beamwidth. An antenna known only by its horizontal and vertical beamwidths has at best 41253 / (θH θV), since a sphere is 41253 square degrees, and a dB or two less in practice."
+        ["G = η (π D / λ)²", "G dBi = 20 log (D / λ) + 7.7 (ITU)", "θ = k λ / D, k ≈ 70°", "G dBi ≈ 44.5 − 20 log θ (ITU)", "Sector: G = 10 log (31000 / (θH θV))", "Omni: D = 107.64 e^(θ²/36400) / θ", "Ae = G λ² / 4π, far field 2 D² / λ"],
+        "An antenna does not radiate evenly: it concentrates power into a beam, and its gain says how much more strongly than an isotropic antenna (one that radiates equally in every direction: dBi) it does so in the best direction. The beamwidth is the angle between the two directions where the power has fallen to half, 3 dB, of the peak. A bigger aperture, the area that collects the waves, gives a narrower beam and more gain: a dish of diameter D has the gain η (π D / λ)² and a beamwidth of about 70 λ / D degrees. η, the aperture efficiency, is how much of the dish's area counts, usually 55 to 70 %; the ITU's rules of thumb match η = 60 %. The effective area Ae = G λ² / 4π is the wavefront area the antenna catches. The far field, where these gains hold for a distant receiver, starts at about 2 D² / λ. Aiming off by ψ costs about 12 (ψ / θ)² dB inside the beam: 3 dB at half the beamwidth. A sector antenna, wide in azimuth and narrow in elevation, has about 31 000 / (θH θV) of gain (ITU-R F.1336). An omnidirectional antenna radiates all round the horizon and squeezes its beam in elevation, like a doughnut: its directivity D = 107.64 e^(θ² / 36400) / θ follows from the vertical beamwidth θ in degrees, and the gain is η D, with η the radiation efficiency (the ITU takes 100 %). k is how high the side lobes of an omnidirectional antenna stand: 0.7 for typical ones below 3 GHz, 0 for improved ones."
       )}
       ${calcFooter("")}
     `;
@@ -16251,7 +16339,11 @@ function renderBeamwidth(domain, tool, favId) {
         else if (key === "D") s.D = v * du();
         else if (key === "G") s.G = v - PL_G_UNITS[state.gUnit];
         else if (key === "eta") s.eta = v / 100;
+        else if (key === "thO") { s.thO = v; if (state.omniKnown !== "beam") { state.omniKnown = "beam"; hintsOmni(); } }
+        else if (key === "GO") { s.GO = v - PL_G_UNITS[state.gUnit]; if (state.omniKnown !== "gain") { state.omniKnown = "gain"; hintsOmni(); } }
+        else if (key === "etaO") s.etaO = v / 100;
         else s[key] = v;
+        syncOmni();
         show();
       };
     });

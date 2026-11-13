@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=e0321d80ad" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=db9569b32b" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -6891,7 +6891,7 @@ band 12; 100 Hz is outside the bands, its wavelength shown as 2997.925 km.</p>
 <section class="tool" id="beamwidth" style="--accent:#E08585">
   <div class="crumb">RF &amp; microwave › Antennas &amp; propagation</div>
   <h2>Beamwidth &amp; gain</h2>
-  <figure class="shot"><img src="manual/img/beamwidth.jpg?h=824c5478e9" loading="lazy" alt="Beamwidth &amp; gain as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/beamwidth.jpg?h=9786723d85" loading="lazy" alt="Beamwidth &amp; gain as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>How strongly an antenna beams its power and how wide the beam is, from
 whichever of the antenna's figures you have (pills):</p>
@@ -6914,30 +6914,56 @@ whichever of the antenna's figures you have (pills):</p>
   diameter, its effective area and the far-field distance; under them the
   same rows. It is the circular dish that would give that gain at the
   efficiency you assume.</li>
-<li><strong>Beamwidths:</strong> the horizontal and vertical half-power beamwidths (the
-  frequency is optional) give the gain two ways. The big result is the ITU-R
-  F.699 rule with the equivalent circular beam, θ = √(θH × θV). In three
-  cells: the ideal estimate 41253 / (θH θV), the gain in dBd and the
-  equivalent D/λ. Under them: the equivalent dish (needs the frequency), how
-  much of the sphere the beam covers, and the loss from the aiming error in
-  each plane. The drawing is the two beams as sectors, each as wide as its
-  beamwidth: the horizontal one seen from above, the vertical one from the
-  side.</li>
+<li><strong>Beamwidths:</strong> a sector antenna's horizontal (azimuth) and vertical
+  (elevation) half-power beamwidths; the frequency is optional. The big result
+  is its gain by the sectoral rule of ITU-R F.1336, 31 000 / (θH × θV). In
+  three cells: the directivity by F.1336's own formula (the gain with no losses
+  in the antenna), the gain in dBd and the equivalent D/λ (the dish that would
+  give that gain, by F.699's rule). Under them: the equivalent dish (needs the
+  frequency), how much of the sphere the beam covers, the loss from the aiming
+  error in each plane, and a flag when the horizontal beamwidth is over about
+  120° or the vertical one over about 45°, where the rule is outside its range or
+  rougher. The drawing is the two beams as sectors, each as wide as its
+  beamwidth: the horizontal one seen from above, the vertical one from the side.</li>
+<li><strong>Omni:</strong> an omnidirectional antenna, one that radiates alike in every
+  direction round the horizon and squeezes its beam in elevation, like a
+  doughnut: a whip, or a collinear array of stacked dipoles. Its vertical
+  beamwidth and its gain are linked: type either and the other is calculated
+  (the box that is calculated carries the word "result"). The efficiency is the
+  antenna's radiation efficiency (100 % is the ITU's assumption), the
+  side-lobe k is the parameter of the ITU's pattern (0.7 for typical antennas
+  below 3 GHz, 0 for ones with improved side lobes and for 3 to 70 GHz), and the
+  elevation is the angle off the horizon. The big result is the gain (when the
+  beamwidth is typed) or the vertical beamwidth (when the gain is). In three
+  cells: the directivity, the gain in dBd and how much of the sphere the beam
+  covers. Under them: the simplified rule of F.1336 for the same antenna (its
+  gain, 10 log (107.6 / θ), or its beamwidth, 107.6 × 10^(−0.1 G)), the loss at the
+  elevation angle and the gain left, how far down the far side lobes stay
+  (12 − 10 log k dB; "falling away" for k = 0), and a flag when the gain is
+  outside the 8 to 13 dBi the ITU states its pattern for. The drawing is the
+  gain against the angle off the horizon, to 90°, the angle on a logarithmic
+  scale: the main lobe, then the ITU's side lobe peaks, marked as in the
+  Diameter pill.</li>
 <li><strong>Units:</strong> frequency kHz, MHz or GHz; the diameter in m, cm, ft or in; the
-  gain in dBi or dBd. The "lengths in" picker at the Output heading is the
-  diameter's own: the diameter box, the diameter result, the effective area
-  (in that unit squared) and the far-field distance (metres and kilometres, or
-  feet and miles) follow it, and choosing a unit there changes the box.</li>
+  gain in dBi or dBd (in the Gain and Omni pills). The "lengths in" picker at the
+  Output heading is the diameter's own: the diameter box, the diameter result,
+  the effective area (in that unit squared) and the far-field distance (metres
+  and kilometres, or feet and miles) follow it, and choosing a unit there changes
+  the box.</li>
 <li><strong>Remembered:</strong> the pill and the units.</li>
 </ul>
 <p>Examples: a 2 ft dish at 13 GHz (CommScope's data sheet), a 2° miss on a
-1.2 m dish, how big a 30 dBi antenna is, and a 90° by 30° sector panel.</p>
+1.2 m dish, how big a 30 dBi antenna is, a 90° by 30° sector panel, and the
+ITU's measured 5.8 GHz omnidirectional antenna.</p>
 <h3>Terms</h3>
 <ul>
 <li><strong>Gain (dBi, dBd):</strong> how much more power an antenna sends, or picks up, in
   its best direction than an isotropic antenna, which treats every direction
   alike. In dB: dBi against the isotropic antenna, dBd against a half-wave
   dipole (dBd = dBi − 2.15, the dipole's own gain).</li>
+<li><strong>Directivity:</strong> the same figure for an antenna with no losses; the gain is
+  the directivity times the radiation efficiency, the share of the power given
+  to the antenna that it radiates.</li>
 <li><strong>Half-power beamwidth (beamwidth, −3 dB beamwidth):</strong> the angle between
   the two directions, one each side of the best, where the power has fallen to
   half, 3 dB, of the peak.</li>
@@ -6949,15 +6975,26 @@ whichever of the antenna's figures you have (pills):</p>
   errors take away. 55 to 70 % is usual.</li>
 <li><strong>Beamwidth constant (k):</strong> the number in θ = k λ/D, in degrees: about 70 for
   a typical dish, 58.96 for an evenly lit aperture.</li>
+<li><strong>Sectoral antenna:</strong> one that covers a sector of the horizon, up to about
+  120° wide in the ITU's rules, with a narrow beam in elevation: a
+  base-station panel.</li>
+<li><strong>Omnidirectional antenna:</strong> one with the same gain in every direction of
+  azimuth; only its elevation pattern is shaped. Its vertical (elevation)
+  beamwidth, θ3 in ITU-R F.1336, is the angle between the directions above and
+  below the horizon where the power is half the peak.</li>
+<li><strong>Side-lobe k (F.1336):</strong> how high the side lobes of an omnidirectional
+  antenna stand above what an improved design would give: 0.7 for typical
+  antennas below 3 GHz, 0 for improved ones and for 3 to 70 GHz.</li>
 <li><strong>Main lobe, side lobes:</strong> the beam, and the weaker lobes beside it. The side
   lobe peaks are what interference studies use.</li>
 <li><strong>Far field:</strong> the region far enough out that the pattern no longer changes
   with the distance, beyond about 2D²/λ; nearer, the formulas for a distant
   receiver do not hold.</li>
 <li><strong>Off axis:</strong> the angle between the direction the antenna points and the one
-  in question; the aiming error.</li>
+  in question; the aiming error (the angle off the horizon, for an omni).</li>
 <li><strong>Beam solid angle (Ω):</strong> the beam's size as an angle in space, in steradians;
-  Ω = 4π/G.</li>
+  Ω = 4π/D, a share 1/D of the whole sphere (what the tool calls "sphere
+  covered").</li>
 </ul>
 <h3>Sources</h3>
 <ul>
@@ -6981,6 +7018,31 @@ whichever of the antenna's figures you have (pills):</p>
   limit (Notes 2, 3), and that it models some practical antennas poorly from
   5° to 70° (Note 9); Annex 1 says measurements confirm it to D/λ of about
   180.</li>
+<li><strong>Recommendation ITU-R F.1336-5, "Reference radiation patterns of
+  omnidirectional, sectoral and other antennas ... 400 MHz to about 70 GHz"
+  (01/2019; read as PDF text, and pages 4, 9, 12 and 29 rendered and read as
+  printed):</strong> recommends 2.1 gives the elevation pattern of the side lobe peaks
+  of an omnidirectional antenna: G₀ − 12 (θ/θ3)² up to θ4 = θ3 √(1 − log (k + 1)
+  / 1.2), G₀ − 12 + 10 log (k + 1) up to θ3, then G₀ − 12 + 10 log ((θ/θ3)^−1.5</li>
+<li>k) to 90°, with θ3 = 107.6 × 10^(−0.1 G₀) (G₀ the gain in dBi, θ3 the
+  beamwidth in degrees); 2.3 and 2.4 set k to 0.7 for typical antennas from
+  400 MHz to 3 GHz and to 0 for antennas with improved side lobes and all those
+  from 3 to 70 GHz. Annex 1 builds the pattern on a collinear array of dipoles
+  spaced 3λ/4, states it for 8 to 13 dBi (further work being needed above), gives
+  the directivity from the beamwidth, D = 10 log [191 √(0.818 + 1/θ3) − 172.4]
+  dBi (5a), says k = 0.7 stands for side lobes about 13.5 dB below the peak
+  and k = 0.5 for about 15 dB, and compares a measured 9.4 dBi antenna at
+  5.8 GHz, θ3 = 8.7°, with it. Annex 2 derives the directivity from an
+  exponential elevation pattern: D = 107.64 e^(θ3²/36400) / θ3 for an
+  omnidirectional antenna (23a, θ3 in degrees; Table 2 compares it with the
+  directivity of a cos^2N pattern, to within 0.062 dB), the same with the
+  exponential set to 1 (23b, under 6 % error below 45°), and for a sector
+  D = k e^(θ3²/36400) / (φs θ3) with k = 36 400 up to φs = 120° and 38 750 above
+  (34, 35; the transition said to need study). Its measured sectoral antennas
+  (25 to 29.5 GHz: 90° by 2.5°, directivity 22.1 dBi, gain 20.5 to 21.4 dBi)
+  lead to the provisional gain G₀ = 10 log (31 000 / (φs θ3)) of recommends 3.3
+  (28a), for a sector of about 120° or less and an elevation beamwidth under
+  about 45°.</li>
 <li><strong>Condon and Ransom, "Essential Radio Astronomy", chapter 3 (NRAO; the first
   100 000 of its 174 658 characters, read through a text-extraction tool):</strong>
   the beam solid angle Ω_A = 4π/G (eq. 3.34), the average effective area
@@ -7008,10 +7070,12 @@ whichever of the antenna's figures you have (pills):</p>
 <li><strong>Ubiquiti, RD-5G30-LW tech specs (the maker's page):</strong> 5.1 to 5.9 GHz, 30 dBi,
   5.8° (3 dB) in both polarisations, 650 × 650 × 386 mm.</li>
 <li><strong>Not read:</strong> Kraus, Balanis and IEEE Std 145 (the definitions of gain and
-  of the far field); ITU-R F.1245, F.1336 and the satellite patterns S.580 and
-  S.465; the CommScope 80 GHz sheets (the maker's server refused them). The
-  41253 below is derived, not quoted, and dBd = dBi − 2.15 is the textbook
-  figure, as in Path loss.</li>
+  of the far field); ITU-R F.1245 and the satellite patterns S.580 and S.465;
+  F.1336's Annexes 3 to 5 (the pattern at azimuth and elevation together, and
+  downtilt) and its recommends 4 (low-gain antennas); the CommScope 80 GHz
+  sheets (the maker's server refused them). The 41253 mentioned below is
+  derived, not quoted, and dBd = dBi − 2.15 is the textbook figure, as in Path
+  loss.</li>
 </ul>
 <h3>Why the formulas are these</h3>
 <p><strong>Gain from the size.</strong> An isotropic antenna receives from a wave over an area
@@ -7038,34 +7102,64 @@ for no more than λ/16 gives R ≥ 2D²/λ (NRAO 3.64).</p>
 <p><strong>Aiming.</strong> Near the peak the pattern is a parabola in dB, G(φ) = G_max −
 12 (φ/θ)², which is 3 dB down at φ = θ/2. The ITU's main lobe is the same
 parabola for θ = 69.28 λ/D, since 12 / 69.28² = 2.5×10⁻³: at 1° for D/λ = 11.6
-both give 0.33686 dB. The tool writes it with the beamwidth you use, so k
-changes it, and continues with the ITU's pattern beyond φ_m.</p>
-<p><strong>Two beamwidths.</strong> The whole sphere is 4π steradians, 4π (180/π)² = 41 253
-square degrees. If a beam were a rectangle θH by θV that held all the power, its
-solid angle would be θH θV and its gain 4π/Ω_A (NRAO 3.34) = 41253 / (θH θV):
-the ideal estimate. For a circular beam that is 46.15 − 20 log θ, 1.65 dB above
-the ITU's practical 44.5 − 20 log θ (and 0.8 dB above the evenly lit aperture
-of the Airy pattern, 45.35 − 20 log θ), because a real beam leaves power in its
-side lobes. For a fan-shaped beam the tool takes the equivalent circular
-beam θ = √(θH θV), which is its own extension of the ITU rule.</p>
+both give 0.33686 dB. The ITU's omnidirectional main lobe is the same parabola
+again, with θ3 the full beamwidth. The tool writes it with the beamwidth you
+use, so k changes it, and continues with the ITU's pattern beyond φ_m.</p>
+<p><strong>Omnidirectional antennas.</strong> F.1336 takes the elevation pattern as e^(−aθ²), half
+the peak at θ3/2, which fixes the constant, a = 4 ln 2 / θ3² = 2.7726 / θ3² (θ3 in
+radians). The
+directivity is 4π over the integral of the pattern over the sphere; round the
+horizon the integral is 2π, and in elevation it is the integral of
+e^(−aθ²) cos θ, which the ITU evaluates as the infinite integral √(π/a)
+e^(−1/(4a)). That gives D = 107.64 e^(θ3²/36400) / θ3 with θ3 in degrees. The
+tool's numerical integration of the same pattern agrees with it to 0.0005 dB up
+to a 60° beam, 0.0055 dB at 78° and 0.021 dB at 90°. The exponential is 1 for
+narrow beams and 1.06 at 45°; leaving it out gives the simple 107.6 / θ3, and
+θ3 = 107.6 × 10^(−0.1 G). A half-wave dipole's 78° gives 2.12 dBi, against its
+own 2.15. The gain is the directivity times the radiation efficiency, G = η D;
+the ITU takes η = 100 %, but its measured 9.4 dBi antenna, 8.7° wide, has a
+directivity of 10.93 dBi, so its efficiency is 70 %: the tool's efficiency box
+is for such an antenna. To go from the gain to the beamwidth the tool solves
+the equation for θ3 (D falls steadily with θ3 up to 90°, so there is one
+answer; a directivity under 1.74 dBi, a 90° beam, has none).</p>
+<p><strong>Sector antennas.</strong> The same integral with a flat azimuth pattern of width φs
+gives D = 38 750 e^(θ3²/36400) / (φs θ3) (the 107.64 above is 38 750/360, the
+omnidirectional case), and an exponential azimuth pattern gives 36 400, within
+0.3 dB of it; F.1336 takes 36 400 up to φs = 120° and 38 750 above. Numerical
+integration of the flat case agrees with its formula to 0.001 dB. The
+practical rule, 31 000 / (φs θ3), comes from measurements: with the gain 0.7 dB
+under the directivity and the exponential dropped, the ITU fits 31 000 to its
+first set of antennas and 34 000 to the second. For a 90° by 30° sector that
+is 10.6 dBi against a directivity of 11.4 dBi. The familiar 41253 / (θH θV), the
+sphere's 41 253 square degrees (4π (180/π)²) over a rectangle, is the same idea
+without the shape of the beam or any losses: 11.8 dBi for that sector.</p>
 <h3>Assumptions and limits</h3>
 <ul>
-<li><strong>A dish-like aperture.</strong> The gain, beamwidth and pattern rules are for a
-  circular aperture lit smoothly from the middle; flat panels and horns follow
-  only through an equivalent dish (F.699 Note 5), and fan beams only roughly:
-  beams averaging over 70° are flagged.</li>
-<li><strong>The efficiency is yours.</strong> 55 to 70 % is typical, 60 % matches the ITU's
-  rules, and it falls where the dish surface is rough compared with the
-  wavelength (the Ruze loss, which the tool does not model). The data sheets
-  below imply 56 to 60 %.</li>
+<li><strong>A dish-like aperture.</strong> The gain, beamwidth and pattern rules of the first
+  two pills are for a circular aperture lit smoothly from the middle; flat
+  panels and horns follow only through an equivalent dish (F.699 Note 5).</li>
+<li><strong>The efficiency is yours.</strong> 55 to 70 % is typical for a dish, 60 % matches
+  the ITU's rules, and it falls where the dish surface is rough compared with
+  the wavelength (the Ruze loss, which the tool does not model). The data
+  sheets below imply 56 to 60 %.</li>
+<li><strong>The sector rule is provisional.</strong> F.1336 gives 31 000 / (φs θ3) for sectors
+  of about 120° or less and elevation beamwidths under about 45°, on two sets
+  of measurements at 25 to 29.5 GHz, and says the transition at 120° needs
+  study; the tool flags beamwidths beyond those limits.</li>
+<li><strong>The omnidirectional rules</strong> are for a collinear array of dipoles and an
+  elevation beam up to 90° (a directivity from 1.74 dBi); the ITU's pattern is
+  stated for 8 to 13 dBi, from 400 MHz to 70 GHz, and further work is said to
+  be needed above that, particularly above 3 GHz; the tool says so outside
+  8 to 13 dBi. The efficiency of a real antenna is below the ITU's 100 %: its
+  beam is narrower for its gain.</li>
 <li><strong>The pattern is the ITU's reference.</strong> It is a line through the side lobe
   peaks, for interference studies, not a measured pattern; real antennas can be
-  worse over some angles (F.699 Notes 2, 3 and 9). It is defined from 100 MHz
-  to 174.8 GHz; its printed ranges follow one another only above D/λ of
-  100/48 (1 to 70 GHz), 100/120 (70 GHz and up) and 0.63 (under 1 GHz, the
-  limit F.699 states), so the tool draws the main lobe only below those, and
-  outside the frequencies. Its pieces meet to 0.031 dB (the printed constants
-  are rounded).</li>
+  worse over some angles (F.699 Notes 2, 3 and 9). The dish pattern is defined
+  from 100 MHz to 174.8 GHz; its printed ranges follow one another only above
+  D/λ of 100/48 (1 to 70 GHz), 100/120 (70 GHz and up) and 0.63 (under 1 GHz,
+  the limit F.699 states), so the tool draws the main lobe only below those,
+  and outside the frequencies. Its pieces meet to 0.031 dB (the printed
+  constants are rounded).</li>
 <li><strong>The aiming loss</strong> is the parabola inside the main lobe and the pattern
   beyond; for the Beamwidths pill, per plane, the parabola only, to an angle of
   the beamwidth.</li>
@@ -7075,7 +7169,7 @@ beam θ = √(θH θV), which is its own extension of the ITU rule.</p>
   tool's own flag), and a beam wider than 180° is not a beam.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>47 cases. The expected values come from a Python implementation of the same
+<p>69 cases. The expected values come from a Python implementation of the same
 formulas:
 - Diameter: 0.6 m at 5.8 GHz, 29.0 dBi (a ratio of 798, 26.9 dBd), 6.03°,
   0.17 m², far field from 13.9 m, the ITU rules 29.0 dBi and 6.03°, 0.33 dB
@@ -7089,11 +7183,19 @@ formulas:
 - Gain: 30 dBi at 5.8 GHz (0.672 m, 5.39°, 0.213 m², the ITU's 0.674 m and
   5.31°), 36 dBi at 12.975 GHz, the gain in dBd, 70 % efficiency, feet, a low
   gain flagged, a missing gain refused;
-- Beamwidths: 90° by 30° (10.2 dBi, 8.0 dBd, ideal 11.8 dBi, D/λ 1.35,
-  6.54 % of the sphere), 60° by 60°, 6° by 6°, 120° by 90° flagged, no
-  frequency, 50° off axis, feet, missing and over-large beamwidths refused;
+- Beamwidths: 90° by 30° (10.6 dBi, 8.4 dBd, directivity 11.4 dBi, D/λ 1.4,
+  7.24 % of the sphere), 60° by 60°, 6° by 6°, 120° by 90° and 150° by 30°
+  flagged, no frequency, 50° off axis, feet, missing and over-large
+  beamwidths refused;
+- Omni: a 14° beam (8.9 dBi, 6.7 dBd, 12.9 % of the sphere, the ITU rule 8.9 dBi,
+  1.53 dB lost 5° off the horizon, side lobes 13.5 dB down); a 9 dBi gain (a
+  13.6° beam, the other box following, and the "result" tags); the ITU's
+  measured antenna (9.4 dBi at 70 % efficiency and k 0: 8.67°); the gain in dBd;
+  k = 0; 30° and 0° off the horizon; beams of 3°, 40° and 70 % efficiency, which
+  fall outside 8 to 13 dBi; the 90° and 78° beams; the missing, over-large and
+  too-low figures refused;
 - the length unit linked between the diameter box and the Output heading, the
-  pill and the units remembered, the four examples, and the formula-search
+  pills and the units remembered, the five examples, and the formula-search
   card.</p>
 <p>Against data sheets, with η 60 % and k 70:</p>
 <table>
@@ -7132,10 +7234,26 @@ three frequencies, and the ITU's rule gives 35.99 dBi at mid-band. The
 Ubiquiti dish is square: its sheet's 30 dBi at 650 mm implies 56 % efficiency,
 the equal-area circle is 0.733 m across (the tool's equivalent dish 0.708 m),
 and 70 λ over the 650 mm side is 5.87°, the sheet's 5.8°.</p>
-<p>The Python implementation also showed that the reference pattern's pieces meet
-at their boundaries to 0.031 dB at most (the main lobe meets G₁ exactly), that
-44.5 − 20 log θ is within 0.10 dB of 20 log (70/θ) + 7.7, and that the 2.5×10⁻³ of
-the ITU's main lobe is 12 (φ/θ)² with θ = 69.28 λ/D.</p>
+<p>Against the ITU's own numbers (F.1336-5):
+- Fifteen of the rows of its Table 2 (2N from 2 to 74) are reproduced: the beamwidths
+  2 arccos (0.5^(1/2N)) and the directivities (2N + 1)!! / (2N)!! of the cos^2N
+  pattern to the printed digits, and eq. 23a to 0.0001 dB;
+- its sector example, 90° by 2.5°, gives a directivity of 22.09 dBi by eq. 34
+  (the text says 22.1 dBi) and 21.39 dBi by the gain rule (the measured gain is
+  20.5 to 21.4 dBi);
+- its measured omnidirectional antenna (9.4 dBi, 8.7°) has a directivity of
+  10.93 dBi by eq. 23a, an efficiency of 70.2 %; a 9.4 dBi gain at 70 % gives
+  8.67°; the lossless rule would say 12.4°;
+- the pattern's three regions meet to 10⁻⁸ dB at θ4 and θ3 for k of 0, 0.3, 0.7
+  and 1, and solving eq. 23a for the beamwidth and then computing the
+  directivity again returns the beamwidth to rounding;
+- for a half-wave dipole, 78°, eq. 23a gives 2.12 dBi (2.15 dBi); 14° gives
+  8.88 dBi, and a 9 dBi omnidirectional antenna 13.6° by eq. 23a and 13.5° by the
+  simplified rule.</p>
+<p>The Python implementation also showed that the dish pattern's pieces meet at
+their boundaries to 0.031 dB at most (the main lobe meets G₁ exactly), that
+44.5 − 20 log θ is within 0.10 dB of 20 log (70/θ) + 7.7, and that the
+2.5×10⁻³ of the ITU's main lobe is 12 (φ/θ)² with θ = 69.28 λ/D.</p>
   <p class="back"><a href="#index">↑ Index</a> · <a href="./#/tool/rf%3A0%3A2/beamwidth">Open the tool</a></p>
 </section>
 <section class="tool" id="fresnel" style="--accent:#E08585">
