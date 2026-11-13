@@ -344,6 +344,12 @@ const FORMULAS = [
     note: "ITU-R P.525 (version 3 read) for the free-space loss between isotropic antennas, which rounds the constant to 32.4, and the field of an e.i.r.p.; link budget and log-distance model as Wikipedia gives them. γ is 2 in free space.",
   },
   {
+    tool: "Fresnel zone",
+    domain: "rf",
+    formulas: ["r = √(n λ d1 d2 / d), d = d1 + d2", "= 547.5 √(n d1 d2 / (f d)) m (MHz, km)", "bulge = d1 d2 / (2 k a), a = 6371 km", "clearance = line − (top + bulge)", "ν = −√2 × clearance / r1", "J = 6.9 + 20 log (√((ν−0.1)²+1) + ν−0.1)"],
+    note: "ITU-R P.526-15 (read): keep 60 % of the first zone clear; J is the loss of a thin obstacle (knife-edge), nil from 55.2 % of r1. k = 4/3 is the usual allowance for the atmosphere bending rays.",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],

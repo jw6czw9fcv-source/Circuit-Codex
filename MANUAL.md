@@ -93,6 +93,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Antennas & propagation → [Path loss](#path-loss)
 - Antennas & propagation → [Radio wavelength](#radio-wavelength)
+- Antennas & propagation → [Fresnel zone](#fresnel)
 - Antennas & propagation → [Antenna length](#antenna-length)
 - Transmission lines → [VSWR / Return loss](#vswr)
 - Transmission lines → [Coax impedance](#coax)
@@ -7445,8 +7446,7 @@ Solving it for the distance at which the margin is a given M:
 - **Far field, clear path.** Closer than about 5 wavelengths the formula is
   not reliable, and the tool says so (its own rule of thumb). The path must
   be clear of obstructions out to 0.6 of the first Fresnel zone for the
-  free-space figures to apply: the Fresnel zone tool, when built, is where
-  to check it.
+  free-space figures to apply: the Fresnel zone tool is where to check it.
 - **Antennas aligned and the polarization matched.** The gains are in the
   direction of the link; a misalignment or a polarization mismatch is margin
   you must keep.
@@ -7480,6 +7480,265 @@ to 3 × 10⁻¹⁴ dB over 110 combinations of frequency and distance (30 cm to
 384 000 km, 100 kHz to 120 GHz), that solving the range and then running the link budget at it
 returns the margin asked for to 10⁻¹⁴ dB, and that e²/(120 π) equals
 p/(4π d²).
+
+[↑ Index](#index)
+
+---
+
+<a id="fresnel"></a>
+## Fresnel zone
+
+`calc: fresnel` · RF & microwave › Antennas & propagation
+
+### What it computes
+
+How much room a radio path needs round the straight line between two
+antennas, and what an obstacle in that room costs, three ways (pills):
+
+- **Zone radius:** the frequency, the path length, a point on the path (its
+  distance from the transmitting antenna) and the zone number give the radius
+  of that Fresnel zone at that point. The point starts at the middle of the
+  path and follows it when the path changes, until you type one; the "mid"
+  beside the box says so, and becomes a button that takes you back. In three
+  cells: the wavelength, 60 % of the first zone's radius there (the clearance
+  to keep) and the path length in wavelengths. Under them: the radii of zones
+  1, 2 and 3 there, and the widest radius of the zone you chose, at mid-path.
+  The drawing is the path seen from the side: the zone as an ellipse, the
+  60 % one dashed (zone 1 dashed instead when you chose a higher zone), the
+  radius marked in green.
+- **Clearance:** the two antennas' heights, the top of an obstacle and its
+  distance from the transmitting antenna, the Earth radius factor k and the
+  share of the first zone you want kept clear. The big result is the loss in
+  dB the obstacle causes, taken as a knife-edge; the line under it says how
+  much of the first zone is clear and how that compares with what you want,
+  or "blocked" when the top is above the line of sight. In three cells: the
+  clearance, its share of the first zone's radius and that radius there.
+  Under them: the height of the line of sight at the obstacle, the
+  obstacle's height with the Earth's bulge added, and the clearance from
+  which the loss is nil (55.2 % of the radius, with its length). The drawing
+  is the same path with a hill whose top is where the clearance puts it, the
+  clearance in green.
+- **Mast height:** the same problem solved the other way: for the
+  transmitting antenna you give, the height the receiving antenna needs so
+  that the line clears the obstacle by the share you want. The big result is
+  that height. In three cells: the height if both ends are alike, the
+  clearance wanted in length, and the Earth's bulge. Under them: the line's
+  height at the obstacle as a sum (the obstacle, the bulge, the clearance)
+  and the first zone's radius there; and a note when the receiving antenna
+  comes out below the datum, which means the transmitting antenna alone
+  clears the obstacle.
+- **Units:** frequency kHz, MHz or GHz; distances m, km, mi, nmi or ft;
+  heights m or ft. A distance unit and the height unit go together: miles or
+  feet for the distances put the heights in feet, metres or kilometres put
+  them in metres, and the other way round (nautical miles leave the heights
+  as they are). Both distance boxes change together, and so do the three
+  height boxes. The zone radius is given in the height unit, with the other
+  unit in the line under it.
+- **Remembered:** the pill and the units.
+
+Examples: a 5.8 GHz link across 5 km, the masts needed over a 20 m hill, the
+Earth's bulge on a 50 km hop, and a hill just inside the zone.
+
+### Terms
+
+- **Fresnel ellipsoid, Fresnel zone:** the radio energy from one antenna to
+  another does not follow a line but fills a region round it. Take the points
+  M whose path through them, AM + MB, is longer than the straight one AB by
+  n half-wavelengths: they form an ellipsoid, the n-th Fresnel ellipsoid, with
+  the antennas at its foci. The zone of order n is the part between ellipsoids
+  n − 1 and n; the first zone is inside the first ellipsoid.
+- **Zone radius (r):** the radius of the n-th ellipsoid at a point: the
+  distance from the line of sight to its edge there, widest at mid-path and
+  nil at the antennas. "F1" or "r1" is the first one.
+- **Clearance:** how far the line of sight passes above the top of an
+  obstacle there; negative when the top is above it (blocked).
+- **The 60 % rule:** keep the path clear of obstacles to 60 % of the first
+  zone's radius, and the path behaves as if it were free space.
+- **Datum:** the level the heights are measured from: sea level, or the level
+  ground both antennas stand on.
+- **Earth bulge:** how far the Earth's surface rises between two points on
+  it, above the straight line joining them: d1 d2 / (2 a), the product of
+  the distances to the two ends over twice the Earth's radius.
+- **k, the effective Earth radius factor:** the atmosphere bends radio rays
+  slightly toward the ground, so a ray can be treated as straight if the
+  Earth is made larger by the factor k: the effective radius is k × 6371 km.
+  4/3 is the usual value; 1 means no bending.
+- **Knife-edge, ν, J:** an idealised obstacle with a sharp top and no
+  thickness. ν (nu) packs its geometry into one number, √2 × (how far its top
+  is above the line of sight) / r1; J(ν) is the loss in dB the obstacle
+  causes, by diffraction.
+
+### Sources
+
+- **Recommendation ITU-R P.526-15, "Propagation by diffraction" (10/2019;
+  read as PDF text; the extraction dropped the Greek letters and the root
+  signs, so each equation was read with its dimensions checked, and the
+  numbers below were checked against it):** § 2.1 defines the ellipsoids by
+  AM + MB − AB = nλ/2 (eq. 1) and gives the radius of the n-th at a point
+  d1 and d2 from the ends as an approximation, R_n = √(n λ d1 d2/(d1 + d2))
+  (eq. 2), and in metres for f in MHz and d in km as 550 √(n d1 d2/(f (d1 + d2)))
+  (eq. 3); it calls the part between ellipsoids n − 1 and n the zone of order
+  n, and takes a path as line-of-sight, with negligible diffraction, when
+  nothing lies inside the first ellipsoid. § 2.3 starts the diffraction zone
+  where the clearance falls to 60 % of the first zone's radius, and § 2.5 lists
+  among the conditions for an isolated obstacle a clearance of at least 0.6 of
+  it on both sides. § 4.1 gives the knife-edge parameter, ν = h √(2 (d1 + d2)/
+  (λ d1 d2)) (eq. 26, h the top's height above the straight line, negative
+  below it; eq. 33 is the same in practical units, with 0.0316 for h and λ in
+  metres and d in km), the loss J(ν) as Fresnel integrals (eq. 30) and, for ν
+  above −0.78, the approximation J = 6.9 + 20 log (√((ν − 0.1)² + 1) + ν − 0.1)
+  dB (eq. 31), which the tool uses. It assumes a diffraction angle under about
+  0.2 rad (12°) and says the data are mainly for VHF and shorter waves (above
+  30 MHz). § 3.2 gives the clearance for zero diffraction loss as h_req = 0.552
+  √(λ d1 d2/d) (eq. 23). Attachment 2 gives the ray's height at a point of the
+  path, (h_u d_iv + h_v d_ui)/d_uv (eq. 123), the terrain's, h_i + d_ui d_iv/
+  (2 a_e) (eq. 124), the clearance h_z as their difference (eq. 121), F1 =
+  √(λ d_ui d_iv/d_uv) (eq. 122), the normalised clearance C_F = h_z/F1 (eq. 120)
+  and ν = −√2 C_F (eq. 125). The text before eq. 44 gives a_e = k × 6371 km,
+  and § 1 suggests an equivalent Earth radius of 8 500 km when nothing better
+  is known (k = 1.334, 0.06 % above 4/3).
+- **Recommendation ITU-R P.526-14 (01/2018; read as PDF text):** the same
+  eq. 2 and 3 and the same 60 % statements.
+- **Not read:** later versions of P.526; ITU-R P.530 (the design of
+  terrestrial line-of-sight links, where clearance criteria with several
+  values of k are given), P.310 (the definition of k) and P.834 (refraction);
+  any textbook derivation of the Fresnel zones or of the knife-edge loss. The
+  5 wavelengths at which the tool warns is its own rule of thumb (see
+  Assumptions and limits).
+
+### Why the formulas are these
+
+**The zone radius.** A point M at a distance r off the line, d1 from one
+antenna and d2 from the other along it (r much smaller than d1 and d2), is
+√(d1² + r²) ≈ d1 + r²/(2 d1) from the first antenna and d2 + r²/(2 d2) from
+the second. The path through it is longer than the straight one, d1 + d2, by
+r²/2 × (1/d1 + 1/d2) = r² d/(2 d1 d2). Setting that to n λ/2 gives
+
+    r = √(n λ d1 d2 / d)      d = d1 + d2
+
+(eq. 2). It is widest at mid-path, r = √(n λ d)/2, nil at the antennas,
+symmetric about the middle, and the n-th is √n times the first. With f in MHz
+λ = 299.792 458/f, and with d1 and d2 in km the factor 1000 turns km into m:
+r = √(299.792 458 × 1000) √(n d1 d2/(f d)) = 547.53 √(n d1 d2 /(f d)). P.526's
+eq. 3 rounds the 547.53 to 550, which reads 0.45 % high; the tool does not
+round it.
+
+**The clearance and the loss.** The ray passes at a height
+(h1 d2 + h2 d1)/d over the datum at a point d1 from the first antenna, a
+linear mix of the two antennas' heights (eq. 123). The Earth's surface, seen
+from a straight line between two points on it, lies d1 d2/(2 a_e) above that
+line (the chord theorem for a circle of radius a_e, a small sagitta, eq.
+124), so the top of an obstacle at height h_o sits at h_o + d1 d2/(2 k a)
+over the straight line; the clearance is the difference. In the knife-edge
+formula ν = h √(2 (d1 + d2)/(λ d1 d2)) = √2 h / r1, where h is the top's
+height above the line: h = −clearance gives ν = −√2 × clearance/r1 (eq. 125).
+J(ν) comes from the Fresnel integrals (eq. 30); eq. 31 is a simple fit to it.
+
+Eq. 31 is exactly 0 dB at ν = −0.7806 (√(u² + 1) + u = 10^(−6.9/20) with
+u = ν − 0.1 gives u = −0.8806), and −0.7806/(−√2) = 0.552: the clearance of
+0.552 r1 in P.526's eq. 23 is the point where the knife-edge loss starts. The
+tool takes no loss at or above it. The 60 % rule has some margin over that:
+at 60 % the exact knife-edge field is 0.37 dB above free space.
+
+**The mast.** The line's height at the obstacle must be h_o + bulge +
+(share wanted) × r1 = T. With the transmitting antenna at h1 and the
+receiving one at h2 it is (h1 d2 + h2 d1)/d, which equals T for
+
+    h2 = h1 + (T − h1) × d / d1
+
+and with the same height at both ends the line is level and the height is T.
+
+### Assumptions and limits
+
+- **One thin obstacle.** The tool looks at the one obstacle you describe and
+  treats its top as a knife-edge. A real hill is rounded, which loses more
+  (P.526 § 4.2 adds a term for it), and a path with several obstacles, or
+  trees and buildings, needs the methods of its later sections (Bullington,
+  Epstein-Peterson, Deygout, ...), none of which the tool has. The figures
+  are an estimate to within a few dB for a single sharp ridge, and a minimum
+  for anything else.
+- **No ground reflection and no fading.** A path clear to 60 % of the first
+  zone can still fade from a reflection off the ground or water; the 60 %
+  rule is about diffraction by obstacles only.
+- **The approximation of eq. 2.** It holds when the point is many wavelengths
+  from either antenna. The exact ellipsoid of eq. 1 is a little wider: +0.0002 %
+  at mid-path of 10 km at 2.4 GHz, +0.25 % at 50 wavelengths from an
+  antenna, +2.5 % at 5 wavelengths (+7.2 % for zone 3), +12 % at one
+  wavelength. The tool flags a point under 5 wavelengths from an antenna; that
+  limit is its own, and the Fresnel picture itself, which assumes the
+  paraxial limit, stops meaning much there.
+- **J below its zero.** Under 55.2 % of clearance the tool says 0 dB. The
+  exact knife-edge curve there ripples round 0 dB: −1.4 dB (a gain) at ν =
+  −1.22 (a clearance of 86 % of r1) and +1.1 dB at ν = −1.87 (132 %). A real
+  path has a ground and other things that move such ripples; the tool does
+  not model them.
+- **Eq. 31 against the integrals.** The approximation is within 0.12 dB of
+  eq. 30 over ν from −0.78 to 20 (the worst at ν = 4.6).
+- **k is yours.** The real value changes with the weather, and a link is
+  usually checked at a smaller k as well; the tool takes the one you give.
+  P.530, which has the criteria for that, was not read.
+- **Heights share a datum.** If the antennas are on ground of different levels
+  (or the obstacle is), add each one's elevation to its height first; the Earth
+  bulge is measured from the straight line between the antennas' bases.
+- **Small angles and VHF and up.** P.526's knife-edge formulas are for
+  diffraction angles under about 12° and frequencies above 30 MHz; the tool
+  does not stop you outside them.
+- **The distances are along the ground.** The tool uses d1 and d2 as the
+  distances to the ends and does not correct for a steep path.
+
+### How it was checked
+
+51 cases. The expected values come from a Python implementation of the same
+formulas (with the Fresnel integrals of scipy for the check of eq. 31):
+- Zone radius: 2.4 GHz over 10 km, mid-path, 17.7 m (58 ft; λ 12.5 cm, 80 060
+  wavelengths, 60 % 10.6 m; zones 1, 2 and 3: 17.7, 25 and 30.6 m); 2 km from
+  the transmitter 14.1 m; zone 2 and 3 at mid-path 25 m and 30.6 m; 5.8 GHz
+  over 5 km 8.04 m; 145 MHz over 30 km 125 m; a 5-mile path in feet and a
+  600 m one in metres; nautical miles; a point 0.5 m from an antenna flagged;
+  a missing frequency or path, a position off the path and a zone number
+  that is not whole refused;
+- The position: it follows the middle when the path changes (10 km on a
+  20 km path), stays where it was typed, and goes back with the "mid" button;
+- Clearance: 2.4 GHz over 10 km, 30 m antennas, a 20 m hill mid-path, k 4/3:
+  bulge 1.47 m, clearance +8.53 m, 48.3 % of the zone, 0.66 dB; a 5 m hill
+  (133 %, no loss); a 35 m hill (blocked by 6.47 m, 10.43 dB); antennas of 10 and
+  50 m with the hill 2 km from the lower one (the line 18 m there); k = 1
+  (bulge 1.96 m); a 50 km hop at 6 GHz (bulge 36.8 m, 9.34 dB); 100 % and 0 %
+  wanted; the same path in miles and feet; the missing heights, k = 0, 200 % wanted refused;
+  a flag near an antenna;
+- Mast height: 34.1 m at the receiving end (32.1 m at both) for the same
+  hill; 54.1 m with the transmitting antenna at 10 m; 100 % wanted; a 100 m
+  transmitting antenna, which leaves the receiver below the datum; the 50 km
+  hop (104 m, 81.8 m); a hill 9 km along; k = 1;
+- the unit links (miles put heights in feet, feet put distances in miles,
+  metres put them in kilometres, nautical miles leave the heights), the
+  pill and the units remembered, the four examples, and the formula-search
+  card.
+
+The Python implementation also showed that:
+- eq. 31 is 0 dB at ν = −0.78062, a clearance of 0.55198 r1 (P.526 eq. 23: 0.552);
+- eq. 31 stays within 0.123 dB of eq. 30 for ν from −0.78 to 20 (the worst at
+  ν = 4.57), for example 6.03 against 6.02 dB at ν = 0 and 13.93 against
+  13.86 dB at ν = 1;
+- running the mast height and then the clearance at the height it gives
+  returns the share wanted to 2 × 10⁻¹³ over 2000 random paths (10 MHz to
+  100 GHz, 100 m to 316 km, k from 2/3 to 2), and the same with a level line at the
+  same height at both ends;
+- the loss against the clearance, from eq. 31 (the exact value in brackets):
+
+  | Clearance (share of r1) | Loss, dB |
+  |---|---|
+  | 60 % | 0 (−0.37) |
+  | 50 % | 0.49 (0.42) |
+  | 40 % | 1.48 (1.37) |
+  | 20 % | 3.65 (3.60) |
+  | 0 (grazing) | 6.03 (6.02) |
+  | blocked by 25 % | 9.08 (9.04) |
+  | blocked by 100 % | 16.34 (16.33) |
+  | blocked by 200 % | 21.92 (22.02) |
+
+- the Earth's bulge at mid-path, k = 4/3 (k = 1): 1.47 m (1.96 m) at 10 km,
+  5.89 m (7.85 m) at 20 km, 36.8 m (49.1 m) at 50 km.
 
 [↑ Index](#index)
 

@@ -671,6 +671,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "intermodulation") return renderIntermodulation(domain, tool, favId);
   if (calcId === "power-divider") return renderPowerDivider(domain, tool, favId);
   if (calcId === "path-loss") return renderPathLoss(domain, tool, favId);
+  if (calcId === "fresnel") return renderFresnel(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -15637,6 +15638,297 @@ function renderPathLoss(domain, tool, favId) {
     });
     const unit = (attr, name) => app.querySelectorAll(`select[${attr}]`).forEach((el) => { el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); paint(); }; });
     unit("data-uf", "fUnit"); unit("data-ud", "dUnit"); unit("data-up", "pUnit"); unit("data-ug", "gUnit");
+  }
+
+  paint();
+}
+
+// ---------- Fresnel zone ----------
+// Recommendation ITU-R P.526-15 "Propagation by diffraction" (10/2019, read as
+// PDF text; P.526-14 also read, for eq. 3): the Fresnel ellipsoids, the points
+// whose path through them exceeds the straight one by n λ/2 (eq. 1); the
+// radius of the n-th at a point d1 and d2 from the ends, R_n = √(n λ d1 d2 /
+// (d1 + d2)) (eq. 2), and in practical units 550 √(n d1 d2 / (f (d1 + d2))) for
+// f in MHz and d in km (eq. 3: the 550 is 547.5 rounded; the tool does not round
+// it); "line-of-sight ... if there is no obstacle within the first Fresnel
+// ellipsoid"; the diffraction zone starts where the clearance falls to 60 % of
+// the first zone radius (2.3), and an obstacle is isolated if the clearance
+// either side is at least 0.6 of it (2.5). Clearance and Earth bulge are
+// Attachment 2 (eqs 120 to 125): the ray's height above the datum (hu div + hv
+// dui)/duv, the terrain's hi + dui div / (2 ae) with ae = k × 6 371 km (after
+// eq. 44), hz = ray − terrain, F1 = √(λ dui div / duv), CF = hz / F1 and the
+// knife-edge parameter ν = −√2 CF. The loss is J(ν) of 4.1: eq. 30 exactly and
+// eq. 31, 6.9 + 20 log (√((ν − 0.1)² + 1) + ν − 0.1), for ν > −0.78, which the
+// tool uses; it is 0 dB at ν = −0.7806, a clearance of 0.552 F1, the h_req of
+// eq. 23 (3.2), and below that the tool, as 3.2 does, takes no loss. The 5 λ
+// flag is this tool's own rule of thumb, as in Path loss.
+const FZ_MODES = { radius: "Zone radius", clear: "Clearance", mast: "Mast height" };
+const FZ_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const FZ_D_UNITS = { m: 1, km: 1e3, mi: 1609.344, nmi: 1852, ft: 0.3048 };
+const FZ_H_UNITS = { m: 1, ft: 0.3048 };
+const FZ_LIGHT = 299792458;
+const FZ_EARTH = 6371e3;
+// The ν at which eq. 31 is exactly 0 dB: √(u² + 1) + u = 10^(−6.9/20), u = ν − 0.1.
+const FZ_NU0 = (() => { const q = 10 ** (-6.9 / 20); return (q * q - 1) / (2 * q) + 0.1; })();
+// A distance unit and the height unit of the same system (nmi leaves the height alone).
+const FZ_D_TO_H = { m: "m", km: "m", mi: "ft", ft: "ft" };
+const FZ_H_TO_D = { m: { mi: "km", ft: "m" }, ft: { km: "mi", m: "ft" } };
+
+function renderFresnel(domain, tool, favId) {
+  const C = "fresnel";
+  const state = {
+    mode: pref(C, "mode", "radius", Object.keys(FZ_MODES)),
+    fUnit: pref(C, "fUnit", "GHz", Object.keys(FZ_F_UNITS)),
+    dUnit: pref(C, "dUnit", "km", Object.keys(FZ_D_UNITS)),
+    hUnit: pref(C, "hUnit", "m", Object.keys(FZ_H_UNITS)),
+    // f in Hz, every length in metres; k and the clearance wanted (a fraction of zone 1) are plain numbers.
+    si: { f: 2.4e9, d: 10000, d1: 5000, n: 1, h1: 30, h2: 30, ho: 20, k: 4 / 3, wanted: 0.6 },
+    // The position follows the middle of the path until a value is typed.
+    d1Typed: false,
+  };
+  const s = state.si;
+  const n3 = (v) => String(Number(v.toPrecision(3))).replace("-", "−");
+  const n4 = (v) => String(Number(v.toPrecision(4))).replace("-", "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(5)) : "");
+  const db2 = (v) => (Math.round(v * 100) / 100 === 0 ? 0 : v).toFixed(2).replace("-", "−");
+  const hu = () => FZ_H_UNITS[state.hUnit];
+  const hNum = (m) => n3(m / hu());
+  const hOf = (m) => `${hNum(m)} ${state.hUnit}`;
+  const hSg = (m) => { const v = Number((m / hu()).toPrecision(3)); return v === 0 ? `0 ${state.hUnit}` : `${v < 0 ? "−" : "+"}${n3(Math.abs(v))} ${state.hUnit}`; };
+  const hAlt = (m) => (state.hUnit === "m" ? `${n3(m / 0.3048)} ft` : `${n3(m)} m`);
+  const pct = (x) => `${n3(x * 100)} %`;
+  const dUser = (m) => `${n3(m / FZ_D_UNITS[state.dUnit])} ${state.dUnit}`;
+  const lamTxt = (l) => (l >= 1 ? `${n3(l)} m` : l >= 0.01 ? `${n3(l * 100)} cm` : `${n3(l * 1000)} mm`);
+  const fTxt = (hz) => (hz >= 1e9 ? `${n4(hz / 1e9)} GHz` : hz >= 1e6 ? `${n4(hz / 1e6)} MHz` : `${n4(hz / 1e3)} kHz`);
+
+  // The maths. Lengths in metres.
+  const lambda = () => FZ_LIGHT / s.f;
+  const zone = (d1, n = 1) => Math.sqrt((n * lambda() * d1 * (s.d - d1)) / s.d);
+  const bulge = (d1) => (d1 * (s.d - d1)) / (2 * s.k * FZ_EARTH);
+  const loss = (nu) => (nu <= FZ_NU0 ? 0 : 6.9 + 20 * Math.log10(Math.sqrt((nu - 0.1) ** 2 + 1) + nu - 0.1));
+  function geometry() {
+    const d1 = s.d1, d2 = s.d - s.d1;
+    const line = (s.h1 * d2 + s.h2 * d1) / s.d;
+    const bg = bulge(d1), top = s.ho + bg, hz = line - top, F1 = zone(d1, 1);
+    const ratio = hz / F1, nu = -Math.SQRT2 * ratio;
+    return { line, bg, top, hz, F1, ratio, nu, J: loss(nu) };
+  }
+  // The receiving antenna that puts the line `wanted` zone-1 radii over the top, for this transmitting one.
+  function mastFor() {
+    const F1 = zone(s.d1, 1), bg = bulge(s.d1), need = s.wanted * F1;
+    const T = s.ho + bg + need;
+    return { F1, bg, need, T, h2: s.h1 + ((T - s.h1) * s.d) / s.d1 };
+  }
+  const closeMsg = () => (Math.min(s.d1, s.d - s.d1) < 5 * lambda() ? "under 5 wavelengths from an antenna: too close" : "");
+
+  function problem() {
+    if (!(s.f > 0)) return "Enter the frequency.";
+    if (!(s.d > 0)) return "Enter the path length, above zero.";
+    if (!(s.d1 > 0 && s.d1 < s.d)) return "Enter the position, above zero and under the path length.";
+    if (state.mode === "radius") return Number.isInteger(s.n) && s.n >= 1 && s.n <= 99 ? "" : "Enter the zone number, a whole number from 1 to 99.";
+    if (!isFinite(s.ho)) return "Enter the obstacle's height.";
+    if (!isFinite(s.h1)) return "Enter the transmitting antenna's height.";
+    if (state.mode === "clear" && !isFinite(s.h2)) return "Enter the receiving antenna's height.";
+    if (!(s.k > 0)) return "Enter the Earth radius factor k, above zero (4/3 is the usual).";
+    if (!(s.wanted >= 0 && s.wanted <= 1.5)) return "Enter the clearance wanted, 0 to 150 % of the first zone (60 % is the usual).";
+    return "";
+  }
+
+  // ---------------- the drawing: the path side-on, the line of sight level ----------------
+  function diagram() {
+    const wire = "#5A6169", part = "#8FC1F5", calc = "#5DCAA5", grey = "#8A9099";
+    const lbl = (x, y, v, c = grey, a = "start") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${v}</text>`;
+    const XL = 30, XR = 260, CX = 145, RX = 115, YC = 50, RY = 27, YG = 94;
+    const ok = !problem(), mode = state.mode;
+    const frac = ok ? Math.min(0.97, Math.max(0.03, s.d1 / s.d)) : 0.5;
+    const xm = XL + (XR - XL) * frac, uu = (xm - CX) / RX;
+    const here = RY * Math.sqrt(Math.max(0, 1 - uu * uu));
+    const ell = (k, extra) => `<ellipse cx="${CX}" cy="${YC}" rx="${RX}" ry="${(RY * k).toFixed(1)}" ${extra}/>`;
+    let out = `<path d="M14 ${YG} H276" stroke="${wire}" stroke-width="1.2"/>`;
+    let inner = 0, caption = "first Fresnel zone";
+    if (mode === "radius") {
+      if (ok && s.n > 1) { inner = 1 / Math.sqrt(s.n); caption = `zone ${s.n} · dashed zone 1`; }
+      else { inner = 0.6; caption = "zone 1 · dashed 60 %"; }
+    } else if (ok && s.wanted > 0 && s.wanted < 0.98) { inner = s.wanted; caption = `zone 1 · dashed ${n3(s.wanted * 100)} %`; }
+    out += ell(1, `fill="${wire}" fill-opacity="0.13" stroke="${wire}" stroke-width="1.4"`);
+    if (inner) out += ell(inner, `fill="none" stroke="${grey}" stroke-width="1.2" stroke-dasharray="4 3"`);
+    out += `<path d="M${XL} ${YC} H${XR}" stroke="${wire}" stroke-width="1.4"/><path d="M${XL} ${YC} V${YG} M${XR} ${YC} V${YG}" stroke="${part}" stroke-width="2"/>`
+      + `<circle cx="${XL}" cy="${YC}" r="3" fill="${part}"/><circle cx="${XR}" cy="${YC}" r="3" fill="${part}"/>`
+      + lbl(XL, 108, "Tx", part, "middle") + lbl(XR, 108, "Rx", part, "middle") + lbl(CX, 108, caption, grey, "middle");
+    if (!ok) return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
+    const tick = (y) => `<path d="M${(xm - 4).toFixed(1)} ${y.toFixed(1)} h8" stroke="${calc}" stroke-width="1.6"/>`;
+    const leader = (yEnd) => (yEnd - 3 - 16 > 6 ? `<path d="M${xm.toFixed(1)} 16 V${(yEnd - 3).toFixed(1)}" stroke="${calc}" stroke-width="0.9" stroke-dasharray="1.5 3"/>` : "");
+    const lx = Math.min(244, Math.max(46, xm)).toFixed(1);
+    if (mode === "radius") {
+      const top = YC - here;
+      out += `<path d="M${xm.toFixed(1)} ${YC} V${top.toFixed(1)}" stroke="${calc}" stroke-width="1.8"/>${tick(top)}${leader(top)}`
+        + lbl(lx, 11, hOf(zone(s.d1, s.n)), calc, "middle");
+    } else {
+      const wanted = mode === "mast";
+      const ratio = wanted ? s.wanted : geometry().ratio;
+      const apex = YC + Math.min(1.3, Math.max(-1.1, ratio)) * here;
+      const top = Math.min(YC, apex);
+      out += `<path d="M${(xm - 21).toFixed(1)} ${YG} L${xm.toFixed(1)} ${apex.toFixed(1)} L${(xm + 21).toFixed(1)} ${YG} Z" fill="${part}" fill-opacity="0.28" stroke="${part}" stroke-width="1.6" stroke-linejoin="round"/>`
+        + `<path d="M${xm.toFixed(1)} ${YC} V${apex.toFixed(1)}" stroke="${calc}" stroke-width="1.8"/>${tick(apex)}${leader(top)}`
+        + lbl(lx, 11, wanted ? hOf(mastFor().need) : hSg(geometry().hz), calc, "middle");
+    }
+    return `<svg width="320" height="124" viewBox="0 0 290 112" fill="none">${out}</svg>`;
+  }
+
+  // ---------------- results ----------------
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const warn = (x) => `<span style="color:#E0A85E">${x}</span>`;
+    const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+    const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const lam = lambda();
+    const near = closeMsg() ? row("Position", warn(closeMsg()), "warn") : "";
+    const where = `${dUser(s.d1)} from Tx at ${fTxt(s.f)}`;
+
+    if (state.mode === "radius") {
+      const r = zone(s.d1, s.n), r1 = zone(s.d1, 1);
+      const ratio = s.d / lam;
+      return `${head(`Zone ${s.n} radius, ${where}`, hOf(r), `√(n λ d1 d2 / d) = ${hAlt(r)}`)}
+        ${grid([cell("Wavelength", lamTxt(lam), "lam"), cell("60 % of zone 1", hOf(0.6 * r1), "p60"), cell("Path / λ", n4(ratio), "pl")])}
+        <div class="field notation-box">
+          ${row("Zones 1 · 2 · 3 here", `${[1, 2, 3].map((n) => hNum(zone(s.d1, n))).join(" · ")} ${state.hUnit}`, "zones")}
+          ${row(`Widest, mid-path (zone ${s.n})`, hOf(zone(s.d / 2, s.n)), "mid")}
+          ${near}
+        </div>`;
+    }
+
+    if (state.mode === "clear") {
+      const g = geometry(), spare = g.hz - s.wanted * g.F1, wn = n3(s.wanted * 100);
+      const sub = g.hz < 0 ? `blocked: the top is ${hOf(-g.hz)} above the line of sight`
+        : spare >= 0 ? `${pct(g.ratio)} of the first zone clear · ${hOf(spare)} more than the ${wn} % wanted`
+        : `${pct(g.ratio)} of the first zone · ${hOf(-spare)} short of the ${wn} % wanted`;
+      return `${head(`Obstacle loss (knife-edge), ${where}`, `${db2(g.J)} dB`, sub)}
+        ${grid([cell("Clearance", hSg(g.hz), "clr"), cell("Of zone 1", pct(g.ratio), "ratio"), cell("Zone 1 radius", hOf(g.F1), "f1")])}
+        <div class="field notation-box">
+          ${row("Line of sight there", hOf(g.line), "los")}
+          ${row("Obstacle + Earth bulge", `${hOf(s.ho)} + ${hOf(g.bg)}`, "top")}
+          ${row("No loss from", `${pct(0.552)} = ${hOf(0.552 * g.F1)}`, "zero")}
+          ${near}
+        </div>`;
+    }
+
+    const m = mastFor(), wn = n3(s.wanted * 100);
+    return `${head(`Rx antenna height needed, ${where}`, hOf(m.h2), `the line clears the top by ${hOf(m.need)}, ${wn} % of zone 1`)}
+        ${grid([cell("Same at both ends", hOf(m.T), "same"), cell("Clearance wanted", hOf(m.need), "need"), cell("Earth bulge", hOf(m.bg), "bulge")])}
+        <div class="field notation-box">
+          ${row("Line needed there", `${hOf(s.ho)} + ${hOf(m.bg)} + ${hOf(m.need)} = ${hOf(m.T)}`, "target")}
+          ${row("Zone 1 radius there", hOf(m.F1), "f1")}
+          ${m.h2 < 0 ? row("Rx antenna", warn("below the datum: the Tx antenna alone clears it"), "neg") : ""}
+          ${near}
+        </div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => {
+    Object.assign(state, st.top || {});
+    Object.assign(state.si, st.si || {});
+    state.d1Typed = !st.mid;
+    if (st.mid) s.d1 = s.d / 2;
+    paint();
+  };
+  useExamples([
+    { title: "A 5.8 GHz link across 5 km", note: "The first zone is 8.04 m in radius at mid-path: keep 4.82 m (60 %) clear.",
+      apply: example({ top: { mode: "radius", fUnit: "GHz", dUnit: "km", hUnit: "m" }, mid: true, si: { f: 5.8e9, d: 5000, n: 1 } }) },
+    { title: "Masts over a 20 m hill", note: "2.4 GHz, 10 km, hill mid-path: both masts 32.1 m, or 54.1 m at one end with 10 m at the other.",
+      apply: example({ top: { mode: "mast", fUnit: "GHz", dUnit: "km", hUnit: "m" }, mid: true, si: { f: 2.4e9, d: 10000, ho: 20, h1: 10, k: 4 / 3, wanted: 0.6 } }) },
+    { title: "The Earth's bulge on a 50 km hop", note: "6 GHz, 60 m masts, a 30 m hill mid-path: the bulge adds 36.8 m and blocks it, 9.34 dB.",
+      apply: example({ top: { mode: "clear", fUnit: "GHz", dUnit: "km", hUnit: "m" }, mid: true, si: { f: 6e9, d: 50000, h1: 60, h2: 60, ho: 30, k: 4 / 3, wanted: 0.6 } }) },
+    { title: "A hill just inside the zone", note: "5.8 GHz, 8 km, a 15 m hill at 3 km, 20 m masts: 41.8 % of the zone clear, 1.29 dB.",
+      apply: example({ top: { mode: "clear", fUnit: "GHz", dUnit: "km", hUnit: "m" }, si: { f: 5.8e9, d: 8000, d1: 3000, h1: 20, h2: 20, ho: 15, k: 4 / 3, wanted: 0.6 } }) },
+  ]);
+
+  const d1Hint = () => (state.d1Typed ? `<button class="label-btn field-hint--tight" data-mid>mid</button>` : `<span class="field-hint field-hint--tight">mid</span>`);
+  const syncD1 = () => {
+    const el = app.querySelector('input[data-key="d1"]');
+    if (el && el !== document.activeElement) el.value = fmt(s.d1 / FZ_D_UNITS[state.dUnit]);
+  };
+  function hintD1() {
+    const hint = app.querySelector('[data-res="d1-hint"]');
+    if (hint) { hint.innerHTML = d1Hint(); bindMid(); }
+  }
+  function bindMid() {
+    app.querySelectorAll("[data-mid]").forEach((b) => { b.onclick = () => { state.d1Typed = false; if (s.d > 0) s.d1 = s.d / 2; paint(); }; });
+  }
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value, hint = "") => `
+        <div class="field">
+          <label><span class="field-name">${label}</span>${hint}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const fr = field("f", "Frequency", sel('data-uf="1"', FZ_F_UNITS, state.fUnit), fmt(s.f / FZ_F_UNITS[state.fUnit]));
+    const di = field("d", "Path length", sel('data-ud="1"', FZ_D_UNITS, state.dUnit), fmt(s.d / FZ_D_UNITS[state.dUnit]));
+    const po = field("d1", "Position",sel('data-ud="2"', FZ_D_UNITS, state.dUnit), fmt(s.d1 / FZ_D_UNITS[state.dUnit]), `<span data-res="d1-hint">${d1Hint()}</span>`);
+    const nn = field("n", "Zone number", fixed(""), fmt(s.n));
+    const hx = (key, label, which) => field(key, label, sel(`data-uh="${which}"`, FZ_H_UNITS, state.hUnit), fmt(s[key] / hu()));
+    const ht1 = hx("h1", "Tx height", 1), ht2 = hx("h2", "Rx height", 2), hob = hx("ho", "Obstacle top", 3);
+    const kk = field("k", "Earth radius factor k", fixed(""), fmt(s.k));
+    const wn = field("wanted", "Clearance wanted", fixed("%"), fmt(s.wanted * 100));
+    const inputs = state.mode === "radius" ? `<div class="field-pair">${fr}${di}</div><div class="field-pair">${po}${nn}</div>`
+      : state.mode === "clear" ? `<div class="field-pair">${fr}${di}${po}</div><div class="field-pair">${ht1}${ht2}${hob}</div><div class="field-pair">${kk}${wn}</div>`
+        : `<div class="field-pair">${fr}${di}${po}</div><div class="field-pair">${hob}${ht1}</div><div class="field-pair">${kk}${wn}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Zone radius, clearance and mast height")}
+
+      ${pillRow(Object.entries(FZ_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["r = √(n λ d1 d2 / d), d = d1 + d2", "= 547.5 √(n d1 d2 / (f d)) m (MHz, km)", "bulge = d1 d2 / (2 k a), a = 6371 km", "clearance = line − (top + bulge)", "ν = −√2 × clearance / r1", "J = 6.9 + 20 log (√((ν−0.1)²+1) + ν−0.1)"],
+        "Radio waves do not travel along a thin line but through a region round it. The first Fresnel zone is the part of that region where a path via a point is longer than the straight one by less than half a wavelength: waves by such paths arrive less than half a cycle late and help the direct wave, while waves from outside it arrive further out of step and in part cancel it. It is an ellipsoid with the two antennas at its ends, and its radius r at a point d1 from one antenna and d2 from the other is √(λ d1 d2 / d), widest at mid-path; the n-th ellipsoid is √n times as wide. The usual rule is to keep the path clear of obstacles to 60 % of the first zone's radius. An obstacle inside the zone takes signal away by diffraction; for a thin one (a knife-edge) the loss J follows from ν = √2 × (how far its top sticks above the line of sight) / r, and is nil from a clearance of 55.2 % of r. Over a long path the Earth's curve raises the ground between the antennas by d1 d2 / (2 k a), a = 6371 km; k = 4/3 is the usual allowance for the atmosphere bending rays toward the ground, which makes the Earth look flatter."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "f") s.f = v * FZ_F_UNITS[state.fUnit];
+        else if (key === "d") { s.d = v * FZ_D_UNITS[state.dUnit]; if (!state.d1Typed && s.d > 0) { s.d1 = s.d / 2; syncD1(); } }
+        else if (key === "d1") { s.d1 = v * FZ_D_UNITS[state.dUnit]; if (!state.d1Typed) { state.d1Typed = true; hintD1(); } }
+        else if (key === "h1" || key === "h2" || key === "ho") s[key] = v * hu();
+        else if (key === "wanted") s.wanted = v / 100;
+        else s[key] = v;
+        show();
+      };
+    });
+    bindMid();
+    const keep = () => { setPref(C, "dUnit", state.dUnit); setPref(C, "hUnit", state.hUnit); paint(); };
+    app.querySelectorAll("select[data-uf]").forEach((el) => { el.onchange = () => { state.fUnit = el.value; setPref(C, "fUnit", state.fUnit); paint(); }; });
+    app.querySelectorAll("select[data-ud]").forEach((el) => {
+      el.onchange = () => { state.dUnit = el.value; if (FZ_D_TO_H[el.value]) state.hUnit = FZ_D_TO_H[el.value]; keep(); };
+    });
+    app.querySelectorAll("select[data-uh]").forEach((el) => {
+      el.onchange = () => { state.hUnit = el.value; const nd = FZ_H_TO_D[el.value][state.dUnit]; if (nd) state.dUnit = nd; keep(); };
+    });
   }
 
   paint();

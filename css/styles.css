@@ -486,6 +486,8 @@ div.tool-row { cursor: default; }
   white-space: nowrap;
   margin-left: 10px;
 }
+/* A short hint on a narrow label (three fields to a row). */
+.field-hint--tight { margin-left: 4px; font-size: 12px; }
 
 .field-row {
   display: flex;
