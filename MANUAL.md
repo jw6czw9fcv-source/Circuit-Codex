@@ -107,6 +107,7 @@ will key on, since that is the id the app already holds for each tool.
 - Power & gain → [Intercept point](#intercept-point)
 - Power & gain → [Intermodulation](#intermodulation)
 - Power & gain → [Power divider](#power-divider)
+- Mixing & conversion → [IF calculator](#if-calculator)
 
 ### Power electronics
 
@@ -13564,6 +13565,252 @@ isolated), the unequal one for K² from 1 to 100 with the exact split, and
 that the resistor placed after the output transformers, or the transformers
 left out, or RF Essentials' arms, do not give a matched and isolated
 divider.
+
+[↑ Index](#index)
+
+---
+
+<a id="if-calculator"></a>
+## IF calculator
+
+`calc: if-calculator` · RF & microwave › Mixing & conversion
+
+### What it computes
+
+A mixer moves a signal from one frequency to another by combining it with an
+oscillator of the receiver's own, the LO. The tool plans that move: from two of
+the three frequencies, the RF (the signal's), the LO and the IF (the one the
+mixer delivers), it finds the third, then the image that would give the same IF
+and the other inputs that would come through. Four pills:
+
+- **Find LO:** the RF, as one frequency or as a band (the band's other end in
+  "RF to"), and the IF give the LO. The picker in the Output heading says on
+  which side of the RF the LO sits: "LO above RF" is high-side injection, the
+  usual choice, "LO below RF" is low-side. The big result is the LO (a band gives
+  a range). In three cells: the image, the half-IF response, and the tuning ratio
+  (the highest LO over the lowest, for a band; the LO over the RF for one
+  frequency). Under them: the LO on the other side, with its ratio for a band;
+  the spacing of the image, 2 × IF; and, for a band, the part of the image that
+  falls inside the RF band.
+- **Find IF:** the RF (a band if you like) and the LO give the IF, IF = |RF − LO|.
+  A band gives an IF band, as in a satellite dish's LNB, which turns 10.70 to
+  11.70 GHz into 0.95 to 1.95 GHz with a 9.75 GHz LO. In three cells: the image, the
+  half-IF response, and RF + LO, the other product the mixer makes, which a filter
+  removes. The line under the big result says which side the LO is on, and a
+  band that holds the LO is said to fall through 0 Hz.
+- **Find RF:** the IF (a band if you like) and the LO give the wanted RF, LO − IF
+  with the LO above it and LO + IF with the LO below, the up-converter's case.
+  The same three cells, and the spacing of the image.
+- **Spurs:** the inputs, other than the wanted one, that put a product of the input
+  and the LO on the IF, m × n responses up to an order you set, 2 to 9. The big
+  result is the closest one to the RF, and under it its order and how far
+  above or below the RF it is. In three cells: the image, the half-IF response
+  and the number of responses. Under them: the eight closest, each with its
+  frequency and its offset from the RF.
+
+Under the inputs, chips set the IF to one of the usual values: 455 kHz, 10.7 MHz,
+21.4 MHz, 45 MHz or 70 MHz.
+
+The drawing of the first three pills is the plan: a row each for the RF, the LO,
+the image and the IF, on one scale of frequency. A value you gave is blue, one
+calculated green, the image amber; a single frequency is a dot, a band a bar,
+and where the image lies inside an RF band it is shaded across the rows. The IF
+is far to the left of the others, so the axis is broken where that saves room;
+the scale is the same on both sides of the break, so the distance from 0 to the
+IF is the distance between the RF and the LO. The Spurs pill draws a window round
+the LO: the RF and the image either side of it, and the responses that fall within
+1.35 IF of it, which are the 2 × 2 pair, 3 × 3 pair and so on, crowding up to the LO.
+
+- **Units:** Hz, kHz, MHz or GHz, one for every frequency box and for the results:
+  changing it in one changes them all. A value is shown to nine figures at most and
+  to 1 Hz.
+- **Remembered:** the pill, the unit and the side.
+
+Examples: the FM band with a 10.7 MHz IF, the AM band with 455 kHz, a Ku-band LNB, a
+70 MHz IF up-converted, and a half-IF blocker.
+
+### Terms
+
+- **RF (radio frequency):** the frequency of the signal that is to be received or,
+  for an up-converter, produced.
+- **LO (local oscillator):** the oscillator the mixer combines the RF with. It is
+  tuned so that it differs from the RF by exactly the IF.
+- **IF (intermediate frequency):** the fixed frequency the mixer's output is
+  filtered and amplified at. A sharp filter is easier to make at one fixed
+  frequency than to tune across a band, which is why receivers move everything
+  to one.
+- **Mixer:** a circuit that multiplies two signals. The product holds the sum and
+  the difference of their frequencies; the difference is the IF of a receiver
+  (down-conversion), the sum or the difference the output of an up-converter.
+- **High-side and low-side injection:** the LO above the RF, or below it.
+- **Image:** a second input frequency that gives the same IF: on the far side of
+  the LO, as far from it as the RF is, so RF ± 2 IF. After the mixer it cannot be
+  told from the wanted signal, so it has to be stopped before it; the farther it
+  is from the RF, the easier that is, so the image is 2 × IF away. In an
+  up-converter it is the other sideband.
+- **Half-IF response:** an input halfway between the RF and the LO, half an IF from the
+  RF, which lands on the IF through the mixer's second harmonics (2 × 2). The IF
+  filter cannot remove it, since it is on the IF.
+- **m × n response, order:** an input at f that puts m f ± n LO on the IF, for whole m
+  and n; the order is m + n. The wanted signal is 1 × 1.
+- **Tuning ratio:** the highest LO frequency over the lowest as the receiver tunes
+  across a band; the oscillator is easier to build the smaller it is.
+- **Sideband:** an up-converter's two products, LO + IF and LO − IF; one is wanted.
+- **Direct conversion:** an IF of 0 Hz, the LO on the RF.
+
+### Sources
+
+- **Wikipedia, "Superheterodyne receiver" (read through a fetch tool, the first
+  100 000 of its 135 500 characters):** the IF as |f_LO − f_RF|; high-side injection
+  (the LO above the RF) as the usual choice for broadcast because of the
+  oscillator's tuning range; the medium-wave example, 531 to 1700 kHz with a
+  455 kHz IF, an LO of 986 to 2155 kHz ("slightly greater than 2:1") and images of
+  1441 to 2610 kHz, against 76 to 1245 kHz for low-side injection ("a much wider
+  ratio"); a 660 kHz station with the LO at 1115 kHz and the image at 1570 kHz;
+  an input at 955 kHz with a 1455 kHz LO giving a spur on the 455 kHz IF
+  (2 × 955 − 1455); and a double-conversion receiver, a 1 MHz input with a
+  first IF of 81.4 MHz and the LO at 82.4 MHz, whose image is at 163.8 MHz.
+- **Wikipedia, "Intermediate frequency" (read through a fetch tool):** the usual
+  IFs: 455 kHz for AM broadcast, 10.7 MHz for FM, 38.9 and 45.75 MHz for
+  analogue television, 70 MHz for satellite and terrestrial microwave
+  equipment, 950 to 2150 MHz from a satellite dish's LNB, 30 MHz for radar.
+- **Wikipedia, "Low-noise block downconverter" (read through a fetch tool):** the
+  universal Ku-band LNB: LO 9.75 GHz for 10.70 to 11.70 GHz (IF 950 to 1950 MHz)
+  and LO 10.60 GHz for 11.70 to 12.75 GHz (IF 1100 to 2150 MHz), the LO below
+  the RF.
+- **Stephen Long, "Introduction to Receivers" (University of California, Santa
+  Barbara, ECE145A; PDF text extracted and read):** a mixer multiplies, and its output
+  holds the sum and the difference; two inputs, the RF and the image, give the same
+  IF, f_RF − f_LO = f_LO − f_IM = f_IF; where the image lies with the LO above and
+  below the RF; the usual IF filters, 455 kHz, 10.7 MHz, 21.4 MHz, 45 MHz and
+  70 MHz; the FM band (88 to 108 MHz, IF 10.7 MHz, the image always outside the
+  band) and the AM band (the LO's tuning ratio 16.6 : 1 low-side against 2.2 : 1
+  high-side, the image often in the band); and a dual conversion, 900 MHz with a
+  first IF of 400 MHz (LO 1300 MHz, image 1700 MHz) and a second of 10.7 MHz (LO
+  410.7 MHz, image of the second conversion 421.4 MHz).
+- **Marki Microwave, "Mixer Basics Primer" (2010; PDF text extracted and read):** a
+  mixer's output holds products ± n f_LO ± m f_RF for whole n and m, the wanted one
+  n = m = 1; in a double-balanced mixer only odd n and odd m survive at the IF port;
+  the manufacturer's spur tables give their levels.
+- **Microwaves & RF, "Match Mixers To BTS LTE Receivers" (read through a fetch
+  tool):** the half-IF response, 2 f − 2 f_LO = ±IF, an input half an IF from the
+  RF on the side of the LO: RF 2510 MHz, LO 2860 MHz and IF 350 MHz put it at
+  2685 MHz; spurious responses inside the IF band are not attenuated by the IF
+  filter.
+- **Not read:** Analog Devices' technical articles on the half-IF and 2 × 2 responses
+  (their pages timed out; their content reached me only as a search summary, which
+  agrees with the article above), any mixer's datasheet spur table, any textbook,
+  and any standard for IFs.
+
+### Why the formulas are these
+
+**The mixer.** Multiplying two cosines gives
+cos a · cos b = ½ cos (a − b) + ½ cos (a + b), so an RF and an LO give terms at
+|RF − LO| and RF + LO: the IF is the difference.
+
+**The LO and the image.** An input f gives |f − LO| on the output, which is the IF
+for f = LO + IF and for f = LO − IF: two inputs, the wanted RF and the image,
+symmetric about the LO. With the LO above the RF (σ = +1) the RF is LO − IF and the
+image LO + IF; with the LO below it (σ = −1) the RF is LO + IF and the image
+LO − IF. In both:
+
+    LO = RF + σ IF      image = LO + σ IF = RF + 2σ IF = 2 LO − RF
+
+so the image is 2 × IF from the RF, on the side of the LO. A band moves the LO and
+the image with it, each shifted by a constant, so the band's width and the tuning
+ratio follow: LO = RF + σ IF for the two ends gives (RF_high + σ IF) / (RF_low + σ IF);
+531 to 1700 kHz with 455 kHz is 2155/986 = 2.19 with the LO above and 1245/76 = 16.4
+with it below, the figures of Wikipedia and Long. An image below 0 Hz does not
+exist; the tool cuts the image band at 0 Hz.
+
+**The half-IF response.** The mixer's second harmonics make 2 f − 2 LO = ±IF, so
+f = LO ± IF/2: on each side of the LO, half an IF away. The one nearer the RF is
+(RF + LO)/2, RF + σ IF/2.
+
+**The responses.** An input at f puts a product on the IF when m f + a n LO = b IF,
+with a and b each +1 or −1, so
+
+    f = (b IF − a n LO) / m      m, n ≥ 1, order m + n
+
+and only positive f count. With a = −1 these are f = (n LO ± IF)/m, the differences
+of the product ± n LO ± m f. Whether the mixer makes a given product, and how
+strongly, depends on its design: an ideal multiplier makes only 1 × 1, a double-balanced
+mixer only the odd ones, and the levels come from the maker's spur table. The tool
+lists where responses can be, not how big they are. The wanted signal (1 × 1, at
+the RF) is left out. The list is sorted by distance from the RF, the lower order
+first on a tie.
+
+**The image in the band.** For an RF band [a, b] and an image band [c, d] the
+overlap is [max (a, c), min (b, d)] when that is not empty, and its share is its
+width over b − a.
+
+**The drawing.** The scale is k = (axis length) / (length shown), the length shown
+being the cluster of RF, LO and image with a margin, plus the stretch from 0 to the
+IF when the axis is broken. The axis is broken when the gap between the IF (with a
+quarter more) and the cluster is over 35 % of the highest frequency drawn.
+
+### Assumptions and limits
+
+- **The difference product only.** The IF is |RF − LO|. A plan whose IF is the sum of
+  the RF and the LO (an LO below the IF) is not covered.
+- **Where, not how much.** The Spurs list says which inputs can reach the IF, for
+  every m and n up to the order; a real mixer makes only some, at levels in its
+  datasheet's spur table (typically falling quickly with the order), and a
+  preselector before the mixer helps against the ones that are not too close to the RF.
+- **Responses from m or n of zero are not listed:** an input at the IF itself or at a
+  submultiple of it getting through, the LO leaking to the IF port, harmonics of the
+  RF. Keep the IF outside the RF band.
+- **No filter widths.** A response counts whatever its distance from the IF in
+  frequency; the tool does not ask how wide the IF filter is. A response that falls
+  within it (the closest rows here show how far each is) is a whistle or a
+  desensitised channel.
+- **One conversion at a time.** A receiver with two conversions is planned stage by stage,
+  the first IF being the second stage's RF.
+- **Positive frequencies.** An image band that lies below 0 Hz is shown as none, and
+  one that reaches below it is cut at 0 Hz.
+- **Frequencies are the nominal ones.** An LO's own spurs and phase noise, the
+  oscillator's accuracy and the filters' shapes are outside the tool.
+- **Display.** Nine figures at most and to 1 Hz.
+
+### How it was checked
+
+58 cases, the expected values from a Python implementation of the same relations
+(every figure, every label of the drawing, the rows of the Spurs list in order):
+- Find LO: an FM station at 98 MHz; the FM band; Wikipedia's medium-wave band with
+  the LO above (986 to 2155 kHz, images 1441 to 2610 kHz, 22.2 % of the band
+  reached) and below (76 to 1245 kHz, 16.4 : 1); the 660 kHz station (LO 1115, image
+  1570 kHz); Long's dual conversion (LO 1300 MHz, image 1700 MHz; the second stage,
+  LO 410.7 MHz, image 421.4 MHz); Wikipedia's double conversion (LO 82.4 MHz,
+  image 163.8 MHz); GHz units; a band typed backwards; a band end equal to the
+  start; a high IF; an image below 0 Hz;
+- Find IF: the LNB's two bands, a station and an LO, an LO inside the band, an
+  LO below the RF, the refusals;
+- Find RF: the 70 MHz up-converter, the receiver's view, an IF band, the refusals;
+- Spurs: Microwaves & RF's blocker at 2685 MHz, Wikipedia's 955 kHz input, an LO
+  below the RF, order 2, 6 and 9, GHz units, every refusal of the order;
+- the linked units, the side picker, the remembered choices, the chips, the five
+  examples, and the formula-search card.
+
+About 700 more cases, on 180 random plans (an RF from 100 kHz to 20 GHz, an IF from
+0.4 % to 250 % of it, bands, both sides, orders 2 to 9) through all four pills,
+compared every figure and label with the Python implementation; they were run
+and not kept.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| FM 88 to 108 MHz, IF 10.7 MHz, LO above | Long | LO from 98.7 MHz, image from 109.4 MHz, outside the band | LO 98.7 to 118.7 MHz, image 109.4 to 129.4 MHz, none in the band |
+| AM 531 to 1700 kHz, IF 455 kHz, LO above | Wikipedia | LO 986 to 2155 kHz, images 1441 to 2610 kHz, "slightly greater than 2:1" | the same, 2.19 : 1 |
+| the same, LO below | Wikipedia | LO 76 to 1245 kHz | the same, 16.4 : 1 |
+| 660 kHz, IF 455 kHz | Wikipedia | LO 1115 kHz, image 1570 kHz | the same |
+| 900 MHz, first IF 400 MHz | Long | LO 1300 MHz, image 1700 MHz | the same |
+| 400 MHz, second IF 10.7 MHz | Long | LO 410.7 MHz, image 421.4 MHz | the same |
+| 1 MHz, first IF 81.4 MHz | Wikipedia | LO 82.4 MHz, image 163.8 MHz | the same |
+| LNB, 10.70 to 11.70 GHz, LO 9.75 GHz | Wikipedia | IF 950 to 1950 MHz | 0.95 to 1.95 GHz |
+| LNB, 11.70 to 12.75 GHz, LO 10.60 GHz | Wikipedia | IF 1100 to 2150 MHz | 1.1 to 2.15 GHz |
+| RF 2510 MHz, LO 2860 MHz, IF 350 MHz | Microwaves & RF | half-IF blocker at 2685 MHz | the 2 × 2 response, 2685 MHz, first of the list |
+| RF 1000 kHz, LO 1455 kHz, IF 455 kHz | Wikipedia | a 955 kHz input gives 2 × 955 − 1455 = 455 | the 2 × 1 response at 955 kHz, first of the list |
 
 [↑ Index](#index)
 

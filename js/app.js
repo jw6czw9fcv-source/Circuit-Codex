@@ -674,6 +674,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "fresnel") return renderFresnel(domain, tool, favId);
   if (calcId === "beamwidth") return renderBeamwidth(domain, tool, favId);
   if (calcId === "smith") return renderSmith(domain, tool, favId);
+  if (calcId === "if-calculator") return renderIfCalculator(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -16931,6 +16932,332 @@ function renderSmith(domain, tool, favId) {
       const r = e.target.closest("[data-sol]");
       if (r) { state.sel = +r.dataset.sol; show(); }
     };
+  }
+
+  paint();
+}
+
+// ---------- IF calculator ----------
+// The frequency plan of a mixer. A mixer multiplies two signals, so its output holds the sum and the difference of their
+// frequencies (Long, UCSB ECE145A "Introduction to Receivers", read as PDF text); the IF is the difference, IF = |RF − LO|
+// (Wikipedia, "Superheterodyne receiver", read through a fetch tool), with the LO above the RF for high-side injection and below
+// it for low-side. Two input frequencies mix to the same IF, the RF and the image, symmetric about the LO: LO = RF ± IF (the LO
+// above for +), image = RF ± 2 IF = 2 LO − RF (Long, slides 7 to 12, worked for the FM band, the AM band and a dual conversion;
+// Wikipedia: 455 kHz IF, LO 986 to 2155 kHz and image 1441 to 2610 kHz for 531 to 1700 kHz, an LO tuning range slightly over 2:1
+// against 76 to 1245 kHz for low-side injection). A real mixer has products at other frequencies too, ± n f_LO ± m f_RF for whole
+// n and m, the wanted one n = m = 1 (Marki Microwave, "Mixer Basics Primer", read as PDF text); an input at f puts a product on
+// the IF when m f ± n LO = ±IF, that is f = (n LO ± IF)/m, of order m + n. The half-IF response is the 2 × 2 one, 2 f − 2 LO = ±IF,
+// at RF ± IF/2 on the side of the LO (Microwaves & RF, "Match Mixers To BTS LTE Receivers", read through a fetch tool: RF 2510,
+// LO 2860 and IF 350 MHz put it at 2685 MHz); and Wikipedia's AM example, an input at 955 kHz with a 1455 kHz LO and a 455 kHz
+// IF, is the 2 × 1 one, 2 × 955 − 1455 = 455. LNB figures (LO 9.75 GHz, RF 10.70 to 11.70 GHz, IF 950 to 1950 MHz): Wikipedia,
+// "Low-noise block downconverter". Typical IFs: Wikipedia, "Intermediate frequency", and Long's slide 13. Everything else is derived
+// here and checked against a Python implementation. The difference product only: a plan whose IF is the sum RF + LO is not covered.
+const IFC_MODES = { lo: "Find LO", if: "Find IF", rf: "Find RF", spurs: "Spurs" };
+const IFC_F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const IFC_DEC = { Hz: 3, kHz: 3, MHz: 6, GHz: 9 };
+const IFC_SIDES = { above: "LO above RF", below: "LO below RF" };
+// The IFs that filters are easy to buy for (Long, UCSB ECE145A, slide 13; Wikipedia, "Intermediate frequency").
+const IFC_TYPICAL = [[455e3, "455 kHz"], [10.7e6, "10.7 MHz"], [21.4e6, "21.4 MHz"], [45e6, "45 MHz"], [70e6, "70 MHz"]];
+
+function renderIfCalculator(domain, tool, favId) {
+  const C = "if-calculator";
+  const state = {
+    mode: pref(C, "mode", "lo", Object.keys(IFC_MODES)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(IFC_F_UNITS)),
+    side: pref(C, "side", "above", Object.keys(IFC_SIDES)),
+    // Hz: the RF and its optional band end, the IF and its optional band end, the LO; the order of the responses listed.
+    rf: 98e6, rf2: NaN, ifq: 10.7e6, ifq2: NaN, lo: 108.7e6, order: 5,
+  };
+  const n3 = (v) => String(Number(v.toPrecision(3))).replace("-", "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const u = () => IFC_F_UNITS[state.fUnit];
+  // A frequency in the unit picked: nine figures at most (a third of a megahertz does not run on), to 1 Hz, never in exponent form.
+  const one = (v) => {
+    const s = (+(Math.abs(v) / u()).toPrecision(9)).toFixed(IFC_DEC[state.fUnit]);
+    return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+  };
+  const fq = (v) => `${one(v)} ${state.fUnit}`;
+  const rng = (a, b) => (a === b ? fq(a) : `${one(a)} to ${one(b)} ${state.fUnit}`);
+  const sg = () => (state.side === "above" ? 1 : -1);
+  const band = (a, b) => (b > 0 && b !== a ? [Math.min(a, b), Math.max(a, b)] : [a, a]);
+  const isBand = (b) => b[0] !== b[1];
+  const clip = (b) => (b[1] <= 0 ? null : [Math.max(b[0], 0), b[1]]);
+
+  function problem() {
+    const m = state.mode;
+    const needs = { lo: ["rf", "ifq"], if: ["rf", "lo"], rf: ["ifq", "lo"], spurs: ["rf", "ifq"] }[m];
+    const say = { rf: "Enter the RF frequency.", ifq: "Enter the IF.", lo: "Enter the LO frequency." };
+    for (const k of needs) if (!(state[k] > 0)) return say[k];
+    if (m === "spurs" && !(Number.isInteger(state.order) && state.order >= 2 && state.order <= 9)) return "Enter the order, a whole number from 2 to 9.";
+    if ((m === "lo" || m === "spurs") && sg() < 0) {
+      const lowest = m === "lo" ? band(state.rf, state.rf2)[0] : state.rf;
+      if (lowest - state.ifq <= 0) return "With the LO below the RF the IF must be under the RF (the LO would be 0 Hz or less).";
+    }
+    if (m === "if") {
+      const r = band(state.rf, state.rf2);
+      if (!isBand(r) && r[0] === state.lo) return "The RF and the LO are the same frequency: the IF is 0 Hz (direct conversion).";
+    }
+    if (m === "rf" && sg() > 0 && band(state.ifq, state.ifq2)[1] >= state.lo) return "With the LO above the RF the IF must be under the LO (the RF would be 0 Hz or less).";
+    return "";
+  }
+
+  // Every band is [low, high] in Hz; null is an image below 0 Hz.
+  function plan() {
+    const s = sg();
+    if (state.mode === "lo") {
+      const r = band(state.rf, state.rf2), i = state.ifq;
+      return { rf: r, lo: [r[0] + s * i, r[1] + s * i], ifb: [i, i], img: clip([r[0] + 2 * s * i, r[1] + 2 * s * i]), half: [r[0] + (s * i) / 2, r[1] + (s * i) / 2],
+        sum: [2 * r[0] + s * i, 2 * r[1] + s * i], space: [2 * i, 2 * i] };
+    }
+    if (state.mode === "if") {
+      const r = band(state.rf, state.rf2), l = state.lo;
+      const d = [Math.abs(r[0] - l), Math.abs(r[1] - l)];
+      const inside = r[0] <= l && l <= r[1];
+      const ifb = [inside ? 0 : Math.min(...d), Math.max(...d)];
+      const im = [2 * l - r[1], 2 * l - r[0]];
+      return { rf: r, lo: [l, l], ifb, img: clip(im), half: [(r[0] + l) / 2, (r[1] + l) / 2], sum: [r[0] + l, r[1] + l], space: [2 * ifb[0], 2 * ifb[1]], inside,
+        side: l > r[1] ? 1 : l < r[0] ? -1 : 0 };
+    }
+    // Find RF
+    const b = band(state.ifq, state.ifq2), l = state.lo;
+    const rf = [l - s * b[0], l - s * b[1]].sort((p, q) => p - q);
+    const im = [l + s * b[0], l + s * b[1]].sort((p, q) => p - q);
+    return { rf, lo: [l, l], ifb: b, img: clip(im), half: [l - (s * b[0]) / 2, l - (s * b[1]) / 2].sort((p, q) => p - q), sum: [rf[0] + l, rf[1] + l], space: [2 * b[0], 2 * b[1]] };
+  }
+
+  // Every input frequency that puts a product of order up to `order` on the IF, for the LO that tunes the RF.
+  function responses() {
+    const rf = state.rf, i = state.ifq, lo = rf + sg() * i, out = [];
+    for (let m = 1; m < state.order; m++) {
+      for (let n = 1; n <= state.order - m; n++) {
+        for (const a of [-1, 1]) {
+          for (const b of [-1, 1]) {
+            const f = (b * i - a * n * lo) / m;
+            if (f <= 0) continue;
+            out.push({ m, n, f, wanted: m === 1 && n === 1 && Math.abs(f - rf) < 1e-9 * rf });
+          }
+        }
+      }
+    }
+    return { lo, list: out.filter((r) => !r.wanted).sort((p, q) => Math.abs(p.f - rf) - Math.abs(q.f - rf) || p.m + p.n - (q.m + q.n) || p.m - q.m) };
+  }
+
+  // ---------------- the drawings ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", AMBER = "#E0A85E", WIRE = "#5A6169", GREY = "#8A9099";
+  // A label sits on top of the lines, with a halo in the box's own colour so a line running through it does not hide it.
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+
+  // The plan: one row each for the RF, the LO, the image and the IF, on one frequency scale. The IF sits far to the left of the
+  // rest, so the axis is broken there when that saves room; the scale is the same on both sides of the break, so the distance from
+  // 0 to the IF is the distance between the RF and the LO.
+  function planChart() {
+    const rows = [["RF", 18, "pr"], ["LO", 50, "pl"], ["Image", 82, "pi"], ["IF", 114, "pf"]];
+    let out = "";
+    const W0 = 46, W1 = 292, AY = 130;
+    const labels = rows.map(([t, y]) => lbl(null, 4, y + 4, t, GREY)).join("");
+    if (problem()) return `<path d="M${W0} ${AY} H${W1}" stroke="${WIRE}" stroke-width="1.4"/>${labels}`;
+    const p = plan();
+    const inputs = { lo: ["rf", "ifb"], if: ["rf", "lo"], rf: ["ifb", "lo"] }[state.mode];
+    const col = (k) => (inputs.includes(k) ? BLUE : GREEN);
+    const parts = [p.rf, p.lo, ...(p.img ? [p.img] : [])];
+    const cmin = Math.min(...parts.map((b) => b[0])), cmax = Math.max(...parts.map((b) => b[1]));
+    const left = p.ifb[1] * 1.25;
+    const brk = cmin - left > 0.35 * cmax;
+    const pad = Math.max(0.08 * (cmax - cmin), 0.15 * p.ifb[1]);
+    const GAP = 14, len = brk ? left + (cmax - cmin + 2 * pad) : cmax + pad;
+    const k = (W1 - W0 - (brk ? GAP : 0)) / len;
+    const x = (f) => (brk && f > left ? W0 + left * k + GAP + (f - (cmin - pad)) * k : W0 + f * k);
+    const guide = (f) => `<path d="M${x(f).toFixed(1)} 18 V${AY}" stroke="${WIRE}" stroke-width="1" stroke-dasharray="2 3" stroke-opacity="0.5"/>`;
+    // A value goes beside its bar, to the right if there is room, else to the left, else above the bar.
+    const item = (id, b, y, c, text) => {
+      const x1 = x(b[0]), x2 = x(b[1]), w = text.length * 6.6;
+      let g = "";
+      if (b[0] === b[1]) g += guide(b[0]) + `<circle cx="${x1.toFixed(1)}" cy="${y}" r="4.2" fill="${c}"/>`;
+      else g += `<rect x="${x1.toFixed(1)}" y="${y - 4}" width="${(x2 - x1).toFixed(1)}" height="8" rx="4" fill="${c}"/>`;
+      if (x2 + 8 + w <= 298) return g + lbl(id, x2 + 8, y + 4, text, c, "start");
+      if (x1 - 8 - w >= 42) return g + lbl(id, x1 - 8, y + 4, text, c, "end");
+      return g + lbl(id, Math.min(Math.max((x1 + x2) / 2, 42 + w / 2), 298 - w / 2), y - 8, text, c, "middle");
+    };
+    // the part of the image inside the RF band, across the three rows
+    const ov = p.img ? [Math.max(p.rf[0], p.img[0]), Math.min(p.rf[1], p.img[1])] : null;
+    if (ov && isBand(p.rf) && ov[1] > ov[0]) out += `<g data-res="pov"><title>image in the band</title><rect x="${x(ov[0]).toFixed(1)}" y="8" width="${(x(ov[1]) - x(ov[0])).toFixed(1)}" height="96" fill="${AMBER}" fill-opacity="0.2"/></g>`;
+    out += item("pr", p.rf, 18, col("rf"), rng(p.rf[0], p.rf[1]));
+    out += item("pl", p.lo, 50, col("lo"), rng(p.lo[0], p.lo[1]));
+    if (p.img) out += item("pi", p.img, 82, AMBER, rng(p.img[0], p.img[1]));
+    else out += lbl("pi", W0 + 6, 86, "below 0 Hz: none", GREY);
+    out += item("pf", p.ifb, 114, col("ifb"), rng(p.ifb[0], p.ifb[1]));
+    // the axis, broken where the scale skips
+    if (brk) {
+      const bx = W0 + left * k + GAP / 2;
+      out += `<path d="M${W0} ${AY} H${(bx - 5).toFixed(1)} M${(bx + 5).toFixed(1)} ${AY} H${W1}" stroke="${WIRE}" stroke-width="1.4"/>`
+        + `<path d="M${(bx - 6).toFixed(1)} ${AY + 4} L${(bx - 2).toFixed(1)} ${AY - 4} M${(bx + 2).toFixed(1)} ${AY + 4} L${(bx + 6).toFixed(1)} ${AY - 4}" stroke="${WIRE}" stroke-width="1.2"/>`;
+    } else out += `<path d="M${W0} ${AY} H${W1}" stroke="${WIRE}" stroke-width="1.4"/>`;
+    return out + labels;
+  }
+
+  // The responses near the LO: the RF and the image either side of it, and the others that fall in the window (the n × n ones
+  // crowd up to the LO, at LO ± IF/n).
+  function spurChart() {
+    const AY = 118;
+    let out = `<path d="M10 ${AY} H290" stroke="${WIRE}" stroke-width="1.4"/>`;
+    if (problem()) return out;
+    const r = responses(), lo = r.lo, i = state.ifq, w0 = lo - 1.35 * i, w1 = lo + 1.35 * i;
+    const x = (f) => 14 + ((f - w0) / (w1 - w0)) * 272;
+    const items = [{ f: state.rf, t: "RF", c: BLUE, h: 62 }, { f: lo, t: "LO", c: GREEN, h: 78 }];
+    const im = 2 * lo - state.rf;
+    if (im > 0) items.push({ f: im, t: "image", c: AMBER, h: 62 });
+    r.list.forEach((q) => {
+      if (q.f > w0 && q.f < w1 && !(q.m === 1 && q.n === 1)) items.push({ f: q.f, t: `${q.m}×${q.n}`, c: GREEN, h: 38 });
+    });
+    items.sort((a, b) => a.f - b.f);
+    const placed = [];
+    items.forEach((it, idx) => {
+      const cx = x(it.f), w = it.t.length * 6.4 + 4;
+      let level = 0;
+      while (placed.some((p) => p.level === level && Math.abs(p.cx - cx) < (p.w + w) / 2) && level < 4) level++;
+      placed.push({ cx, w, level });
+      out += `<path d="M${cx.toFixed(1)} ${AY} V${AY - it.h}" stroke="${it.c}" stroke-width="2.2"/>` + lbl(`sx${idx}`, cx, AY - it.h - 4 - level * 13, it.t, it.c, "middle");
+    });
+    return out;
+  }
+
+  function diagram() {
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${state.mode === "spurs" ? spurChart() : planChart()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+  const bandTxt = (b) => (b ? rng(b[0], b[1]) : "none: below 0 Hz");
+  const ratioTxt = (b) => `${n3(b[1] / b[0])} : 1`;
+  const inBand = (p) => {
+    if (!p.img) return "no";
+    const a = Math.max(p.rf[0], p.img[0]), b = Math.min(p.rf[1], p.img[1]);
+    return b > a ? `${rng(a, b)} · ${n3((100 * (b - a)) / (p.rf[1] - p.rf[0]))} %` : "no";
+  };
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const s = sg(), above = state.side === "above";
+    if (state.mode === "spurs") {
+      const r = responses(), list = r.list, rf = state.rf, im = 2 * r.lo - rf, c = list[0];
+      const side = (q) => `${q.f > rf ? "+" : "−"}${one(Math.abs(q.f - rf))}`;
+      const named = (q) => (q.m === 1 && q.n === 1 ? " · image" : q.m === 2 && q.n === 2 && Math.abs(q.f - (rf + r.lo) / 2) < 1e-9 * rf ? " · half-IF" : "");
+      const rows = list.slice(0, 8).map((q, k) => row(`${q.m} × ${q.n}${named(q)}`, `${one(q.f)} · ${side(q)} ${state.fUnit}`, `r${k}`)).join("");
+      return `${head("Closest response", c ? fq(c.f) : "none", c ? `${c.m} × ${c.n} response, order ${c.m + c.n}, ${one(Math.abs(c.f - rf))} ${state.fUnit} ${c.f > rf ? "above" : "below"} the RF · LO ${fq(r.lo)}` : "no response of that order")}
+        ${grid([cell("Image", im > 0 ? fq(im) : "none", "image"), cell("Half-IF", fq((rf + r.lo) / 2), "half"), cell("Responses", String(list.length), "count")])}
+        <div class="field notation-box">${rows}</div>`;
+    }
+    const p = plan();
+    if (state.mode === "lo") {
+      const other = band(state.rf, state.rf2).map((v) => v - s * state.ifq);
+      const otherOk = other[0] > 0;
+      const rowsHTML = [row(above ? "LO below the RF" : "LO above the RF", otherOk ? `${rng(other[0], other[1])}${isBand(p.rf) ? ` · ${ratioTxt(other)}` : ""}` : "none: the LO would be 0 Hz or less", "other"),
+        row("Image spacing, 2 × IF", fq(2 * state.ifq), "spacing")];
+      if (isBand(p.rf)) rowsHTML.push(row("Image in the band", inBand(p), "inband"));
+      return `${head("Local oscillator", rng(p.lo[0], p.lo[1]), `${above ? "high" : "low"}-side: LO = RF ${above ? "+" : "−"} IF${isBand(p.rf) ? ` · tuning ratio ${ratioTxt(p.lo)}` : ""}`)}
+        ${grid([cell("Image", bandTxt(p.img), "image"), cell("Half-IF", rng(p.half[0], p.half[1]), "half"), cell(isBand(p.rf) ? "Tuning ratio" : "LO / RF", isBand(p.rf) ? ratioTxt(p.lo) : `${n3(p.lo[0] / p.rf[0])} : 1`, "ratio")])}
+        <div class="field notation-box">${rowsHTML.join("")}</div>`;
+    }
+    if (state.mode === "if") {
+      const sideTxt = p.side > 0 ? "LO above the RF (high-side)" : p.side < 0 ? "LO below the RF (low-side)" : "LO inside the RF band: the IF falls to 0 Hz";
+      const rowsHTML = [row("Image spacing, 2 × IF", rng(p.space[0], p.space[1]), "spacing")];
+      if (isBand(p.rf)) rowsHTML.push(row("Image in the band", inBand(p), "inband"));
+      return `${head("Intermediate frequency", rng(p.ifb[0], p.ifb[1]), sideTxt)}
+        ${grid([cell("Image", bandTxt(p.img), "image"), cell("Half-IF", rng(p.half[0], p.half[1]), "half"), cell("RF + LO", rng(p.sum[0], p.sum[1]), "sum")])}
+        <div class="field notation-box">${rowsHTML.join("")}</div>`;
+    }
+    const rowsHTML = [row("Image spacing, 2 × IF", rng(p.space[0], p.space[1]), "spacing")];
+    if (isBand(p.rf)) rowsHTML.push(row("Image in the band", inBand(p), "inband"));
+    return `${head("Wanted RF", rng(p.rf[0], p.rf[1]), `LO ${above ? "above" : "below"} the RF: RF = LO ${above ? "−" : "+"} IF`)}
+        ${grid([cell("Image", bandTxt(p.img), "image"), cell("Half-IF", rng(p.half[0], p.half[1]), "half"), cell("RF + LO", rng(p.sum[0], p.sum[1]), "sum")])}
+        <div class="field notation-box">${rowsHTML.join("")}</div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, { rf2: NaN, ifq2: NaN }, st); paint(); };
+  useExamples([
+    { title: "FM broadcast, 10.7 MHz IF", note: "88 to 108 MHz needs an LO of 98.7 to 118.7 MHz; the image is above the band, 109.4 to 129.4 MHz.",
+      apply: example({ mode: "lo", fUnit: "MHz", side: "above", rf: 88e6, rf2: 108e6, ifq: 10.7e6 }) },
+    { title: "AM broadcast, 455 kHz IF", note: "531 to 1700 kHz: LO 986 to 2155 kHz (2.19 : 1); below the RF it would be 76 to 1245 kHz, 16.4 : 1.",
+      apply: example({ mode: "lo", fUnit: "kHz", side: "above", rf: 531e3, rf2: 1700e3, ifq: 455e3 }) },
+    { title: "A Ku-band LNB", note: "The universal LNB's 9.75 GHz LO turns 10.70 to 11.70 GHz into an IF of 0.95 to 1.95 GHz.",
+      apply: example({ mode: "if", fUnit: "GHz", rf: 10.7e9, rf2: 11.7e9, lo: 9.75e9 }) },
+    { title: "Up-converting a 70 MHz IF", note: "A 5930 MHz LO below the RF: 6000 MHz out, and 5860 MHz, the other sideband, is the image.",
+      apply: example({ mode: "rf", fUnit: "MHz", side: "below", ifq: 70e6, lo: 5930e6 }) },
+    { title: "A half-IF blocker", note: "RF 2510 MHz, IF 350 MHz, LO 2860 MHz: a signal at 2685 MHz, half an IF up, lands on the IF.",
+      apply: example({ mode: "spurs", fUnit: "MHz", side: "above", rf: 2510e6, ifq: 350e6, order: 5 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((k) => `<option ${k === cur ? "selected" : ""}>${k}</option>`).join("")}</select>`;
+    const field = (attrs, label, unitHTML, value, hint = "") => `
+        <div class="field">
+          <label><span class="field-name">${label}</span>${hint}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" ${attrs} value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (x) => `<span class="unit-fixed">${x}</span>`;
+    const opt = '<span class="field-hint">optional</span>';
+    const ff = (key, label, n, hint = "") => field(`data-key="${key}"`, label, sel(`data-funit="${n}"`, IFC_F_UNITS, state.fUnit), fmt(state[key] / u()), hint);
+    const m = state.mode;
+    const typ = '<span class="field-hint">typical IFs below</span>';
+    const inputs = m === "lo" ? `<div class="field-pair">${ff("rf", "RF", 1)}${ff("rf2", "RF to", 2, opt)}</div><div class="field-pair">${ff("ifq", "IF", 3, typ)}</div>`
+      : m === "if" ? `<div class="field-pair">${ff("rf", "RF", 1)}${ff("rf2", "RF to", 2, opt)}</div><div class="field-pair">${ff("lo", "LO", 3)}</div>`
+        : m === "rf" ? `<div class="field-pair">${ff("ifq", "IF", 1, typ)}${ff("ifq2", "IF to", 2, opt)}</div><div class="field-pair">${ff("lo", "LO", 3)}</div>`
+          : `<div class="field-pair">${ff("rf", "RF", 1)}${ff("ifq", "IF", 2, typ)}</div><div class="field-pair">${field('data-key="order"', "Order up to", fixed(""), fmt(state.order))}</div>`;
+    const sideSel = m === "if" ? "" : `<select class="label-select" data-side="1">${Object.entries(IFC_SIDES).map(([k, t]) => `<option value="${k}" ${k === state.side ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Mixer frequency plan: LO, IF, image and spurs")}
+
+      ${pillRow(Object.entries(IFC_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+      ${m === "if" ? "" : `<div class="chip-row" style="margin-bottom:6px;gap:6px">${IFC_TYPICAL.map(([hz, t]) => `<button class="chip-btn" style="padding:6px 9px;font-size:13px" data-if="${hz}" aria-label="IF ${t}">${t}</button>`).join("")}</div>`}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${sideSel}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["IF = |RF − LO|", "LO = RF ± IF, + for the LO above", "image = RF ± 2 IF = 2 LO − RF", "half-IF response = (RF + LO) / 2", "response: f = (n LO ± IF) / m", "tuning ratio = LO max / LO min"],
+        "A mixer multiplies the RF by the LO (local oscillator), so its output holds the sum and the difference of the two; the IF (intermediate frequency) is the difference, IF = |RF − LO|, and a fixed filter after the mixer keeps it. With the LO above the RF (high-side injection) LO = RF + IF; below it (low-side) LO = RF − IF. Either way a second input, the image, sits on the far side of the LO at the same distance from it as the RF and gives the same IF: RF ± 2 IF, 2 LO − RF in all, so the IF is also the distance a filter ahead of the mixer has to put between the two (twice the IF). Tuning a band moves the LO with it, and the tuning ratio, the highest LO over the lowest, is how far the oscillator must tune. Other inputs reach the IF too, through products of the input and the LO: an input at f puts an m × n response on the IF when m f ± n LO = ±IF, whole m and n, of order m + n. The one half an IF from the RF, 2 × 2, comes through the same mixer whatever the filter after it, because it lands on the IF itself. Typical IFs: 455 kHz (AM broadcast), 10.7 MHz (FM broadcast), 21.4 MHz, 45 MHz, 70 MHz (satellite and microwave links)."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        state[key] = key === "order" ? (el.value.trim() === "" ? NaN : Number(el.value)) : v * u();
+        show();
+      };
+    });
+    app.querySelectorAll("select[data-funit]").forEach((el) => {
+      el.onchange = () => { state.fUnit = el.value; setPref(C, "fUnit", state.fUnit); paint(); };
+    });
+    app.querySelectorAll(".chip-btn[data-if]").forEach((btn) => {
+      btn.onclick = () => { state.ifq = +btn.dataset.if; state.ifq2 = NaN; paint(); };
+    });
+    const sd = app.querySelector("select[data-side]");
+    if (sd) sd.onchange = () => { state.side = sd.value; setPref(C, "side", state.side); show(); };
   }
 
   paint();

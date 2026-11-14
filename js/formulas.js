@@ -362,6 +362,12 @@ const FORMULAS = [
     note: "Load Z = R + jX on a line Z0; z = Z / Z0, g + jb = 1 / z. Derived and checked against Steer's L-match examples and the Pozar-based slides' stub examples (read).",
   },
   {
+    tool: "IF calculator",
+    domain: "rf",
+    formulas: ["IF = |RF − LO|", "LO = RF ± IF, + for the LO above", "image = RF ± 2 IF = 2 LO − RF", "half-IF response = (RF + LO) / 2", "response: f = (n LO ± IF) / m", "tuning ratio = LO max / LO min"],
+    note: "High-side injection puts the LO above the RF, low-side below it; the image is the other input that gives the same IF. Checked against the worked FM, AM and dual-conversion examples of Long's UCSB receiver lectures and Wikipedia's superheterodyne article, and the half-IF case of a Microwaves & RF article (all read).",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],
