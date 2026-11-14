@@ -356,6 +356,12 @@ const FORMULAS = [
     note: "ITU-R F.699-9 (read) for the dish rules, which match η = 60 %; ITU-R F.1336-5 (read) for sector and omnidirectional antennas; aperture relations from NRAO's Essential Radio Astronomy ch. 3 and Wikipedia. θ is the −3 dB beamwidth in degrees.",
   },
   {
+    tool: "Smith chart matching",
+    domain: "rf",
+    formulas: ["Γ = (Z − Z0) / (Z + Z0)", "VSWR = (1 + |Γ|) / (1 − |Γ|)", "L-match: x = −X ± √(R (Z0 − R))", "then b = (X + x) / (R Z0), Q = |X + x| / R", "Stub: (b² + g² − g) t² − 2 b t + 1 − g = 0", "d = atan (t) / 2π wavelengths, t = tan βd", "λ/4: ZT = √(Z0 R), R = Z0 S or Z0 / S"],
+    note: "Load Z = R + jX on a line Z0; z = Z / Z0, g + jb = 1 / z. Derived and checked against Steer's L-match examples and the Pozar-based slides' stub examples (read).",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],

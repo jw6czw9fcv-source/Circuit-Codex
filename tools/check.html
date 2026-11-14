@@ -174,6 +174,18 @@ async function checkTool(t) {
     const over = Math.max(vb.x - b.x, b.x + b.width - (vb.x + vb.width), vb.y - b.y - 3, b.y + b.height - (vb.y + vb.height) - 3);
     return over > 0.5 ? `${t.textContent.trim().slice(0, 12)}+${over.toFixed(1)}px` : null;
   }).filter(Boolean);
+  // The selected pill or filter button, text against its own fill, in the theme being audited: a dark tint under dark blue text
+  // read about 2:1 in the light theme before this was measured.
+  const weakPills = [...doc.querySelectorAll(".pill.active, .filter-btn.active")].filter((el) => el.getBoundingClientRect().height > 0).map((el) => {
+    const cs = win.getComputedStyle(el), a = lum(cs.color), b = lum(cs.backgroundColor);
+    if (a === null || b === null) return null;
+    const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    return ratio < 4.5 ? `${el.textContent.trim().slice(0, 14)} ${ratio.toFixed(1)}:1` : null;
+  }).filter(Boolean);
+  if (weakPills.length) r.notes.push(`${weakPills.length} selected pill(s) under 4.5:1 contrast: ${weakPills.slice(0, 3).join(", ")}`);
+  // The selected pill is bold: its label must still fit its pill.
+  const wide = [...doc.querySelectorAll(".pill, .filter-btn")].filter((el) => el.getBoundingClientRect().height > 0 && el.scrollWidth > el.clientWidth + 1);
+  if (wide.length) r.notes.push(`${wide.length} pill label(s) wider than the pill: "${wide[0].textContent.trim().slice(0, 16)}"`);
   if (cut.length) r.notes.push(`${cut.length} drawing text(s) cut by the drawing's edge: ${cut.slice(0, 4).join(", ")}`);
   if (small.size) r.notes.push(`${small.size} drawing text(s) under 11 px: ${[...small].slice(0, 4).join(", ")}`);
   if (faint.size) r.notes.push(`${faint.size} drawing text(s) under 4.5:1 contrast: ${[...faint].slice(0, 3).join(", ")}`);

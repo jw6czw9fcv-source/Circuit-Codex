@@ -673,6 +673,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "path-loss") return renderPathLoss(domain, tool, favId);
   if (calcId === "fresnel") return renderFresnel(domain, tool, favId);
   if (calcId === "beamwidth") return renderBeamwidth(domain, tool, favId);
+  if (calcId === "smith") return renderSmith(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -1437,7 +1438,7 @@ function renderOhmsLaw(domain, tool, favId) {
 
       <div class="diagram-box">${diagram()}</div>
 
-      ${pillRow(OHM_MODES, state.mode, "#1B2A3B")}
+      ${pillRow(OHM_MODES, state.mode, domain.bg)}
 
       <div class="section-label" style="color:#8FC1F5">Your inputs
         <select id="ohm-tol" class="label-select">
@@ -16349,6 +16350,587 @@ function renderBeamwidth(domain, tool, favId) {
     });
     const unit = (attr, name) => app.querySelectorAll(`select[${attr}]`).forEach((el) => { el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); paint(); }; });
     unit("data-uf", "fUnit"); unit("data-ud", "dUnit"); unit("data-ug", "gUnit");
+  }
+
+  paint();
+}
+
+// ---------- Smith chart matching ----------
+// The reflection coefficient Γ = (z − 1)/(z + 1) of a normalized impedance z = Z/Z0, and z = (1 + Γ)/(1 − Γ); the
+// chart's circles of constant r (centre r/(1+r), radius 1/(1+r)) and arcs of constant x (centre (1, 1/x), radius 1/|x|);
+// a point moving toward the generator turns clockwise, Γ(d) = Γ_L e^(−j 4π d/λ), a full turn being λ/2; the admittance chart is the
+// same chart turned 180°, y = 1/z (Wikipedia, "Smith chart", read through a text-extraction tool). L-matches, Steer, "Fundamentals of
+// Microwave and RF Design" § 10.4 (read through the same tool): Q = √(Rhigh/Rlow − 1) for a real load, with examples (100 Ω to 1700 Ω
+// at 900 MHz: Q 4, 70.7 nH, 0.416 pF; 50 Ω to 75 Ω). Single-stub and L-section examples with answers, Çankaya University's slides on
+// Pozar's "Impedance matching and tuning" and the University of Tennessee's ECE341 notes 9 (PDF text). Derived here and checked by
+// simulating every network (|Γ| under 10⁻¹⁰ at the design frequency): a series element x then a shunt b needs R ≤ Z0, x = −X ± √(R (Z0 − R)),
+// b = (X + x)/(R Z0); a shunt b then a series x needs G = R/(R² + X²) ≤ Y0, b = −B ± √(G (Y0 − G)), x = Z0 (B + b)/G; a line of
+// electrical length βd and a shunt (series) stub: with a = y_L (z_L) = g + jb and t = tan βd, Re a(d) = 1 is (b² + g² − g) t² − 2 b t + 1 − g = 0, the stub
+// gives −Im a(d), a short (open) shunt stub is −j cot βl, an open (short) one j tan βl; a quarter-wave section of impedance √(Z0 R)
+// matches the real R = Z0 S or Z0/S (S the VSWR) at a voltage maximum or minimum. The load is taken as R in series with L (X > 0) or C (X < 0)
+// for the bandwidth, found by a scan to the 15 dB return loss. The 15 dB is this tool's choice.
+const SM_MODES = { load: "Load", lmatch: "L-match", stub: "Stub", qw: "λ/4" };
+const SM_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const SM_L_UNITS = { mm: 0.001, cm: 0.01, m: 1, in: 0.0254, ft: 0.3048 };
+
+function renderSmith(domain, tool, favId) {
+  const C = "smith";
+  const state = {
+    mode: pref(C, "mode", "load", Object.keys(SM_MODES)),
+    fUnit: pref(C, "fUnit", "GHz", Object.keys(SM_F_UNITS)),
+    lUnit: pref(C, "lUnit", "mm", Object.keys(SM_L_UNITS)),
+    kind: pref(C, "kind", "shunt", ["shunt", "series"]),
+    term: pref(C, "term", "short", ["short", "open"]),
+    sel: 0,
+    big: false,
+    // R, X, Z0 in ohms, f in Hz, vf the line's velocity factor.
+    si: { R: 60, X: -80, Z0: 50, f: 2e9, vf: 1 },
+  };
+  const s = state.si;
+  const n3 = (v) => String(Number(v.toPrecision(3))).replace("-", "−");
+  const n4 = (v) => String(Number(v.toPrecision(4))).replace("-", "−");
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(5)) : "");
+  const db2 = (v) => (Math.round(v * 100) / 100 === 0 ? 0 : v).toFixed(2).replace("-", "−");
+  const PI = Math.PI;
+  const lu = () => SM_L_UNITS[state.lUnit];
+  const lenTxt = (m) => `${n3(m / lu())} ${state.lUnit}`;
+  const fTxt = (hz) => (hz >= 1e9 ? `${+(hz / 1e9).toPrecision(5)} GHz` : hz >= 1e6 ? `${+(hz / 1e6).toPrecision(5)} MHz` : `${+(hz / 1e3).toPrecision(5)} kHz`);
+  const wl = (v) => `${v.toFixed(3)} λ`;
+  // A complex number is [re, im].
+  const cadd = (a, b) => [a[0] + b[0], a[1] + b[1]];
+  const csub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  const cmul = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+  const cinv = (a) => { const n = a[0] * a[0] + a[1] * a[1]; return [a[0] / n, -a[1] / n]; };
+  const cdiv = (a, b) => cmul(a, cinv(b));
+  const cabs = (a) => Math.hypot(a[0], a[1]);
+  const cplx = (re, im) => `${n3(re)} ${im < 0 ? "−" : "+"} j${n3(Math.abs(im))}`;
+  const gam = (z) => cdiv(csub(z, [1, 0]), cadd(z, [1, 0]));
+  const line = (a, t) => cdiv(cadd(a, [0, t]), cadd([1, 0], cmul([0, t], a)));    // a(d) = (a + j t)/(1 + j a t)
+
+  const fOk = () => s.f > 0;
+  const lamLine = () => (PI > 0 ? (299792458 * s.vf) / s.f : NaN);
+  const zl = () => [s.R / s.Z0, s.X / s.Z0];
+  const loadG = () => gam(zl());
+
+  // ---- the load as R in series with L (X > 0) or C (X < 0), at f ----
+  const loadZ = (f) => [s.R, s.X >= 0 ? s.X * (f / s.f) : s.X * (s.f / f)];
+  const capTxt = (c) => (c >= 1e-13 && c < 1e-9 ? `${n3(c * 1e12)} pF` : siFormat(c, "F", 3));
+  const loadTxt = () => (s.X === 0 ? `${n3(s.R)} Ω` : s.X > 0 ? `${n3(s.R)} Ω + ${siFormat(s.X / (2 * PI * s.f), "H", 3)}` : `${n3(s.R)} Ω + ${capTxt(-1 / (2 * PI * s.f * s.X))}`);
+
+  // ---- L-matches ----
+  function lmatch() {
+    const R = s.R, X = s.X, Z0 = s.Z0, Y0 = 1 / Z0, out = [];
+    if (R <= Z0 * (1 + 1e-12)) {
+      const root = Math.sqrt(Math.max(R * (Z0 - R), 0));
+      for (const sg of root > 1e-12 * Z0 ? [1, -1] : [1]) {
+        const x = -X + sg * root, b = (X + x) / (R * Z0);
+        out.push({ top: "P", els: [{ kind: "series", v: x }, { kind: "shunt", v: b }], Q: Math.abs(X + x) / R });
+      }
+    }
+    const G = R / (R * R + X * X), Bl = -X / (R * R + X * X);
+    if (G <= Y0 * (1 + 1e-12)) {
+      const root = Math.sqrt(Math.max(G * (Y0 - G), 0));
+      for (const sg of root > 1e-12 * Y0 ? [1, -1] : [1]) {
+        const b = -Bl + sg * root, x = (Z0 * (Bl + b)) / G;
+        out.push({ top: "S", els: [{ kind: "shunt", v: b }, { kind: "series", v: x }], Q: Math.abs(Bl + b) / G });
+      }
+    }
+    // By loaded Q; equal Qs keep the series-first networks before the shunt-first ones, and the + root before the − root.
+    out.sort((p, q) => Math.round(p.Q * 1e9) - Math.round(q.Q * 1e9) || (p.top < q.top ? -1 : p.top > q.top ? 1 : 0));
+    const w = 2 * PI * s.f;
+    out.forEach((o) => o.els.forEach((e) => {
+      const tiny = e.kind === "series" ? Math.abs(e.v) < 1e-9 * Z0 : Math.abs(e.v) < 1e-9 * Y0;
+      e.part = tiny ? null : e.kind === "series" ? (e.v > 0 ? { k: "L", v: e.v / w } : { k: "C", v: -1 / (w * e.v) }) : (e.v > 0 ? { k: "C", v: e.v / w } : { k: "L", v: -1 / (w * e.v) });
+    }));
+    // R = Z0 with a reactance: both orders end in the same lone series part; it is listed once.
+    const seen = new Set();
+    return out.filter((o) => {
+      const key = o.els.filter((e) => e.part).map((e) => `${e.kind}${e.part.k}${e.part.v.toPrecision(8)}`).join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  const partTxt = (p) => (p.k === "L" ? siFormat(p.v, "H", 3) : capTxt(p.v));
+  const elName = (e) => (e.part ? `${e.kind} ${e.part.k}` : "");
+  const lmZin = (sol, f) => {
+    const w = 2 * PI * f;
+    let z = loadZ(f);
+    for (const e of sol.els) {
+      if (!e.part) continue;
+      const { k, v } = e.part;
+      if (e.kind === "series") z = cadd(z, [0, k === "L" ? w * v : -1 / (w * v)]);
+      else z = cinv(cadd(cinv(z), [0, k === "C" ? w * v : -1 / (w * v)]));
+    }
+    return z;
+  };
+  const lmGamma = (sol) => (f) => cabs(gam([lmZin(sol, f)[0] / s.Z0, lmZin(sol, f)[1] / s.Z0]));
+
+  // ---- stubs ----
+  function stubs(kind) {
+    const a = kind === "shunt" ? cinv(zl()) : zl();
+    const g = a[0], b = a[1];
+    if (Math.abs(g - 1) < 1e-12 && Math.abs(b) < 1e-12) return [];
+    const A = b * b + g * g - g, r = Math.sqrt(Math.max(g * ((1 - g) ** 2 + b * b), 0));
+    const ts = Math.abs(A) < 1e-12 ? [(1 - g) / (2 * b), Infinity] : [(b + r) / A, (b - r) / A];
+    const out = ts.map((t) => {
+      let d, ad;
+      if (!isFinite(t)) { d = 0.25; ad = cinv(a); } else { d = (((Math.atan(t) / (2 * PI)) % 0.5) + 0.5) % 0.5; ad = line(a, t); }
+      const sv = -ad[1];
+      const rev = Math.atan2(1, -sv) / (2 * PI), dir = ((((Math.atan(sv) % PI) + PI) % PI)) / (2 * PI);
+      return kind === "shunt" ? { d, a, ad, s: sv, short: rev, open: dir } : { d, a, ad, s: sv, short: dir, open: rev };
+    });
+    return out.sort((p, q) => p.d - q.d);
+  }
+  // The lumped part with the stub's susceptance (shunt) or reactance (series) sv, normalized.
+  function stubPart(kind, sv) {
+    if (Math.abs(sv) < 1e-12 || !fOk()) return null;
+    const w = 2 * PI * s.f;
+    if (kind === "shunt") return sv > 0 ? { k: "C", v: sv / (w * s.Z0) } : { k: "L", v: -s.Z0 / (w * sv) };
+    return sv > 0 ? { k: "L", v: (sv * s.Z0) / w } : { k: "C", v: -1 / (w * sv * s.Z0) };
+  }
+  const stubGamma = (kind, term, so) => (f) => {
+    const zlf = [loadZ(f)[0] / s.Z0, loadZ(f)[1] / s.Z0];
+    const th = (2 * PI * so.d * f) / s.f, ts = Math.tan((2 * PI * (term === "short" ? so.short : so.open) * f) / s.f);
+    const big = (v) => (Math.abs(v) < 1e-300 ? Infinity : v);
+    if (kind === "shunt") {
+      const y = line(cinv(zlf), Math.tan(th));
+      const ys = term === "short" ? [0, -1 / big(ts)] : [0, ts];
+      return cabs(gam(cinv(cadd(y, ys))));
+    }
+    const z = line(zlf, Math.tan(th));
+    const zs = term === "short" ? [0, ts] : [0, -1 / big(ts)];
+    return cabs(gam(cadd(z, zs)));
+  };
+
+  // ---- quarter-wave sections ----
+  function quarter() {
+    const g = loadG(), S = (1 + cabs(g)) / (1 - cabs(g));
+    const dmax = ((((Math.atan2(g[1], g[0]) * 180) / PI) % 360) + 360) % 360 / 720, dmin = (dmax + 0.25) % 0.5;
+    return [{ at: "maximum", d: dmax, ZT: Math.sqrt(S) * s.Z0, R: S * s.Z0 }, { at: "minimum", d: dmin, ZT: s.Z0 / Math.sqrt(S), R: s.Z0 / S }].sort((p, q) => p.d - q.d);
+  }
+  const qwGamma = (q) => (f) => {
+    const zlf = [loadZ(f)[0] / s.Z0, loadZ(f)[1] / s.Z0];
+    const zd = line(zlf, Math.tan((2 * PI * q.d * f) / s.f));
+    const zt = q.ZT / s.Z0, th = (PI / 2) * (f / s.f), t = Math.tan(th);
+    const zin = cdiv(cmul([zt, 0], cadd(zd, [0, zt * t])), cadd([zt, 0], cmul([0, t], zd)));
+    return cabs(gam(zin));
+  };
+
+  // ---- the band with a return loss of at least 15 dB around f ----
+  function band(gf) {
+    const thr = 10 ** (-15 / 20);
+    if (!(gf(s.f) <= thr)) return null;
+    const edge = (sg) => {
+      let last = s.f;
+      for (let k = 1; k <= 400; k++) {
+        const f = s.f * (1 + sg * 0.002 * k);
+        if (!(f > 0)) return null;
+        if (!(gf(f) <= thr)) {
+          let lo = last, hi = f;
+          for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; if (gf(mid) <= thr) lo = mid; else hi = mid; }
+          return lo;
+        }
+        last = f;
+      }
+      return null;
+    };
+    return [edge(-1), edge(1)];
+  }
+  const bandTxt = (b) => {
+    if (!b) return "no 15 dB band";
+    const [lo, hi] = b;
+    if (lo === null || hi === null) return "wider than ±80 %";
+    const u = lo >= 1e9 ? [1e9, "GHz"] : lo >= 1e6 ? [1e6, "MHz"] : [1e3, "kHz"];
+    return `${+(lo / u[0]).toPrecision(4)} to ${+(hi / u[0]).toPrecision(4)} ${u[1]}`;
+  };
+
+  function problem() {
+    if (!(s.Z0 > 0)) return "Enter the line impedance Z0, above zero.";
+    if (!(s.R > 0)) return "Enter the load's resistance, above zero.";
+    if (!isFinite(s.X)) return "Enter the load's reactance (negative for a capacitor).";
+    if (state.mode === "load") return "";
+    if (state.mode === "lmatch" && !fOk()) return "Enter the frequency.";
+    if ((state.mode === "stub" || state.mode === "qw") && !(s.vf > 0 && s.vf <= 1)) return "Enter the velocity factor, above 0 and at most 1.";
+    if (cabs(loadG()) < 1e-9) return "The load is already matched: nothing to add.";
+    return "";
+  }
+
+  // ---------------- the chart and the circuit ----------------
+  const SM_BLUE = "#8FC1F5", SM_GREEN = "#5DCAA5", SM_WIRE = "#5A6169", SM_GREY = "#8A9099";
+
+  // The Smith chart, centred on (CX, CY) with radius R, and what the tool found on it.
+  function chart(CX = 150, CY = 72, R = 68) {
+    const wire = SM_WIRE, part = SM_BLUE, calc = SM_GREEN, grey = SM_GREY;
+    const px = (g) => [CX + R * g[0], CY - R * g[1]];
+    // Labels sit on top of the lines, each with a halo in the box's own colour so a line running through one does not hide it.
+    const lbl = (x, y, v, c = grey, a = "start") => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${v}</text>`;
+    let out = `<clipPath id="smc"><circle cx="${CX}" cy="${CY}" r="${R}"/></clipPath><g clip-path="url(#smc)" stroke="${wire}" stroke-width="0.7" stroke-opacity="0.65" fill="none">`;
+    for (const r of [0.2, 0.5, 1, 2, 5]) out += `<circle cx="${(CX + (R * r) / (1 + r)).toFixed(1)}" cy="${CY}" r="${(R / (1 + r)).toFixed(1)}"/>`;
+    for (const x of [0.2, 0.5, 1, 2, 5]) for (const sg of [-1, 1]) out += `<circle cx="${CX + R}" cy="${(CY + (sg * R) / x).toFixed(1)}" r="${(R / x).toFixed(1)}"/>`;
+    out += `<path d="M${CX - R} ${CY} H${CX + R}"/></g><circle cx="${CX}" cy="${CY}" r="${R}" stroke="${wire}" stroke-width="1.4" fill="none"/>`;
+    let scale = "";
+    for (const r of [0.2, 0.5, 1, 2, 5]) scale += lbl(CX + (R * (r - 1)) / (r + 1), CY + 12, String(r), grey, "middle");
+    if (problem()) return out + scale;
+    const dot = (g, c, rad = 3.6) => { const [x, y] = px(g); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" fill="${c}"/>`; };
+    // Labels beside their points. Points that coincide (the load is its own first stop when a part or a line is nil, and the
+    // voltage maximum of a real load above Z0 is the load) share one label; each label tries the way outward first and then the
+    // other sides, keeping off the others and the r scale.
+    const wants = [];
+    const tag = (g, text, c) => wants.push({ g, text, c });
+    const placeTags = () => {
+      const merged = [];
+      for (const t of wants) {
+        const [x, y] = px(t.g), m = merged.find((o) => Math.hypot(o.x - x, o.y - y) < 4);
+        if (m) m.text += `, ${t.text}`; else merged.push({ x, y, text: t.text, c: t.c });
+      }
+      const boxes = [1, 0.2, 0.5, 2, 5].map((r) => ({ x: CX + (R * (r - 1)) / (r + 1), y: CY + 8, w: 18 }));
+      return merged.map(({ x, y, text, c }) => {
+        const ux = x - CX, uy = y - CY, n = Math.hypot(ux, uy), w = 7 * text.length + 2;
+        const base = n > 10 ? Math.atan2(uy, ux) : -Math.PI / 4, onAxis = Math.abs(uy) < 5;
+        const angles = onAxis ? [-Math.PI / 2, Math.PI / 2, Math.PI, 0] : [0, 0.7, -0.7, 1.4, -1.4, 2.1, -2.1, Math.PI].map((d) => base + d);
+        let best = null;
+        for (const a of angles) {
+          const dx = Math.cos(a), dy = Math.sin(a);
+          const lx = Math.min(294 - w / 2, Math.max(6 + w / 2, x + dx * (7 + (w / 2) * Math.abs(dx)))), ly = Math.min(CY + R, Math.max(11, y + dy * (7 + 6 * Math.abs(dy)) + 4));
+          const hit = boxes.some((o) => Math.abs(o.x - lx) < (o.w + w) / 2 && Math.abs(o.y - (ly - 4)) < 12);
+          if (!best || !hit) best = { lx, ly };
+          if (!hit) break;
+        }
+        boxes.push({ x: best.lx, y: best.ly - 4, w });
+        return lbl(best.lx, best.ly, text, c, "middle");
+      });
+    };
+    const poly = (pts, c, w = 2, op = 1, dash = "") => `<path d="${pts.map((g, i) => `${i ? "L" : "M"}${px(g)[0].toFixed(1)} ${px(g)[1].toFixed(1)}`).join(" ")}" stroke="${c}" stroke-width="${w}" stroke-opacity="${op}" ${dash ? `stroke-dasharray="${dash}"` : ""} stroke-linejoin="round" fill="none"/>`;
+    const N = 48;
+    const arc = (g0, ang) => Array.from({ length: N + 1 }, (_, i) => { const p = (ang * i) / N, c = Math.cos(p), sn = Math.sin(p); return [g0[0] * c + g0[1] * sn, g0[1] * c - g0[0] * sn]; });
+    const gL = loadG();
+    tag(gL, "L", part);
+    // the circle of constant |Γ| through the load
+    out += `<circle cx="${CX}" cy="${CY}" r="${(R * cabs(gL)).toFixed(1)}" stroke="${grey}" stroke-width="1" stroke-dasharray="3 3" fill="none"/>`;
+    const circleG1 = (gc) => `<circle cx="${(CX + R * gc[0]).toFixed(1)}" cy="${CY}" r="${(R * gc[1]).toFixed(1)}" stroke="${calc}" stroke-width="1" stroke-opacity="0.55" stroke-dasharray="2 3" fill="none"/>`;
+    if (state.mode === "lmatch") {
+      const sols = lmatch(), sol = sols[Math.min(state.sel, sols.length - 1)];
+      let z = zl(), idx = 0;
+      // the intermediate point lies on the r = 1 circle after a shunt part (already drawn) and on the g = 1 circle after a series one
+      out += sol.top === "S" ? "" : circleG1([-0.5, 0.5]);
+      for (const e of sol.els) {
+        const seg = [];
+        for (let i = 0; i <= N; i++) {
+          const t = i / N;
+          if (e.kind === "series") seg.push(gam(cadd(z, [0, (t * e.v) / s.Z0])));
+          else seg.push(gam(cinv(cadd(cinv(z), [0, t * e.v * s.Z0]))));
+        }
+        out += poly(seg, calc, 2.2);
+        z = e.kind === "series" ? cadd(z, [0, e.v / s.Z0]) : cinv(cadd(cinv(z), [0, e.v * s.Z0]));
+        idx++;
+        if (idx === 1) { out += dot(gam(z), calc, 3.2); tag(gam(z), "1", calc); }
+      }
+    } else if (state.mode === "stub") {
+      const sols = stubs(state.kind), pick = Math.min(state.sel, sols.length - 1);
+      out += state.kind === "shunt" ? circleG1([-0.5, 0.5]) : "";
+      sols.forEach((so, i) => {
+        const dim = i !== pick, op = dim ? 0.4 : 1;
+        const a1 = poly(arc(gL, 4 * PI * so.d), calc, 2.2, op);
+        const seg = Array.from({ length: N + 1 }, (_, k) => { const t = k / N, aa = cadd(so.ad, [0, t * so.s]); return state.kind === "shunt" ? gam(cinv(aa)) : gam(aa); });
+        const gd = state.kind === "shunt" ? gam(cinv(so.ad)) : gam(so.ad);
+        out += a1 + poly(seg, calc, 2.2, op) + dot(gd, calc, dim ? 2.6 : 3.2);
+        tag(gd, String(i + 1), dim ? grey : calc);
+      });
+    } else if (state.mode === "qw") {
+      const qs = quarter(), pick = Math.min(state.sel, qs.length - 1);
+      qs.forEach((q, i) => {
+        const dim = i !== pick, op = dim ? 0.4 : 1;
+        const gp = arc(gL, 4 * PI * q.d), end = gp[gp.length - 1];
+        out += poly(gp, calc, 2.2, op) + poly([[end[0], 0], [0, 0]], calc, 1.6, op, "4 3") + dot([end[0], 0], calc, dim ? 2.6 : 3.2);
+        tag([end[0], 0], q.at === "maximum" ? "max" : "min", dim ? grey : calc);
+      });
+    }
+    out += dot(gL, part, 4) + `<circle cx="${CX}" cy="${CY}" r="3" fill="none" stroke="${calc}" stroke-width="1.6"/>` + scale + placeTags().join("");
+    return out;
+  }
+
+  // The network as it is built, the line coming in on the left and the load on the right: the parts you gave are blue,
+  // the ones this tool calculated green, the wires grey. The rail is at Y, every ground on one line at GY.
+  function circuit() {
+    if (problem()) return "";
+    const wire = SM_WIRE, part = SM_BLUE, calc = SM_GREEN;
+    const Y = 19, GY = 72, MID = 46, LX = 244;
+    const w = (d) => `<path d="${d}" stroke="${wire}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    const q = (d, c, sw = 1.6) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+    const lbl = (id, x, y, t, c, a = "middle", fit = 0) => `<text data-res="${id}" x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}"${fit && t.length * 6.2 > fit ? ` textLength="${fit}" lengthAdjust="spacingAndGlyphs"` : ""}>${t}</text>`;
+    const dot = (x) => `<circle cx="${x}" cy="${Y}" r="2.6" fill="${wire}"/>`;
+    const ground = (x) => w(`M${x - 12} ${GY} H${x + 12} M${x - 8} ${GY + 4} H${x + 8} M${x - 4} ${GY + 8} H${x + 4}`);
+    const zigH = (x1, x2, y) => { let d = `M${x1} ${y}`; const n = 6, st = (x2 - x1) / n; for (let i = 0; i < n; i++) d += ` L${x1 + st * (i + 0.5)} ${y + (i % 2 ? 5 : -5)}`; return `${d} L${x2} ${y}`; };
+    const coilH = (x1, y) => `M${x1} ${y}` + " a5 5 0 0 1 10 0".repeat(4);
+    const coilV = (x, y1) => `M${x} ${y1}` + " a5 5 0 0 1 0 10".repeat(4);
+    const box = (x, y, wd, h, c) => `<rect x="${x}" y="${y}" width="${wd}" height="${h}" rx="2" stroke="${c}" stroke-width="1.6" fill="none"/>`;
+    const openEnd = (x, y, c) => `<circle cx="${x}" cy="${y}" r="2.4" stroke="${c}" stroke-width="1.4" fill="none"/>`;
+    const fq = fOk(), ll = lamLine();
+    const feed = `<circle cx="9" cy="${Y}" r="3" stroke="${wire}" stroke-width="1.4" fill="none"/>${lbl("cin", 3, 9, `${n3(s.Z0)} Ω`, part, "start")}`;
+    // The rail from the line to its end, leaving a gap wherever a part sits on it; tail continues the wire from the end.
+    const rail = (end, gaps, tail = "") => {
+      let x = 12, d = "";
+      for (const [a, b] of gaps.slice().sort((p, r) => p[0] - r[0])) { d += `M${x} ${Y} H${a} `; x = b; }
+      if (x < end) d += `M${x} ${Y} H${end} `;
+      return w(d + tail);
+    };
+    // A part in series on the rail, centred on x.
+    const series = (x, p, c) => (p.k === "L"
+      ? { gap: [x - 20, x + 20], svg: q(coilH(x - 20, Y), c) }
+      : { gap: [x - 3.5, x + 3.5], svg: q(`M${x - 3.5} ${Y - 9} V${Y + 9} M${x + 3.5} ${Y - 9} V${Y + 9}`, c, 2) });
+    // A part from the rail down to ground at x (a junction dot on the rail unless it ends the rail).
+    const shunt = (x, p, c, junction = true) => (junction ? dot(x) : "") + (p ? (p.k === "L"
+      ? w(`M${x} ${Y} V${MID - 20} M${x} ${MID + 20} V${GY}`) + q(coilV(x, MID - 20), c)
+      : w(`M${x} ${Y} V${MID - 4} M${x} ${MID + 4} V${GY}`) + q(`M${x - 10} ${MID - 4} H${x + 10} M${x - 10} ${MID + 4} H${x + 10}`, c, 2)) : w(`M${x} ${Y} V${GY}`)) + ground(x);
+    const loadBox = () => {
+      const txt = `${cplx(s.R, s.X)} Ω`;
+      return box(LX - 38, 26, 76, 30, part) + w(`M${LX} 56 V${GY}`) + ground(LX) + lbl("czl", LX, 39, "ZL", part) + lbl("czv", LX, 52, txt, part, "middle", 68);
+    };
+    const tail = `M${LX} ${Y} V26`;
+    const cnt = { L: 0, C: 0 };
+    const des = (p) => `${p.k}${++cnt[p.k]}`;
+    const mode = state.mode;
+
+    if (mode === "load") {
+      // The load as the tool models it: its resistance in series with an inductor or a capacitor.
+      const xr = 190, reactive = s.X === 0 ? null : s.X > 0 ? { k: "L", v: s.X / (2 * PI * s.f) } : { k: "C", v: -1 / (2 * PI * s.f * s.X) };
+      const rLbl = lbl("cr", 170, 9, `R ${n3(s.R)} Ω`, part);
+      const xLbl = reactive ? (fq ? lbl("cx", xr + 14, MID + 4, `${reactive.k} ${partTxt(reactive)}`, calc, "start") : lbl("cx", xr + 14, MID + 4, `${s.X < 0 ? "−" : "+"}j${n3(Math.abs(s.X))} Ω`, part, "start")) : "";
+      return feed + rail(xr, [[150, xr]]) + q(zigH(150, xr, Y), part) + shunt(xr, reactive, fq ? calc : part, false) + rLbl + xLbl;
+    }
+
+    if (mode === "lmatch") {
+      const sols = lmatch(), pick = Math.min(state.sel, sols.length - 1), sol = sols[pick];
+      const seq = sol.els.filter((e) => e.part).reverse();     // left to right: the part met first from the line
+      const gaps = [];
+      let parts = "";
+      const seriesFirst = seq.length === 2 && seq[0].kind === "series";
+      const xs = seq.length === 2 ? (seriesFirst ? [70, 150] : [56, 150]) : [seq[0].kind === "series" ? 130 : 150];
+      seq.forEach((e, i) => {
+        const x = xs[i], text = `${des(e.part)} ${partTxt(e.part)}`;
+        if (e.kind === "series") {
+          const sp = series(x, e.part, calc);
+          gaps.push(sp.gap);
+          parts += sp.svg + lbl(`cp${i + 1}`, x, 9, text, calc, "middle", 84);
+        } else {
+          // A shunt part's label sits on the side that has the room: to the left when it is the last before the load.
+          const left = i === seq.length - 1;
+          parts += shunt(x, e.part, calc) + (left ? lbl(`cp${i + 1}`, x - 14, MID + 4, text, calc, "end", 84) : lbl(`cp${i + 1}`, x + 14, MID + 4, text, calc, "start", 84));
+        }
+      });
+      return feed + rail(LX, gaps, tail) + parts + loadBox();
+    }
+
+    if (mode === "stub") {
+      const sols = stubs(state.kind), pick = Math.min(state.sel, sols.length - 1), so = sols[pick];
+      const len = state.term === "short" ? so.short : so.open, isShunt = state.kind === "shunt";
+      const hasD = wl(so.d) !== wl(0);
+      const sx = hasD ? 96 : 150;
+      const gaps = [];
+      let parts = "";
+      // the stub: a shunt one hangs from the rail and ends in ground (short) or in the air (open); a series one breaks the rail and
+      // runs out and back, closed at the end (short) or not (open)
+      let stub;
+      if (isShunt) {
+        stub = dot(sx) + w(`M${sx} ${Y} V27`) + box(sx - 6, 27, 12, 30, calc);
+        stub += state.term === "short" ? w(`M${sx} 57 V${GY}`) + ground(sx) : w(`M${sx} 57 V59`) + openEnd(sx, 61.4, calc);
+      } else {
+        gaps.push([sx - 10, sx + 10]);
+        stub = q(state.term === "short" ? `M${sx - 10} ${Y} V56 H${sx + 10} V${Y}` : `M${sx - 10} ${Y} V56 M${sx + 10} 56 V${Y}`, calc);
+        if (state.term === "open") stub += openEnd(sx - 10, 58.4, calc) + openEnd(sx + 10, 58.4, calc);
+      }
+      parts += `<g data-res="cstub"><title>${state.term} ${state.kind} stub</title>${stub}</g>`;
+      const lx = isShunt ? sx - 14 : sx - 18;
+      parts += lbl("cl", lx, 41, `stub ${wl(len)}`, calc, "end");
+      if (fq) parts += lbl("cll", lx, 53, lenTxt(len * ll), calc, "end");
+      if (hasD) {
+        const x1 = sx + (isShunt ? 0 : 10) + 30, wd = 62;
+        parts += box(x1, Y - 6, wd, 12, calc) + lbl("cd", x1 + wd / 2, 9, `d ${wl(so.d)}`, calc);
+        if (fq) parts += lbl("cdl", x1 + wd / 2, 39, lenTxt(so.d * ll), calc);
+        gaps.push([x1, x1 + wd]);
+      }
+      return feed + rail(LX, gaps, tail) + parts + loadBox();
+    }
+
+    // quarter-wave section
+    const qs = quarter(), pick = Math.min(state.sel, qs.length - 1), qq = qs[pick];
+    const hasD = wl(qq.d) !== wl(0);
+    const gaps = [];
+    let parts = "";
+    const x1 = hasD ? 46 : 112, wz = 66;
+    parts += box(x1, Y - 6, wz, 12, calc) + lbl("czt", x1 + wz / 2, 9, `ZT ${n3(qq.ZT)} Ω`, calc) + lbl("cztl", x1 + wz / 2, 39, fq ? `λ/4 ${lenTxt(ll / 4)}` : "λ/4", calc);
+    gaps.push([x1, x1 + wz]);
+    if (hasD) {
+      const x2 = 130, wd = 62;
+      parts += box(x2, Y - 6, wd, 12, calc) + lbl("cd", x2 + wd / 2, 9, `d ${wl(qq.d)}`, calc);
+      if (fq) parts += lbl("cdl", x2 + wd / 2, 39, lenTxt(qq.d * ll), calc);
+      gaps.push([x2, x2 + wd]);
+    }
+    return feed + rail(LX, gaps, tail) + parts + loadBox();
+  }
+
+  // The drawing: the chart with the circuit under it, or, tapped, the chart alone and as big as the box allows.
+  function diagram() {
+    const big = state.big;
+    const icon = `<g data-res="cbtn"><title>${big ? "Show the circuit too" : "Enlarge the chart"}</title><rect x="270" y="0" width="30" height="24" fill="none"/><path d="${big
+      ? "M284 4 V10 H290 M290 4 L284 10 M282 18 V12 H276 M276 18 L282 12"
+      : "M283 4 H290 V11 M290 4 L281 13 M283 18 H276 V11 M276 18 L285 9"}" stroke="${SM_GREY}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g>`;
+    return `<svg width="310" height="233" viewBox="0 0 300 226" fill="none"${big ? ' data-big="1"' : ""}>${big ? chart(150, 113, 104) : `${chart()}<g transform="translate(0 142)">${circuit()}</g>`}${icon}</svg>`;
+  }
+
+  // ---------------- results ----------------
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+    const solRow = (i, label, value) => `<div class="notation-row sol${i === pick ? " sel" : ""}" data-sol="${i}"><span>${i === pick ? "● " : ""}${label}</span><span data-res="sol${i}">${value}</span></div>`;
+    const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+    const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+    const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+    const loadLabel = `${cplx(s.R, s.X)} Ω on ${n3(s.Z0)} Ω`;
+    let pick = 0;
+
+    if (state.mode === "load") {
+      const g = loadG(), m = cabs(g), z = zl(), y = cinv(z);
+      const S = m >= 1 ? Infinity : (1 + m) / (1 - m), none = m < 1e-9;
+      const ang = (Math.atan2(g[1], g[0]) * 180) / PI;
+      const dmax = ((((Math.atan2(g[1], g[0]) * 180) / PI) % 360) + 360) % 360 / 720, dmin = (dmax + 0.25) % 0.5;
+      return `${head(`Load ${loadLabel}`, `${isFinite(S) ? n3(S) : "∞"} : 1`, `|Γ| ${n3(m)} ∠ ${n3(ang)}° · VSWR`)}
+        ${grid([cell("Return loss", none ? "∞ dB" : `${n3(-20 * Math.log10(m))} dB`, "rl"), cell("Mismatch loss", `${m >= 1 ? "∞" : n3(-10 * Math.log10(1 - m * m))} dB`, "ml"), cell("Power reflected", `${n3(100 * m * m)} %`, "pr")])}
+        <div class="field notation-box">
+          ${row("Normalized z · y", `${cplx(z[0], z[1])} · ${cplx(y[0], y[1])}`, "zy")}
+          ${row("Same as", fOk() ? loadTxt() : "enter the frequency", "eq")}
+          ${row("Voltage maximum", none ? "none: matched" : `${wl(dmax)} from the load`, "vmax")}
+          ${row("Voltage minimum", none ? "none: matched" : wl(dmin), "vmin")}
+        </div>`;
+    }
+
+    if (state.mode === "lmatch") {
+      const sols = lmatch();
+      pick = Math.min(state.sel, sols.length - 1);
+      const sol = sols[pick], parts = sol.els.filter((e) => e.part);
+      const b = band(lmGamma(sol));
+      return `${head(`L-match, ${loadLabel}, ${fTxt(s.f)}`, parts.map((e) => partTxt(e.part)).join(" · "),
+        `${parts.map((e, i) => `${elName(e)}${i === 0 && parts.length > 1 ? " at the load, then" : ""}`).join(" ")} · solution ${pick + 1} of ${sols.length}`)}
+        ${grid([cell("Loaded Q", n3(sol.Q), "q"), cell("15 dB band", bandTxt(b), "band"), cell("Load as", loadTxt(), "model")])}
+        <div class="field notation-box">
+          ${sols.map((o, i) => solRow(i, `${i + 1}  ${o.els.filter((e) => e.part).map(elName).join(", ")}`, o.els.filter((e) => e.part).map((e) => partTxt(e.part)).join(" · "))).join("")}
+        </div>`;
+    }
+
+    if (state.mode === "stub") {
+      const sols = stubs(state.kind);
+      pick = Math.min(state.sel, sols.length - 1);
+      const so = sols[pick], ll = lamLine(), kn = state.kind;
+      const lum = stubPart(kn, so.s);
+      const bs = (term) => bandTxt(band(stubGamma(kn, term, so)));
+      return `${head(`${kn === "shunt" ? "Shunt" : "Series"} stub, ${loadLabel}`, wl(so.d), `${fOk() ? `${lenTxt(so.d * ll)} of line from the load · ` : ""}solution ${pick + 1} of ${sols.length}`)}
+        ${grid([cell("Short stub", wl(so.short), "short"), cell("Open stub", wl(so.open), "open"), cell("Or lumped", lum ? `${kn} ${lum.k} ${partTxt(lum)}` : "—", "lump")])}
+        <div class="field notation-box">
+          ${sols.map((o, i) => solRow(i, `${i + 1}  line ${wl(o.d)}`, `short ${wl(o.short)} · open ${wl(o.open)}`)).join("")}
+          ${row("Stub lengths", fOk() ? `${lenTxt(so.short * ll)} short · ${lenTxt(so.open * ll)} open` : "enter the frequency", "lens")}
+          ${row("15 dB band, short", fOk() ? bs("short") : "enter the frequency", "bshort")}
+          ${row("15 dB band, open", fOk() ? bs("open") : "enter the frequency", "bopen")}
+        </div>`;
+    }
+
+    const qs = quarter();
+    pick = Math.min(state.sel, qs.length - 1);
+    const q = qs[pick], ll = lamLine();
+    const b = band(qwGamma(q));
+    return `${head(`Quarter-wave section, ${loadLabel}`, `${n3(q.ZT)} Ω`, `${fOk() ? `λ/4 is ${lenTxt(ll / 4)} (velocity factor ${n3(s.vf)}) · ` : ""}at the voltage ${q.at}, where the line shows ${n3(q.R)} Ω`)}
+        ${grid([cell("Section Z", `${n3(q.ZT)} Ω`, "zt"), cell("Line before it", wl(q.d), "d"), cell("15 dB band", fOk() ? bandTxt(b) : "enter the frequency", "band")])}
+        <div class="field notation-box">
+          ${qs.map((o, i) => solRow(i, `${i + 1}  voltage ${o.at}`, `line ${wl(o.d)} · ${n3(o.ZT)} Ω`)).join("")}
+          ${row("Line before it", fOk() ? lenTxt(q.d * ll) : "enter the frequency", "dlen")}
+        </div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st.top || {}); Object.assign(state.si, st.si || {}); state.sel = 0; paint(); };
+  useExamples([
+    { title: "A 60 − j80 Ω load on 50 Ω", note: "At 2 GHz it reflects 59 % of the voltage: VSWR 3.91, return loss 4.54 dB.",
+      apply: example({ top: { mode: "load", fUnit: "GHz" }, si: { R: 60, X: -80, Z0: 50, f: 2e9, vf: 1 } }) },
+    { title: "An L-match from 200 − j100 Ω to 100 Ω", note: "At 500 MHz: 0.923 pF and 39 nH, or 46.1 nH and 2.6 pF (the slides read 38.8 nH).",
+      apply: example({ top: { mode: "lmatch", fUnit: "MHz" }, si: { R: 200, X: -100, Z0: 100, f: 500e6, vf: 1 } }) },
+    { title: "A shunt stub for 60 − j80 Ω", note: "On 50 Ω: at 0.110 λ with a 0.095 λ short stub, or at 0.259 λ with 0.405 λ; the slides read 0.26 λ.",
+      apply: example({ top: { mode: "stub", kind: "shunt", fUnit: "GHz" }, si: { R: 60, X: -80, Z0: 50, f: 2e9, vf: 1 } }) },
+    { title: "A series stub for 100 + j80 Ω", note: "On 50 Ω: at 0.120 λ with a 0.398 λ open stub, or at 0.463 λ with 0.102 λ.",
+      apply: example({ top: { mode: "stub", kind: "series", fUnit: "GHz" }, si: { R: 100, X: 80, Z0: 50, f: 2e9, vf: 1 } }) },
+    { title: "A quarter-wave match for 100 Ω", note: "From 50 Ω: a 70.7 Ω section, λ/4 long, at the load, which is a voltage maximum.",
+      apply: example({ top: { mode: "qw", fUnit: "MHz" }, si: { R: 100, X: 0, Z0: 50, f: 1000e6, vf: 0.66 } }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((u) => `<option ${u === cur ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+    const field = (key, label, unitHTML, value, hint = "") => `
+        <div class="field">
+          <label><span class="field-name">${label}</span>${hint}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const optional = state.mode === "load" ? '<span class="field-hint">optional</span>' : "";
+    const fR = field("R", "Resistance", fixed("Ω"), fmt(s.R));
+    const fX = field("X", "Reactance", fixed("Ω"), fmt(s.X));
+    const fZ = field("Z0", "Line Z0", fixed("Ω"), fmt(s.Z0));
+    const fF = field("f", "Frequency", sel('data-uf="1"', SM_F_UNITS, state.fUnit), fmt(s.f / SM_F_UNITS[state.fUnit]), optional);
+    const fV = field("vf", "Velocity factor", fixed(""), fmt(s.vf));
+    const inputs = `<div class="field-pair">${fR}${fX}</div>` + (state.mode === "stub" || state.mode === "qw" ? `<div class="field-pair">${fZ}${fF}${fV}</div>` : `<div class="field-pair">${fZ}${fF}</div>`);
+    const controls = state.mode === "stub"
+      ? `${sel('class="label-select" data-kind="1"', { shunt: 0, series: 0 }, state.kind)} ${sel('class="label-select" data-term="1"', { short: 0, open: 0 }, state.term)} <span class="r-hint">lengths in</span> ${sel('class="label-select" data-ul="1"', SM_L_UNITS, state.lUnit)}`
+      : state.mode === "qw" ? `<span class="r-hint">lengths in</span> ${sel('class="label-select" data-ul="1"', SM_L_UNITS, state.lUnit)}` : "";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Load, L-match, stub and quarter-wave matching")}
+
+      ${pillRow(Object.entries(SM_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box" role="button" tabindex="0" aria-label="Chart and circuit: tap to enlarge the chart or to show the circuit" style="cursor:pointer">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${controls}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Γ = (Z − Z0) / (Z + Z0)", "VSWR = (1 + |Γ|) / (1 − |Γ|)", "L-match: x = −X ± √(R (Z0 − R))", "then b = (X + x) / (R Z0), Q = |X + x| / R", "Stub: (b² + g² − g) t² − 2 b t + 1 − g = 0", "d = atan (t) / 2π wavelengths, t = tan βd", "λ/4: ZT = √(Z0 R), R = Z0 S or Z0 / S"],
+        "The Smith chart shows every impedance as a point inside a circle, through its reflection coefficient Γ, the share of the voltage a load sends back: the centre is a perfect match (Γ = 0), the edge a pure reactance that reflects everything, and the circles and arcs on it are the load's resistance and reactance, in units of the line's impedance Z0. The VSWR (voltage standing wave ratio) is the ratio of the highest to the lowest voltage on the line, 1 when matched. Moving along the line toward the source turns the point clockwise round the centre, a full turn in half a wavelength; adding a series part moves it along a circle of constant resistance, adding a shunt part along a circle of constant conductance. Matching is moving the load to the centre: an L-match does it with two lumped parts, a series and a shunt one (the loaded Q is how sharply it tunes); a stub with a length of line from the load and a short or open stub across it (shunt) or in series with it; a quarter-wave transformer with a line section to a point where the impedance is real, a voltage maximum (Z0 S) or minimum (Z0 / S, S the VSWR), then a quarter-wave line of impedance √(Z0 R). The load is taken as its resistance in series with an inductor or a capacitor, so the bandwidth with a return loss of 15 dB or better can be found. Under the chart the circuit is drawn as it is built, the line coming in on the left and the load ZL on the right, the parts you gave in blue and the ones calculated in green: d is the length of line from the load, a stub is named by its own length (short at the end, or open, as you choose) and ZT is the impedance of the quarter-wave section. Tap the drawing to enlarge the chart, and again to bring the circuit back."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    const dbox = app.querySelector(".diagram-box");
+    const flip = () => { state.big = !state.big; show(); };
+    dbox.onclick = flip;
+    dbox.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); flip(); } };
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; state.sel = 0; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "f") s.f = v * SM_F_UNITS[state.fUnit];
+        else s[key] = v;
+        show();
+      };
+    });
+    const unit = (attr, name) => app.querySelectorAll(`select[${attr}]`).forEach((el) => { el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); if (name === "kind") state.sel = 0; paint(); }; });
+    unit("data-uf", "fUnit"); unit("data-ul", "lUnit"); unit("data-kind", "kind"); unit("data-term", "term");
+    app.querySelector('[data-res="result"]').onclick = (e) => {
+      const r = e.target.closest("[data-sol]");
+      if (r) { state.sel = +r.dataset.sol; show(); }
+    };
   }
 
   paint();

@@ -358,6 +358,14 @@ div.tool-row { cursor: default; }
   white-space: nowrap;
 }
 .filter-btn.active { color: #FFFFFF; }
+/* The selected pill in the dark theme: it was regular-weight pale blue on a tint hardly lighter than the card, which Pierre could barely
+   read. Bold white on the same domain tint lifted a little (the light theme has its own tints and keeps them). */
+:root:not([data-theme="light"]) .pill.active,
+:root:not([data-theme="light"]) .filter-btn.active {
+  color: #FFFFFF !important;
+  font-weight: 600;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.14)) !important;
+}
 
 /* Colour-band roller. One column per band, left to right in the order the
    bands sit on the part, so the picker reads like the resistor above it.
@@ -606,6 +614,10 @@ div.tool-row { cursor: default; }
 .notation-box { padding: 8px 14px; }
 .notation-row { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; line-height: 1.7; }
 .notation-row > span:first-child { color: var(--text-secondary); font-size: 14px; }
+/* A solution you can pick (Smith chart matching): the chosen one is tinted and drawn. */
+.notation-row.sol { cursor: pointer; border: 1px solid transparent; border-radius: 8px; padding: 0 8px; margin: 0 -8px; }
+.notation-row.sol.sel { background: var(--result-bg); border-color: var(--result-border); }
+.notation-row.sol.sel > span:first-child { color: var(--result-text); font-weight: 600; }
 /* The pickers that are the whole field (Wire sizing's AWG, SWG and
    insulation) are sized like the numbers beside them in their three-to-a-row
    line, not like the compact unit pickers every other .field select is,

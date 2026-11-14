@@ -99,6 +99,7 @@ will key on, since that is the id the app already holds for each tool.
 - Transmission lines → [VSWR / Return loss](#vswr)
 - Transmission lines → [Coax impedance](#coax)
 - Transmission lines → [Velocity factor](#velocity-factor)
+- Transmission lines → [Smith chart matching](#smith)
 - Transmission lines → [Skin depth](#skin-depth)
 - Transmission lines → [Coax cable standards](#coax-standards)
 - Power & gain → [RF cascade](#rf-cascade)
@@ -12094,6 +12095,353 @@ resonator, a 10 m cable measured by its resonance.
 - a 10 m cable resonating at 4.95 MHz: 66 %; a 50 ns delay: 66.7 % and
   5 MHz; a delay faster than light is refused;
 - inches put the imperial figure first.
+
+[↑ Index](#index)
+
+---
+
+<a id="smith"></a>
+## Smith chart matching
+
+`calc: smith` · RF & microwave › Transmission lines
+
+### What it computes
+
+A load sits at the end of a transmission line. When its impedance is not the
+line's, part of the wave is sent back. The tool shows how bad that is and gives
+three ways of curing it (pills). You give the load as a resistance R above zero
+and a reactance X (negative for a capacitor), both in ohms, and the line's
+impedance Z0.
+
+The drawing is the same for the four pills: the Smith chart with the load on it
+and whatever the tool found, and under it the circuit that was calculated, the
+line coming in on the left and the load, ZL, on the right. The parts you gave
+are blue, the ones the tool calculated green, the wires grey. Tap the drawing
+and the chart fills the box while the circuit goes; tap again and it comes back.
+
+- **Load:** how well the load matches the line. The big result is the VSWR
+  (3.91 : 1) with |Γ| and its angle under it. In three cells: the return loss,
+  the mismatch loss and the share of the power reflected. Under them: the
+  normalized impedance z and admittance y; "Same as", the load as its
+  resistance in series with an inductor or a capacitor at the frequency (the
+  frequency is optional here, and only this row waits for it); the distance
+  from the load to the first voltage maximum, in wavelengths, and to the first
+  minimum. The chart has the load, L, and the dashed circle of constant |Γ|
+  through it; the circuit is the line ending in that resistance and reactance.
+- **L-match:** a series part and a shunt part, ordinary inductors or capacitors
+  at the frequency, that match the load. The big result is the two values
+  ("92.7 fF · 6.08 nH"); under it which part is which ("shunt C at the load,
+  then series L") and which solution of how many. In three cells: the loaded Q,
+  the band where the return loss stays at 15 dB or better, and the load as
+  its resistance with an inductor or capacitor. Under them, every solution on a
+  row, sorted by loaded Q (up to four); tap a row to pick it: the chart draws
+  its path, from the load through "1", the point after the first part, to the
+  centre, and the circuit shows its parts numbered from the line (L1, C1; C1
+  and C2 when both are capacitors). A load whose resistance equals Z0 needs
+  only a series part, and that one is listed once.
+- **Stub:** a length of line from the load, then a stub, a short length of line
+  with its far end shorted or open, across the line (shunt) or in series with
+  it. The Output heading holds the choices: shunt or series, short or open, and
+  the unit for lengths. The big result is the distance from the load to the
+  stub in wavelengths, with the same in length units and "solution 1 of 2"
+  under it. In three cells: the length of a short stub, of an open stub, and
+  the lumped part that does the same job ("shunt L 2.7 nH"). Under them: the
+  two solutions on rows to tap, the stub lengths in the length unit, and the
+  15 dB band for the short stub and for the open one. The chart draws both
+  solutions, the one you picked bright. The circuit shows the line, the stub
+  you chose and the load: a shunt stub hangs from the line and ends in ground
+  (short) or in the air (open); a series stub breaks the line and runs out
+  and back, closed at its end (short) or not (open). Its label carries the stub's
+  length and, with a frequency, the same in the length unit.
+- **λ/4:** a quarter-wave section of another impedance, placed where the line
+  shows a real impedance. The big result is the section's impedance; under it
+  its length, where it goes (at the voltage minimum or maximum) and the
+  impedance the line shows there. In three cells: the section's impedance, the
+  length of line before it in wavelengths and the 15 dB band. Under them: the
+  two places (sorted by distance from the load) on rows to tap, and the line's
+  length before the section in the length unit. The circuit is line, section,
+  the line of that length, the load; with the load already at the voltage
+  maximum (a real load above Z0) there is no line before the section and the
+  drawing leaves it out.
+- **Units:** frequency kHz, MHz or GHz; lengths mm, cm, m, in or ft, set in
+  the Output heading. The velocity factor (Stub and λ/4) turns wavelengths into
+  lengths: λ in the line is c × VF / f.
+- **Remembered:** the pill, the frequency unit, the length unit, shunt or series
+  and short or open. The enlarged chart is not.
+
+Examples: a 60 − j80 Ω load on 50 Ω, an L-match from 200 − j100 Ω to 100 Ω, a
+shunt stub and a series stub, and a quarter-wave match for 100 Ω.
+
+### Terms
+
+- **Impedance Z = R + jX:** what a load presents to a signal at one frequency, in
+  ohms. R, the resistance, dissipates power; X, the reactance, stores and returns
+  it, positive for an inductor and negative for a capacitor. The j marks a
+  quantity a quarter of a cycle out of step with the other.
+- **Z0, the line's impedance:** the impedance a wave meets travelling along the
+  line, set by its construction (50 Ω and 75 Ω are the usual ones). A load of
+  exactly Z0 sends nothing back.
+- **Normalized z = Z / Z0 = r + jx:** the load in units of the line's impedance.
+  The chart is drawn for it, so one chart serves every Z0.
+- **Admittance Y = 1 / Z = G + jB, y = Y / Y0 = g + jb:** the same load seen as
+  how easily current flows, in siemens: G the conductance, B the susceptance,
+  positive for a capacitor and negative for an inductor. Parts in parallel add
+  their admittances, parts in series add their impedances, which is why a
+  matching job switches between the two.
+- **Reflection coefficient Γ:** the share of the voltage wave sent back by the
+  load, with its phase: Γ = (Z − Z0) / (Z + Z0). |Γ| runs from 0 (a match) to
+  1 (everything reflected, as from a short, an open or a pure reactance).
+- **VSWR (voltage standing wave ratio):** incoming and reflected waves add up to a
+  standing wave on the line; the VSWR is its highest voltage over its lowest,
+  (1 + |Γ|) / (1 − |Γ|), and 1 when matched.
+- **Return loss, mismatch loss, power reflected:** the same |Γ| in other words.
+  Return loss, −20 log |Γ| dB, says how far down the reflected wave is;
+  mismatch loss, −10 log (1 − |Γ|²) dB, the power the mismatch costs the load;
+  power reflected is |Γ|².
+- **Smith chart:** the disk of every Γ with |Γ| ≤ 1, which holds every load with
+  R ≥ 0. Its grid shows, at each Γ, the load's r and x: circles of constant
+  resistance all touching at the right-hand edge, and arcs of constant
+  reactance (the top half inductive, the bottom half capacitive). The centre
+  is the match, Γ = 0.
+- **Moving along the line:** towards the generator, Γ keeps its size and turns
+  clockwise round the centre, a full turn for every half wavelength. A point
+  therefore stays on its dashed circle of constant |Γ|.
+- **Voltage maximum, minimum:** places on the line where the standing wave
+  peaks or dips. There the impedance is real, Z0 × VSWR at a maximum and
+  Z0 / VSWR at a minimum, a quarter wavelength apart.
+- **Series part, shunt part:** a series part sits in the line, a shunt part
+  joins the line to ground. Adding series reactance moves the load's point along
+  its circle of constant resistance; adding shunt susceptance moves it along
+  its circle of constant conductance.
+- **L-match:** two lumped parts, one series and one shunt, drawn like an L or a
+  turned L. **Loaded Q:** how sharply it is tuned, the reactance over the
+  resistance at its middle point; the lower, the wider the band.
+- **Stub:** a length l of line, shorted or open at the far end, used as a
+  reactance. Across the line it adds susceptance −cot βl (short) or tan βl (open);
+  in series, reactance tan βl (short) or −cot βl (open), in units of 1 / Z0 and
+  Z0, with βl = 2π l / λ. A shorted stub a quarter wave long is an open circuit;
+  an open one is a short.
+- **Quarter-wave section, λ/4:** a line a quarter wavelength long, of impedance
+  ZT, turns a real impedance R into ZT² / R. With ZT = √(Z0 R) it makes R look
+  like Z0.
+- **Velocity factor (VF):** how fast the wave travels in the line, as a fraction of
+  the speed of light; a wavelength in the line is c × VF / f.
+- **15 dB band:** the frequencies around the design frequency over which the
+  return loss stays at 15 dB or better, |Γ| ≤ 0.178, about 3 % of the power
+  reflected. 15 dB is this tool's own yardstick, not a standard.
+
+### Sources
+
+- **Wikipedia, "Smith chart" (read through a fetch tool):** the chart as a plot of
+  Γ with z = (1 + Γ)/(1 − Γ) and the circles of constant resistance and reactance;
+  the admittance chart as the same chart turned half a turn; movement along the
+  line as rotation on the outer wavelength scale, the angle changing by 2π over
+  λ/2; and a worked example the tool reproduces: a 50 Ω line at 800 MHz and a
+  load of 17.5 Ω in series with 6.5 nH, z = 0.35 + j0.65, matched either by 0.079 λ
+  (29.6 mm) of line and a 2.6 pF series capacitor, or by 0.329 λ (123 mm) of line
+  and a 6.5 nH shunt inductor. The article does not say in which direction the
+  rotation goes; that comes from the line equations below.
+- **Michael Steer, Fundamentals of Microwave and RF Design, § 10.4 "The L matching
+  network" (LibreTexts page, read through the fetch tool):** the L-match between
+  two real resistances, with Q = √(R_high / R_low − 1), and two examples: 100 Ω to
+  1700 Ω at 900 MHz (Q 4, 70.7 nH, 0.416 pF) and 50 Ω to 75 Ω (Q 0.7071, a series
+  reactance of 35.35 Ω and a shunt one of 106.1 Ω). That page has no method for a
+  complex load.
+- **Lecture slides "Impedance Matching and Tuning", Çankaya University
+  (ece358.cankaya.edu.tr; PDF text extracted and read):** L-sections: the load
+  200 − j100 Ω to 100 Ω at 500 MHz, read off the chart as 0.92 pF with 38.8 nH or
+  46.1 nH with 2.61 pF, and z = 0.5 + j0.3, with a series x = 0.2 and a shunt
+  b = 1.0, or x = −0.8 and b = −1.0; single-stub tuning: a short shunt stub for
+  60 − j80 Ω on 50 Ω at 2 GHz (0.110 λ and 0.095 λ, or 0.260 λ and 0.405 λ) and an
+  open series stub for 100 + j80 Ω (0.120 λ and 0.397 λ, or 0.463 λ and 0.103 λ);
+  the loads modelled as 200 Ω + 3.18 pF, 60 Ω + 0.995 pF and 100 Ω + 6.37 nH to
+  plot |Γ| against frequency; short stubs preferred on coaxial cable (a short
+  radiates less) and open stubs on a printed board (no via to ground). Their title
+  is also that of the matching chapter of Pozar's Microwave Engineering (from
+  memory; the book was not read) and they do not cite it. Their quarter-wave
+  formula is an image the extraction lost; it is derived below.
+- **University of Tennessee, ECE341 lecture notes 9, "Impedance matching: lumped
+  elements and single stub" (Fall 2021; PDF text extracted and read):** y_L =
+  0.4 + j0.8: a line of 0.178 − 0.115 = 0.063 λ where y = 1 + j1.58, a short stub
+  of 0.09 λ, and a second place, the mirror image, at 0.322 − 0.115 = 0.207 λ
+  where y = 1 − j1.58 (the extracted text lost that minus sign).
+- **Not read:** Pozar's book itself, Smith's papers, and anything on double-stub
+  tuning (the tool does not do it) or on stubs in microstrip, where junction and
+  open-end effects are modelled.
+
+### Why the formulas are these
+
+**The chart.** With Γ = u + jv, z = (1 + Γ)/(1 − Γ) gives
+r = (1 − u² − v²) / ((1 − u)² + v²) and x = 2v / ((1 − u)² + v²). Setting r
+constant and completing the square gives (u − r/(1 + r))² + v² = 1/(1 + r)², a
+circle of centre (r/(1 + r), 0) and radius 1/(1 + r); setting x constant gives
+(u − 1)² + (v − 1/x)² = 1/x², a circle of centre (1, 1/x) and radius 1/|x|, of
+which only the part inside the unit circle is drawn. The chart shows r and x at
+0.2, 0.5, 1, 2 and 5. Seen as y = 1/z the same chart has its points turned
+half a turn: Γ(y) = −Γ(z).
+
+**Along the line.** A wave on a lossless line has Γ(d) = Γ_L e^(−j2βd) at a
+distance d from the load toward the generator, β = 2π/λ. The size stays, the
+angle falls by 4π d/λ: clockwise, a full turn at d = λ/2. At a voltage maximum
+Γ(d) is real and positive, so the first one is where the angle has fallen to 0,
+d = (arg Γ_L mod 360°) / 720° wavelengths, and a minimum is a quarter wavelength
+from it. There z = S at a maximum and 1/S at a minimum, S the VSWR.
+
+**The L-match.** Series first (at the load): adding jx to z = R + jX gives
+R + j(X + x). Its admittance must have conductance 1/Z0:
+R / (R² + (X + x)²) = 1/Z0, so (X + x)² = R (Z0 − R), which has solutions only for
+R ≤ Z0:
+
+    x = −X ± √(R (Z0 − R))
+
+What is left is the susceptance −(X + x) / (R Z0), which a shunt part cancels:
+
+    b = (X + x) / (R Z0)        Q = |X + x| / R
+
+Shunt first: the load's admittance is G + jB_L with G = R / (R² + X²) and
+B_L = −X / (R² + X²); adding jb gives G + j(B_L + b), whose impedance must have
+resistance Z0: G / (G² + (B_L + b)²) = Z0, so (B_L + b)² = G (Y0 − G), possible for
+G ≤ Y0 = 1/Z0:
+
+    b = −B_L ± √(G (Y0 − G))    x = Z0 (B_L + b) / G    Q = |B_L + b| / G
+
+Up to four solutions, two per order. A series x is an inductor L = x/ω if
+positive, a capacitor C = −1/(ωx) if negative; a shunt b is a capacitor
+C = b/ω if positive, an inductor L = −1/(ωb) if negative, ω = 2π f. For a real
+load the shunt-first Q is √(Y0/G − 1) = √(R/Z0 − 1), Steer's formula. When
+R = Z0 exactly, the series-first root is single (x = −X, b = 0) and the
+shunt-first one ends in the same lone series part, which is listed once.
+
+**The stub.** With a = y_L (shunt stub) or z_L (series stub) = g + jb, a line of
+electrical length βd changes it to a(d) = (a + jt) / (1 + j a t), t = tan βd: the
+same law for an admittance as for an impedance. Its real part is
+g (1 + t²) / ((1 − bt)² + g² t²); setting it to 1 gives
+
+    (b² + g² − g) t² − 2 b t + (1 − g) = 0
+    t = (b ± √(g ((1 − g)² + b²))) / (b² + g² − g)
+
+and d/λ = atan(t) / 2π, taken in [0, ½). When b² + g² − g is 0 (a on the circle
+through 0 and 1) one root is t = ∞, d = λ/4, and the other is
+t = (1 − g) / (2b). Moving along the line from a gives a(d) = 1 + j b_d; the stub
+must add s = −b_d. A shunt stub, shorted, has −cot βl = s, so
+l/λ = atan2(1, −s) / 2π; open, tan βl = s, so l/λ = (atan s mod π) / 2π. A series
+stub has the two swapped. The lumped part with the same s: shunt, C = s / (ω Z0)
+if s > 0 and L = −Z0 / (ω s) if s < 0; series, L = s Z0 / ω if s > 0 and
+C = −1 / (ω s Z0) if s < 0. The distance d is of the line's wavelength, so
+d × c × VF / f is its length.
+
+**The quarter-wave section.** A line of impedance Zt and electrical length θ
+turns Z_L into Zt (Z_L + j Zt tan θ) / (Zt + j Z_L tan θ), which at θ = 90° is
+Zt² / Z_L. For the line to see Z0 the section needs Zt² = Z0 R, with R the real
+impedance at that point: Z0 × S at a voltage maximum, Z0 / S at a minimum, so
+Zt = Z0 √S or Z0 / √S. With Zt² = Z0 Z_L the reflection coefficient at any θ is
+
+    Γ = (Z_L − Z0) / (Z_L + Z0 + j 2 Zt tan θ)
+
+so its size, (Z_L − Z0)² / ((Z_L + Z0)² + 4 Z0 Z_L tan² θ) under a root, is smallest
+at θ = 90°.
+
+**The band.** For the design frequency f0 the lines and stubs keep their length in
+wavelengths at f0, so their electrical length is proportional to f/f0; a lumped
+part keeps ωL or −1/(ωC); the load is its resistance in series with X f/f0 (an
+inductor, X > 0) or X f0/f (a capacitor), as the slides model theirs. |Γ| is
+computed at steps of 0.2 % of f0 from f0 downward and upward until it passes
+10^(−15/20) = 0.178, and each crossing is refined by halving 50 times. A band
+that has not closed within ±80 % is given as "wider than ±80 %".
+
+**The drawing.** A series part x moves z to z + jx along the circle of constant
+resistance; a shunt part b moves y to y + jb along the circle of constant
+conductance; a length of line d moves Γ clockwise round the dashed circle by 720°
+per wavelength. The tool samples those paths and draws them. A dotted green circle
+that appears is the circle of conductance 1, g = 1 (the mirror image of the r = 1
+circle): a shunt stub's line, and an L-match that starts with its series part,
+must bring the load onto it, from where one shunt move reaches the centre.
+
+### Assumptions and limits
+
+- **Ideal parts.** Lines lose nothing; inductors and capacitors have no
+  resistance, no stray capacitance and no self-resonance. At gigahertz that is
+  often untrue: the default L-match at 2 GHz asks for a 92.7 fF capacitor, less
+  than the stray capacitance of a solder pad or a via. The tool solves the
+  circuit; it does not know what can be built.
+- **Stubs and junctions.** The stub and the line have the same Z0 and velocity
+  factor. A T-junction adds a little discontinuity and an open end behaves as if
+  the line went a little further (its fringing field), so a real open stub is
+  cut slightly shorter; neither is modelled.
+- **One frequency.** Every design is exact at the design frequency and
+  narrow-band. The 15 dB band shows how narrow, for the load model above; a real
+  antenna or device has an impedance that varies in its own way.
+- **A match to the line.** The tool brings the load to Γ = 0 on a line of Z0, the
+  usual aim. It does not conjugate-match a source with a reactance of its own.
+- **R above zero.** A negative resistance (an active load) is outside the chart.
+  A load of exactly Z0 is "already matched".
+- **Numbers, not pictures.** Everything is calculated, not read off the chart;
+  chart readings in the sources differ from the exact values by up to about 2.5 %
+  (2.6 against 2.55 pF, 6.5 against 6.38 nH, 38.8 against 39.0 nH).
+- **L-match choices.** Up to four networks match one load; the first listed has
+  the lowest loaded Q and so the widest band. The tool does not say which is a
+  low-pass or a high-pass, nor which of them can be built with parts that exist.
+- **The λ/4 section** matches only a real impedance, so for a load with reactance
+  the tool first moves along the line to the voltage maximum or minimum, and
+  the line before the section counts in the band.
+- **The circuit is a diagram.** Boxes and parts are not drawn to scale; the
+  numbers beside them are the sizes.
+- **The 15 dB** and the ±80 % limit are this tool's choices; three digits are
+  shown.
+
+### How it was checked
+
+74 cases and the formula-search card. The expected values come from a Python
+implementation of the same formulas, written apart from the JavaScript, and cover
+every figure and every label of the circuit:
+- Load: 60 − j80 Ω on 50 Ω (3.91 : 1, |Γ| 0.593 ∠ −46.8°, 4.54 dB, 35.1 %,
+  z 1.2 − j1.6, y 0.3 + j0.4, 60 Ω + 0.995 pF, voltage maximum at 0.435 λ),
+  100 Ω and 25 Ω (VSWR 2, the maximum at the load and at 0.250 λ), a match, a
+  near short and a short, the load as 6.5 nH, 3.18 nH, 1.99 nF and 99.5 fF, with
+  and without a frequency, a 75 Ω line;
+- L-match: the slides' two examples, Steer's two, a load with four solutions, a
+  lone series part, 10 Ω to 50 Ω at 14 MHz, a 10 + j5 Ω load at 500 kHz, picking
+  each row, and the numbering of the parts on the circuit;
+- Stub: shunt and series, short and open, both solutions, velocity factor 0.66,
+  lengths in cm and in inches, no frequency, a stub right at the load, and a load
+  on the circle through 0 and 1 (one stub exactly a quarter wave away);
+- λ/4: 60 − j80, 100 Ω at 1 GHz in a 0.66 line, 25 Ω, 300 Ω on 75 Ω, both rows,
+  no frequency;
+- the refusals (Z0, R, X, frequency, velocity factor, a matched load), the
+  units and the remembered choices, the five examples, and the tap that enlarges
+  the chart.
+
+About 1 200 more cases, on 240 random loads (R 0.5 Ω to 1.5 kΩ, X ±600 Ω, Z0 10 to
+400 Ω, 100 kHz to 20 GHz) through all four pills, compared every figure and label
+with the Python implementation; they were run and not kept.
+
+Published answers reproduced (the tool gives the exact value, the sources read a
+chart):
+
+| Example | Source | Source reads | Tool gives |
+|---|---|---|---|
+| 200 − j100 Ω on 100 Ω, 500 MHz | Çankaya | 0.92 pF + 38.8 nH; 46.1 nH + 2.61 pF | 0.923 pF + 39.0 nH; 46.1 nH + 2.60 pF |
+| z = 0.5 + j0.3 | Çankaya | x 0.2, b 1.0; x −0.8, b −1.0 | 10 Ω and 0.02 S on 50 Ω: the same |
+| Shunt stub, 60 − j80 Ω on 50 Ω | Çankaya | d 0.110 and 0.260 λ; short 0.095 and 0.405 λ | 0.110 and 0.259; 0.095 and 0.405 |
+| Series stub, 100 + j80 Ω on 50 Ω | Çankaya | d 0.120 and 0.463 λ; open 0.397 and 0.103 λ | 0.120 and 0.463; 0.398 and 0.102 |
+| y_L = 0.4 + j0.8 | Tennessee | d 0.063 and 0.207 λ; short stub 0.09 λ; y = 1 ± j1.58 | 0.063 and 0.207; 0.090 |
+| 17.5 Ω + 6.5 nH, 800 MHz, 50 Ω | Wikipedia | 0.079 λ, 2.6 pF in series; 0.329 λ, 6.5 nH in shunt | 0.079 λ (29.6 mm), 2.55 pF; 0.329 λ (123 mm), 6.38 nH |
+| 100 Ω to 1700 Ω, 900 MHz | Steer | Q 4, 70.7 nH, 0.416 pF | Q 4, 70.7 nH, 0.416 pF |
+| 50 Ω to 75 Ω | Steer | Q 0.7071, 35.35 Ω, 106.1 Ω | Q 0.707; 56.3 nH and 15.0 pF at 100 MHz, which are 35.35 Ω and 106.1 Ω |
+
+The Python implementation also showed that:
+- simulating every network at its design frequency, over 5 000 random loads
+  (R 0.3 Ω to 1.6 kΩ, X ±800 Ω, Z0 10 to 400 Ω, 100 kHz to 20 GHz), leaves |Γ| at
+  most 4 × 10⁻¹³ for the L-matches and 3 × 10⁻¹¹ for the stubs, short and open,
+  and for the quarter-wave sections;
+- the band of a quarter-wave section at the load equals the closed form above:
+  0.65846 to 1.34154 f0 for 100 Ω on 50 Ω and for 25 Ω on 50 Ω, 0.84509 to
+  1.15491 f0 for 300 Ω on 75 Ω, the same to five digits;
+- the slides' two L-matches, which they say differ little in bandwidth, have
+  15 dB bands of 401.2 to 606.1 MHz (41 % of 500 MHz) and 428.1 to 662.9 MHz
+  (47 %);
+- the slides' loads, 60 − j80 Ω at 2 GHz and 100 + j80 Ω, are 60 Ω + 0.9947 pF
+  and 100 Ω + 6.366 nH, as they write them.
 
 [↑ Index](#index)
 
