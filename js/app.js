@@ -675,6 +675,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "beamwidth") return renderBeamwidth(domain, tool, favId);
   if (calcId === "smith") return renderSmith(domain, tool, favId);
   if (calcId === "if-calculator") return renderIfCalculator(domain, tool, favId);
+  if (calcId === "image-frequency") return renderImageFrequency(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -17258,6 +17259,419 @@ function renderIfCalculator(domain, tool, favId) {
     });
     const sd = app.querySelector("select[data-side]");
     if (sd) sd.onchange = () => { state.side = sd.value; setPref(C, "side", state.side); show(); };
+  }
+
+  paint();
+}
+
+// ---------- Image frequency ----------
+// A mixer gives the same IF for two inputs, the wanted RF and the image on the other side of the LO, RF ± 2 IF (see the IF calculator;
+// the 1000 kHz, 1455 kHz and 1910 kHz example is Wikipedia's "Superheterodyne receiver", read through a fetch tool). How well a filter
+// ahead of the mixer stops the image: for one tuned circuit the ratio of its gains at the RF and at the image is
+// IRR = √(1 + ρ² Q²), ρ = f_image/f_RF − f_RF/f_image, Q the circuit's quality factor (Wikipedia, "Image response": the formula lines of
+// the article's wikitext, quoted by a fetch tool). n such circuits that do not load one another multiply, n × 10 log (1 + (Q ρ)²) dB; an n-pole
+// Butterworth band-pass of centre f0 and 3 dB bandwidth BW is the low-pass prototype |H|² = 1/(1 + Ω^(2n)) (Wikipedia, "Butterworth
+// filter", read through a fetch tool) at Ω = Q (f/f0 − f0/f), Q = f0/BW (Wikipedia, "Prototype filter", read through a fetch tool), that
+// is Ω = Q ρ at the image: 10 log (1 + (Q ρ)^(2n)) dB. The IF that keeps the image out of a band of width BW: the image band starts at
+// the band's start + 2 IF, so 2 IF − BW is the gap, IF = (BW + guard)/2; Cornell, ECE 4880 "Frequency Strategy" (PDF text, read), gives
+// IF > BW_RF/2 and the FM example IF = (108 − 88)/2 + 0.7 = 10.7 MHz with a band filter of Q = 98/(108 − 88) = 4.9. A quadrature
+// (image-reject) mixer with a gain imbalance γ (a ratio) and a phase error φ rejects the image by (γ² + 1 + 2γ cos φ)/(γ² + 1 − 2γ cos φ)
+// (Wikipedia, "Image response": the inverse ratio IMRR ≈ (ε² + φ²)/4 for ε = γ − 1, the article crediting dsplog.com; the same formula on the
+// RF design tools page "Hartley Image Rejection Mixer", read through a fetch tool, whose printed cosine term lacks the factor 2 that its own
+// derivation has; that page says about 6° of phase error alone gives roughly 25 dB, which this gives, 25.6 dB). The cascade of tuned
+// circuits and the Butterworth form applied to image rejection, and the allowed errors, are derived here and checked against a Python
+// implementation. A real preselector also has loss at the RF, which this does not count: it is the extra rejection.
+const IMG_MODES = { filter: "Filter", needed: "Needed", ifc: "IF choice", ir: "IR mixer" };
+const IMG_F_UNITS = { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const IMG_DEC = { Hz: 3, kHz: 3, MHz: 6, GHz: 9 };
+const IMG_SIDES = { above: "LO above RF", below: "LO below RF" };
+const IMG_MODELS = { tuned: "tuned circuits", butter: "Butterworth" };
+// The IFs that filters are easy to buy for (the same list as the IF calculator).
+const IMG_USUAL = [[455e3, "455 kHz"], [10.7e6, "10.7 MHz"], [21.4e6, "21.4 MHz"], [45e6, "45 MHz"], [70e6, "70 MHz"]];
+const IMG_BIG = 300;
+
+function renderImageFrequency(domain, tool, favId) {
+  const C = "image-frequency";
+  const state = {
+    mode: pref(C, "mode", "filter", Object.keys(IMG_MODES)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(IMG_F_UNITS)),
+    side: pref(C, "side", "above", Object.keys(IMG_SIDES)),
+    model: pref(C, "model", "tuned", Object.keys(IMG_MODELS)),
+    // Which of the loaded Q and the bandwidth was typed last: the other one is calculated.
+    qKnown: "q",
+    // Hz: the RF, the IF; the loaded Q or the bandwidth, and the poles; the levels (dBm) and the ratio (dB);
+    // the band's two ends, the guard and an IF to try; the mixer's gain imbalance (dB), phase error (degrees) and target (dB).
+    rf: 98e6, ifq: 10.7e6, q: 20, bw: NaN, poles: 1,
+    pw: -80, pim: -30, si: 10,
+    b1: 88e6, b2: 108e6, guard: 1.4e6, ifTest: NaN,
+    gdb: 0.5, phi: 2, target: 40,
+  };
+  // Three figures, never in exponent form (a detuning of 0.000000004 for an IF of 1 Hz on 1 GHz is written out).
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const u = () => IMG_F_UNITS[state.fUnit];
+  // A frequency in the unit picked: nine figures at most, to 1 Hz, never in exponent form.
+  const one = (v) => {
+    const s = (+(Math.abs(v) / u()).toPrecision(9)).toFixed(IMG_DEC[state.fUnit]);
+    return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+  };
+  const fq = (v) => `${one(v)} ${state.fUnit}`;
+  const rng = (a, b) => (a === b ? fq(a) : `${one(a)} to ${one(b)} ${state.fUnit}`);
+  const db = (v) => (v >= IMG_BIG ? `over ${IMG_BIG} dB` : `${n3(v)} dB`);
+  const dbNeg = (v) => (v >= IMG_BIG ? `below −${IMG_BIG} dB` : `−${n3(v)} dB`);
+  const sg = () => (state.side === "above" ? 1 : -1);
+  const imgF = () => state.rf + 2 * sg() * state.ifq;
+  const rhoV = () => imgF() / state.rf - state.rf / imgF();
+  // The rejection in dB of n tuned circuits (each one 10 log (1 + (Q ρ)²)) or of an n-pole Butterworth band-pass.
+  const attn = (q, r, n) => (state.model === "tuned" ? n * 10 * Math.log10(1 + (q * r) ** 2) : 10 * Math.log10(1 + Math.abs(q * r) ** (2 * n)));
+  const qNeed = (rej, r, n) => (state.model === "tuned" ? Math.sqrt(10 ** (rej / (10 * n)) - 1) / Math.abs(r) : (10 ** (rej / 10) - 1) ** (1 / (2 * n)) / Math.abs(r));
+  // The loaded Q and the bandwidth: the one typed last is the input, the other follows (Q = RF / bandwidth).
+  const qNow = () => (state.qKnown === "q" ? state.q : state.rf / state.bw);
+  const bwNow = () => (state.qKnown === "bw" ? state.bw : state.rf / state.q);
+  // The image rejection of a quadrature mixer, exact and for small errors, in dB.
+  const irrOf = (g, p) => {
+    const a = 10 ** (g / 20), c = Math.cos((p * Math.PI) / 180), den = 1 + a * a - 2 * a * c;
+    return den <= 1e-300 ? Infinity : 10 * Math.log10((1 + a * a + 2 * a * c) / den);
+  };
+  const irrApprox = (g, p) => { const e = 10 ** (g / 20) - 1, r = (p * Math.PI) / 180, d = e * e + r * r; return d === 0 ? Infinity : 10 * Math.log10(4 / d); };
+  // The phase error that, with the gain imbalance g (dB), gives exactly t dB; null when the gain error alone is already too big.
+  function phiGiven(t, g) {
+    const a = 10 ** (g / 20), R = 10 ** (t / 10), c = ((R - 1) * (1 + a * a)) / (2 * a * (R + 1));
+    return c > 1 ? null : (Math.acos(c) * 180) / Math.PI;
+  }
+
+  function problem() {
+    const m = state.mode;
+    if (m === "filter" || m === "needed") {
+      if (!(state.rf > 0)) return "Enter the RF frequency.";
+      if (!(state.ifq > 0)) return "Enter the IF.";
+      if (sg() < 0 && state.rf - 2 * state.ifq <= 0) return "With the LO below the RF the IF must be under half the RF: the image, RF − 2 × IF, would be 0 Hz or less.";
+    }
+    if (m === "filter") {
+      if (state.qKnown === "q" && !(state.q > 0)) return "Enter the loaded Q, above 0.";
+      if (state.qKnown === "bw" && !(state.bw > 0)) return "Enter the bandwidth, above 0.";
+      if (!(Number.isInteger(state.poles) && state.poles >= 1 && state.poles <= 10)) return "Enter the number of poles, a whole number from 1 to 10.";
+    }
+    if (m === "needed") {
+      if (!isFinite(state.pw)) return "Enter the wanted signal's level.";
+      if (!isFinite(state.pim)) return "Enter the image signal's level.";
+      if (!isFinite(state.si)) return "Enter the S/I the wanted signal must keep over the image.";
+      if (state.pim - state.pw + state.si >= IMG_BIG) return `The rejection needed is over ${IMG_BIG} dB: check the levels.`;
+    }
+    if (m === "ifc") {
+      if (!(state.b1 > 0) || !(state.b2 > 0)) return "Enter the two ends of the band.";
+      if (state.b1 === state.b2) return "The two ends of the band must differ.";
+      if (isFinite(state.guard) && state.guard < 0) return "The guard cannot be negative.";
+      if (isFinite(state.ifTest) && state.ifTest <= 0) return "Enter an IF above 0, or leave it empty.";
+    }
+    if (m === "ir") {
+      if (!isFinite(state.gdb)) return "Enter the gain imbalance, in dB.";
+      if (!isFinite(state.phi)) return "Enter the phase error, in degrees.";
+      if (isFinite(state.target) && !(state.target > 0)) return "Enter a target above 0 dB, or leave it empty.";
+    }
+    return "";
+  }
+
+  // ---------------- the drawings ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", AMBER = "#E0A85E", WIRE = "#5A6169", GREY = "#8A9099";
+  // A label sits on top of the lines, with a halo in the box's own colour so a line running through it does not hide it.
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const X0 = 36, X1 = 292, Y0 = 20, Y1 = 112;
+
+  // The attenuation scale: 0 dB at the top, a line every 10, 20, 50 or 100 dB so that there are never more than six.
+  const stepFor = (a) => (a <= 50 ? 10 : a <= 100 ? 20 : a <= 250 ? 50 : 100);
+  const niceMax = (a) => { const t = Math.max(20, a * 1.2), s = stepFor(t); return Math.ceil(t / s) * s; };
+  function frame(amax) {
+    const step = stepFor(amax);
+    let out = "";
+    for (let a = 0; a <= amax + 1e-9; a += step) {
+      const y = Y0 + (a / amax) * (Y1 - Y0);
+      out += `<path d="M${X0} ${y.toFixed(1)} H${X1}" stroke="${WIRE}" stroke-width="${a === 0 ? 1.4 : 0.8}" stroke-opacity="${a === 0 ? 1 : 0.5}"/>` + lbl(null, X0 - 5, y + 4, a === 0 ? "0" : `−${a}`, GREY, "end");
+    }
+    return out;
+  }
+  const DASH = ["", "7 3", "2.5 3"];
+
+  // The response of the filter round the RF, with the image on it; for Needed the three curves that meet at the image.
+  function responseChart() {
+    if (problem()) return frame(40);
+    const f0 = state.rf, fi = imgF(), d = Math.abs(fi - f0), w0 = Math.min(f0, fi) - 0.6 * d, w1 = Math.max(f0, fi) + 0.6 * d;
+    const x = (f) => X0 + ((f - w0) / (w1 - w0)) * (X1 - X0);
+    const needed = state.mode === "needed";
+    const r = rhoV();
+    let curves, amax, aimg;
+    if (needed) {
+      const rej = state.pim - state.pw + state.si;
+      if (!(rej > 0)) return frame(40) + lbl("pn", 164, 70, "no rejection needed", GREEN, "middle");
+      amax = niceMax(Math.min(rej, 200));
+      aimg = rej;
+      curves = [1, 2, 3].map((n) => ({ n, q: qNeed(rej, r, n) }));
+    } else {
+      const q = qNow(), n = state.poles;
+      aimg = attn(q, r, n);
+      amax = niceMax(Math.min(aimg, 200));
+      curves = [{ n, q }];
+    }
+    const y = (a) => Y0 + (Math.min(a, amax) / amax) * (Y1 - Y0);
+    let out = frame(amax);
+    curves.forEach((cv, i) => {
+      const bw1 = f0 / cv.q, fs = new Set();
+      for (let k = 0; k <= 90; k++) fs.add(w0 + (k * (w1 - w0)) / 90);
+      // more points near the RF, where a narrow filter bends
+      for (let t = 0.125; t < (w1 - w0) / bw1; t *= 1.6) { fs.add(f0 + t * bw1); fs.add(f0 - t * bw1); }
+      fs.add(f0); fs.add(fi);
+      const pts = [...fs].filter((f) => f >= w0 && f <= w1).sort((p, q2) => p - q2);
+      const dd = pts.map((f, k) => `${k ? "L" : "M"}${x(f).toFixed(1)} ${y(attn(cv.q, f / f0 - f0 / f, cv.n)).toFixed(1)}`).join(" ");
+      const dash = needed && DASH[i] ? ` stroke-dasharray="${DASH[i]}"` : "";
+      out += `<path d="${dd}" stroke="${GREEN}" stroke-width="2.2" fill="none" stroke-linejoin="round"${dash}/>`;
+    });
+    out += `<path d="M${x(f0).toFixed(1)} ${Y0} V${Y1}" stroke="${BLUE}" stroke-width="2"/>` + lbl("pr", x(f0), 12, "RF", BLUE, "middle");
+    out += `<path d="M${x(fi).toFixed(1)} ${Y0} V${y(aimg).toFixed(1)}" stroke="${AMBER}" stroke-width="2" stroke-dasharray="4 3"/><circle cx="${x(fi).toFixed(1)}" cy="${y(aimg).toFixed(1)}" r="3.4" fill="${AMBER}"/>`;
+    out += lbl("pi", x(fi), 12, "image", AMBER, "middle");
+    const left = x(fi) > 160;
+    // below the dot, in the free space under the curve
+    out += lbl("pa", x(fi) + (left ? -6 : 6), y(aimg) + 16, dbNeg(aimg), AMBER, left ? "end" : "start");
+    if (needed) {
+      // the three curves are told apart by their dashes
+      let lx = 40;
+      curves.forEach((cv, i) => {
+        const t = `${cv.n} pole${cv.n > 1 ? "s" : ""}`;
+        out += `<path d="M${lx} 128 H${lx + 22}" stroke="${GREEN}" stroke-width="2.2"${DASH[i] ? ` stroke-dasharray="${DASH[i]}"` : ""}/>` + lbl(`pl${cv.n}`, lx + 27, 132, t, GREEN, "start");
+        lx += 27 + t.length * 6.4 + 16;
+      });
+    }
+    return out;
+  }
+
+  // The band and the band of its images, with the gap between them.
+  function ifcChart() {
+    const AX = [18, 286], AY = 122;
+    const axis = `<path d="M${AX[0]} ${AY} H${AX[1]}" stroke="${WIRE}" stroke-width="1.4"/>`;
+    if (problem()) return axis;
+    const lo = Math.min(state.b1, state.b2), hi = Math.max(state.b1, state.b2), bw = hi - lo, g = isFinite(state.guard) ? state.guard : 0;
+    const ifUse = state.ifTest > 0 ? state.ifTest : (bw + g) / 2, s = sg();
+    const raw = [lo + 2 * s * ifUse, hi + 2 * s * ifUse];
+    const im = raw[1] <= 0 ? null : [Math.max(raw[0], 0), raw[1]];
+    const all = [lo, hi, ...(im || [])], mn = Math.min(...all), mx = Math.max(...all), pad = 0.08 * (mx - mn);
+    const x = (f) => AX[0] + ((f - (mn - pad)) / (mx - mn + 2 * pad)) * (AX[1] - AX[0]);
+    let out = axis;
+    const bar = (id, a, b, y, c, text, above) => {
+      const x1 = x(a), x2 = x(b), w = text.length * 6.6;
+      const cx = Math.min(Math.max((x1 + x2) / 2, 6 + w / 2), 296 - w / 2);
+      return `<rect x="${x1.toFixed(1)}" y="${y - 5}" width="${Math.max(x2 - x1, 2).toFixed(1)}" height="10" rx="5" fill="${c}"/>` + lbl(id, cx, above ? y - 10 : y + 20, text, c, "middle");
+    };
+    const gap = 2 * ifUse - bw;
+    out += bar("pb", lo, hi, 40, BLUE, rng(lo, hi), true);
+    if (!im) out += lbl("pm", 150, 100, "image below 0 Hz: none", GREY, "middle");
+    else {
+      if (gap < 0) {
+        const a = Math.max(lo, im[0]), b = Math.min(hi, im[1]);
+        out += `<g data-res="pov"><title>image in the band</title><rect x="${x(a).toFixed(1)}" y="26" width="${(x(b) - x(a)).toFixed(1)}" height="86" fill="${AMBER}" fill-opacity="0.2"/></g>`;
+        out += lbl("pg", (x(a) + x(b)) / 2, 66, `overlap ${fq(b - a)}`, AMBER, "middle");
+      }
+      out += bar("pm", im[0], im[1], 96, AMBER, rng(im[0], im[1]), false);
+    }
+    if (gap > 0 && im) {
+      const xa = s > 0 ? x(hi) : x(raw[1]), xb = s > 0 ? x(raw[0]) : x(lo);
+      // where the band ends and where its image starts, and the distance between them
+      out += `<path d="M${xa.toFixed(1)} 46 V90 M${xb.toFixed(1)} 46 V90" stroke="${GREEN}" stroke-width="1" stroke-dasharray="2 3" stroke-opacity="0.8"/>`
+        + `<path d="M${xa.toFixed(1)} 63 V73 M${xb.toFixed(1)} 63 V73 M${xa.toFixed(1)} 68 H${xb.toFixed(1)}" stroke="${GREEN}" stroke-width="1.6" fill="none"/>`
+        + lbl("pg", (xa + xb) / 2, 59, `gap ${fq(gap)}`, GREEN, "middle");
+    }
+    out += lbl("pif", AX[0], 136, `IF ${fq(ifUse)}`, GREY, "start");
+    return out;
+  }
+
+  // What is left after an image-reject mixer: the wanted signal, and the image, down by the rejection.
+  function irChart() {
+    if (problem()) return frame(40);
+    const irr = irrOf(state.gdb, state.phi), amax = niceMax(isFinite(irr) ? Math.min(irr, 200) : 60);
+    const y = (a) => Y0 + (Math.min(a, amax) / amax) * (Y1 - Y0);
+    let out = frame(amax);
+    out += `<path d="M110 ${Y1} V${Y0}" stroke="${GREEN}" stroke-width="3"/>` + lbl("pw", 110, 12, "wanted", GREEN, "middle");
+    const yi = isFinite(irr) ? y(irr) : Y1;
+    out += `<path d="M200 ${Y1} V${yi.toFixed(1)}" stroke="${AMBER}" stroke-width="3"/>` + lbl("pi", 200, 12, "image", AMBER, "middle");
+    out += lbl("pa", 208, Math.min(yi + 14, Y1 - 4), isFinite(irr) ? dbNeg(irr) : "no image", AMBER, "start");
+    return out;
+  }
+
+  function diagram() {
+    const m = state.mode;
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${m === "ifc" ? ifcChart() : m === "ir" ? irChart() : responseChart()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const m = state.mode;
+    if (m === "filter") {
+      const q = qNow(), bw = bwNow(), n = state.poles, a = attn(q, rhoV(), n), fi = imgF(), dist = Math.abs(fi - state.rf);
+      return `${head("Image rejection", db(a), `${fq(dist)} ${fi > state.rf ? "above" : "below"} the RF · ${n3((100 * dist) / state.rf)} % off tune`)}
+        ${grid([cell("Image", fq(fi), "image"), cell("Detuning ρ", n3(Math.abs(rhoV())), "rho"), state.qKnown === "q" ? cell("Bandwidth", fq(bw), "other") : cell("Loaded Q", n3(q), "other")])}
+        <div class="field notation-box">
+          ${row("Amplitude at the image", a >= IMG_BIG ? "over 1 : 10¹⁵" : `1 : ${n3(10 ** (a / 20))}`, "amp")}
+          ${row("Image distance, in bandwidths", `${n3(dist / bw)} ×`, "dist")}
+          ${state.model === "tuned" ? row("Per tuned circuit", db(a / n), "per") : row("Bandwidth / RF", `${n3((100 * bw) / state.rf)} %`, "frac")}
+          ${state.model === "tuned" && n >= 2 ? row("All together, 3 dB", fq(bw * Math.sqrt(2 ** (1 / n) - 1)), "tot") : ""}
+        </div>`;
+    }
+    if (m === "needed") {
+      const rej = state.pim - state.pw + state.si, fi = imgF(), r = rhoV();
+      const at = row("Image at", `${fq(fi)} · ρ ${n3(Math.abs(r))}`, "at");
+      if (!(rej > 0)) {
+        return `${head("Rejection needed", "0 dB", "the image is already weak enough: no filter has to stop it")}
+          ${grid([cell("1 pole, Q", "none", "q1"), cell("2 poles, Q", "none", "q2"), cell("3 poles, Q", "none", "q3")])}
+          <div class="field notation-box">${at}</div>`;
+      }
+      const qs = [1, 2, 3].map((n) => qNeed(rej, r, n));
+      const dif = state.pim - state.pw;
+      return `${head("Rejection needed", db(rej), `${n3(dif)} dB image over wanted ${state.si >= 0 ? "+" : "−"} ${n3(Math.abs(state.si))} dB S/I`)}
+        ${grid(qs.map((q, i) => cell(`${i + 1} pole${i ? "s" : ""}, Q`, n3(q), `q${i + 1}`)))}
+        <div class="field notation-box">
+          ${qs.map((q, i) => row(`Bandwidth, ${i + 1} pole${i ? "s" : ""}`, fq(state.rf / q), `b${i + 1}`)).join("")}
+          ${at}
+        </div>`;
+    }
+    if (m === "ifc") {
+      const lo = Math.min(state.b1, state.b2), hi = Math.max(state.b1, state.b2), bw = hi - lo, g = isFinite(state.guard) ? state.guard : 0, s = sg();
+      const least = (bw + g) / 2, raw = [lo + 2 * s * least, hi + 2 * s * least];
+      const im = raw[1] <= 0 ? null : [Math.max(raw[0], 0), raw[1]];
+      // the gap between the band and its image is 2 IF − band: below 0 the image reaches into the band
+      const gapTxt = (ifv) => {
+        const gap = 2 * ifv - bw;
+        return gap < 0 ? `overlap ${fq(-gap)}` : gap === 0 ? "touching" : `gap ${fq(gap)} · ${gap < g ? "too close" : "clear"}`;
+      };
+      const rows = IMG_USUAL.map(([hz, t], i) => row(`With ${t}`, gapTxt(hz), `u${i}`));
+      if (state.ifTest > 0) rows.push(row("With your IF", gapTxt(state.ifTest), "mine"));
+      return `${head("Least IF", fq(least), g > 0 ? `the image band then starts ${fq(g)} ${s > 0 ? "above" : "below"} the band` : "the image band then just touches the band")}
+        ${grid([cell("Band", rng(lo, hi), "band"), cell("Band filter Q", n3((lo + hi) / 2 / bw), "q"), cell("Image band", im ? rng(im[0], im[1]) : "none: below 0 Hz", "image")])}
+        <div class="field notation-box">${rows.join("")}</div>`;
+    }
+    const irr = irrOf(state.gdb, state.phi), ap = irrApprox(state.gdb, state.phi), e = 10 ** (state.gdb / 20) - 1;
+    const irrTxt = (v) => (isFinite(v) ? db(v) : "∞ dB");
+    const rows = [];
+    if (isFinite(state.target)) {
+      const t = state.target, xx = 10 ** (-t / 20), pg = phiGiven(t, state.gdb);
+      // the most error that still gives the target: the one error alone, then the phase error that is left once the gain imbalance is as typed
+      rows.push(row(`Phase error alone for ${n3(t)} dB`, `${n3((2 * Math.atan(xx) * 180) / Math.PI)}°`, "rpa"));
+      rows.push(row(`Gain imbalance alone for ${n3(t)} dB`, `${n3(20 * Math.log10((1 + xx) / (1 - xx)))} dB`, "rga"));
+      rows.push(row(`Phase error with ${n3(state.gdb)} dB gain`, pg === null ? "not possible" : `${n3(pg)}°`, "rpg"));
+    }
+    return `${head("Image rejection", irrTxt(irr), `gain imbalance ${n3(state.gdb)} dB · phase error ${n3(state.phi)}°`)}
+        ${grid([cell("Small errors", irrTxt(ap), "approx"), cell("Gain error", `${n3(100 * e)} %`, "eps"), cell("Phase error", `${n3((state.phi * Math.PI) / 180)} rad`, "rad")])}
+        <div class="field notation-box">${rows.join("")}</div>`;
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, { ifTest: NaN, bw: NaN, qKnown: "q" }, st); paint(); };
+  useExamples([
+    { title: "A tuned circuit on FM", note: "Q 20 at 98 MHz with a 10.7 MHz IF: the image, 21.4 MHz up, is 18.1 dB down.",
+      apply: example({ mode: "filter", fUnit: "MHz", side: "above", model: "tuned", rf: 98e6, ifq: 10.7e6, q: 20, poles: 1 }) },
+    { title: "An AM station and its image", note: "At 1000 kHz with a 455 kHz IF the image is 1910 kHz (Wikipedia); Q 50 puts it 36.8 dB down.",
+      apply: example({ mode: "filter", fUnit: "kHz", side: "above", model: "tuned", rf: 1000e3, ifq: 455e3, q: 50, poles: 1 }) },
+    { title: "Stopping a strong image", note: "A −80 dBm signal, a −30 dBm image and 10 dB of S/I need 60 dB: three tuned circuits of Q 25.",
+      apply: example({ mode: "needed", fUnit: "MHz", side: "above", model: "tuned", rf: 98e6, ifq: 10.7e6, pw: -80, pim: -30, si: 10 }) },
+    { title: "An IF for the FM band", note: "88 to 108 MHz with 1.4 MHz of guard: at least 10.7 MHz (Cornell: 20/2 + 0.7).",
+      apply: example({ mode: "ifc", fUnit: "MHz", side: "above", b1: 88e6, b2: 108e6, guard: 1.4e6 }) },
+    { title: "An image-reject mixer", note: "0.1 dB and 1° leave the image 39.6 dB down; 0.5 dB and 2°, 29.5 dB.",
+      apply: example({ mode: "ir", gdb: 0.1, phi: 1, target: 40 }) },
+  ]);
+
+  // The Q and the bandwidth: the known one is as typed, the other is calculated and follows.
+  const shownQ = () => (state.qKnown === "q" ? state.q : state.rf / state.bw);
+  const shownBw = () => (state.qKnown === "bw" ? state.bw : state.rf / state.q);
+  const hintHTML = (w) => (state.qKnown === w ? "" : '<span class="field-hint">result</span>');
+  function syncQ() {
+    if (state.mode !== "filter") return;
+    const el = app.querySelector(state.qKnown === "q" ? 'input[data-key="bw"]' : 'input[data-key="q"]');
+    if (el && el !== document.activeElement) el.value = state.qKnown === "q" ? fmt(shownBw() / u()) : fmt(shownQ());
+  }
+  function hintsQ() {
+    ["q", "bw"].forEach((w) => { const el = app.querySelector(`[data-res="hint-${w}"]`); if (el) el.innerHTML = hintHTML(w); });
+  }
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((k) => `<option ${k === cur ? "selected" : ""}>${k}</option>`).join("")}</select>`;
+    const field = (attrs, label, unitHTML, value, hint = "") => `
+        <div class="field">
+          <label><span class="field-name">${label}</span>${hint}</label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" ${attrs} value="${value}" />${unitHTML}</div>
+        </div>`;
+    const fixed = (x) => `<span class="unit-fixed">${x}</span>`;
+    const opt = '<span class="field-hint">optional</span>';
+    const ff = (key, label, n, hint = "") => field(`data-key="${key}"`, label, sel(`data-funit="${n}"`, IMG_F_UNITS, state.fUnit), fmt(state[key] / u()), hint);
+    const m = state.mode;
+    const qf = field('data-key="q"', "Loaded Q", fixed(""), fmt(shownQ()), `<span data-res="hint-q">${hintHTML("q")}</span>`);
+    const bf = field('data-key="bw"', "Bandwidth", sel('data-funit="3"', IMG_F_UNITS, state.fUnit), fmt(shownBw() / u()), `<span data-res="hint-bw">${hintHTML("bw")}</span>`);
+    const inputs = m === "filter" ? `<div class="field-pair">${ff("rf", "RF", 1)}${ff("ifq", "IF", 2)}</div><div class="field-pair">${qf}${bf}</div><div class="field-pair">${field('data-key="poles"', "Poles", fixed(""), fmt(state.poles))}</div>`
+      : m === "needed" ? `<div class="field-pair">${ff("rf", "RF", 1)}${ff("ifq", "IF", 2)}</div><div class="field-pair">${field('data-key="pw"', "Wanted", fixed("dBm"), fmt(state.pw))}${field('data-key="pim"', "Image", fixed("dBm"), fmt(state.pim))}${field('data-key="si"', "S/I", fixed("dB"), fmt(state.si))}</div>`
+        : m === "ifc" ? `<div class="field-pair">${ff("b1", "Band from", 1)}${ff("b2", "to", 2)}</div><div class="field-pair">${ff("guard", "Guard", 3, opt)}${ff("ifTest", "Your IF", 4, opt)}</div>`
+          : `<div class="field-pair">${field('data-key="gdb"', "Gain imbalance", fixed("dB"), fmt(state.gdb))}${field('data-key="phi"', "Phase error", fixed("°"), fmt(state.phi))}</div><div class="field-pair">${field('data-key="target"', "Target rejection", fixed("dB"), fmt(state.target), opt)}</div>`;
+    const sideSel = `<select class="label-select" data-side="1">${Object.entries(IMG_SIDES).map(([k, t]) => `<option value="${k}" ${k === state.side ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const modelSel = `<select class="label-select" data-model="1">${Object.entries(IMG_MODELS).map(([k, t]) => `<option value="${k}" ${k === state.model ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const controls = m === "ir" ? "" : m === "ifc" ? sideSel : `${sideSel} ${modelSel}`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Stopping the image: filter, IF choice, IR mixer")}
+
+      ${pillRow(Object.entries(IMG_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${inputs}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${controls}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["image = RF ± 2 IF", "ρ = f_image / f_RF − f_RF / f_image", "n tuned circuits: n × 10 log (1 + (Q ρ)²) dB", "n-pole Butterworth: 10 log (1 + (Q ρ)^(2n)) dB", "least IF = (band + guard) / 2", "IRR = (1 + g² + 2g cos φ) / (1 + g² − 2g cos φ)"],
+        "The image is a second input that comes out of the mixer at the same IF as the wanted RF: 2 × IF above the RF with the LO above it, below with the LO below. Once mixed nothing tells them apart, so it must be stopped before the mixer, by a preselector (a tuned filter on the RF), kept out of the band by the choice of IF, or cancelled by an image-reject mixer. A tuned circuit passes the RF and less of what is off tune: its loaded Q (the RF over its 3 dB bandwidth) sets how fast, and at the image it is down by 10 log (1 + (Q ρ)²) dB, ρ being how far off the image is. Poles are the tuned circuits in the filter: ones that do not load each other add their dB, and an n-pole Butterworth filter (the flattest passband) of the same bandwidth falls as 10 log (1 + (Q ρ)^(2n)). How much rejection is needed: the image level minus the wanted level, plus S/I, the ratio the wanted signal must keep over the image that is left. A fixed filter that passes a band cannot stop an image inside it, so the IF is at least half the band plus half the guard; 2 IF − band is the gap between the band and its image. An image-reject mixer, two mixers with a 90° shift, cancels the image as far as its two paths match: with a gain imbalance g (the ratio of the two gains) and a phase error φ it leaves (1 + g² + 2g cos φ) / (1 + g² − 2g cos φ), about 4 / (ε² + φ²) for small errors, ε = g − 1 and φ in radians."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const hz = ["rf", "ifq", "b1", "b2", "guard", "ifTest"];
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "poles") state.poles = el.value.trim() === "" ? NaN : Number(el.value);
+        else if (key === "q") { state.q = v; if (state.qKnown !== "q") { state.qKnown = "q"; hintsQ(); } }
+        else if (key === "bw") { state.bw = v * u(); if (state.qKnown !== "bw") { state.qKnown = "bw"; hintsQ(); } }
+        else state[key] = hz.includes(key) ? v * u() : v;
+        syncQ();
+        show();
+      };
+    });
+    app.querySelectorAll("select[data-funit]").forEach((el) => {
+      el.onchange = () => { state.fUnit = el.value; setPref(C, "fUnit", state.fUnit); paint(); };
+    });
+    const sd = app.querySelector("select[data-side]");
+    if (sd) sd.onchange = () => { state.side = sd.value; setPref(C, "side", state.side); show(); };
+    const md = app.querySelector("select[data-model]");
+    if (md) md.onchange = () => { state.model = md.value; setPref(C, "model", state.model); show(); };
   }
 
   paint();

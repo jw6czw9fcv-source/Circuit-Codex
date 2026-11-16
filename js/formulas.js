@@ -368,6 +368,12 @@ const FORMULAS = [
     note: "High-side injection puts the LO above the RF, low-side below it; the image is the other input that gives the same IF. Checked against the worked FM, AM and dual-conversion examples of Long's UCSB receiver lectures and Wikipedia's superheterodyne article, and the half-IF case of a Microwaves & RF article (all read).",
   },
   {
+    tool: "Image frequency",
+    domain: "rf",
+    formulas: ["image = RF ± 2 IF", "ρ = f_image / f_RF − f_RF / f_image", "n tuned circuits: n × 10 log (1 + (Q ρ)²) dB", "n-pole Butterworth: 10 log (1 + (Q ρ)^(2n)) dB", "least IF = (band + guard) / 2", "IRR = (1 + g² + 2g cos φ) / (1 + g² − 2g cos φ)"],
+    note: "The image is the second input that comes out at the same IF; a filter's loaded Q sets how far down it is, and the IF can be chosen to keep it out of the band. Checked against Wikipedia's image-rejection formulas, Cornell's FM example (IF = 20/2 + 0.7 = 10.7 MHz) and the RF design tools page's 6° ≈ 25 dB (all read).",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],

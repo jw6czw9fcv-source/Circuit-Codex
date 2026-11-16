@@ -108,6 +108,7 @@ will key on, since that is the id the app already holds for each tool.
 - Power & gain → [Intermodulation](#intermodulation)
 - Power & gain → [Power divider](#power-divider)
 - Mixing & conversion → [IF calculator](#if-calculator)
+- Mixing & conversion → [Image frequency](#image-frequency)
 
 ### Power electronics
 
@@ -13811,6 +13812,307 @@ Published answers reproduced:
 | LNB, 11.70 to 12.75 GHz, LO 10.60 GHz | Wikipedia | IF 1100 to 2150 MHz | 1.1 to 2.15 GHz |
 | RF 2510 MHz, LO 2860 MHz, IF 350 MHz | Microwaves & RF | half-IF blocker at 2685 MHz | the 2 × 2 response, 2685 MHz, first of the list |
 | RF 1000 kHz, LO 1455 kHz, IF 455 kHz | Wikipedia | a 955 kHz input gives 2 × 955 − 1455 = 455 | the 2 × 1 response at 955 kHz, first of the list |
+
+[↑ Index](#index)
+
+---
+
+<a id="image-frequency"></a>
+## Image frequency
+
+`calc: image-frequency` · RF & microwave › Mixing & conversion
+
+### What it computes
+
+A mixer gives the same IF for two inputs: the wanted RF, and the image, on the far
+side of the LO and 2 × IF from the RF (the IF calculator finds it). Once they are
+mixed nothing can tell them apart, so the image has to be dealt with before the
+mixer: stopped by a filter, kept out of the band by the choice of IF, or cancelled
+by the mixer itself. One pill for each:
+
+- **Filter:** how much a filter ahead of the mixer, a preselector, stops the image.
+  The RF, the IF, the filter's loaded Q or its 3 dB bandwidth (type one and the other
+  is calculated, marked "result"), and the number of poles. Two pickers in the Output
+  heading: the side of the LO, which puts the image above or below the RF, and how
+  several poles behave, "tuned circuits" for tuned circuits that do not load one
+  another (the Q and the bandwidth are each circuit's), "Butterworth" for an n-pole
+  Butterworth band-pass (the Q and the bandwidth are the whole filter's). The big
+  result is the rejection in dB at the image. In three cells: the image, the detuning ρ, and the
+  bandwidth (the Q when the bandwidth was typed). Under them: the amplitude ratio at
+  the image, how many bandwidths from the RF the image is, and for tuned circuits the
+  dB each one gives and, from two circuits up, the 3 dB bandwidth of all of them
+  together; for Butterworth the bandwidth as a share of the RF.
+- **Needed:** the other way round, the rejection a receiver needs. The wanted
+  signal's level and the image's at the antenna, both in dBm, and S/I, the ratio the
+  wanted signal must keep over what is left of the image. The big result is the
+  rejection. In three cells: the loaded Q that one, two or three poles must have;
+  under them the bandwidth for each and where the image is. If the image is already
+  weaker than the wanted signal by more than S/I, no filter is needed and it says so.
+- **IF choice:** the least IF that keeps the image out of a band. The band's two ends
+  and a guard, the room to leave between the band and its image (optional, 0 if
+  empty). The big result is the IF, (band + guard) / 2. In three cells: the band, the
+  Q of a filter that just passes it, and the image band. Under them, what each of the
+  usual IFs, 455 kHz, 10.7 MHz, 21.4 MHz, 45 MHz and 70 MHz, leaves between the band and
+  its image: "gap … · clear", "gap … · too close" (under the guard), "touching" or
+  "overlap …" (the image reaches into the band). An IF of your own, in "Your IF"
+  (optional), adds a row and is the one the drawing shows.
+- **IR mixer:** what an image-reject (quadrature) mixer leaves, from the gain
+  imbalance in dB and the phase error in degrees between its two paths. The big result
+  is the rejection. In three cells: the same by the small-error formula, the gain error as a
+  percentage, and the phase error in radians. Under them, for a target (40 dB at the
+  start; optional): the phase error that alone would give it, the gain imbalance that
+  alone would, and the phase error that is left when the gain imbalance is the one
+  typed ("not possible" if that gain imbalance already costs more than the target).
+
+The drawing of Filter and Needed is the response of the filter round the RF, 0 dB at
+the top and the attenuation going down, on a scale chosen to fit: the RF is a blue
+stem, the image an amber dashed one that ends on the curve at the rejection, the
+response green. Needed draws the curves of one, two and three poles, told apart by
+their dashes, which all pass through the image at the rejection needed. IF choice
+draws the band (blue) and its image band (amber) on one scale, with the gap between
+them marked in green and, where the image reaches into the band, the overlap shaded;
+the IF drawn is written in the corner. IR mixer draws the wanted signal (green) and
+the image (amber) with its stem cut at the rejection.
+
+- **Units:** Hz, kHz, MHz or GHz, one for every frequency box and for the results:
+  changing it in one changes them all. A frequency is shown to nine figures at most and
+  to 1 Hz; the dB, the Q and the ratios to three figures.
+- **Remembered:** the pill, the unit, the side and the model.
+
+Examples: a tuned circuit on FM, an AM station and its image, stopping a strong
+image, an IF for the FM band, and an image-reject mixer.
+
+### Terms
+
+- **Image:** the second input frequency that gives the same IF, RF ± 2 IF: above the
+  RF with the LO above it, below with the LO below.
+- **Preselector:** the filter between the antenna and the mixer, tuned to the RF; its
+  job is to stop the image.
+- **Image rejection:** how far down the image is, against the wanted signal, after the
+  filter or the mixer, in dB.
+- **Loaded Q:** the filter's centre frequency over its 3 dB bandwidth, with its source
+  and load counted. It is lower than the Q of the bare inductor and capacitor, and it
+  is the one that sets how fast the response falls.
+- **3 dB bandwidth:** the width between the two frequencies where the response is
+  3 dB below its peak.
+- **Pole:** one tuned circuit (resonator) in the filter; a filter of n poles has n.
+- **Detuning ρ:** how far off the RF the image is, f_image / f_RF − f_RF / f_image,
+  the form a tuned circuit's response is written in. It is 0 on the RF.
+- **Butterworth:** the filter whose passband is as flat as it can be: its response
+  falls as 1 / (1 + Ω^2n) in power, 3 dB down at Ω = 1.
+- **S/I (signal to interference):** the ratio the wanted signal must keep over the
+  image that is left, in dB; how much is enough is the receiver's requirement, which
+  the tool does not know.
+- **Guard:** the room left between the RF band and the band of its images.
+- **Gap:** the distance from the top of the band to the bottom of its image band (for
+  an LO above), 2 × IF − band; below 0 the two overlap.
+- **Band filter Q:** a filter that just passes the band, centre over width.
+- **Image-reject mixer (quadrature, Hartley, Weaver):** two mixers fed by the LO 90°
+  apart and a 90° shift after them, so the wanted signal adds and the image cancels.
+- **Gain imbalance, phase error:** how far the two paths are from equal gain (their
+  ratio γ, in dB) and from exactly 90° (φ). Either leaves a part of the image.
+
+### Sources
+
+- **Wikipedia, "Image response" (the formula lines of its wikitext, quoted by a fetch
+  tool; the page's rendered text summarised by the same tool):** a single tuned
+  circuit's image rejection IRR = √(1 + ρ² Q²), with ρ = f_IMAGE / f_RF − f_RF / f_IMAGE
+  and Q the quality factor, characterised by the RF filter and found from the response
+  of a parallel tuned circuit (the article does not say whether the value is a ratio
+  or in dB; the tool takes it as an amplitude ratio, which is derived below); and
+  IMRR = (γ² + 1 − 2γ cos φ) / (γ² + 1 + 2γ cos φ) ≈ (ε² + φ²) / 4, γ the gain
+  imbalance, ε = γ − 1 and φ the phase imbalance, a formula the article credits to
+  dsplog.com. The article's own example is a 100 MHz signal with a 110 MHz LO and
+  a 10 MHz IF, whose image is at 120 MHz.
+- **Wikipedia, "Butterworth filter" (read through a fetch tool):** the gain of the
+  n-th order Butterworth low-pass, |H|² = G0² / (1 + (ω/ω_c)^2n), ω_c the cut-off, about
+  the −3 dB point, and a slope of 20 n dB per decade.
+- **Wikipedia, "Prototype filter" (read through a fetch tool):** the change from a
+  low-pass prototype to a band-pass, iω/ω_c′ → Q (iω/ω_0 + ω_0/iω), with Q = ω_0/Δω,
+  Δω the bandwidth and ω_0 the geometric mean of the band edges; the article gives
+  no Butterworth response itself.
+- **Wikipedia, "Superheterodyne receiver" (read through a fetch tool, as for the IF
+  calculator):** a 1000 kHz input with a 1455 kHz oscillator and a 455 kHz IF, whose
+  image, at 1910 kHz, also translates to 455 kHz.
+- **Edwin Kan, "Chapter 8, Frequency Strategy" (Cornell University, ECE 4880, Fall
+  2016; PDF text extracted and read):** a single-side-band superheterodyne with
+  f_IF > BW_RF / 2 and a filter of width BW_RF as the first way to reject the image
+  (the second, up-conversion, the third, quadrature); f_IF > BW_RF / 4 for
+  dual-side injection; the FM band 88 to 108 MHz with f_IF = (108 − 88) / 2 + 0.7 =
+  10.7 MHz and a band filter of Q = 98 / (108 − 88) = 4.9; the AM band 530 to
+  1610 kHz with an IF of 455 kHz, below the 540 kHz that is half the band; the
+  choice of IF, low (a better filter is needed round BW_RF, a larger tuning range
+  for the LO) against high (easier image rejection, less LO phase noise, harder
+  processing); and the Hartley and Weaver quadrature schemes.
+- **RF Design Tools, "Hartley IRM" (the documentation page of its image-planning
+  tool; read through a fetch tool):** the rejection of a Hartley image-reject mixer as
+  a function of the amplitude mismatch (ε = 10^(G/20) − 1) and the phase mismatch, in
+  the form of Wikipedia's, the printed cosine term lacking the factor 2 that the
+  page's own derivation has (the tool's summary corrected it with the factor and the
+  correction agrees with Wikipedia's); the small-error form, 6.02 − 10 log (ε² + φ²)
+  dB; and the statement that about 6° of phase mismatch alone gives roughly 25 dB.
+  The summary also listed worked examples, 0.1 dB and 1°: 39.6 dB; 0.5 dB and 2°:
+  29.5 dB (29.3 by the small-error form); 1 dB and 5°: 22.8 dB (22.5). The tool gives
+  the same, but I cannot say whether the page prints those figures or the fetch
+  tool worked them out from the corrected formula, so they count as agreement with
+  the formula, not as published answers.
+- **Not read:** Analog Devices' article on image rejection in receivers (its fetch
+  failed), McGill's superheterodyne notes (the connection was reset), any
+  textbook, any datasheet of a preselector or an image-reject mixer, and any standard.
+  The rejection of several tuned circuits one after another and the Butterworth form
+  applied to the image are derived here from the single-circuit formula and the two
+  articles above; the allowed errors of the mixer are derived from the exact formula.
+
+### Why the formulas are these
+
+**The image.** With the LO above the RF the image is at RF + 2 IF, with the LO below it
+at RF − 2 IF (the IF calculator's derivation). Below 0 Hz there is none: the tool
+refuses an IF of half the RF or more with the LO below.
+
+**One tuned circuit.** An inductor, a capacitor and the loss resistor R in parallel,
+fed by a current, have the admittance
+(1/R) (1 + j Q (f / f0 − f0 / f)), with Q = R / (ω0 L) = ω0 R C the loaded Q, so the
+voltage across them is 1 / √(1 + Q² δ²) of its peak, δ = f / f0 − f0 / f. Tuned to the
+RF, f0 = RF: the gain is 1 there and 1 / √(1 + Q² ρ²) at the image, ρ being δ at
+f_image. The ratio of the two is Wikipedia's IRR = √(1 + ρ² Q²), an amplitude ratio,
+and in dB
+
+    rejection = 20 log √(1 + Q² ρ²) = 10 log (1 + (Q ρ)²)
+
+For the FM example, RF 98 MHz and IF 10.7 MHz: the image is at 119.4 MHz, ρ = 1.2184 −
+0.8208 = 0.3976, and Q = 20 gives 10 log (1 + 63.2) = 18.1 dB.
+
+**Several tuned circuits.** Circuits that do not load one another (an amplifier between
+them) multiply their gains, so their dB add: n × 10 log (1 + (Q ρ)²). Their 3 dB
+bandwidth together is narrower than each one's: (1 + x²)^n = 2 at the edges, with
+x = Q (f / f0 − f0 / f), which gives x = √(2^(1/n) − 1) and a width
+BW_each × √(2^(1/n) − 1), 0.644 of it for two and 0.510 for three. The edges are
+exact: f / f0 − f0 / f = ±x / Q puts them x f0 / Q apart.
+
+**An n-pole Butterworth band-pass.** The prototype is the low-pass
+|H|² = 1 / (1 + Ω^2n); the band-pass substitution turns Ω into
+Ω = Q (f / f0 − f0 / f), Q = f0 / BW, so at the image Ω = Q ρ and
+
+    rejection = 10 log (1 + (Q ρ)^2n)
+
+One pole is the single tuned circuit; more poles fall faster, as 20 n dB per decade of
+Ω. The two models agree at n = 1. Beyond it the Q means something else in each: each
+circuit's in the tuned model, so that the circuits together have a narrower 3 dB
+bandwidth than any one of them, and the whole filter's (f0 over its 3 dB bandwidth) in the
+Butterworth model. Typed alike they give nearly the same (36.2 dB and 36.0 dB for two
+poles and Q 20 at the FM image); for the same 3 dB bandwidth of the whole filter the
+Butterworth one rejects more, by about 7.7 dB at two poles (17.6 dB at three) when Q ρ is large, since its
+poles are coupled to be as flat as they can be at the centre and fall steeply after it.
+
+**The rejection needed.** A filter that is 0 dB at the RF and A dB down at the image
+leaves the image at P_image − A and the wanted signal at P_wanted; to keep S/I the
+wanted signal must be that far above:
+
+    P_wanted − (P_image − A) ≥ S/I
+    A = P_image − P_wanted + S/I
+
+The Q for a given A comes from inverting the two forms, with R = A:
+
+    tuned:        Q = √(10^(R / 10 n) − 1) / |ρ|
+    Butterworth:  Q = (10^(R / 10) − 1)^(1 / 2n) / |ρ|
+
+At the FM image (ρ = 0.3976), R = 60 dB takes Q = 2515 for one pole, 79.5 for two tuned
+circuits (79.5 as well for two Butterworth poles) and 25.0 for three (25.2).
+
+**The IF.** The band of width BW, from lo to hi, has its image band from lo + 2 IF to
+hi + 2 IF with the LO above, from lo − 2 IF to hi − 2 IF below. The gap between a band
+and its image band is the same either way, 2 IF − BW. To leave a guard G the IF must be
+at least (BW + G) / 2; with no guard the least IF is BW / 2, Cornell's f_IF > BW_RF / 2.
+Cornell's FM numbers are this with G = 1.4 MHz: (108 − 88) / 2 + 0.7 = 10.7 MHz. A filter
+that just passes the band has Q = centre / BW, Cornell's 98 / 20 = 4.9. The AM band,
+530 to 1610 kHz, is 1080 kHz wide: half of it, 540 kHz, is more than the 455 kHz IF,
+so the gap is 2 × 455 − 1080 = −170 kHz and the image falls in the band. An image band
+that is below 0 Hz is shown as none, and one that reaches it is cut there.
+
+**The image-reject mixer.** With the gain ratio γ and the phase error φ of the two
+paths, the image leaves as the fraction (γ² + 1 − 2γ cos φ) / (γ² + 1 + 2γ cos φ) of the
+power (Wikipedia's IMRR), so the rejection in dB is
+
+    IRR = 10 log [(γ² + 1 + 2γ cos φ) / (γ² + 1 − 2γ cos φ)]
+    γ = 10^(G/20)
+
+It is the same for γ and 1 / γ. For small errors it is 10 log [4 / (ε² + φ²)] with
+ε = γ − 1 and φ in radians. The allowed errors for a target of T dB (R = 10^(T/10)):
+
+    phase alone (γ = 1):   R = cot² (φ/2)
+                           φ = 2 atan (10^(−T/20))
+    gain alone (φ = 0):    R = ((γ + 1) / (γ − 1))²
+                           G = 20 log ((1 + x) / (1 − x)),  x = 10^(−T/20)
+    phase with a given γ:  cos φ = (R − 1) (1 + γ²) / (2 γ (R + 1))
+                           (possible only while that is at most 1)
+
+For 40 dB: 1.146° alone, 0.174 dB alone; with 0.1 dB of gain imbalance 0.937°.
+
+### Assumptions and limits
+
+- **Ideal filters.** The filters are tuned circuits or a Butterworth band-pass, centred
+  on the RF, with no loss. The tool says what a loaded Q buys, not what a particular
+  filter does: a real preselector has its own shape (Chebyshev, one with traps or
+  zeros, a helical or ceramic resonator), a loss at the RF that has to be added to
+  the noise figure, and a Q that depends on its parts.
+- **Isolated circuits.** The "tuned circuits" model adds the dB of circuits that do
+  not load one another. Circuits coupled to each other respond as a filter does, which
+  is the Butterworth model's case, or another design's.
+- **Loaded Q, one frequency.** The rejection is at the image's one frequency; a
+  preselector's Q changes as it is tuned across a band, and a fixed filter has to pass
+  the whole band.
+- **One image, one conversion.** The image of the first conversion only. The other
+  inputs that reach the IF (the half-IF response, the m × n responses) are the IF
+  calculator's Spurs, and a receiver with two conversions has an image at each.
+- **The IF rule is for a filter that passes the band.** Dual-side injection (the LO
+  below the lower half of the band and above the upper half, which Cornell says
+  needs only f_IF > BW_RF / 4) and up-conversion are not drawn.
+- **The mixer's two errors only.** The rejection is from the gain imbalance and the phase
+  error of the paths (the error of the 90° shift after the mixers counts as phase
+  error). It is at one frequency; the paths' mismatch changes across the band, and
+  the LO and RF leakage and noise are not included.
+- **No noise figure.** Noise at the image frequency also reaches the IF (Wikipedia's
+  superheterodyne article says so); how much a rejection saves in noise is not
+  calculated.
+- **Over 300 dB** is not counted: it shows "over 300 dB", and a needed rejection of
+  300 dB or more is refused.
+- **Display.** Frequencies to nine figures at most and to 1 Hz; dB, Q and ratios to three
+  figures, never in exponent form.
+
+### How it was checked
+
+84 cases, the expected values from a Python implementation of the same relations (every
+figure, every label of the drawing):
+- Filter: the FM front end (18.1 dB at 119.4 MHz), a Q typed and a bandwidth typed (the
+  other follows), two and three tuned circuits, Butterworth with two and three poles,
+  one pole the same in both, Wikipedia's AM image (1910 kHz) with Q 50, the LO below,
+  an image just above 0 Hz, GHz units, Q of 0.5, Q past 300 dB, ten poles, the linked
+  units, the pickers, every refusal;
+- Needed: 60 dB at the FM image (Q 2515, 79.5, 25.0), Butterworth, an image weaker than
+  the wanted signal, exactly 0 dB, a small need, the LO below, a negative S/I, 120 dB,
+  the 300 dB refusal, GHz units, every refusal;
+- IF choice: the FM band (10.7 MHz, Q 4.9), Cornell's AM band (−170 kHz with 455 kHz),
+  the LO below, an image below 0 Hz and one that straddles it, an IF tried that overlaps,
+  that is too close, that touches, no guard, a band typed backwards, GHz, every refusal;
+- IR mixer: 0.5 dB and 2°, 0.1 dB and 1°, 1 dB and 5°, perfect paths, gain alone, phase
+  alone (6°: 25.6 dB), negative errors, a target of 40 and of 60 dB, no target, every
+  refusal;
+- the five examples, the remembered choices and the formula-search card.
+
+About 1 900 more cases, on 465 random plans (an RF from 100 kHz to 30 GHz, an IF from 1 %
+to 150 % of it, both sides, both models, 1 to 6 poles, bands, guards, levels, errors), through
+all four pills, compared every figure and label with the Python implementation; they were
+run and not kept.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| FM band 88 to 108 MHz | Cornell | IF = (108 − 88) / 2 + 0.7 = 10.7 MHz; band filter Q = 98 / (108 − 88) = 4.9 | least IF 10.7 MHz with 1.4 MHz of guard; band filter Q 4.9 |
+| AM band 530 to 1610 kHz, IF 455 kHz | Cornell | 455 kHz is below 540 kHz, half the band | gap −170 kHz: "overlap 170 kHz"; least IF 540 kHz with no guard |
+| 1000 kHz, LO 1455 kHz, IF 455 kHz | Wikipedia | image at 1910 kHz | 1910 kHz |
+| Mixer, 6° of phase error alone | RF Design Tools | roughly 25 dB | 25.6 dB |
+| Mixer, 0.5 dB and 2° | formula of Wikipedia's IMRR | (agrees with the fetch tool's summary, 29.5 dB) | 29.5 dB; 29.3 dB by the small-error form |
 
 [↑ Index](#index)
 
