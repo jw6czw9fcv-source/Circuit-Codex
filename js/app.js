@@ -677,6 +677,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "if-calculator") return renderIfCalculator(domain, tool, favId);
   if (calcId === "image-frequency") return renderImageFrequency(domain, tool, favId);
   if (calcId === "microwave-bands") return renderMicrowaveBands(domain, tool, favId);
+  if (calcId === "amateur-bands") return renderAmateurBands(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -18073,6 +18074,506 @@ function renderMicrowaveBands(domain, tool, favId) {
       const lo = +r.dataset.lo, hi = +r.dataset.hi, c = +r.dataset.c;
       state.f = c > 0 ? c : lo > 0 ? +Math.sqrt(lo * hi).toPrecision(4) : hi / 2;
       state.fUnit = unitFor(state.f);
+      paint();
+    };
+  }
+
+  paint();
+}
+
+// ---------- Amateur radio bands ----------
+// Which amateur band a frequency is in, and what Canada, the United States and the three ITU Regions say about it. Sources, as read this session:
+//  - ISED, RBR-4 "Standards for the Operation of Radio Stations in the Amateur Radio Service", Issue 3, July 2022 (the PDF, text extracted): Schedule I (Canada,
+//    40 items) and Schedules II, III and IV (Regions 1, 2, 3: what a Canadian-registered ship or aircraft may use in international waters or airspace, section 7).
+//    Column I the band, II the maximum bandwidth (measured 26 dB below the peak, section 4), III the operating provision (a star: no interference to, and no
+//    protection from, other services; a "C" footnote is Canadian, the others the ITU's), IV the operator qualifications. The tables below are made from that
+//    text by a script, not typed.
+//  - 47 CFR 97.301 (the eCFR's XML of 2026-11-13), paragraphs (a) and (b), Region 2 column: the Amateur Extra class's limits, the widest (the other classes' are in
+//    (c) to (e)); 97.303 for the sharing paragraphs, with (h)(3), the 60 m channels and 2.8 kHz. 97.307 and the band plans were not read.
+//  - The ITU Radio Regulations, edition of 2020: 1.56 (the amateur service), 5.3 to 5.5 (the Regions), 5.25 to 5.31 (primary and secondary: the capitals) and
+//    the amateur entries of the Article 5 table, which a script read for most of the rows of Regions 1 and 2 (not Region 3, nor the spanning rows) and I read by eye on a few pages.
+//  - The names of the bands (40 m, 70 cm...) are the FCC's (97.301) and common usage; 9 cm for 3.3 to 3.5 GHz is common usage (the FCC's table no longer lists it).
+// Generated from the sources by am_gen.py: ISED RBR-4 Issue 3 (July 2022) Schedules I to IV and 47 CFR 97.301 (eCFR, 2026-11-13).
+// A segment is [band, low Hz, high Hz, maximum bandwidth Hz (0: not specified), operating provision, qualification (H: HF, B: basic), note]; a segment whose
+// low and high are equal is a channel of that centre frequency and that bandwidth.
+const AMB_BANDS = [["2200 m", 135700, 137800], ["630 m", 472000, 479000], ["160 m", 1800000, 2000000], ["80 m", 3500000, 4000000], ["60 m", 5300000, 5450000], ["40 m", 7000000, 7300000], ["30 m", 10100000, 10150000], ["20 m", 14000000, 14350000], ["17 m", 18068000, 18168000], ["15 m", 21000000, 21450000], ["12 m", 24890000, 24990000], ["10 m", 28000000, 29700000], ["6 m", 50000000, 54000000], ["2 m", 144000000, 148000000], ["1.25 m", 219000000, 225000000], ["70 cm", 420000000, 450000000], ["33 cm", 902000000, 928000000], ["23 cm", 1240000000, 1300000000], ["13 cm", 2300000000, 2450000000], ["9 cm", 3300000000, 3500000000], ["5 cm", 5650000000, 5925000000], ["3 cm", 10000000000, 10500000000], ["1.2 cm", 24000000000, 24250000000], ["6 mm", 47000000000, 47200000000], ["4 mm", 76000000000, 81500000000], ["2.5 mm", 122250000000, 123000000000], ["2 mm", 134000000000, 141000000000], ["1 mm", 241000000000, 250000000000]];
+const AMB_SYS = {
+  ca: { name: "Canada", full: "Canada, ISED RBR-4 Issue 3, Schedule I", segs: [
+    ["2200 m", 135700, 137800, 100, "5.67A", "H", ""],
+    ["630 m", 472000, 479000, 1000, "5.80A", "H", ""],
+    ["160 m", 1800000, 2000000, 6000, "-", "H", ""],
+    ["80 m", 3500000, 4000000, 6000, "-", "H", ""],
+    ["60 m", 5332000, 5332000, 2800, "C21", "H", ""],
+    ["60 m", 5348000, 5348000, 2800, "C21", "H", ""],
+    ["60 m", 5351500, 5366500, 2800, "C21", "H", ""],
+    ["60 m", 5373000, 5373000, 2800, "C21", "H", ""],
+    ["60 m", 5405000, 5405000, 2800, "C21", "H", ""],
+    ["40 m", 7000000, 7300000, 6000, "5.142", "H", ""],
+    ["30 m", 10100000, 10150000, 1000, "C6", "H", ""],
+    ["20 m", 14000000, 14350000, 6000, "-", "H", ""],
+    ["17 m", 18068000, 18168000, 6000, "-", "H", ""],
+    ["15 m", 21000000, 21450000, 6000, "-", "H", ""],
+    ["12 m", 24890000, 24990000, 6000, "-", "H", ""],
+    ["10 m", 28000000, 29700000, 20000, "-", "H", ""],
+    ["6 m", 50000000, 54000000, 30000, "-", "B", ""],
+    ["2 m", 144000000, 148000000, 30000, "-", "B", ""],
+    ["1.25 m", 219000000, 220000000, 100000, "C11", "B", ""],
+    ["1.25 m", 220000000, 222000000, 100000, "C11", "B", "Exceptional circumstances only"],
+    ["1.25 m", 222000000, 225000000, 100000, "-", "B", ""],
+    ["70 cm", 430000000, 450000000, 12000000, "*", "B", ""],
+    ["33 cm", 902000000, 928000000, 12000000, "*", "B", ""],
+    ["23 cm", 1240000000, 1300000000, 0, "*", "B", ""],
+    ["13 cm", 2300000000, 2450000000, 0, "*", "B", ""],
+    ["9 cm", 3300000000, 3500000000, 0, "*", "B", ""],
+    ["5 cm", 5650000000, 5925000000, 0, "*", "B", ""],
+    ["3 cm", 10000000000, 10500000000, 0, "*", "B", ""],
+    ["1.2 cm", 24000000000, 24050000000, 0, "-", "B", ""],
+    ["1.2 cm", 24050000000, 24250000000, 0, "*", "B", ""],
+    ["6 mm", 47000000000, 47200000000, 0, "-", "B", ""],
+    ["4 mm", 76000000000, 77500000000, 0, "*", "B", ""],
+    ["4 mm", 77500000000, 78000000000, 0, "-", "B", ""],
+    ["4 mm", 78000000000, 81000000000, 0, "*", "B", ""],
+    ["4 mm", 81000000000, 81500000000, 0, "5.561A", "B", ""],
+    ["2.5 mm", 122250000000, 123000000000, 0, "*", "B", ""],
+    ["2 mm", 134000000000, 136000000000, 0, "-", "B", ""],
+    ["2 mm", 136000000000, 141000000000, 0, "*", "B", ""],
+    ["1 mm", 241000000000, 248000000000, 0, "*", "B", ""],
+    ["1 mm", 248000000000, 250000000000, 0, "-", "B", ""]
+  ] },
+  us: { name: "United States", full: "United States, 47 CFR 97.301, Amateur Extra limits", segs: [
+    ["2200 m", 135700, 137800, 0, "(a), (g)", "", ""],
+    ["630 m", 472000, 479000, 0, "(g)", "", ""],
+    ["160 m", 1800000, 2000000, 0, "(a)", "", ""],
+    ["80 m", 3500000, 4000000, 0, "(a)", "", ""],
+    ["60 m", 5332000, 5332000, 2800, "(h)", "", ""],
+    ["60 m", 5348000, 5348000, 2800, "(h)", "", ""],
+    ["60 m", 5351500, 5366500, 2800, "(h)", "", ""],
+    ["60 m", 5373000, 5373000, 2800, "(h)", "", ""],
+    ["60 m", 5405000, 5405000, 2800, "(h)", "", ""],
+    ["40 m", 7000000, 7300000, 0, "(i)", "", ""],
+    ["30 m", 10100000, 10150000, 0, "(j)", "", ""],
+    ["20 m", 14000000, 14350000, 0, "", "", ""],
+    ["17 m", 18068000, 18168000, 0, "", "", ""],
+    ["15 m", 21000000, 21450000, 0, "", "", ""],
+    ["12 m", 24890000, 24990000, 0, "", "", ""],
+    ["10 m", 28000000, 29700000, 0, "", "", ""],
+    ["6 m", 50000000, 54000000, 0, "(a)", "", ""],
+    ["2 m", 144000000, 148000000, 0, "(a), (k)", "", ""],
+    ["1.25 m", 219000000, 220000000, 0, "(l)", "", ""],
+    ["1.25 m", 222000000, 225000000, 0, "(a)", "", ""],
+    ["70 cm", 420000000, 450000000, 0, "(a), (b), (m)", "", ""],
+    ["33 cm", 902000000, 928000000, 0, "(a), (b), (e), (n)", "", ""],
+    ["23 cm", 1240000000, 1300000000, 0, "(b), (d), (o)", "", ""],
+    ["13 cm", 2300000000, 2310000000, 0, "(d), (p)", "", ""],
+    ["13 cm", 2390000000, 2450000000, 0, "(d), (e), (p)", "", ""],
+    ["5 cm", 5650000000, 5925000000, 0, "(a), (b), (e), (r)", "", ""],
+    ["3 cm", 10000000000, 10500000000, 0, "(a), (b), (k)", "", ""],
+    ["1.2 cm", 24000000000, 24250000000, 0, "(b), (d), (e)", "", ""],
+    ["6 mm", 47000000000, 47200000000, 0, "", "", ""],
+    ["4 mm", 76000000000, 81000000000, 0, "(c), (f), (s)", "", ""],
+    ["2.5 mm", 122250000000, 123000000000, 0, "(e), (t)", "", ""],
+    ["2 mm", 134000000000, 141000000000, 0, "(c), (f)", "", ""],
+    ["1 mm", 241000000000, 250000000000, 0, "(c), (e), (f)", "", ""]
+  ] },
+  r1: { name: "Region 1", full: "ITU Region 1, ISED RBR-4 Schedule II", segs: [
+    ["2200 m", 135700, 137800, 100, "5.67A", "H", ""],
+    ["630 m", 472000, 479000, 1000, "5.80A", "H", ""],
+    ["160 m", 1810000, 1850000, 6000, "-", "H", ""],
+    ["80 m", 3500000, 3800000, 6000, "-", "H", ""],
+    ["60 m", 5351500, 5366500, 2800, "5.133B", "H", ""],
+    ["40 m", 7000000, 7200000, 6000, "-", "H", ""],
+    ["30 m", 10100000, 10150000, 1000, "*", "H", ""],
+    ["20 m", 14000000, 14350000, 6000, "-", "H", ""],
+    ["17 m", 18068000, 18168000, 6000, "-", "H", ""],
+    ["15 m", 21000000, 21450000, 6000, "-", "H", ""],
+    ["12 m", 24890000, 24990000, 6000, "-", "H", ""],
+    ["10 m", 28000000, 29700000, 20000, "-", "H", ""],
+    ["6 m", 50000000, 52000000, 30000, "*", "B", ""],
+    ["2 m", 144000000, 146000000, 30000, "-", "B", ""],
+    ["70 cm", 430000000, 440000000, 0, "-", "B", ""],
+    ["23 cm", 1240000000, 1300000000, 0, "*", "B", ""],
+    ["13 cm", 2300000000, 2450000000, 0, "*", "B", ""],
+    ["5 cm", 5650000000, 5850000000, 0, "*", "B", ""],
+    ["3 cm", 10000000000, 10500000000, 0, "*", "B", ""],
+    ["1.2 cm", 24000000000, 24050000000, 0, "-", "B", ""],
+    ["1.2 cm", 24050000000, 24250000000, 0, "*", "B", ""],
+    ["6 mm", 47000000000, 47200000000, 0, "-", "B", ""],
+    ["4 mm", 76000000000, 77500000000, 0, "*", "B", ""],
+    ["4 mm", 77500000000, 78000000000, 0, "-", "B", ""],
+    ["4 mm", 78000000000, 81000000000, 0, "*", "B", ""],
+    ["4 mm", 81000000000, 81500000000, 0, "5.561A", "B", ""],
+    ["2.5 mm", 122250000000, 123000000000, 0, "*", "B", ""],
+    ["2 mm", 134000000000, 136000000000, 0, "-", "B", ""],
+    ["2 mm", 136000000000, 141000000000, 0, "*", "B", ""],
+    ["1 mm", 241000000000, 248000000000, 0, "*", "B", ""],
+    ["1 mm", 248000000000, 250000000000, 0, "-", "B", ""]
+  ] },
+  r2: { name: "Region 2", full: "ITU Region 2, ISED RBR-4 Schedule III", segs: [
+    ["2200 m", 135700, 137800, 100, "5.67A", "H", ""],
+    ["630 m", 472000, 479000, 1000, "5.80A", "H", ""],
+    ["160 m", 1800000, 2000000, 6000, "-", "H", ""],
+    ["80 m", 3500000, 4000000, 6000, "-", "H", ""],
+    ["60 m", 5351500, 5366500, 2800, "5.133B", "H", ""],
+    ["40 m", 7000000, 7300000, 6000, "5.142", "H", ""],
+    ["30 m", 10100000, 10150000, 1000, "*", "H", ""],
+    ["20 m", 14000000, 14350000, 6000, "-", "H", ""],
+    ["17 m", 18068000, 18168000, 6000, "-", "H", ""],
+    ["15 m", 21000000, 21450000, 6000, "-", "H", ""],
+    ["12 m", 24890000, 24990000, 6000, "-", "H", ""],
+    ["10 m", 28000000, 29700000, 20000, "-", "H", ""],
+    ["6 m", 50000000, 54000000, 30000, "-", "B", ""],
+    ["2 m", 144000000, 148000000, 30000, "-", "B", ""],
+    ["1.25 m", 220000000, 225000000, 100000, "-", "B", ""],
+    ["70 cm", 430000000, 440000000, 0, "*", "B", ""],
+    ["33 cm", 902000000, 928000000, 12000000, "*", "B", ""],
+    ["23 cm", 1240000000, 1300000000, 0, "*", "B", ""],
+    ["13 cm", 2300000000, 2450000000, 0, "*", "B", ""],
+    ["9 cm", 3300000000, 3500000000, 0, "*", "B", ""],
+    ["5 cm", 5650000000, 5925000000, 0, "*", "B", ""],
+    ["3 cm", 10000000000, 10500000000, 0, "*", "B", ""],
+    ["1.2 cm", 24000000000, 24050000000, 0, "-", "B", ""],
+    ["1.2 cm", 24050000000, 24250000000, 0, "*", "B", ""],
+    ["6 mm", 47000000000, 47200000000, 0, "-", "B", ""],
+    ["4 mm", 76000000000, 77500000000, 0, "*", "B", ""],
+    ["4 mm", 77500000000, 78000000000, 0, "-", "B", ""],
+    ["4 mm", 78000000000, 81000000000, 0, "*", "B", ""],
+    ["4 mm", 81000000000, 81500000000, 0, "5.561A", "B", ""],
+    ["2.5 mm", 122250000000, 123000000000, 0, "*", "B", ""],
+    ["2 mm", 134000000000, 136000000000, 0, "-", "B", ""],
+    ["2 mm", 136000000000, 141000000000, 0, "*", "B", ""],
+    ["1 mm", 241000000000, 248000000000, 0, "*", "B", ""],
+    ["1 mm", 248000000000, 250000000000, 0, "-", "B", ""]
+  ] },
+  r3: { name: "Region 3", full: "ITU Region 3, ISED RBR-4 Schedule IV", segs: [
+    ["2200 m", 135700, 137800, 100, "5.67A", "H", ""],
+    ["630 m", 472000, 479000, 1000, "5.80A", "H", ""],
+    ["160 m", 1800000, 2000000, 6000, "-", "H", ""],
+    ["80 m", 3500000, 3900000, 6000, "-", "H", ""],
+    ["60 m", 5351500, 5366500, 2800, "5.133B", "H", ""],
+    ["40 m", 7000000, 7200000, 6000, "-", "H", ""],
+    ["30 m", 10100000, 10150000, 1000, "*", "H", ""],
+    ["20 m", 14000000, 14350000, 6000, "-", "H", ""],
+    ["17 m", 18068000, 18168000, 6000, "-", "H", ""],
+    ["15 m", 21000000, 21450000, 6000, "-", "H", ""],
+    ["12 m", 24890000, 24990000, 6000, "-", "H", ""],
+    ["10 m", 28000000, 29700000, 20000, "-", "H", ""],
+    ["6 m", 50000000, 54000000, 30000, "-", "B", ""],
+    ["2 m", 144000000, 148000000, 30000, "-", "B", ""],
+    ["70 cm", 430000000, 440000000, 0, "*", "B", ""],
+    ["23 cm", 1240000000, 1300000000, 0, "*", "B", ""],
+    ["13 cm", 2300000000, 2450000000, 0, "*", "B", ""],
+    ["9 cm", 3300000000, 3500000000, 0, "*", "B", ""],
+    ["5 cm", 5650000000, 5850000000, 0, "*", "B", ""],
+    ["3 cm", 10000000000, 10500000000, 0, "*", "B", ""],
+    ["1.2 cm", 24000000000, 24050000000, 0, "-", "B", ""],
+    ["1.2 cm", 24050000000, 24250000000, 0, "*", "B", ""],
+    ["6 mm", 47000000000, 47200000000, 0, "-", "B", ""],
+    ["4 mm", 76000000000, 77500000000, 0, "*", "B", ""],
+    ["4 mm", 77500000000, 78000000000, 0, "-", "B", ""],
+    ["4 mm", 78000000000, 81000000000, 0, "*", "B", ""],
+    ["4 mm", 81000000000, 81500000000, 0, "5.561A", "B", ""],
+    ["2.5 mm", 122250000000, 123000000000, 0, "*", "B", ""],
+    ["2 mm", 134000000000, 136000000000, 0, "-", "B", ""],
+    ["2 mm", 136000000000, 141000000000, 0, "*", "B", ""],
+    ["1 mm", 241000000000, 248000000000, 0, "*", "B", ""],
+    ["1 mm", 248000000000, 250000000000, 0, "-", "B", ""]
+  ] },
+};
+const AMB_MODES = { find: "Find", bands: "Bands" };
+const AMB_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const AMB_KEYS = ["ca", "us", "r1", "r2", "r3"];
+const AMB_TAGS = { ca: "CAN", us: "USA", r1: "R1", r2: "R2", r3: "R3" };
+const AMB_LIGHT = 299792458;
+const AMB_QUAL = { H: "Basic + Morse 5, Basic with Honours, or Basic + Advanced", B: "Basic" };
+// RBR-4's column III, in short; the long forms are in RBR-4.
+const AMB_PROV = {
+  "-": "No condition is listed for it in RBR-4.",
+  "*": "Secondary: it must not interfere with the other services in the band, and gets no protection from them.",
+  "5.67A": "At most 1 W e.i.r.p., and no harmful interference to radionavigation stations in the countries of RR 5.67.",
+  "5.80A": "At most 1 W e.i.r.p. (5 W far from certain countries); no harmful interference to, and no protection from, aeronautical radionavigation.",
+  "5.133B": "At most 15 W e.i.r.p. (20 W in Mexico, 25 W in some other Region 2 countries).",
+  "5.142": "In Region 2, using 7.2 to 7.3 MHz must not constrain the broadcasting meant for Regions 1 and 3.",
+  "5.561A": "81 to 81.5 GHz is also allocated to the amateur services, on a secondary basis.",
+  "C6": "Not an ITU allocation in Canada: no interference to other countries' fixed service, no protection from it, and it may have to stop.",
+  "C11": "219 to 220 MHz is secondary. 220 to 222 MHz only in exceptional circumstances, secondary, to help in disaster relief.",
+  "C21": "Not an ITU allocation. 2.8 kHz at most, 100 W PEP per channel; telephony, data, RTTY or CW. No interference to fixed or mobile services, no protection from them, and it may have to stop.",
+};
+// The paragraphs of 47 CFR 97.303 that 97.301 points to, in short.
+const AMB_US = {
+  a: "Equal right to operate with services of the same category in the neighbouring Regions.",
+  b: "Accept interference from US Government radiolocation, and cause none.",
+  c: "Accept interference from radiolocation (US Government, FCC, other nations), and cause none.",
+  d: "Accept interference from other nations' radiolocation, and cause none.",
+  e: "Receiving: accept interference from industrial, scientific and medical (ISM) equipment.",
+  f: "Cause no harmful interference to radio astronomy.",
+  g: "Fixed locations only; tell the UTC 30 days ahead; not within 1 km of a power-line carrier line.",
+  h: "Only 5351.5 to 5366.5 kHz and four channels; 2.8 kHz at most; accept interference from fixed and (other nations') mobile services.",
+  i: "7.2 to 7.3 MHz: accept interference from international broadcasting for Regions 1 and 3.",
+  j: "Accept interference from other nations' fixed service.",
+  k: "For stations in Regions 1 and 3 only: accept interference from other nations' fixed and mobile services.",
+  l: "Only fixed, point-to-point digital message forwarding; written notice 30 days ahead; protects AMTS and other services.",
+  m: "Not north of Line A in 420 to 430 MHz; land mobile near Buffalo, Cleveland and Detroit; other nations' fixed and mobile.",
+  n: "Accept interference from US Government, location and monitoring and other nations' fixed; banned in parts of TX, NM, CO and WY.",
+  o: "Accept interference from aeronautical radionavigation, radionavigation-satellite, and active Earth-exploration and space-research services.",
+  p: "Accept interference from other nations' fixed and mobile; 2305 to 2310 MHz also the FCC's fixed, mobile and radiolocation.",
+  r: "5.650 to 5.725 GHz: other nations' mobile; 5.850 to 5.925 GHz: fixed-satellite, mobile and fixed services.",
+  s: "Reserved in 97.303.",
+  t: "Accept interference from fixed, inter-satellite and mobile services, and cause none.",
+};
+const AMB_NOTE = {
+  ca: "Canada: ISED's RBR-4, Issue 3 (July 2022), Schedule I. The bandwidth is measured 26 dB below the signal's peak.",
+  us: "United States: 47 CFR 97.301, the Amateur Extra class's limits, the widest; the other classes get narrower segments. Bandwidth limits are set elsewhere in Part 97 and are not shown.",
+  r1: "Region 1 (Europe, Africa, Russia): RBR-4's Schedule II, what a Canadian ship or aircraft may use in the international waters or airspace of the Region. It follows the ITU's table, checked only in part.",
+  r2: "Region 2 (the Americas): RBR-4's Schedule III, what a Canadian ship or aircraft may use in the international waters or airspace of the Region. It follows the ITU's table, checked only in part.",
+  r3: "Region 3 (Asia outside Russia, Oceania): RBR-4's Schedule IV, what a Canadian ship or aircraft may use in the international waters or airspace of the Region. It follows the ITU's table, checked only in part.",
+};
+
+function renderAmateurBands(domain, tool, favId) {
+  const C = "amateur-bands";
+  const state = {
+    mode: pref(C, "mode", "find", Object.keys(AMB_MODES)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(AMB_F_UNITS)),
+    sys: pref(C, "sys", "ca", AMB_KEYS),
+    f: 7.25e6, // Hz
+  };
+  // Three figures, never in exponent form.
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const KU = { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+  const unitOf = (hz) => (hz >= 1e9 ? "GHz" : hz >= 1e6 ? "MHz" : "kHz");
+  const one = (hz, u) => String(Number((hz / KU[u]).toPrecision(7)));
+  const fq = (hz) => { const u = unitOf(hz); return `${one(hz, u)} ${u}`; };
+  const fr = (lo, hi) => { const u = unitOf(hi); return `${one(lo, u)} to ${one(hi, u)} ${u}`; };
+  const frs = (lo, hi) => { const u = unitOf(hi); return `${one(lo, u)}–${one(hi, u)} ${u}`; };
+  const hz = (v) => (v >= 1e6 ? `${one(v, "MHz")} MHz` : v >= 1e3 ? `${one(v, "kHz")} kHz` : `${one(v, "Hz")} Hz`);
+  const bwText = (v) => (v > 0 ? hz(v) : "not specified");
+  const wl = (m) => (m >= 1 ? `${n3(m)} m` : m >= 1e-2 ? `${n3(m * 100)} cm` : m >= 5e-4 ? `${n3(m * 1e3)} mm` : `${n3(m * 1e6)} µm`);
+  // An edge belongs to both segments it separates, to within a rounding error of the typed number.
+  const ge = (f, x) => f >= x * (1 - 1e-12);
+  const le = (f, x) => f <= x * (1 + 1e-12);
+  // A segment whose low and high are equal is a channel: the centre frequency, the maximum bandwidth around it.
+  const span = (s) => (s[1] === s[2] ? [s[1] - s[3] / 2, s[2] + s[3] / 2] : [s[1], s[2]]);
+  const inSeg = (s, f) => { const [a, b] = span(s); return ge(f, a) && le(f, b); };
+  const segsOf = (k, name) => AMB_SYS[k].segs.filter((s) => s[0] === name);
+  const hitsOf = (k, f) => AMB_SYS[k].segs.filter((s) => inSeg(s, f));
+  const bandAt = (f) => AMB_BANDS.find((b) => ge(f, b[1]) && le(f, b[2])) || null;
+  // The nearest segment of a band to the frequency, for the systems that do not allow it.
+  const gap = (s, f) => { const [a, b] = span(s); return f < a ? a - f : f > b ? f - b : 0; };
+  const nearest = (k, name, f) => segsOf(k, name).reduce((p, q) => (!p || gap(q, f) < gap(p, f) ? q : p), null);
+  // The band to draw when the frequency is in none: the nearest, in log frequency.
+  const below = (f) => [...AMB_BANDS].reverse().find((b) => b[2] < f) || null;
+  const above = (f) => AMB_BANDS.find((b) => b[1] > f) || null;
+  const dlog = (b, f) => (f < b[1] ? Math.log(b[1] / f) : f > b[2] ? Math.log(f / b[2]) : 0);
+  const chartBand = (f) => bandAt(f) || [below(f), above(f)].filter(Boolean).reduce((p, q) => (dlog(q, f) < dlog(p, f) ? q : p));
+  // The runs of a system's band: touching segments joined, a lone channel on its own.
+  function runsOf(k, name) {
+    const out = [];
+    for (const s of segsOf(k, name)) {
+      const chan = s[1] === s[2], [a, b] = span(s);
+      const last = out[out.length - 1];
+      if (last && !chan && !last.chan && s[1] <= last.hi * (1 + 1e-12)) { last.hi = Math.max(last.hi, s[2]); last.b = last.hi; }
+      else out.push({ lo: s[1], hi: s[2], a, b, chan, bw: s[3] });
+    }
+    return out;
+  }
+  const runText = (r) => (r.chan ? fq(r.lo) : fr(r.lo, r.hi));
+  const bandsOf = (k) => AMB_BANDS.map((b) => ({ band: b, name: b[0], runs: runsOf(k, b[0]) })).filter((x) => x.runs.length).map((x) => {
+    const bws = [...new Set(segsOf(k, x.name).map((s) => s[3]))];
+    // a tap puts the frequency in the middle of the widest segment, away from the edges where two segments meet
+    const widest = segsOf(k, x.name).reduce((p, q) => (q[2] - q[1] > p[2] - p[1] ? q : p));
+    const text = x.runs.length <= 2 ? x.runs.map(runText).join(" and ") : `${fr(x.runs[0].lo, x.runs[x.runs.length - 1].hi)} in ${x.runs.length} parts`;
+    return { ...x, text: text + (bws.length === 1 && bws[0] > 0 ? ` · ${hz(bws[0])}` : ""), mid: +((widest[1] + widest[2]) / 2).toPrecision(7) };
+  });
+  const provCell = (k, s) => (k === "us" ? s[4] || "none listed" : s[4] === "-" ? "none" : s[4] === "*" ? "secondary" : s[4]);
+
+  function problem() {
+    return state.f > 0 ? "" : "Enter the frequency.";
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", AMBER = "#E0A85E", WIRE = "#5A6169", GREY = "#8A9099";
+  // A label sits on top of the lines, with a halo in the box's own colour so a line running through it does not hide it.
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+
+  // The band the frequency is in, in each of the five systems: every segment a bar on one linear scale, the one holding the frequency green, the range written at
+  // the right (green where the frequency is inside, amber where it is not); a tap on a row picks that system.
+  function chart() {
+    if (problem()) return "";
+    const f = state.f, band = chartBand(f), name = band[0], exact = !!bandAt(f);
+    let a = Infinity, b = -Infinity;
+    for (const k of AMB_KEYS) for (const s of segsOf(k, name)) { const [x1, x2] = span(s); a = Math.min(a, x1); b = Math.max(b, x2); }
+    if (exact) { a = Math.min(a, f); b = Math.max(b, f); }
+    const XA = 38, XB = 170, w = b - a || 1, x = (v) => XA + ((v - a) / w) * (XB - XA);
+    const fx = Math.min(XB, Math.max(XA, x(f)));
+    const rowY = (i) => 22 + i * 24;
+    let out = "";
+    AMB_KEYS.forEach((k, i) => {
+      if (k === state.sys) out += `<rect x="1.5" y="${rowY(i) - 3}" width="297" height="19" rx="5" style="fill:var(--result-bg);stroke:var(--result-border)"/>`;
+    });
+    // The frequency's stem goes first, so the bars and their labels are drawn over it.
+    out += `<path d="M${fx.toFixed(1)} 16 V138" stroke="${BLUE}" stroke-width="2"/>`;
+    AMB_KEYS.forEach((k, i) => {
+      const y = rowY(i), segs = segsOf(k, name), hit = hitsOf(k, f)[0] || null, near = hit || nearest(k, name, f);
+      segs.forEach((s) => {
+        const [x1, x2] = span(s), px = x(x1), pw = Math.max(x(x2) - px, 3), on = s === hit;
+        out += `<rect x="${px.toFixed(1)}" y="${y}" width="${pw.toFixed(1)}" height="13" rx="3" fill="${on ? GREEN : "none"}" fill-opacity="${on ? 0.25 : 0}" stroke="${on ? GREEN : WIRE}" stroke-width="${on ? 1.6 : 1}"/>`;
+      });
+      out += lbl(null, 5, y + 10, AMB_TAGS[k], hit ? GREEN : GREY, "start");
+      out += lbl(`pr-${k}`, 182, y + 10, near ? (near[1] === near[2] ? fq(near[1]) : frs(near[1], near[2])) : "none", hit ? GREEN : near ? AMBER : GREY, "start");
+      out += `<rect x="1.5" y="${y - 3}" width="297" height="19" fill="transparent" pointer-events="all" data-sys="${k}" style="cursor:pointer"/>`;
+    });
+    out += lbl("pb", 296, 11, exact ? `${name} band` : `nearest: ${name}`, GREY, "end");
+    const anchor = fx > 130 ? "end" : fx < 60 ? "start" : "middle";
+    const off = anchor === "end" ? 4 : anchor === "start" ? -4 : 0;
+    out += lbl("pf", fx + off, 11, state.f < band[1] || state.f > band[2] ? (state.f < band[1] ? `◀ ${fq(f)}` : `${fq(f)} ▶`) : fq(f), BLUE, anchor);
+    return out;
+  }
+
+  function diagram() {
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${chart()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+  const warn = (x) => `<span style="color:${AMBER}">${x}</span>`;
+
+  // What the system says about the segment: its provision in words, and its note.
+  function provNote(k, s) {
+    const lines = [];
+    if (s[6]) lines.push(`${s[6]}.`);
+    if (k === "us") {
+      for (const l of s[4].match(/[a-z](?=\))/g) || []) lines.push(`(${l}) ${AMB_US[l]}`);
+      if (!s[4]) lines.push("97.303 lists no sharing paragraph for this band.");
+    } else if (AMB_PROV[s[4]]) lines.push(AMB_PROV[s[4]]);
+    return lines.join("<br>");
+  }
+
+  // The head of both views: the band, and where the system puts it.
+  function headHTML(label, band, k, hits) {
+    const name = k === "us" ? "the United States" : AMB_SYS[k].name;
+    if (!band) {
+      const lo = below(state.f), hi = above(state.f);
+      return head(label, "none", lo && hi ? `between ${lo[0]} (to ${fq(lo[2])}) and ${hi[0]} (from ${fq(hi[1])})`
+        : hi ? `below the lowest amateur band, ${hi[0]} from ${fq(hi[1])}` : `above the highest, ${lo[0]} up to ${fq(lo[2])}`);
+    }
+    const s = hits[0];
+    if (s) return head(label, band[0], s[1] === s[2] ? `channel at ${fq(s[1])} in ${name}` : `${fr(s[1], s[2])} in ${name}`);
+    const nr = nearest(k, band[0], state.f), at = nr ? (nr[1] === nr[2] ? fq(nr[1]) : fr(nr[1], nr[2])) : "";
+    return head(label, band[0], nr ? warn(`not allowed in ${name}: ${runsOf(k, band[0]).length > 1 ? `the nearest ${band[0]} segment is ${at}` : `${band[0]} is ${at} there`}`) : warn(`${name} has no ${band[0]} band`));
+  }
+
+  function findHTML() {
+    const f = state.f, k = state.sys, band = bandAt(f), hits = hitsOf(k, f), s = hits[0] || null;
+    const edge = hits.slice(1).map((t) => `${t[1] === t[2] ? fq(t[1]) : fr(t[1], t[2])} (${provCell(k, t)})`).join(" and ");
+    return `${headHTML("Amateur band", band, k, hits)}
+      ${grid([cell("Wavelength", wl(AMB_LIGHT / f), "wl"), cell("Max bandwidth", s ? bwText(s[3]) : "—", "bw"), cell("Provision", s ? provCell(k, s) : "—", "prov")])}
+      <div class="field notation-box">
+        ${s && k !== "us" ? row("Operator", AMB_QUAL[s[5]], "oper") : ""}
+        ${edge ? row("Also, on the edge", edge, "edge") : ""}
+        ${s && provNote(k, s) ? `<div class="cx-note" data-res="pnote">${provNote(k, s)}</div>` : ""}
+        <div class="cx-note" data-res="snote">${AMB_NOTE[k]}</div>
+      </div>`;
+  }
+
+  function bandsHTML() {
+    const f = state.f, k = state.sys, band = bandAt(f), hits = hitsOf(k, f), list = bandsOf(k);
+    const cur = band ? list.find((x) => x.name === band[0]) : null;
+    const run = cur ? cur.runs.find((r) => ge(f, r.a) && le(f, r.b)) : null;
+    const rows = list.map((x, i) => `<div class="notation-row sol${x === cur ? " sel" : ""}" data-f="${x.mid}" role="button"><span data-res="n${i}">${x.name}</span><span data-res="v${i}">${x.text}</span></div>`).join("");
+    return `${headHTML(`${AMB_SYS[k].name}, ${list.length} bands`, band, k, hits)}
+      ${grid([cell("Lower edge", run ? fq(run.a) : "—", "c1"), cell("Upper edge", run ? fq(run.b) : "—", "c2"), cell("Width", run ? hz(run.b - run.a) : "—", "c3")])}
+      <div class="field notation-box">${rows}
+        <div class="cx-note">Tap a band to put the frequency in its middle.</div>
+        <div class="cx-note" data-res="snote">${AMB_NOTE[k]}</div>
+      </div>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    return state.mode === "find" ? findHTML() : bandsHTML();
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "7.25 MHz on 40 m", note: "Allowed in Canada, the US and Region 2 (to 7.3 MHz); Regions 1 and 3 stop at 7.2 MHz.",
+      apply: example({ mode: "find", sys: "ca", f: 7.25e6, fUnit: "MHz" }) },
+    { title: "A 60 m channel at 5.332 MHz", note: "Canada's four 2.8 kHz channels (C21); the other Regions only have 5351.5 to 5366.5 kHz.",
+      apply: example({ mode: "find", sys: "ca", f: 5.332e6, fUnit: "MHz" }) },
+    { title: "221 MHz in Canada", note: "Only in exceptional circumstances, to help in disaster relief; the US has no amateur band there.",
+      apply: example({ mode: "find", sys: "ca", f: 221e6, fUnit: "MHz" }) },
+    { title: "445 MHz on 70 cm", note: "Canada and the US go up to 450 MHz; Regions 1 to 3 stop at 440 MHz.",
+      apply: example({ mode: "find", sys: "ca", f: 445e6, fUnit: "MHz" }) },
+    { title: "77.8 GHz on 4 mm", note: "Canada's 76 to 81.5 GHz comes in four pieces; only 77.5 to 78 GHz is not secondary.",
+      apply: example({ mode: "find", sys: "ca", f: 77.8e9, fUnit: "GHz" }) },
+    { title: "100 MHz, no amateur band", note: "It falls between 6 m (up to 54 MHz) and 2 m (from 144 MHz).",
+      apply: example({ mode: "find", sys: "ca", f: 100e6, fUnit: "MHz" }) },
+  ]);
+
+  function paint() {
+    const fBox = `
+        <div class="field">
+          <label><span class="field-name">Frequency</span></label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="f" value="${fmt(state.f / AMB_F_UNITS[state.fUnit])}" /><select data-funit>${Object.keys(AMB_F_UNITS).map((u) => `<option ${u === state.fUnit ? "selected" : ""}>${u}</option>`).join("")}</select></div>
+        </div>`;
+    const sysSel = `<select class="label-select" data-sys="1">${AMB_KEYS.map((k) => `<option value="${k}" ${k === state.sys ? "selected" : ""}>${AMB_SYS[k].name}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Which band a frequency is in, and the rules there")}
+
+      ${pillRow(Object.entries(AMB_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${fBox}</div>
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${sysSel}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["λ = c / f", "in a band: lower edge ≤ f ≤ upper edge", "channel: centre ± width / 2", "band name ≈ λ at its middle"],
+        "The amateur service is the ITU's name for radio used for self-training, intercommunication and technical study by people with a personal aim and no pay (RR 1.56). Each country says which slices of spectrum amateurs may use and how; this tool shows Canada (ISED's RBR-4), the United States (47 CFR 97.301, the Amateur Extra class, the widest) and the three ITU Regions (RBR-4's schedules for Canadian ships and aircraft in international waters). Bands are named by wavelength, rounded: 40 m is about 7 MHz, where λ = c / f = 300 / 7.15 = 42 m. A primary service is protected from the others; a secondary one must not interfere with a primary one and has no protection from it (RR 5.28 to 5.31). In RBR-4 a star means that, and a dash means no condition. Bandwidth is the width of the signal measured 26 dB below its peak, and the maximum is how wide it may be. A channel (the 60 m ones) is a centre frequency and a width around it. e.i.r.p. is the power radiated in the antenna's strongest direction, as if from an isotropic antenna; PEP is the peak envelope power, the most the transmitter delivers at the top of its modulation; RTTY is radioteletype. Operator qualifications in RBR-4: Basic, Morse 5 (5 words per minute), Honours (a Basic score of 80 % or more) and Advanced; the bands under 30 MHz need Basic with one of the others. The three Regions are the ITU's (RR 5.3 to 5.5): 1 is Europe, Africa and Russia, 2 the Americas, 3 Asia outside Russia, and Oceania."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const fin = app.querySelector('input[data-key="f"]');
+    fin.oninput = () => { state.f = parseFloat(fin.value) * AMB_F_UNITS[state.fUnit]; show(); };
+    app.querySelector("select[data-funit]").onchange = (e) => { state.fUnit = e.target.value; setPref(C, "fUnit", state.fUnit); paint(); };
+    const sy = app.querySelector("select[data-sys]");
+    const pick = (k) => { state.sys = k; setPref(C, "sys", k); sy.value = k; show(); };
+    sy.onchange = () => pick(sy.value);
+    // A row of the drawing picks that system.
+    app.querySelector(".diagram-box").onclick = (e) => {
+      const g = e.target.closest("[data-sys]");
+      if (g) pick(g.dataset.sys);
+    };
+    // A band row puts the frequency in the middle of that band.
+    app.querySelector('[data-res="result"]').onclick = (e) => {
+      const r = e.target.closest(".notation-row.sol");
+      if (!r) return;
+      state.f = +r.dataset.f;
+      state.fUnit = unitOf(state.f);
       paint();
     };
   }

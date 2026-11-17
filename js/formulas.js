@@ -380,6 +380,12 @@ const FORMULAS = [
     note: "Which ITU number, IEEE or NATO letter, ISM band and standard waveguide a frequency falls in. ITU bands and ISM bands checked against the ITU Radio Regulations (2020), waveguide sizes against Spinner's IEC/EIA cross reference and Precision mmW's chart (all read); the IEEE and NATO letters are secondary copies.",
   },
   {
+    tool: "Amateur radio bands",
+    domain: "rf",
+    formulas: ["λ = c / f", "in a band: lower edge ≤ f ≤ upper edge", "channel: centre ± width / 2", "band name ≈ λ at its middle"],
+    note: "Which amateur band a frequency is in, and what Canada, the United States and the three ITU Regions allow there. Canada and the Regions from ISED's RBR-4 (Issue 3, 2022), the United States from 47 CFR 97.301 and 97.303 (Amateur Extra class); the ITU table was cross-checked only in part (see the manual).",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],

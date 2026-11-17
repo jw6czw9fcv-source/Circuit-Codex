@@ -110,6 +110,7 @@ will key on, since that is the id the app already holds for each tool.
 - Mixing & conversion → [IF calculator](#if-calculator)
 - Mixing & conversion → [Image frequency](#image-frequency)
 - Reference → [Microwave bands](#microwave-bands)
+- Reference → [Amateur radio bands](#amateur-bands)
 
 ### Power electronics
 
@@ -14359,6 +14360,235 @@ Published answers reproduced:
 | WR-90, bands | Wikipedia (EIA), Spinner (IEC) | 8.2 to 12.4 GHz; 8.20 to 12.5 GHz | EIA 8.2 to 12.4 GHz, nominal 8.2 to 12.5 GHz |
 | WR-10 | Spinner (IEEE 1785.1) | cut-off 59.014 GHz | 59.01 GHz |
 | WR-28 | Wikipedia | cut-off 21.077 GHz, 26.5 to 40 GHz | 21.08 GHz, EIA 26.5 to 40 GHz |
+
+[↑ Index](#index)
+
+---
+
+<a id="amateur-bands"></a>
+## Amateur radio bands
+
+`calc: amateur-bands` · RF & microwave › Reference
+
+### What it computes
+
+The amateur service is the radio service for people who use radio for self-training and
+experiment without pay. Which slices of spectrum they may use, how wide a signal may be
+and on what terms differs from one country to the next. The tool takes one frequency and
+says which amateur band it is in and what five systems allow there: Canada, the United
+States, and the three ITU Regions (1 Europe, Africa and Russia; 2 the Americas;
+3 Asia outside Russia, and Oceania). Two pills:
+
+- **Find:** the frequency, in kHz, MHz or GHz (one picker), and, in the Output heading, the
+  system to read it in (Canada, the default). The big result is the band's name (40 m)
+  with where that system puts it ("7 to 7.3 MHz in Canada"), or, if the system does not
+  allow the frequency, why: "not allowed in Region 1: 40 m is 7 to 7.2 MHz there".
+  In three cells: the free-space wavelength; the maximum bandwidth (RBR-4's column II;
+  the United States has none in its band table); and the provision. Under them: for
+  Canada and the Regions, the operator qualifications; what the provision means; and a
+  note on where the system's figures come from. When the frequency sits exactly on the
+  edge of two segments (24.05 GHz in Canada) a row says what the other segment gives.
+- **Bands:** the same head, then three cells (the lower edge, the upper edge and the
+  width of the stretch that holds the frequency) and the list of the system's bands, each
+  with its range and, where RBR-4 gives one, its maximum bandwidth. The row of the band
+  that holds the frequency is tinted; tapping a row puts the frequency in the middle of
+  that band's widest segment. A band made of several pieces says so ("5.332 to 5.405 MHz
+  in 5 parts" for Canada's 60 m); touching pieces count as one stretch, so Canada's
+  1.25 m reads 219 to 225 MHz although 220 to 222 MHz is for exceptional
+  circumstances only (Find says so).
+
+The drawing, in both pills, is the band holding the frequency (or, between bands, the
+nearest) in the five systems: one bar per segment on a single linear scale, the one
+holding the frequency green, the others grey; the range written beside each system in
+green where the frequency is inside it and in amber where it is not; a blue stem at the
+frequency (with an arrow at the edge when the frequency is outside the band). The
+selected system's row is tinted, and a tap on a row picks that system, as the picker
+does.
+
+- **Units:** kHz, MHz or GHz for the frequency.
+- **Remembered:** the pill, the unit and the system.
+
+Examples: 7.25 MHz on 40 m, a 60 m channel at 5.332 MHz, 221 MHz in Canada, 445 MHz on
+70 cm, 77.8 GHz on 4 mm, and 100 MHz, which is in no amateur band.
+
+### Terms
+
+- **Band name (40 m, 70 cm):** a wavelength, rounded: 40 m is the band around 7 MHz,
+  where λ = c / f = 300 / 7.15 = 42 m. The names are the FCC's (47 CFR 97.301's first
+  column) and common usage; 9 cm for 3.3 to 3.5 GHz is common usage, the FCC's table no
+  longer lists that band.
+- **Primary and secondary:** a primary service is protected from the others; a secondary
+  one must not cause harmful interference to a primary one and cannot claim protection
+  from it (ITU Radio Regulations 5.28 to 5.31). In the Radio Regulations' table a
+  primary service is printed in capitals (AMATEUR) and a secondary one in lower case
+  (Amateur) (RR 5.24 to 5.26).
+- **The star and the dash (RBR-4, column III):** RBR-4 defines the star as: the
+  transmissions must not cause interference to, and are not protected from, the stations
+  of the other services in that band, that is, secondary. A dash means RBR-4 lists no
+  operating provision. The tool says "secondary" and "none" and nothing more.
+- **Footnote codes:** a code without a prefix (5.142) is a footnote of the ITU's table;
+  one with a "C" (C21) is from the Canadian Table of Frequency Allocations. RBR-4 prints
+  their text and the tool shows a short form of it.
+- **Maximum bandwidth:** how wide the signal may be. RBR-4 section 4 measures a signal's
+  bandwidth as the width of frequency it occupies at 26 dB below its peak.
+- **Channel:** a centre frequency and a width around it. Canada's and the United
+  States' 60 m channels are 5332, 5348, 5373 and 5405 kHz, 2.8 kHz wide: the channel
+  spans the centre frequency plus and minus half of that.
+- **Operator qualifications (RBR-4, column IV):** B is the Amateur Radio Operator
+  Certificate with Basic Qualification; 5 that with Morse Code (5 words per minute)
+  Qualification; B/H a Basic with Honours (a score of 80 % or more); A the Advanced
+  Qualification. "B and 5, B/H, B and A" (every band under 30 MHz) is written out as
+  "Basic + Morse 5, Basic with Honours, or Basic + Advanced"; "B" (50 MHz and up) is
+  "Basic".
+- **ITU Regions:** 1, 2 and 3, bounded by lines A, B and C (RR 5.3 to 5.9).
+- **e.i.r.p.:** the power radiated in the antenna's strongest direction, as if from an
+  isotropic antenna (transmitter power times antenna gain). **PEP:** peak envelope
+  power, the most a transmitter delivers at the crest of its modulation. **RTTY:**
+  radioteletype. **w.p.m.:** words per minute.
+- **The services the footnotes name** (fixed, mobile, maritime mobile, radiolocation,
+  radionavigation, radio astronomy, inter-satellite, and so on) are the ITU's
+  radiocommunication services (RR 1). **AMTS** is the US Automated Maritime
+  Telecommunications System, **UTC** the Utilities Telecom Council, **PLC** power-line
+  carrier, **Line A** a line defined in 47 CFR 97.3(a) (not read), **ISM** industrial,
+  scientific and medical equipment (see Microwave bands).
+
+### Sources
+
+- **ISED Canada, RBR-4, "Standards for the Operation of Radio Stations in the Amateur
+  Radio Service", Issue 3, July 2022 (the PDF from the University of New Brunswick's
+  amateur radio files, www.ece.unb.ca/petersen/amateur-radio-files/RBR04e-Operating-Standards-2022-Jul.pdf;
+  text extracted and read):** the definitions; section 3, the frequency bands and the
+  qualifications; section 4, the bandwidths (the 26 dB rule); section 7, operation
+  outside Canada (Schedules II to IV are for a Canadian-registered ship or aircraft in
+  international waters or airspace, "subject to the requirements for operator
+  qualifications"); section 8, interference; and the four schedules with their notes:
+  Schedule I, Canada, 40 items; Schedules II, III and IV, Regions 1, 2 and 3, 31, 34 and
+  32 items; each with the band, the maximum bandwidth, the operating provision and the
+  operator qualifications, and the text of the footnotes 5.67A, 5.80A, 5.133B, 5.142,
+  5.561A, C6, C11 and C21. Not used: the sections on station identification and the
+  rest.
+- **47 CFR 97.301 and 97.303 (the eCFR's XML for 2026-11-13, read):** 97.301 (a) and (b),
+  the Region 2 column: the bands of a station whose control operator holds an Amateur
+  Extra class licence (the widest; (c) to (e) give the other classes' narrower ones), each
+  with its wavelength-band name and the paragraphs of 97.303 that apply; 97.303 (a) to (t),
+  the sharing requirements, and (h)(3), the four 60 m channels, their centre frequencies
+  and the 2.8 kHz.
+- **ITU, Radio Regulations, edition of 2020, volume 1 (the PDF, text read):** 1.56, the
+  amateur service; 5.3 to 5.9, the Regions; 5.24 to 5.31, primary and secondary; and the
+  amateur entries of Article 5's table of allocations, which a script read for part of
+  the rows and I looked at by eye for the five rows it flagged, on pages 169, 186 and 192
+  of the PDF (see "How it was checked").
+- **Not read:** ISED's Canadian Table of Frequency Allocations (the C footnotes are known
+  only as RBR-4 prints them), RIC-3 and the certification rules (so whether the Morse 5
+  qualification is still awarded was not checked); the rest of 47 CFR Part 97 (97.305,
+  which emissions in which band; 97.307, emission standards; 97.313, power; the licence
+  classes' details; 97.3's definitions) and 47 CFR 2.106, the US Table of Allocations,
+  which says whether each US amateur band is primary or secondary; the band plans of the
+  ARRL, the IARU and the national societies; every other country's rules.
+
+### Why the numbers are what they are
+
+**The wavelength.** λ = c / f in free space with c = 299 792 458 m/s: 41.4 m at 7.25 MHz.
+The band's name is a rounded wavelength of its middle, not the exact one.
+
+**In the band, on the edge.** A frequency is in a segment when the lower edge ≤ f ≤ the
+upper edge, to within a relative 10⁻¹², so that a typed 5.3515 MHz is on the edge it
+names. The sources print ranges with both ends and do not say that an end is out, so both
+ends count as in; a frequency on the edge of two segments is in both, and the second is
+shown ("Also, on the edge"). A channel is in when f is within its centre plus or minus half
+its bandwidth. The band's name is found from a nominal range (40 m: 7.0 to 7.3 MHz, the
+widest of the systems' versions), so a frequency can be in a band's name and in none of a
+system's segments of it; that system is then said not to allow it, with the nearest
+segment.
+
+**The drawing.** One linear scale from the lowest to the highest edge of the band over the
+five systems, widened to hold the frequency when that is in the band's nominal range;
+frequencies outside every band show the nearest band in log frequency.
+
+**The tap on a band.** The middle of the widest segment, not the middle of the whole
+band, so the frequency is not put on a boundary between two segments.
+
+### Assumptions and limits
+
+- **Schedules II to IV are not the Regions' own rules.** RBR-4 gives them for a
+  Canadian-registered ship or aircraft in international waters or airspace of that
+  Region; they follow the ITU's table of allocations, which was cross-checked only in
+  part (below). A person in a country of Region 1 is bound by that country's rules.
+- **The United States is the Amateur Extra class's.** The other classes have narrower
+  segments (97.301 (c) to (e)); 97.305, 97.307 and 97.313 (emissions, standards, power)
+  and the band plans are not shown, so the US cells have no maximum bandwidth. The row
+  "Above 275 GHz" of 97.301 has no upper limit and is not listed. The Region 2 column is
+  used (the United States, Puerto Rico and the Virgin Islands are in Region 2, 97.303's
+  last paragraph); other insular areas are in Region 2 or 3 (appendix 1 to Part 97, not
+  read).
+- **The US 60 m channels** are the four centre frequencies and the block 5351.5 to
+  5366.5 kHz, 2.8 kHz at most everywhere on 60 m (97.303(h)(3)). Phone, data and RTTY
+  may set the carrier 1.5 kHz below the centre; the tool takes the frequency typed as the
+  centre.
+- **Primary or secondary.** Canada and the Regions: RBR-4's star is "secondary" by its own
+  definition; its dash is shown as "none". In the ITU table I could read, the dash rows
+  are the capitals (primary) and the star rows lower case, but that was not read
+  everywhere. The United States' status is in the Table of Allocations (not read), so the
+  tool shows 97.303's paragraphs instead.
+- **The paragraph and footnote texts are short paraphrases,** mine, of RBR-4's reproduction
+  of the Radio Regulations' footnotes and of 97.303; the country lists (5.80A, 5.133B)
+  and the places and conditions are cut. Read the original before operating.
+- **Qualifications as RBR-4 prints them,** written out with RBR-4's own definitions; the
+  Regions' schedules carry them too.
+- **Canada's 220 to 222 MHz** is listed as a segment, with the note "Exceptional
+  circumstances only" (item 20), because RBR-4 lists it; C11 says it is for disaster relief.
+- **A signal's width is not checked against the edges.** The maximum bandwidth is shown;
+  a signal that wide centred within half of it of an edge reaches over the edge, and no
+  source read says what the rule is there.
+- **Currency.** RBR-4 is Issue 3 (July 2022); the eCFR text is of 2026-11-13. Both change
+  as rules do. A reference, not legal advice: check with ISED, the FCC or the country's
+  authority.
+- **Display.** Frequencies to seven figures at most, wavelengths to three.
+
+### How it was checked
+
+309 cases, the expected values from a Python implementation of the lookups and the wording
+(every label of the drawing too), the long texts read out of the tool's own source:
+- Find: 7.25 MHz in each of the five systems; the 60 m channels, their edges (5.3305,
+  5.3306, 5.4064 and 5.4065 MHz) and a frequency between them; 1.25 m (219.5, 220, 221,
+  222, 223, 225, 226 MHz) in Canada, the US and Region 2; the 24.05 GHz, 77.5, 78 and
+  81 GHz edges; 135 kHz, 100 MHz and 1000 GHz (no band); the edges and the gaps of
+  Canada's and Region 1's bands (7, 7.2, 7.3 and 7.301 MHz; 1.8, 1.85 and 1.86 MHz;
+  137.8 kHz; 29.7 and 30 MHz; and so on); every one of the 170 segments of the five
+  systems at its middle; the units and the refusals; a tap on a row of the drawing; the
+  remembered choices;
+- Bands: each system's whole list; eleven frequencies and systems for the three cells;
+  taps on a band;
+- the six examples and the formula-search card.
+
+About 1 300 more cases (660 random frequencies and systems in both pills, 644 at the exact
+edges of every segment) compared every figure and label with the Python implementation;
+they were run and not kept.
+
+The tables themselves were checked with code that does not share the generator's parser:
+every row of the four RBR-4 schedules (items 1 to 40, 1 to 31, 1 to 34 and 1 to 32) agrees,
+field by field, with the shipped segments (frequencies, bandwidth, provision,
+qualification, note); the union of 97.301's Region 2 rows in (a) and (b) equals the shipped
+US segments, and the four 60 m centre frequencies equal 97.303(h)(3)'s. Against the ITU's
+table of allocations the check is partial: a script read the amateur entries of Article 5
+and confirmed the edges and the primary or secondary status of 18 of Region 1's 31
+segments, 17 of Region 2's 34 and 4 of Region 3's 32; five more of Region 2's (24.05 to
+24.25, 76 to 77.5, 78 to 81, 122.25 to 123 and 136 to 141 GHz) the script flagged, and by
+eye on pages 169, 186 and 192 they are consistent (the entries of neighbouring rows are
+merged on those pages); the rest could not be read by script (rows that span the three
+Regions) and were not checked against the table. No disagreement was found.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| 40 m, Canada | RBR-4 Schedule I, item 10 | 7.000 to 7.300 MHz, 6 kHz, 5.142, B and 5, B/H, B and A | 7 to 7.3 MHz, 6 kHz, 5.142, Basic + Morse 5, Basic with Honours, or Basic + Advanced |
+| 40 m, Region 1 | RBR-4 Schedule II | 7.000 to 7.200 MHz | not allowed at 7.25 MHz: 7 to 7.2 MHz there |
+| 60 m, Canada | RBR-4 item 5 to 9, C21 | 5.332, 5.348, 5.373, 5.405 MHz and 5.3515 to 5.3665 MHz, 2.8 kHz | the same five segments, 2.8 kHz, C21 |
+| 220 to 222 MHz, Canada | RBR-4 item 20, C11 | exceptional circumstances only | C11, "Exceptional circumstances only." |
+| 2 m, US | 47 CFR 97.301(a) | 144 to 148 MHz (Region 2), 97.303 (a), (k) | 144 to 148 MHz, (a), (k) |
+| 60 m channels, US | 47 CFR 97.303(h)(3) | centre 5332, 5348, 5373, 5405 kHz, 2.8 kHz | the four channels, 2.8 kHz |
+| 4 mm, Canada | RBR-4 items 32 to 35 | 76 to 77.5 *, 77.5 to 78 -, 78 to 81 *, 81 to 81.5 5.561A | the four segments: secondary, none, secondary, 5.561A |
 
 [↑ Index](#index)
 
