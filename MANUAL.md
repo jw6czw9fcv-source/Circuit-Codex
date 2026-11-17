@@ -109,6 +109,7 @@ will key on, since that is the id the app already holds for each tool.
 - Power & gain → [Power divider](#power-divider)
 - Mixing & conversion → [IF calculator](#if-calculator)
 - Mixing & conversion → [Image frequency](#image-frequency)
+- Reference → [Microwave bands](#microwave-bands)
 
 ### Power electronics
 
@@ -14113,6 +14114,251 @@ Published answers reproduced:
 | 1000 kHz, LO 1455 kHz, IF 455 kHz | Wikipedia | image at 1910 kHz | 1910 kHz |
 | Mixer, 6° of phase error alone | RF Design Tools | roughly 25 dB | 25.6 dB |
 | Mixer, 0.5 dB and 2° | formula of Wikipedia's IMRR | (agrees with the fetch tool's summary, 29.5 dB) | 29.5 dB; 29.3 dB by the small-error form |
+
+[↑ Index](#index)
+
+---
+
+<a id="microwave-bands"></a>
+## Microwave bands
+
+`calc: microwave-bands` · RF & microwave › Reference
+
+### What it computes
+
+A frequency has several names. The ITU numbers the radio bands; the IEEE has radar
+letters (L, S, C, X, Ku, K, Ka, V, W); NATO has letters of its own (A to M, and N
+and O for the US military); some bands are set aside for industrial, scientific and
+medical equipment (ISM); and a standard rectangular waveguide, WR-90 for instance,
+carries only a limited range. The tool gives all of these for one frequency. Three
+pills:
+
+- **Find:** the frequency, in MHz, GHz or THz (one picker). The big result is the IEEE
+  letter band, with its range and what the letters stand for. In three cells: the ITU
+  band, the NATO letter and the ISM band, if there is one. Under them: the free-space
+  wavelength; the standard waveguides whose nominal range holds the frequency, each a
+  button that opens it in the Waveguide pill; and, for an IEEE band, a note of what it
+  is typically used for. An edge belongs to both bands it separates: exactly 2 GHz is
+  "L / S" to the IEEE and "D / E" to NATO. The ITU's own rule is kept for its numbers:
+  a band's lower limit is out and its upper limit in, so 3 GHz is in band 9.
+- **Bands:** the same as lists. A picker in the Output heading chooses IEEE letters,
+  NATO letters, ITU numbers or ISM bands; the row that holds the frequency is tinted,
+  and tapping a row sets the frequency to the middle of that band (the geometric mean
+  of its edges; the centre frequency for an ISM band; half the top for NATO's A, which
+  starts at 0 Hz). The big result and three cells give the band's edges and the ratio
+  of the two (for ISM bands: the centre, the type, and where it applies).
+- **Waveguide:** one of the 34 standard sizes, WR-2300 to WR-3, picked from the list or,
+  left on "Best fit", chosen from the frequency. The big result is its name, with its IEC
+  and UK names and its inner size in millimetres under it. In three cells: the cut-off
+  frequency, the nominal range, and your frequency as a multiple of the cut-off. Under
+  them: what that means (below the cut-off nothing propagates; above it but under the
+  nominal range; inside it; over it but under twice the cut-off, still one mode; over
+  twice the cut-off, where other modes can exist); the inner size in inches; where the
+  next mode starts; the EIA recommended band where it is known; the letters the
+  maker's table gives it; and the other sizes that hold your frequency.
+
+The drawing of Find and Bands puts the ITU bands, the IEEE letters and NATO's on one
+logarithmic scale from 0.3 to 300 GHz, the three decades of the ITU's UHF, SHF and
+EHF. The bands that hold the frequency are green and the frequency is a blue stem (an
+arrow at the edge of the scale when it is off it). The Waveguide drawing is the guide's
+opening to scale, its wide side a, its short side b, and the TE10 field in green,
+pointing along b and strongest in the middle of a.
+
+- **Units:** MHz, GHz or THz for the frequency.
+- **Remembered:** the pill, the unit, the system picker and the waveguide.
+
+Examples: a microwave oven's 2.45 GHz, satellite TV at 11.7 GHz, GPS L1, Wi-Fi at
+5.8 GHz, a 77 GHz car radar, and WR-90 at 10 GHz.
+
+### Terms
+
+- **ITU band:** the radio spectrum divided into bands numbered 4 to 12, each a decade
+  of frequency; band N runs from 0.3 × 10ᴺ to 3 × 10ᴺ Hz. Band 9 is UHF, 10 SHF, 11 EHF
+  and 12 has no symbol. They are the only names the ITU wants used in dealings with it.
+- **IEEE letter band:** L, S, C, X, Ku, K, Ka, V, W and mm (with HF, VHF and UHF), the
+  names of IEEE Std 521 for radar frequency bands. The letters began in the Second
+  World War and are used well beyond radar, where their edges move.
+- **NATO letter band:** the A to M letters (and N, O of the US military) used for
+  military and electronic-warfare work. They are not the IEEE letters: NATO's J is
+  10 to 20 GHz, IEEE's X is 8 to 12.
+- **ISM band:** a band designated for "industrial, scientific and medical applications
+  (of radio frequency energy)": equipment that makes and uses radio-frequency energy
+  locally, for heating for instance, and not for telecommunications (RR 1.15). Type A
+  (RR 5.138): use is subject to the administration's special authorization. Type B
+  (RR 5.150): the other services in the band must accept the interference ISM equipment
+  may cause. Wi-Fi and Bluetooth use the 2.4 GHz one without being ISM equipment.
+- **Region:** the ITU's three regions: 1 is Europe, Africa and Russia, 2 the Americas,
+  3 Asia outside Russia, Australia and New Zealand.
+- **Waveguide:** a hollow metal pipe that carries a signal; above a few gigahertz it
+  loses less than a cable. **WR** stands for "waveguide rectangular" and the number is the
+  inner width in hundredths of an inch: WR-90 is 0.900 in wide.
+- **TE10 mode, cut-off:** the first mode a rectangular guide can carry; the electric
+  field points along the short side b and is strongest in the middle of the wide side
+  a. Below its cut-off frequency, c / (2 a), nothing propagates.
+- **Nominal range:** the frequencies a size is meant for, from about 1.25 to 1.9 times
+  its cut-off, where only the TE10 mode propagates.
+- **EIA, IEC, UK (RCSC) names:** the same guide under three standards: WR-90, R 100
+  and WG 16.
+
+### Sources
+
+- **ITU, Radio Regulations, edition of 2020, volume 1 (the 443-page PDF; text
+  extracted and read):** Article 2.1, bands 4 to 12 with their symbols and metric
+  subdivisions, "lower limit exclusive, upper limit inclusive", band N from 0.3 × 10ᴺ to
+  3 × 10ᴺ Hz; 2.2, that in communications with the ITU no names, symbols or
+  abbreviations should be used for the bands other than those of 2.1; 1.15, the
+  definition of ISM applications; and the footnotes 5.138 (6765 to 6795 kHz,
+  433.05 to 434.79 MHz in Region 1 except in the countries of 5.280, 61 to 61.5 GHz,
+  122 to 123 GHz, 244 to 246 GHz), 5.150 (13 553 to 13 567 kHz, 26 957 to 27 283 kHz,
+  40.66 to 40.70 MHz, 902 to 928 MHz in Region 2, 2400 to 2500 MHz, 5725 to 5875 MHz,
+  24 to 24.25 GHz) and 5.280 (eleven European countries for which 433.05 to 434.79 MHz
+  is an ISM band with type B's terms), each with the centre frequency it gives.
+- **Wikipedia, "Radio spectrum" (the wikitext, downloaded and read):** the IEEE radar
+  band table, credited to IEEE Std 521-2002, and the ITU table.
+- **David Kelley, "Radar Band Letter Designations (from IEEE Standard 521-2002)"
+  (Bucknell University handout; PDF text read), and radioing.com's page on the
+  IEEE radar bands (read):** the same letter edges: L 1 to 2 GHz, S 2 to 4, C 4 to 8,
+  X 8 to 12, Ku 12 to 18, K 18 to 27, Ka 27 to 40, V 40 to 75, W 75 to 110, mm 110 to
+  300 GHz; and HF 3 to 30 MHz, VHF 30 to 300 MHz, UHF 300 to 1000 MHz. Both say that
+  the IEEE standard gives 110 to 300 GHz to the millimetre band although in popular
+  usage it is often 30 to 300 GHz; radioing.com adds that the standard relates the
+  letters in common use to the frequencies they stand for, that they are not a
+  substitute for specific frequency limits and that they are meant for radar.
+- **Wikipedia, the "NATO radio band table" template (wikitext):** NATO's letters,
+  A 0 to 250 MHz, B 250 to 500 MHz, C 500 MHz to 1 GHz, D 1 to 2, E 2 to 3, F 3 to 4,
+  G 4 to 6, H 6 to 8, I 8 to 10, J 10 to 20, K 20 to 40, L 40 to 60, M 60 to 100 GHz,
+  and the US military's N 100 to 200 and O 200 to 300 GHz, 1978 to the present. The
+  template cites the NATO ARFA handbook, the 1978 US ECM instruction (AFR 55-44 and its
+  twins) and Belov, Smolskiy and Kochemasov's handbook; none of those was read (the
+  server of the instruction refused the download).
+- **Spinner GmbH, TD-00036 issue V, "Cross reference for hollow metallic waveguides"
+  (H.-U. Nickel, 2025; PDF text read):** the inner dimensions (in inches and
+  millimetres), the IEC nominal ranges, the IEC, EIA and UK designations and the
+  letters of each size, from IEC 60153-2:2016, EIA-261-C, MIL-DTL-85 and IEEE Std
+  1785.1-2012; the rule that a nominal range runs from about 1.25 to 1.9 times the TE10
+  cut-off, and that the cut-off is c₀ / (2 a) with c₀ = 299 792 458 m/s.
+- **Wikipedia, "Waveguide (radio frequency)" (the wikitext, read):** the table of
+  standard sizes with the EIA recommended bands and the cut-offs; that the WR number is
+  the inner width in hundredths of an inch; the usual design rules (the band's lower
+  edge about 25 % above the cut-off and its upper edge about 5 % below the cut-off of
+  the next mode, the height half the width); and f = c / 2W for the lowest frequency.
+- **Precision mmW, "Waveguide Frequency Bands with Interior Dimensions" (PDF text
+  read):** an independent chart of the sizes with their recommended bands.
+- **Wikipedia, the articles on the L, S, C, X, Ku, K, Ka, V and W bands, and on the ISM
+  band (wikitext, read):** the examples of use, given as examples and not as
+  allocations.
+- **Not read:** IEEE Std 521 itself, in any edition (it is sold; the 2019 revision may
+  differ from the 2002 table used here); the NATO documents above; EIA-261-C and IEC
+  60153-2 themselves (only through Spinner and Wikipedia); national rules (FCC
+  Parts 15 and 18, ISED, ETSI), and Article 5's table of allocations. Two servers
+  refused downloads (apps.dtic.mil and the Marine Corps' publications site) and were
+  left alone.
+
+### Why the formulas are these
+
+**The ITU band.** Band N holds the frequencies f with 0.3 × 10ᴺ < f ≤ 3 × 10ᴺ Hz (RR 2.1,
+Note 1, and "lower limit exclusive, upper limit inclusive"), so 3 GHz is the top of band
+9 and 30 GHz the top of band 10. The letter bands have no such rule in the sources, so
+an edge here belongs to both bands.
+
+**The wavelength.** λ = c / f in free space, with c = 299 792 458 m/s: 12.2 cm at
+2.45 GHz.
+
+**The cut-off.** The longest wave a rectangular guide of inner width a carries is 2 a, so
+its lowest frequency is
+
+    fc = c / (2 a)
+
+for the nominal width of the table: WR-90, a = 0.900 in = 22.86 mm, gives 6.557 GHz.
+The tool takes a in inches from the EIA name (Spinner's imperial column) and the millimetres
+as 25.4 mm to the inch.
+
+**The next mode, the nominal range, the verdict.** In all 34 sizes the height is at most
+half the width, so the next modes (TE20, and TE01 when b = a / 2) start at 2 fc; that is
+the "next mode" column of Wikipedia's table for every size (WR-90: 13.114 GHz). The nominal
+range runs from about 1.25 fc, which keeps away from the strong dispersion and the loss
+near the cut-off, to about 5 % under 2 fc, 1.9 fc. The tool says "below the cut-off" at or
+under fc, "under the nominal range" up to its lower edge, "inside" up to its upper edge,
+"still one mode" up to 2 fc and "other modes" from there.
+
+**The best fit.** Among the sizes whose nominal range holds the frequency, the one whose
+range is centred nearest it on a log scale (the geometric mean of its edges); with none, the
+nearest of all.
+
+### Assumptions and limits
+
+- **Letters are for radar.** IEEE Std 521's letters are radar designations, and radioing.com's
+  summary of the standard says they are not meant for other uses; satellite and test-equipment
+  makers use the same letters with edges of their own. 11.7 GHz is Ku band to a satellite
+  receiver and X band to the IEEE (whose Ku starts at 12 GHz); C-band satellites use
+  3.7 to 4.2 GHz, partly in IEEE's S. The ITU asks that only its own band names be used with it.
+- **Waveguide letters differ again.** The waveguide world's K is 18 to 26.5 GHz and Ka
+  26.5 to 40, against IEEE's 18 to 27 and 27 to 40; Spinner's letter column (L, S, C, X, Ku,
+  K, Ka, Q, U, V, E, W, F, D, G, Y, H, J, and Ls, R, Xn, Xb, M, P, N for some sizes) is
+  shown as it is, for the size.
+- **Two sources for the letters, one date.** The IEEE table is the 2002 one, from three copies
+  and not from the standard; NATO's letters come from a Wikipedia template whose own sources
+  were not read.
+- **ISM bands of the Radio Regulations only.** National rules (the FCC's Parts 15 and 18,
+  ETSI's short-range-device bands) are not here, and the bands under 433 MHz are listed
+  but do not matter to a microwave user.
+- **Examples of use, not allocations.** The uses come from encyclopaedia articles. An
+  allocation depends on the country and the service (RR Article 5 holds them).
+- **Waveguide: ordinary rectangular sizes only.** No reduced-height, square, circular or
+  ridged guide, no WM sizes under WR-3, no tolerances, no loss, impedance, power rating or guide
+  wavelength: those belong to a waveguide calculator of their own.
+- **The cut-off is for the nominal width.** Spinner's table prints the IEC sizes' cut-offs
+  0.2 to 0.6 % lower (WR-90: 6.54 GHz) while its millimetre table, from IEEE 1785.1, equals
+  c / (2 a) (WR-10: 59.014 GHz). Its own footnote says c / (2 a); I could not tell why
+  the IEC figures are lower and did not read IEC 60153-2.
+- **Two kinds of range.** The nominal range shown is IEC 60153-2's (through Spinner), which
+  every size has. The EIA recommended band (WR-90: 8.2 to 12.4 GHz, the IEC giving 8.20 to
+  12.5) is shown only for the 23 sizes WR-340 to WR-4, where Wikipedia and Precision mmW
+  agree; for the others the sources differ (WR-430: 1.72 or 1.70 GHz at the bottom; WR-650;
+  WR-770; WR-3: 330 or 325 GHz at the top) or only Wikipedia gives one, and none is shown.
+- **Typographical errors in a source.** Wikipedia's table prints the height of WR-284 as
+  34.94 mm and of WR-1150 as 146.5 mm; Spinner's 34.04 and 146.05, which are 1.340 in and
+  5.750 in, are the ones used. Precision mmW prints 1.150 in for the height of WR-229
+  against 1.145 in in Spinner and Wikipedia.
+- **Range.** The IEEE letters cover 3 MHz to 300 GHz, the ITU numbers 3 kHz to 3 THz, NATO's
+  letters up to 300 GHz, the waveguides 0.32 to 330 GHz; outside, the tool says so.
+- **Display.** Frequencies to four figures, wavelengths and ratios to three.
+
+### How it was checked
+
+100 cases, the expected values from a Python implementation written from the sources (every
+figure and every label of the drawing):
+- Find: the five examples (2.45 GHz, 11.7 GHz, GPS L1, 5.8 GHz, 77 GHz) and the edges (2, 3,
+  8, 30 and 300 GHz), 0.4 GHz, 7 MHz, 2 MHz, 400 GHz, 2 THz and 5 THz, the ISM bands
+  (6.78 MHz, 433.92 MHz, 915 MHz, 2.4 and 2.5 GHz, 24.125, 61.25 and 245 GHz), the unit
+  picker, the refusals, the waveguide chip and the remembered choices;
+- Bands: each of the four lists at 2.45 GHz, every row; an edge, HF, mm, NATO's A, the ISM
+  bands, ITU band 12 and the frequency below band 4; tapping a row; the picker;
+- Waveguide: all 34 sizes, each at the middle of its range (name, names, size, cut-off,
+  nominal range, inches, next mode, EIA band, letters, drawing labels); WR-90 at 5, 7, 10,
+  12.45, 13 and 14 GHz; the best fit at 1000 and 0.1 GHz; the picker's 35 entries;
+- the six examples and the formula-search card.
+
+About 1 100 more cases (every edge of every table typed exactly, 117 frequencies in three
+views each, and 260 random frequencies from 300 kHz to 5 THz in three views, with random
+systems and sizes) compared every figure and label with the Python implementation; they
+were run and not kept. The cut-offs of the 34 sizes, worked as c / (2 a), agree with
+Wikipedia's printed ones to its rounding (at worst 0.16 %), and the 34 IEC nominal ranges
+come out at 1.21 to 1.27 and 1.86 to 1.91 times the cut-off.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| ITU band 10 | RR 2.1 | SHF, 3 to 30 GHz, centimetric waves | band 10 · SHF; 3 GHz is band 9 |
+| 2.4 GHz ISM | RR 5.150 | 2400 to 2500 MHz, centre 2450 MHz, type B | 2.4 to 2.5 GHz, centre 2.45 GHz, type B |
+| 433 MHz ISM | RR 5.138 | 433.05 to 434.79 MHz, Region 1, centre 433.92 MHz | the same, type A |
+| IEEE S band | IEEE 521-2002 (three copies) | 2 to 4 GHz | S band, 2 to 4 GHz |
+| NATO E | Wikipedia template | 2 to 3 GHz | E at 2.45 GHz |
+| WR-90 | Wikipedia, Spinner | 22.86 × 10.16 mm; cut-off 6.557 GHz, next mode 13.114 GHz | 22.9 × 10.2 mm; 6.557 GHz; 13.11 GHz |
+| WR-90, bands | Wikipedia (EIA), Spinner (IEC) | 8.2 to 12.4 GHz; 8.20 to 12.5 GHz | EIA 8.2 to 12.4 GHz, nominal 8.2 to 12.5 GHz |
+| WR-10 | Spinner (IEEE 1785.1) | cut-off 59.014 GHz | 59.01 GHz |
+| WR-28 | Wikipedia | cut-off 21.077 GHz, 26.5 to 40 GHz | 21.08 GHz, EIA 26.5 to 40 GHz |
 
 [↑ Index](#index)
 

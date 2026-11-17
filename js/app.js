@@ -676,6 +676,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "smith") return renderSmith(domain, tool, favId);
   if (calcId === "if-calculator") return renderIfCalculator(domain, tool, favId);
   if (calcId === "image-frequency") return renderImageFrequency(domain, tool, favId);
+  if (calcId === "microwave-bands") return renderMicrowaveBands(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -17672,6 +17673,408 @@ function renderImageFrequency(domain, tool, favId) {
     if (sd) sd.onchange = () => { state.side = sd.value; setPref(C, "side", state.side); show(); };
     const md = app.querySelector("select[data-model]");
     if (md) md.onchange = () => { state.model = md.value; setPref(C, "model", state.model); show(); };
+  }
+
+  paint();
+}
+
+// ---------- Microwave bands & frequencies ----------
+// Which band a frequency is in, under each naming system, and the standard waveguide that carries it. Sources, as read this session:
+//  - ITU Radio Regulations, edition of 2020, volume 1 (PDF text): Article 2.1, bands 4 to 12, "lower limit exclusive, upper limit inclusive"; 2.2, that
+//    no other names, symbols or abbreviations should be used for the bands in communications with the ITU; footnotes 5.138 (6765-6795 kHz, 433.05-434.79 MHz
+//    in Region 1 except the countries of 5.280, 61-61.5, 122-123 and 244-246 GHz) and 5.150 (13 553-13 567, 26 957-27 283 kHz, 40.66-40.70 MHz,
+//    902-928 MHz in Region 2, 2400-2500 and 5725-5875 MHz, 24-24.25 GHz) for the ISM bands. The ITU numbers are the ones of the Radio wavelength tool.
+//  - The IEEE radar letters, IEEE Std 521-2002: not the standard itself (paywalled) but three copies of its table: David Kelley's Bucknell handout ("from IEEE
+//    Standard 521-2002"), radioing.com's page and Wikipedia's "Radio spectrum" (wikitext). The letters are radar designations; the standard says they are
+//    not a substitute for specific frequency limits. The 2019 revision was not checked.
+//  - The NATO letters (A to M, and N, O of the US military): Wikipedia's "NATO radio band table" template (wikitext), which cites the NATO ARFA handbook,
+//    the 1978 US ECM instruction and Belov et al.; none of those was read (the instruction's server refused the download).
+//  - Waveguides: Spinner TD-00036 issue V (IEC 60153-2:2016, EIA-261-C and IEEE 1785.1-2012 cross reference: inner sizes, IEC nominal ranges, letters),
+//    Wikipedia "Waveguide (radio frequency)" (wikitext: the EIA recommended bands and the cut-offs) and Precision mmW's chart (PDF), which agree with
+//    the EIA bands used here; where they disagree the band is left out. The TE10 cut-off is c / (2 a) of the nominal width, as Wikipedia prints it.
+//  - The uses of each IEEE band: Wikipedia's articles on the L, S, C, X, Ku, K, Ka, V and W bands (wikitext), as examples, not allocations.
+const MWB_MODES = { find: "Find", bands: "Bands", guide: "Waveguide" };
+const MWB_F_UNITS = { MHz: 1e6, GHz: 1e9, THz: 1e12 };
+const MWB_SYSTEMS = { ieee: "IEEE letters", nato: "NATO letters", itu: "ITU numbers", ism: "ISM bands" };
+const MWB_LIGHT = 299792458;
+const MWB_IEEE = [
+  { k: "HF", lo: 3e6, hi: 30e6, mean: "high frequency", uses: "" },
+  { k: "VHF", lo: 30e6, hi: 300e6, mean: "very high frequency", uses: "" },
+  { k: "UHF", lo: 300e6, hi: 1e9, mean: "ultra-high frequency", uses: "" },
+  { k: "L", lo: 1e9, hi: 2e9, mean: "long wave",
+    uses: "GPS and the other satellite navigation systems (1176.45, 1227.60 and 1575.42 MHz for GPS), ADS-B at 1090 MHz, satellite phones, the hydrogen line at 1420 MHz." },
+  { k: "S", lo: 2e9, hi: 4e9, mean: "short wave",
+    uses: "2.4 GHz Wi-Fi, Bluetooth and microwave ovens, airport and weather radar, NASA's space links." },
+  { k: "C", lo: 4e9, hi: 8e9, mean: "a compromise between S and X",
+    uses: "Satellite links (3.7 to 4.2 GHz down, 5.925 to 6.425 GHz up, so partly in IEEE's S), 5 GHz Wi-Fi, radar altimeters at 4.2 to 4.4 GHz." },
+  { k: "X", lo: 8e9, hi: 12e9, mean: "X for cross, as in crosshair",
+    uses: "Radar (marine, weather, air traffic, speed guns), deep-space links, the 10 GHz amateur band." },
+  { k: "Ku", lo: 12e9, hi: 18e9, mean: "K-under",
+    uses: "Satellite TV and data: 10.7 to 12.75 GHz down, 14.0 to 14.5 GHz up (the satellite world's Ku starts inside IEEE's X), Starlink, some speed guns." },
+  { k: "K", lo: 18e9, hi: 27e9, mean: "kurz, German for short",
+    uses: "Short range only: water vapour absorbs strongly at 22.24 GHz. 24.0 to 24.25 GHz is an ISM and an amateur band." },
+  { k: "Ka", lo: 27e9, hi: 40e9, mean: "K-above",
+    uses: "Satellite broadband (up at 27.5 to 31 GHz, down at 17.7 to 21.2 GHz), cloud radar, some speed guns." },
+  { k: "V", lo: 40e9, hi: 75e9, mean: "the letter after U",
+    uses: "60 GHz links: short range, many gigabits (WiGig, IEEE 802.11ad; 57 to 71 GHz unlicensed in the US), satellite crosslinks." },
+  { k: "W", lo: 75e9, hi: 110e9, mean: "the letter after V",
+    uses: "77 GHz car radar, 94 GHz imaging radar, satellite links at 71 to 76 and 81 to 86 GHz." },
+  { k: "mm", lo: 110e9, hi: 300e9, mean: "millimetre wave",
+    uses: "IEEE's millimetre band is 110 to 300 GHz; in common use \"millimetre wave\" often means 30 to 300 GHz." },
+];
+const MWB_NATO = [
+  { k: "A", lo: 0, hi: 250e6 }, { k: "B", lo: 250e6, hi: 500e6 }, { k: "C", lo: 500e6, hi: 1e9 }, { k: "D", lo: 1e9, hi: 2e9 },
+  { k: "E", lo: 2e9, hi: 3e9 }, { k: "F", lo: 3e9, hi: 4e9 }, { k: "G", lo: 4e9, hi: 6e9 }, { k: "H", lo: 6e9, hi: 8e9 },
+  { k: "I", lo: 8e9, hi: 10e9 }, { k: "J", lo: 10e9, hi: 20e9 }, { k: "K", lo: 20e9, hi: 40e9 }, { k: "L", lo: 40e9, hi: 60e9 },
+  { k: "M", lo: 60e9, hi: 100e9 }, { k: "N", lo: 100e9, hi: 200e9, note: "US military" }, { k: "O", lo: 200e9, hi: 300e9, note: "US military" },
+];
+// RR 5.138 is type A (needs the administration's special authorization), RR 5.150 type B (other services must accept the interference).
+const MWB_ISM = [
+  { lo: 6.765e6, hi: 6.795e6, c: 6.78e6, type: "A", where: "worldwide" },
+  { lo: 13.553e6, hi: 13.567e6, c: 13.56e6, type: "B", where: "worldwide" },
+  { lo: 26.957e6, hi: 27.283e6, c: 27.12e6, type: "B", where: "worldwide" },
+  { lo: 40.66e6, hi: 40.70e6, c: 40.68e6, type: "B", where: "worldwide" },
+  { lo: 433.05e6, hi: 434.79e6, c: 433.92e6, type: "A", where: "Region 1" },
+  { lo: 902e6, hi: 928e6, c: 915e6, type: "B", where: "Region 2" },
+  { lo: 2400e6, hi: 2500e6, c: 2450e6, type: "B", where: "worldwide" },
+  { lo: 5725e6, hi: 5875e6, c: 5800e6, type: "B", where: "worldwide" },
+  { lo: 24e9, hi: 24.25e9, c: 24.125e9, type: "B", where: "worldwide" },
+  { lo: 61e9, hi: 61.5e9, c: 61.25e9, type: "A", where: "worldwide" },
+  { lo: 122e9, hi: 123e9, c: 122.5e9, type: "A", where: "worldwide" },
+  { lo: 244e9, hi: 246e9, c: 245e9, type: "A", where: "worldwide" },
+];
+// n: EIA name; uk: RCSC (UK) name; iec: IEC 60153-2 name; a, b: nominal inner width and height in inches; rng: the IEC nominal range in GHz (about 1.25 to 1.9 times
+// the cut-off); eia: the EIA recommended band in GHz where Wikipedia and Precision mmW agree; let: the letters Spinner gives it.
+const MWB_WR = [
+  { n: "WR-2300", uk: "WG 00", iec: "R 3", a: 23.000, b: 11.500, rng: [0.32, 0.49], eia: null, let: "" },
+  { n: "WR-2100", uk: "WG 0", iec: "R 4", a: 21.000, b: 10.500, rng: [0.35, 0.53], eia: null, let: "" },
+  { n: "WR-1800", uk: "WG 1", iec: "R 5", a: 18.000, b: 9.000, rng: [0.41, 0.62], eia: null, let: "" },
+  { n: "WR-1500", uk: "WG 2", iec: "R 6", a: 15.000, b: 7.500, rng: [0.49, 0.75], eia: null, let: "" },
+  { n: "WR-1150", uk: "WG 3", iec: "R 8", a: 11.500, b: 5.750, rng: [0.64, 0.98], eia: null, let: "" },
+  { n: "WR-975", uk: "WG 4", iec: "R 9", a: 9.750, b: 4.875, rng: [0.76, 1.15], eia: null, let: "" },
+  { n: "WR-770", uk: "WG 5", iec: "R 12", a: 7.700, b: 3.850, rng: [0.96, 1.46], eia: null, let: "" },
+  { n: "WR-650", uk: "WG 6", iec: "R 14", a: 6.500, b: 3.250, rng: [1.13, 1.73], eia: null, let: "L" },
+  { n: "WR-510", uk: "WG 7", iec: "R 18", a: 5.100, b: 2.550, rng: [1.45, 2.20], eia: null, let: "" },
+  { n: "WR-430", uk: "WG 8", iec: "R 22", a: 4.300, b: 2.150, rng: [1.72, 2.61], eia: null, let: "Ls, R" },
+  { n: "WR-340", uk: "WG 9A", iec: "R 26", a: 3.400, b: 1.700, rng: [2.17, 3.30], eia: [2.20, 3.30], let: "" },
+  { n: "WR-284", uk: "WG 10", iec: "R 32", a: 2.840, b: 1.340, rng: [2.60, 3.95], eia: [2.60, 3.95], let: "S" },
+  { n: "WR-229", uk: "WG 11A", iec: "R 40", a: 2.290, b: 1.145, rng: [3.22, 4.90], eia: [3.30, 4.90], let: "" },
+  { n: "WR-187", uk: "WG 12", iec: "R 48", a: 1.872, b: 0.872, rng: [3.94, 5.99], eia: [3.95, 5.85], let: "C, G" },
+  { n: "WR-159", uk: "WG 13", iec: "R 58", a: 1.590, b: 0.795, rng: [4.64, 7.05], eia: [4.90, 7.05], let: "C" },
+  { n: "WR-137", uk: "WG 14", iec: "R 70", a: 1.372, b: 0.622, rng: [5.38, 8.17], eia: [5.85, 8.20], let: "Xn, J" },
+  { n: "WR-112", uk: "WG 15", iec: "R 84", a: 1.122, b: 0.497, rng: [6.57, 9.99], eia: [7.05, 10.0], let: "Xb, H" },
+  { n: "WR-90", uk: "WG 16", iec: "R 100", a: 0.900, b: 0.400, rng: [8.20, 12.5], eia: [8.20, 12.4], let: "X" },
+  { n: "WR-75", uk: "WG 17", iec: "R 120", a: 0.750, b: 0.375, rng: [9.84, 15.0], eia: [10.0, 15.0], let: "M" },
+  { n: "WR-62", uk: "WG 18", iec: "R 140", a: 0.622, b: 0.311, rng: [11.9, 18.0], eia: [12.4, 18.0], let: "Ku, P" },
+  { n: "WR-51", uk: "WG 19", iec: "R 180", a: 0.510, b: 0.255, rng: [14.5, 22.0], eia: [15.0, 22.0], let: "N" },
+  { n: "WR-42", uk: "WG 20", iec: "R 220", a: 0.420, b: 0.170, rng: [17.6, 26.7], eia: [18.0, 26.5], let: "K" },
+  { n: "WR-34", uk: "WG 21", iec: "R 260", a: 0.340, b: 0.170, rng: [21.7, 33.0], eia: [22.0, 33.0], let: "" },
+  { n: "WR-28", uk: "WG 22", iec: "R 320", a: 0.280, b: 0.140, rng: [26.3, 40.0], eia: [26.5, 40.0], let: "Ka, R" },
+  { n: "WR-22", uk: "WG 23", iec: "R 400", a: 0.224, b: 0.112, rng: [32.9, 50.1], eia: [33.0, 50.0], let: "Q" },
+  { n: "WR-19", uk: "WG 24", iec: "R 500", a: 0.188, b: 0.094, rng: [39.2, 59.6], eia: [40.0, 60.0], let: "U" },
+  { n: "WR-15", uk: "WG 25", iec: "R 620", a: 0.148, b: 0.074, rng: [50.0, 75.0], eia: [50.0, 75.0], let: "V" },
+  { n: "WR-12", uk: "WG 26", iec: "R 740", a: 0.122, b: 0.061, rng: [60.0, 90.0], eia: [60.0, 90.0], let: "E" },
+  { n: "WR-10", uk: "WG 27", iec: "R 900", a: 0.100, b: 0.050, rng: [75.0, 110.0], eia: [75.0, 110.0], let: "W" },
+  { n: "WR-8", uk: "WG 28", iec: "R 1.2k", a: 0.080, b: 0.040, rng: [90.0, 140.0], eia: [90.0, 140.0], let: "F" },
+  { n: "WR-7", uk: "WG 29", iec: "R 1.4k", a: 0.0650, b: 0.0325, rng: [110.0, 170.0], eia: [110.0, 170.0], let: "D" },
+  { n: "WR-5", uk: "WG 30", iec: "R 1.8k", a: 0.0510, b: 0.0255, rng: [140.0, 220.0], eia: [140.0, 220.0], let: "G" },
+  { n: "WR-4", uk: "WG 31", iec: "R 2.2k", a: 0.0430, b: 0.0215, rng: [170.0, 260.0], eia: [170.0, 260.0], let: "Y" },
+  { n: "WR-3", uk: "WG 32", iec: "R 2.6k", a: 0.0340, b: 0.0170, rng: [220.0, 330.0], eia: null, let: "H, J" },
+];
+const mwbCutoff = (w) => MWB_LIGHT / (2 * w.a * 0.0254);
+
+function renderMicrowaveBands(domain, tool, favId) {
+  const C = "microwave-bands";
+  const state = {
+    mode: pref(C, "mode", "find", Object.keys(MWB_MODES)),
+    fUnit: pref(C, "fUnit", "GHz", Object.keys(MWB_F_UNITS)),
+    system: pref(C, "system", "ieee", Object.keys(MWB_SYSTEMS)),
+    guide: pref(C, "guide", "auto", ["auto", ...MWB_WR.map((w) => w.n)]),
+    f: 2.45e9, // Hz
+  };
+  // Three figures, never in exponent form.
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const KU = { kHz: 1e3, MHz: 1e6, GHz: 1e9, THz: 1e12 };
+  const unitOf = (hz) => (hz >= 1e12 ? "THz" : hz >= 1e9 ? "GHz" : hz >= 1e6 ? "MHz" : "kHz");
+  const one = (hz, u) => String(Number((hz / KU[u]).toPrecision(4)));
+  const fq = (hz) => { const u = unitOf(hz); return `${one(hz, u)} ${u}`; };
+  const fr = (lo, hi) => { const u = unitOf(hi); return `${one(lo, u)} to ${one(hi, u)} ${u}`; };
+  const wl = (m) => (m >= 1 ? `${n3(m)} m` : m >= 1e-2 ? `${n3(m * 100)} cm` : m >= 5e-4 ? `${n3(m * 1e3)} mm` : `${n3(m * 1e6)} µm`);
+  const ghz = (g) => `${String(Number(g.toPrecision(4)))} GHz`;
+  const ghzRange = (r) => `${String(r[0])} to ${String(r[1])} GHz`;
+  // An edge belongs to both bands it separates, to within a rounding error of the typed number.
+  const ge = (f, x) => f >= x * (1 - 1e-12);
+  const le = (f, x) => f <= x * (1 + 1e-12);
+  const within = (b, f) => ge(f, b.lo) && le(f, b.hi);
+  const ieeeAt = (f) => MWB_IEEE.filter((b) => within(b, f));
+  const natoAt = (f) => MWB_NATO.filter((b) => within(b, f));
+  // The ITU's own rule, RR 2.1: the lower limit is out, the upper limit in.
+  const ITU = ITU_BANDS.filter((b) => b.n >= 4);
+  const ituAt = (f) => ITU.find((b) => f > b.lo * (1 + 1e-12) && le(f, b.hi)) || null;
+  const ismAt = (f) => MWB_ISM.filter((b) => within(b, f));
+  const guidesAt = (f) => MWB_WR.filter((w) => ge(f, w.rng[0] * 1e9) && le(f, w.rng[1] * 1e9));
+  // The guide shown in the Waveguide view: the one picked, else the covering one nearest the middle of its range, else the nearest in log frequency.
+  const mid = (w) => Math.sqrt(w.rng[0] * w.rng[1]) * 1e9;
+  const dist = (w) => Math.abs(Math.log(state.f / mid(w)));
+  const guide = () => {
+    if (state.guide !== "auto") return MWB_WR.find((w) => w.n === state.guide);
+    const cover = guidesAt(state.f);
+    const pool = cover.length ? cover : MWB_WR;
+    return pool.reduce((p, q) => (dist(q) < dist(p) ? q : p));
+  };
+  const unitFor = (hz) => (hz >= 1e12 ? "THz" : hz >= 1e9 ? "GHz" : "MHz");
+
+  function problem() {
+    return state.f > 0 ? "" : "Enter the frequency.";
+  }
+
+  // ---------------- the drawings ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", AMBER = "#E0A85E", WIRE = "#5A6169", GREY = "#8A9099";
+  // A label sits on top of the lines, with a halo in the box's own colour so a line running through it does not hide it.
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+
+  // The three systems on one log scale, 0.3 to 300 GHz, the ITU's three decades; the bands holding the frequency are green and the frequency a blue stem.
+  function bandChart() {
+    const X0 = 38, X1 = 296, F0 = 0.3e9, F1 = 300e9;
+    const x = (f) => X0 + (Math.log10(Math.min(F1, Math.max(F0, f)) / F0) / 3) * (X1 - X0);
+    const ok = !problem();
+    const f = state.f;
+    const rows = [
+      ["ITU", 22, ITU.filter((b) => b.hi > F0 && b.lo < F1).map((b) => ({ k: b.name, lo: b.lo, hi: b.hi, on: ok && ituAt(f) === b })), "pt"],
+      ["IEEE", 50, MWB_IEEE.filter((b) => b.hi > F0).map((b) => ({ k: b.k, lo: b.lo, hi: b.hi, on: ok && within(b, f) })), "pe"],
+      ["NATO", 78, MWB_NATO.filter((b) => b.hi > F0).map((b) => ({ k: b.k, lo: b.lo, hi: b.hi, on: ok && within(b, f) })), "pn"],
+    ];
+    let out = "";
+    // The frequency's stem goes first, so the bands and their letters are drawn over it.
+    const inside = ok && f >= F0 && f <= F1;
+    if (inside) out += `<path d="M${x(f).toFixed(1)} 16 V104" stroke="${BLUE}" stroke-width="2"/>`;
+    for (const t of [0.3e9, 1e9, 3e9, 10e9, 30e9, 100e9, 300e9]) {
+      out += `<path d="M${x(t).toFixed(1)} 18 V104" stroke="${WIRE}" stroke-width="0.8" stroke-dasharray="2 3" stroke-opacity="0.5"/>` + lbl(null, x(t), 117, String(t / 1e9), GREY, t === 300e9 ? "end" : "middle");
+    }
+    out += lbl(null, 4, 117, "GHz", GREY, "start");
+    for (const [name, y, bands, id] of rows) {
+      out += lbl(null, 4, y + 14, name, GREY, "start");
+      bands.forEach((b) => {
+        const x1 = x(Math.max(b.lo, F0)), x2 = x(Math.min(b.hi, F1));
+        out += `<rect x="${x1.toFixed(1)}" y="${y}" width="${Math.max(x2 - x1, 1).toFixed(1)}" height="20" rx="4" fill="${b.on ? GREEN : "none"}" fill-opacity="${b.on ? 0.22 : 0}" stroke="${b.on ? GREEN : WIRE}" stroke-width="${b.on ? 1.6 : 1}"/>`
+          + lbl(b.on ? id : null, (x1 + x2) / 2, y + 14, b.k, b.on ? GREEN : GREY, "middle");
+      });
+    }
+    if (ok) {
+      if (inside) {
+        const fx = x(f), anchor = fx > 250 ? "end" : fx < 70 ? "start" : "middle";
+        out += lbl("pf", fx + (anchor === "end" ? 4 : anchor === "start" ? -4 : 0), 11, fq(f), BLUE, anchor);
+      } else if (f < F0) out += lbl("pf", X0, 11, `◀ ${fq(f)}`, BLUE, "start");
+      else out += lbl("pf", X1, 11, `${fq(f)} ▶`, BLUE, "end");
+    }
+    return out;
+  }
+
+  // The selected guide's opening, to scale: the wide side a, the short side b, and the TE10 field (along b, strongest in the middle of a).
+  function guideChart() {
+    if (problem() && state.guide === "auto") return "";
+    const g = guide();
+    const aPx = 160, bPx = (aPx * g.b) / g.a, x0 = 48, y0 = 62 - bPx / 2 + 4;
+    let out = `<rect x="${x0}" y="${y0.toFixed(1)}" width="${aPx}" height="${bPx.toFixed(1)}" rx="1" stroke="${BLUE}" stroke-width="2.4" fill="none"/>`;
+    for (let i = 1; i <= 5; i++) {
+      const xx = x0 + (aPx * i) / 6, h = (bPx - 8) * Math.sin((Math.PI * i) / 6), ym = y0 + bPx / 2;
+      out += `<path d="M${xx.toFixed(1)} ${(ym - h / 2).toFixed(1)} V${(ym + h / 2).toFixed(1)}" stroke="${GREEN}" stroke-width="2"/>`
+        + `<path d="M${(xx - 3).toFixed(1)} ${(ym - h / 2 + 4).toFixed(1)} L${xx.toFixed(1)} ${(ym - h / 2).toFixed(1)} L${(xx + 3).toFixed(1)} ${(ym - h / 2 + 4).toFixed(1)}" stroke="${GREEN}" stroke-width="1.6" fill="none"/>`;
+    }
+    const yd = y0 + bPx + 12;
+    out += `<path d="M${x0} ${yd.toFixed(1)} H${x0 + aPx} M${x0} ${(yd - 4).toFixed(1)} V${(yd + 4).toFixed(1)} M${x0 + aPx} ${(yd - 4).toFixed(1)} V${(yd + 4).toFixed(1)}" stroke="${WIRE}" stroke-width="1.2"/>`
+      + lbl("pa", x0 + aPx / 2, yd + 15, `a ${n3(g.a * 25.4)} mm`, BLUE, "middle");
+    const xd = x0 + aPx + 10;
+    out += `<path d="M${xd} ${y0.toFixed(1)} V${(y0 + bPx).toFixed(1)} M${xd - 4} ${y0.toFixed(1)} H${xd + 4} M${xd - 4} ${(y0 + bPx).toFixed(1)} H${xd + 4}" stroke="${WIRE}" stroke-width="1.2"/>`
+      + lbl("pb", xd + 8, y0 + bPx / 2 + 4, `b ${n3(g.b * 25.4)} mm`, BLUE, "start");
+    out += lbl(null, x0, y0 - 8, "TE10: E along b", GREEN, "start");
+    return out;
+  }
+
+  function diagram() {
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${state.mode === "guide" ? guideChart() : bandChart()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+  const chip = (n) => `<button class="chip-btn" style="padding:3px 9px;font-size:13px" data-wg="${n}">${n}</button>`;
+  const warn = (x) => `<span style="color:${AMBER}">${x}</span>`;
+
+  const usesNote = (b) => (b && b.uses ? `<div class="cx-note" data-res="uses"><b>${b.k} band, ${b.mean}.</b> ${b.uses}</div>` : "");
+
+  function findHTML() {
+    const f = state.f, ie = ieeeAt(f), na = natoAt(f), it = ituAt(f), ism = ismAt(f), gs = guidesAt(f);
+    const bigTxt = ie.length ? `${ie.map((b) => b.k).join(" / ")} band` : "none";
+    const sub = ie.length === 1 ? `${fr(ie[0].lo, ie[0].hi)} · ${ie[0].mean}`
+      : ie.length > 1 ? `on the edge of ${ie.map((b) => b.k).join(" and ")}: ${fq(f)}`
+        : f < 3e6 ? "below the IEEE letter bands (they start at 3 MHz)" : "above the IEEE letter bands (they end at 300 GHz)";
+    const wg = gs.length ? gs.map((w) => chip(w.n)).join(" · ") : `none: WR-2300 to WR-3 cover ${ghzRange([MWB_WR[0].rng[0], MWB_WR[MWB_WR.length - 1].rng[1]])}`;
+    return `${head("IEEE letter band", bigTxt, sub)}
+      ${grid([cell("ITU band", it ? `${it.n} · ${it.name || "—"}` : "—", "itu"), cell("NATO", na.length ? na.map((b) => b.k).join(" / ") : "—", "nato"),
+        cell("ISM", ism.length ? ism.map((b) => fr(b.lo, b.hi)).join(" · ") : "no", "ism")])}
+      <div class="field notation-box">
+        ${row("Wavelength", wl(MWB_LIGHT / f), "wl")}
+        ${row("Waveguide", wg, "wg")}
+        ${usesNote(ie[0] && ie.length === 1 ? ie[0] : null)}
+      </div>`;
+  }
+
+  // The guide against the frequency: below the cut-off nothing propagates; the nominal range is the one to use; from twice the cut-off the next mode can.
+  function verdict(g, f) {
+    const fc = mwbCutoff(g);
+    if (f <= fc * (1 - 1e-12)) return warn("below the cut-off: nothing propagates");
+    if (f < g.rng[0] * 1e9 * (1 - 1e-12)) return warn("above the cut-off, under the nominal range");
+    if (f <= g.rng[1] * 1e9 * (1 + 1e-12)) return "inside the nominal range";
+    if (f < 2 * fc * (1 - 1e-12)) return warn("over the nominal range, still one mode");
+    return warn("over twice the cut-off: other modes");
+  }
+
+  function bandsHTML() {
+    const f = state.f, sys = state.system;
+    let list, cur, bigTxt, sub, cells, rows;
+    const lr = (lo, hi) => (lo > 0 ? `${n3(hi / lo)} : 1` : "—");
+    if (sys === "ieee") {
+      list = MWB_IEEE; cur = ieeeAt(f);
+      bigTxt = cur.length ? `${cur.map((b) => b.k).join(" / ")} band` : "none";
+      sub = cur.length === 1 ? `${fr(cur[0].lo, cur[0].hi)} · ${cur[0].mean}` : cur.length ? `on the edge of ${cur.map((b) => b.k).join(" and ")}` : "outside the IEEE letter bands, 3 MHz to 300 GHz";
+    } else if (sys === "nato") {
+      list = MWB_NATO; cur = natoAt(f);
+      bigTxt = cur.length ? `${cur.map((b) => b.k).join(" / ")} band` : "none";
+      sub = cur.length === 1 ? `${fr(cur[0].lo, cur[0].hi)}${cur[0].note ? ` · ${cur[0].note}` : ""}` : cur.length ? `on the edge of ${cur.map((b) => b.k).join(" and ")}` : "above 300 GHz: no NATO letter";
+    } else if (sys === "itu") {
+      list = ITU; cur = ituAt(f) ? [ituAt(f)] : [];
+      bigTxt = cur.length ? `${cur[0].name || `band ${cur[0].n}`}` : "none";
+      sub = cur.length ? `band ${cur[0].n}${cur[0].full ? ` · ${cur[0].full}` : ""} · ${cur[0].waves}` : "outside ITU bands 4 to 12, 3 kHz to 3 THz";
+    } else {
+      list = MWB_ISM; cur = ismAt(f);
+      bigTxt = cur.length ? fr(cur[0].lo, cur[0].hi) : "none";
+      sub = cur.length ? `centre ${fq(cur[0].c)} · type ${cur[0].type} · ${cur[0].where}` : "not inside an ISM band of RR 5.138 or 5.150";
+    }
+    const c0 = cur.length === 1 ? cur[0] : null;
+    if (sys === "ism") {
+      cells = [cell("Centre", c0 ? fq(c0.c) : "—", "c1"), cell("Type", c0 ? c0.type : "—", "c2"), cell("Where", c0 ? c0.where.split(",")[0] : "—", "c3")];
+    } else {
+      cells = [cell("Lower edge", c0 ? fq(c0.lo) : "—", "c1"), cell("Upper edge", c0 ? fq(c0.hi) : "—", "c2"), cell("Ratio", c0 ? lr(c0.lo, c0.hi) : "—", "c3")];
+    }
+    const lab = (b) => (sys === "itu" ? `${b.n} · ${b.name || "—"}` : sys === "ism" ? fr(b.lo, b.hi) : b.k);
+    const val = (b) => (sys === "ism" ? `type ${b.type}` : fr(b.lo, b.hi));
+    rows = list.map((b, i) => `<div class="notation-row sol${cur.includes(b) ? " sel" : ""}" data-lo="${b.lo}" data-hi="${b.hi}" data-c="${b.c || ""}" role="button"><span data-res="n${i}">${lab(b)}</span><span data-res="v${i}">${val(b)}</span></div>`).join("");
+    const note = sys === "ieee" ? usesNote(c0)
+      : sys === "ism" ? `<div class="cx-note">Type A (RR 5.138): subject to the administration's special authorization. Type B (RR 5.150): the other services in the band must accept the interference ISM equipment may cause; RR 5.280 gives 433.05 to 434.79 MHz that treatment in eleven European countries.</div>`
+        : sys === "nato" ? `<div class="cx-note">NATO's own letters, in use for military and electronic-warfare work; they are not the IEEE radar letters and the two disagree (NATO's J is 10 to 20 GHz, IEEE's X is 8 to 12).</div>`
+          : `<div class="cx-note">The ITU's only names for the bands (RR 2.1). Band N runs from 0.3 × 10ᴺ to 3 × 10ᴺ Hz; the lower limit is out, the upper limit in.</div>`;
+    return `${head(`${MWB_SYSTEMS[sys]}`, bigTxt, sub)}
+      ${grid(cells)}
+      <div class="field notation-box">${rows}${note}</div>`;
+  }
+
+  function guideHTML() {
+    const g = guide(), f = state.f, fc = mwbCutoff(g);
+    const others = guidesAt(f).filter((w) => w.n !== g.n);
+    return `${head("Standard waveguide", g.n, `${g.iec} · ${g.uk} · ${n3(g.a * 25.4)} × ${n3(g.b * 25.4)} mm`)}
+      ${grid([cell("Cut-off", ghz(fc / 1e9), "fc"), cell("Nominal range", ghzRange(g.rng), "rng"), cell("Your f", `${n3(f / fc)} × cut-off`, "ratio")])}
+      <div class="field notation-box">
+        ${row("At your frequency", verdict(g, f), "verdict")}
+        ${row("Inner size, inches", `${g.a.toFixed(g.a < 0.07 ? 4 : 3)} × ${g.b.toFixed(g.a < 0.07 ? 4 : 3)}`, "inch")}
+        ${row("Next mode starts at", ghz((2 * fc) / 1e9), "next")}
+        ${row("EIA recommended band", g.eia ? ghzRange(g.eia) : "not listed here", "eia")}
+        ${row("Letter bands", g.let || "—", "let")}
+        ${others.length ? row("Also covering it", others.map((w) => chip(w.n)).join(" · "), "also") : ""}
+      </div>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    return state.mode === "find" ? findHTML() : state.mode === "bands" ? bandsHTML() : guideHTML();
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "A microwave oven's 2.45 GHz", note: "UHF to the ITU, S band to IEEE, E to NATO; an ISM band; WR-430 or WR-340 carries it.",
+      apply: example({ mode: "find", f: 2.45e9, fUnit: "GHz" }) },
+    { title: "Satellite TV at 11.7 GHz", note: "Called Ku band, but IEEE's Ku starts at 12 GHz: this is X band. The letters differ by field.",
+      apply: example({ mode: "find", f: 11.7e9, fUnit: "GHz" }) },
+    { title: "GPS L1, 1575.42 MHz", note: "L band to IEEE, D to NATO, UHF to the ITU; WR-650 and WR-510 would carry it.",
+      apply: example({ mode: "find", f: 1575.42e6, fUnit: "MHz" }) },
+    { title: "Wi-Fi at 5.8 GHz", note: "C band, an ISM band (5.725 to 5.875 GHz); three waveguide sizes overlap there.",
+      apply: example({ mode: "find", f: 5.8e9, fUnit: "GHz" }) },
+    { title: "A 77 GHz car radar", note: "W band to IEEE, M to NATO, EHF to the ITU; WR-12 and WR-10 carry it.",
+      apply: example({ mode: "find", f: 77e9, fUnit: "GHz" }) },
+    { title: "WR-90 at 10 GHz", note: "Cut-off 6.557 GHz: 10 GHz is 1.53 times it, inside the nominal 8.2 to 12.5 GHz.",
+      apply: example({ mode: "guide", guide: "WR-90", f: 10e9, fUnit: "GHz" }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, units, cur) => `<select ${attr}>${Object.keys(units).map((k) => `<option ${k === cur ? "selected" : ""}>${k}</option>`).join("")}</select>`;
+    const fBox = `
+        <div class="field">
+          <label><span class="field-name">Frequency</span></label>
+          <div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="f" value="${fmt(state.f / MWB_F_UNITS[state.fUnit])}" />${sel("data-funit", MWB_F_UNITS, state.fUnit)}</div>
+        </div>`;
+    const guideBox = `<div class="field-pair"><div class="field"><label><span class="field-name">Waveguide</span></label><select data-guide="1">
+          <option value="auto" ${state.guide === "auto" ? "selected" : ""}>Best fit for the frequency</option>${MWB_WR.map((w) => `<option value="${w.n}" ${w.n === state.guide ? "selected" : ""}>${w.n} · ${ghzRange(w.rng)}</option>`).join("")}</select></div></div>`;
+    const sysSel = `<select class="label-select" data-sys="1">${Object.entries(MWB_SYSTEMS).map(([k, t]) => `<option value="${k}" ${k === state.system ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Bands, letters and waveguides for a frequency")}
+
+      ${pillRow(Object.entries(MWB_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="field-pair">${fBox}</div>
+      ${state.mode === "guide" ? guideBox : ""}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${state.mode === "bands" ? sysSel : ""}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["ITU band N: 0.3 × 10ᴺ < f ≤ 3 × 10ᴺ Hz", "letter band: lower edge ≤ f ≤ upper edge", "λ = c / f", "TE10 cut-off: fc = c / (2 a)", "one mode: fc < f < 2 fc", "nominal range ≈ 1.25 fc to 1.9 fc"],
+        "Four ways of naming a frequency band. The ITU numbers them 4 to 12, each a decade (band 10, SHF, is 3 to 30 GHz), and its rules say these are the only names to use in dealings with the ITU. The IEEE letters (L, S, C, X, Ku, K, Ka, V, W) were made for radar and say so, yet are used for satellites and test equipment too, where the edges move: the satellite world's Ku starts at 10.7 GHz, inside IEEE's X. NATO has its own letters, A to M, which disagree with IEEE's. ISM bands are the ones set aside for industrial, scientific and medical equipment (microwave ovens at 2.45 GHz). Above a few gigahertz a hollow metal pipe carries the signal better than a cable. A rectangular one of inner width a passes nothing below its cut-off, c / (2 a) for the TE10 mode, the first that can exist; the standard sizes (the WR names are the width in hundredths of an inch) are meant for frequencies from about 1.25 to 1.9 times it, where only that mode propagates, and from twice the cut-off the next one can. The TE10 field points along the short side b and is strongest in the middle of the wide side."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const fin = app.querySelector('input[data-key="f"]');
+    fin.oninput = () => { state.f = parseFloat(fin.value) * MWB_F_UNITS[state.fUnit]; show(); };
+    app.querySelector("select[data-funit]").onchange = (e) => { state.fUnit = e.target.value; setPref(C, "fUnit", state.fUnit); paint(); };
+    const sy = app.querySelector("select[data-sys]");
+    if (sy) sy.onchange = () => { state.system = sy.value; setPref(C, "system", state.system); show(); };
+    const gd = app.querySelector("select[data-guide]");
+    if (gd) gd.onchange = () => { state.guide = gd.value; setPref(C, "guide", state.guide); show(); };
+    // A band row sets the frequency to its middle (the geometric one); an ISM row to its centre; a waveguide chip opens that guide.
+    app.querySelector('[data-res="result"]').onclick = (e) => {
+      const wgBtn = e.target.closest("[data-wg]");
+      if (wgBtn) { state.mode = "guide"; state.guide = wgBtn.dataset.wg; setPref(C, "mode", "guide"); setPref(C, "guide", state.guide); paint(); return; }
+      const r = e.target.closest(".notation-row.sol");
+      if (!r) return;
+      const lo = +r.dataset.lo, hi = +r.dataset.hi, c = +r.dataset.c;
+      state.f = c > 0 ? c : lo > 0 ? +Math.sqrt(lo * hi).toPrecision(4) : hi / 2;
+      state.fUnit = unitFor(state.f);
+      paint();
+    };
   }
 
   paint();

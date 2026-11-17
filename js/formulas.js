@@ -374,6 +374,12 @@ const FORMULAS = [
     note: "The image is the second input that comes out at the same IF; a filter's loaded Q sets how far down it is, and the IF can be chosen to keep it out of the band. Checked against Wikipedia's image-rejection formulas, Cornell's FM example (IF = 20/2 + 0.7 = 10.7 MHz) and the RF design tools page's 6° ≈ 25 dB (all read).",
   },
   {
+    tool: "Microwave bands",
+    domain: "rf",
+    formulas: ["ITU band N: 0.3 × 10ᴺ < f ≤ 3 × 10ᴺ Hz", "letter band: lower edge ≤ f ≤ upper edge", "λ = c / f", "TE10 cut-off: fc = c / (2 a)", "one mode: fc < f < 2 fc", "nominal range ≈ 1.25 fc to 1.9 fc"],
+    note: "Which ITU number, IEEE or NATO letter, ISM band and standard waveguide a frequency falls in. ITU bands and ISM bands checked against the ITU Radio Regulations (2020), waveguide sizes against Spinner's IEC/EIA cross reference and Precision mmW's chart (all read); the IEEE and NATO letters are secondary copies.",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],
