@@ -678,6 +678,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "image-frequency") return renderImageFrequency(domain, tool, favId);
   if (calcId === "microwave-bands") return renderMicrowaveBands(domain, tool, favId);
   if (calcId === "amateur-bands") return renderAmateurBands(domain, tool, favId);
+  if (calcId === "balun") return renderBalun(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -18575,6 +18576,380 @@ function renderAmateurBands(domain, tool, favId) {
       state.f = +r.dataset.f;
       state.fUnit = unitOf(state.f);
       paint();
+    };
+  }
+
+  paint();
+}
+
+// ---------- Balun ----------
+// What a balun does to an impedance, how the transmission-line types are built, and how far its balance limits the rejection of a common-mode signal.
+// Sources, as read this session:
+//  - Marki Microwave, "Balun Primer" (Jorgesen and Marki, edited 2026; the PDF): a balun is a three-port device, ideally S12 = -S13 = S21 = -S31 and S11 = -inf; phase
+//    and amplitude balance, CMRR set by their vector addition; the impedance ratio is the square of the turns ratio (1:1, 1:2, 1:4 stated as impedance ratios), the
+//    differential impedance is between the balanced lines and twice the impedance from a line to ground; the centre tap; the transmission-line types (its Figure 5: 1:1,
+//    Guanella 1:4, Ruthroff 1:4). Its Figure 2 (CMRR against the two balances) reads 2 to 3 dB under the formula below; I could not tell why.
+//  - Mini-Circuits, Application Note on Transformers AN-20-002 (Rev. B, 2015; the PDF): n = N2/N1, V2 = n V1, I2 = I1/n, Z2 = n^2 Z1; amplitude unbalance 20 log10(|V2|/|V3|),
+//    phase unbalance the deviation from 180 degrees; the transmission-line configurations have no DC isolation.
+//  - Dr. Steve Arar, All About Circuits, "Balun Basics and Practical Performance Parameters" (2024): Gdm = (S21 - S31)/sqrt 2, Gcm = (S21 + S31)/sqrt 2, CMRR = |Gdm/Gcm| =
+//    |(S21 - S31)/(S21 + S31)|, with the worked example S21 = 0.66 at 0 degrees, S31 = 0.75 at -170 degrees: 1.11 dB, 10 degrees, Gdm -0.06 dB, Gcm -19.4 dB, CMRR 19.3 dB;
+//    "Understanding the Guanella Transmission Line Balun" (2024): the 1:n^2 balun of n lines, Z0 = RL/n, RS = RL/n^2, the half-wavelength balun; "A Brief Introduction to
+//    Ruthroff Transmission Line Transformers" (2024): the 1:4 balun and unun, Z0 = sqrt(RS RL), less bandwidth than Guanella's. The figures of the last two were looked at to get
+//    the connections right.
+//  - L. B. Cebik, W4RNL, "The Impedance-Transformation Properties of Common 4:1 Balun Types", part 1: a 4:1 balun is made for a 200 ohm load on 50 ohm coax; voltage and current baluns.
+//  - Dr. Jonathan Hare, The Creative Science Centre, "The 4:1 half-wave coax balun": one output straight from the cable, the other after a half wave of cable, shields joined.
+//  - Keysight (HP) 5988-5635EN, balanced measurements: the mixed-mode S-parameter naming (mode of response and stimulus, then the ports).
+//  - RF Essentials' glossary page on baluns gives CMRR approximately -20 log(sqrt(dA^2 + dphi^2)) with dA = dB/20: its own example (0.5 dB, 5 degrees, 25 dB) does not follow from it
+//    (that gives 20.8 dB), so it was not used.
+const BLN_MODES = { ratio: "Ratio", lines: "Lines", balance: "Balance" };
+const BLN_F_UNITS = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+const BLN_RATIOS = [1, 2, 4, 9, 16];
+// kind g: Guanella, n lines; r: Ruthroff, one bifilar line; h: half-wave coax. r is the impedance ratio.
+const BLN_TOPO = {
+  g1: { name: "Guanella 1:1", kind: "g", n: 1, r: 1 },
+  g4: { name: "Guanella 1:4", kind: "g", n: 2, r: 4 },
+  g9: { name: "Guanella 1:9", kind: "g", n: 3, r: 9 },
+  g16: { name: "Guanella 1:16", kind: "g", n: 4, r: 16 },
+  r4: { name: "Ruthroff 1:4", kind: "r", n: 1, r: 4 },
+  h4: { name: "Half-wave coax 1:4", kind: "h", n: 1, r: 4 },
+};
+const BLN_LIGHT = 299792458;
+const BLN_NOTE = {
+  g: "Guanella: n identical lines, their inputs in parallel and their outputs in series, so the load gets n times the voltage and n² times the impedance. Each line wants Z0 = Zb / n. A line is a bifilar coil (two wires wound side by side) or a cable on a ferrite core. No DC isolation. Wide band: its top end is where a line is a half wave long.",
+  r: "Ruthroff: one bifilar line, the source across one winding and the load across both, so twice the voltage and four times the impedance; Z0 = √(Zu Zb). No DC isolation. Less bandwidth than Guanella's.",
+  h: "Half-wave: one output straight from the cable, the other after half a wavelength of cable, which is 180° later: twice the voltage across the load, four times the impedance. The shields join at one point. Exact only at its own frequency.",
+};
+
+function renderBalun(domain, tool, favId) {
+  const C = "balun";
+  const state = {
+    mode: pref(C, "mode", "ratio", Object.keys(BLN_MODES)),
+    topo: pref(C, "topo", "g4", Object.keys(BLN_TOPO)),
+    fUnit: pref(C, "fUnit", "MHz", Object.keys(BLN_F_UNITS)),
+    from: pref(C, "from", "imb", ["imb", "sp"]),
+    mag: pref(C, "mag", "linear", ["linear", "dB"]),
+    zu: 50, zb: 200, pick: 0,
+    f: 145e6, vf: 0.66, cable: "typed",
+    da: 1, dp: 10, target: NaN,
+    s21: 0.66, p21: 0, s31: 0.75, p31: -170,
+  };
+  // Three figures, never in exponent form.
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const KU = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+  const unitOf = (hz) => (hz >= 1e9 ? "GHz" : hz >= 1e6 ? "MHz" : "kHz");
+  const fq = (hz) => { const u = unitOf(hz); return `${String(Number((hz / KU[u]).toPrecision(5)))} ${u}`; };
+  const len = (m) => (m >= 1 ? `${n3(m)} m` : m >= 1e-2 ? `${n3(m * 100)} cm` : `${n3(m * 1000)} mm`);
+  const lenIn = (m) => (m / 0.0254 >= 24 ? `${n3(m / 0.3048)} ft` : `${n3(m / 0.0254)} in`);
+  const wl = (m) => (m >= 1 ? `${n3(m)} m` : m >= 1e-2 ? `${n3(m * 100)} cm` : `${n3(m * 1000)} mm`);
+  const db = (v) => 20 * Math.log10(v);
+  const RAD = Math.PI / 180;
+
+  // ---------------- the numbers ----------------
+  // An ideal transformer balun: the balanced side's impedance Zb comes to the unbalanced side as Zb / ratio.
+  const vswrOf = (z, zu) => Math.max(z, zu) / Math.min(z, zu);
+  const lossOf = (z, zu) => { const g = (z - zu) / (z + zu); return -10 * Math.log10(1 - g * g); };
+  const bestRatio = () => BLN_RATIOS.reduce((p, q) => (vswrOf(state.zb / q, state.zu) < vswrOf(state.zb / p, state.zu) * (1 - 1e-12) ? q : p));
+  const chosen = () => state.pick || bestRatio();
+  // Balance: the two outputs S21 and S31 as 1 and r at 180° + psi; the stable form of (1 + r² + 2 r cos psi) / (1 + r² - 2 r cos psi).
+  const cmrrOf = (r, psi) => {
+    const s2 = Math.sin((psi * RAD) / 2) ** 2;
+    const num = (1 + r) ** 2 - 4 * r * s2, den = (r - 1) ** 2 + 4 * r * s2;
+    return den <= 0 ? Infinity : num <= 0 ? -Infinity : 10 * Math.log10(num / den);
+  };
+  // Rounding noise round 0 dB is 0.
+  const clean = (c) => (Math.abs(c) < 1e-9 ? 0 : c);
+  const wrap = (a) => { let x = a % 360; if (x > 180) x -= 360; if (x <= -180) x += 360; return x; };
+  // The amplitude (dB) and phase (degrees) imbalance, and the CMRR, from what is typed.
+  function balance() {
+    if (state.from === "imb") {
+      const r = 10 ** (Math.abs(state.da) / 20), psi = Math.abs(wrap(state.dp));
+      const c = clean(cmrrOf(r, psi));
+      return { a: Math.abs(state.da), p: psi, c, r };
+    }
+    const m21 = state.mag === "dB" ? 10 ** (state.s21 / 20) : state.s21, m31 = state.mag === "dB" ? 10 ** (state.s31 / 20) : state.s31;
+    const x21 = m21 * Math.cos(state.p21 * RAD), y21 = m21 * Math.sin(state.p21 * RAD), x31 = m31 * Math.cos(state.p31 * RAD), y31 = m31 * Math.sin(state.p31 * RAD);
+    const dm = Math.hypot(x21 - x31, y21 - y31) / Math.SQRT2, cm = Math.hypot(x21 + x31, y21 + y31) / Math.SQRT2;
+    return { a: Math.abs(db(m21 / m31)), p: Math.abs(wrap(state.p21 - state.p31 - 180)), c: cm > 0 ? (dm > 0 ? clean(db(dm / cm)) : -Infinity) : Infinity, dm: db(dm), cm: cm > 0 ? db(cm) : -Infinity, r: m31 / m21 };
+  }
+  // The CMRR as text: 300 dB or more is "no limit".
+  const cmrrText = (c) => (c >= 300 ? "no limit" : c <= -300 ? "none" : `${n3(c)} dB`);
+  // What a target CMRR allows: the phase imbalance alone, the amplitude imbalance alone, and the phase at the amplitude typed.
+  function allowed(T, r) {
+    const x = 10 ** (-T / 20), K = 10 ** (T / 10);
+    const phase = 2 * Math.atan(x) / RAD, amp = db((1 + x) / (1 - x));
+    const sin2 = ((1 + r) ** 2 - K * (r - 1) ** 2) / (4 * r * (1 + K));
+    return { phase, amp, at: sin2 > 0 ? 2 * Math.asin(Math.min(1, Math.sqrt(sin2))) / RAD : NaN };
+  }
+  const cableOf = () => COAX_CABLES.find((c) => c.key === state.cable);
+
+  function problem() {
+    if (state.mode === "ratio") return state.zu > 0 && state.zb > 0 ? "" : "Enter both impedances.";
+    if (state.mode === "lines") {
+      if (!(state.zu > 0)) return "Enter the source impedance.";
+      if (BLN_TOPO[state.topo].kind === "h") {
+        if (!(state.f > 0)) return "Enter the frequency.";
+        if (!(state.vf > 0 && state.vf <= 1)) return "Enter the velocity factor, above 0 and at most 1.";
+      }
+      return "";
+    }
+    if (state.from === "imb") return isFinite(state.da) && isFinite(state.dp) ? "" : "Enter both imbalances.";
+    return state.mag === "dB" ? (isFinite(state.s21) && isFinite(state.s31) && isFinite(state.p21) && isFinite(state.p31) ? "" : "Enter both S-parameters.")
+      : state.s21 > 0 && state.s31 > 0 && isFinite(state.p21) && isFinite(state.p31) ? "" : "Enter both S-parameters, magnitudes above 0.";
+  }
+
+  // ---------------- the drawings ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", AMBER = "#E0A85E", WIRE = "#5A6169", GREY = "#8A9099";
+  // A label sits on top of the lines, with a halo in the box's own colour so a line running through it does not hide it.
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const w = (d, c = WIRE, sw = 1.8) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const dot = (x, y, c = WIRE) => `<circle cx="${x}" cy="${y}" r="2.3" fill="${c}"/>`;
+  const gnd = (x, y) => w(`M${x} ${y} V${y + 3}`) + w(`M${x - 7} ${y + 3} H${x + 7} M${x - 4.5} ${y + 6} H${x + 4.5} M${x - 2} ${y + 9} H${x + 2}`);
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${WIRE}" stroke-width="1.6"/>`;
+  // A vertical zigzag resistor of 36 from t, a horizontal coil of 4 humps (40 long, humps up), a vertical coil of n humps from y1 to y2 (bulging right for sweep 1, left for 0).
+  const zig = (x, t, c) => w(`M${x} ${t} L${x - 7} ${t + 3} L${x + 7} ${t + 9} L${x - 7} ${t + 15} L${x + 7} ${t + 21} L${x - 7} ${t + 27} L${x + 7} ${t + 33} L${x} ${t + 36}`, c, 2);
+  const coilH = (x, y, c) => w(`M${x} ${y}` + " a5 5 0 0 1 10 0".repeat(4), c, 2);
+  const coilV = (x, y1, y2, n, sweep, c) => { const r = (y2 - y1) / (2 * n); return w(`M${x} ${y1}` + ` a${r} ${r} 0 0 ${sweep} 0 ${2 * r}`.repeat(n), c, 2); };
+
+  // The unbalanced side, the transformer with its centre tap and the balanced load, for the ratio picked.
+  function ratioDrawing() {
+    if (problem()) return "";
+    const c = chosen(), n = Math.sqrt(c), zin = state.zb / c, v = vswrOf(zin, state.zu);
+    let o = w("M17 38 H66") + w("M17 98 H66") + port(14, 38) + port(14, 98) + gnd(40, 98) + dot(40, 98);
+    o += coilV(66, 38, 98, 4, 1, GREEN) + w("M96 30 V110 M101 30 V110", WIRE, 2) + coilV(130, 30, 110, 6, 0, GREEN);
+    o += dot(58, 44, GREEN) + dot(138, 36, GREEN);
+    o += w("M130 30 H226 V52") + zig(226, 52, BLUE) + w("M226 88 V110 H130") + w("M130 70 H176") + gnd(176, 70);
+    o += lbl("pzu", 14, 70, `Zu ${n3(state.zu)} Ω`, BLUE) + lbl("pn", 98, 20, `1 : ${n3(n)}`, GREEN, "middle") + lbl(null, 138, 90, "centre tap", GREY);
+    o += lbl("pzb", 226, 128, `Zb ${n3(state.zb)} Ω`, BLUE, "middle") + lbl("pv", 14, 128, `Zin ${n3(zin)} Ω · VSWR ${n3(v)}`, GREEN);
+    return o;
+  }
+
+  // The transmission-line balun: n lines of Guanella's, one of Ruthroff's, or the half-wave loop of cable.
+  function linesDrawing() {
+    if (problem()) return "";
+    const T = BLN_TOPO[state.topo], zb = T.r * state.zu;
+    let o = "";
+    if (T.kind === "g") {
+      const n = T.n, P = [0, 0, 46, 38, 30][n], Y0 = [0, 44, 40, 28, 22][n], D = n === 1 ? 42 : 11, yl = (k) => Y0 + k * P + D, z0 = zb / n;
+      const yEnd = yl(n - 1), ys = Y0 + (yEnd - Y0 - 36) / 2;
+      // the source: the signal to a bus, every line's hot winding from it, every return winding to ground
+      o += port(14, Y0) + port(14, 124) + gnd(14, 124) + w(`M17 ${Y0} H64`) + (n > 1 ? w(`M64 ${Y0} V${Y0 + (n - 1) * P}`) + dot(64, Y0) : "");
+      for (let k = 0; k < n; k++) {
+        const yu = Y0 + k * P, yd = yl(k);
+        o += w(`M64 ${yu} H100`) + (k ? dot(64, yu) : "") + coilH(100, yu, GREEN) + coilH(100, yd, GREEN) + w(`M84 ${yd} H100`) + gnd(84, yd);
+        // the hot winding of the first line goes to the top of the load, the others to the joint above them; the return windings go to the next joint, the last to the bottom of the load
+        o += k === 0 ? w(`M140 ${yu} H250`) : w(`M140 ${yu} H172`) + dot(172, yu);
+        o += k === n - 1 ? w(`M140 ${yd} H250`) : w(`M140 ${yd} H172 V${yu + P}`);
+      }
+      o += w(`M250 ${Y0} V${ys}`) + zig(250, ys, BLUE) + w(`M250 ${ys + 36} V${yEnd}`);
+      o += lbl("pz0", 120, Y0 - 11, n > 1 ? `each Z0 ${n3(z0)} Ω` : `Z0 ${n3(z0)} Ω`, GREEN, "middle") + lbl("pzu", 14, Y0 + 18, `Zu ${n3(state.zu)} Ω`, BLUE) + lbl("pzb", 250, 134, `Zb ${n3(zb)} Ω`, BLUE, "middle");
+    } else if (T.kind === "r") {
+      const z0 = Math.sqrt(state.zu * zb);
+      o += port(14, 60) + port(14, 124) + gnd(14, 124) + w("M17 60 H40") + dot(40, 60) + w("M40 60 V34 H100") + w("M40 60 H250") + coilH(100, 34, GREEN) + w("M140 34 H168") + gnd(168, 34);
+      o += coilH(100, 108, GREEN) + w("M84 108 H100") + gnd(84, 108) + w("M140 108 H250") + dot(250, 60) + w("M250 60 V70") + zig(250, 70, BLUE) + w("M250 106 V108");
+      o += w("M120 40 V102", GREY, 1.2).replace("fill=\"none\"", "fill=\"none\" stroke-dasharray=\"3 3\"");
+      o += dot(97, 38, GREEN) + dot(97, 112, GREEN);
+      o += lbl("pz0", 125, 88, `Z0 ${n3(z0)} Ω`, GREEN) + lbl("pzu", 14, 78, `Zu ${n3(state.zu)} Ω`, BLUE) + lbl("pzb", 250, 134, `Zb ${n3(zb)} Ω`, BLUE, "middle");
+    } else {
+      const l = (BLN_LIGHT * state.vf) / (2 * state.f);
+      o += port(14, 50) + port(14, 112) + gnd(14, 112) + w("M17 50 H250") + dot(64, 50) + w("M64 50 V104 H84") + w("M224 104 H250 V94") + w("M250 50 V58") + zig(250, 58, BLUE);
+      o += `<rect x="92" y="94" width="124" height="20" rx="4" fill="none" stroke="${GREEN}" stroke-width="2"/>` + w("M84 104 H224", GREEN, 2) + w("M104 114 V120") + gnd(104, 120) + w("M204 114 V120") + gnd(204, 120);
+      o += lbl("pl", 154, 88, `ℓ = ${len(l)}`, GREEN, "middle") + lbl("pzu", 14, 78, `Zu ${n3(state.zu)} Ω`, BLUE) + lbl("pzb", 250, 134, `Zb ${n3(zb)} Ω`, BLUE, "middle");
+    }
+    return o;
+  }
+
+  // CMRR against the phase imbalance, a curve for each amplitude imbalance; the one typed in green, a blue stem at the phase.
+  function balanceChart() {
+    if (problem()) return "";
+    const b = balance();
+    const X0 = 40, X1 = 290, Y0 = 112, Y1 = 12, P0 = 0, P1 = 15, C0 = 10, C1 = 50;
+    const x = (p) => X0 + ((Math.min(P1, Math.max(P0, p)) - P0) / (P1 - P0)) * (X1 - X0);
+    const y = (cm) => Y0 - ((Math.min(C1, Math.max(C0, cm)) - C0) / (C1 - C0)) * (Y0 - Y1);
+    const curve = (a) => { const r = 10 ** (a / 20); let d = ""; for (let i = 0; i <= 60; i++) { const p = (P1 * i) / 60; d += `${i ? " L" : "M"}${x(p).toFixed(1)} ${y(cmrrOf(r, p)).toFixed(1)}`; } return d; };
+    let o = "";
+    for (const c of [10, 20, 30, 40, 50]) o += w(`M${X0} ${y(c).toFixed(1)} H${X1}`, WIRE, 0.7).replace('fill="none"', 'fill="none" stroke-opacity="0.5" stroke-dasharray="2 3"') + lbl(null, X0 - 4, y(c) + 4, String(c), GREY, "end");
+    for (const p of [0, 5, 10, 15]) o += lbl(null, x(p), 126, String(p), GREY, "middle");
+    o += w(`M${X0} ${Y1} V${Y0} H${X1}`, WIRE, 1.4);
+    for (const a of [0.1, 0.5, 1, 2]) o += w(curve(a), WIRE, 1.3) + lbl(null, X0 + 4, y(cmrrOf(10 ** (a / 20), 0)) - 3, String(a), GREY);
+    o += lbl(null, 292, 9, "grey curves: amplitude imbalance, dB", GREY, "end");
+    o += `<text transform="rotate(-90 9 62)" x="9" y="62" fill="${GREY}" font-size="11" font-weight="600" text-anchor="middle" style="paint-order:stroke;stroke:var(--card);stroke-width:3px">CMRR (dB)</text>`;
+    o += lbl(null, 165, 138, "phase imbalance (°)", GREY, "middle");
+    const cmr = Math.min(b.c, C1), px = x(b.p), py = y(cmr);
+    o += w(curve(b.a), GREEN, 2.4);
+    o += w(`M${px.toFixed(1)} ${Y1} V${Y0}`, BLUE, 1.6).replace('fill="none"', 'fill="none" stroke-dasharray="4 3"');
+    o += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${GREEN}" stroke="var(--card)" stroke-width="1.5"/>`;
+    const anchor = px > 230 ? "end" : "start", lx = anchor === "end" ? px - 7 : Math.max(px + 7, 74);
+    o += lbl("pc", lx, py < 30 ? py + 16 : py - 7, cmrrText(b.c), GREEN, anchor);
+    return o;
+  }
+
+  function diagram() {
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${state.mode === "ratio" ? ratioDrawing() : state.mode === "lines" ? linesDrawing() : balanceChart()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+  const warn = (x) => `<span style="color:${AMBER}">${x}</span>`;
+
+  function ratioHTML() {
+    const need = state.zb / state.zu, c = chosen(), n = Math.sqrt(c), zin = state.zb / c, v = vswrOf(zin, state.zu);
+    const rows = BLN_RATIOS.map((r, i) => `<div class="notation-row sol${r === c ? " sel" : ""}" data-r="${r}" role="button"><span data-res="rn${i}">1 : ${r}</span><span data-res="rv${i}">${n3(state.zb / r)} Ω · VSWR ${n3(vswrOf(state.zb / r, state.zu))}</span></div>`).join("");
+    return `${head("Impedance ratio needed", `1 : ${n3(need)}`, `${n3(state.zu)} Ω to ${n3(state.zb)} Ω: turns ratio 1 : ${n3(Math.sqrt(need))}`)}
+      ${grid([cell("Turns ratio", `1 : ${n3(n)}`, "c1"), cell("VSWR", n3(v), "c2"), cell("Mismatch loss", `${n3(lossOf(zin, state.zu))} dB`, "c3")])}
+      <div class="field notation-box">${rows}
+        <div class="cx-note" data-res="note">Tap a ratio to draw it. Each balanced terminal sees Zb / 2 = ${n3(state.zb / 2)} Ω to the centre tap: the balanced impedance is the one between the two lines. A transformer can have any ratio (turns ratio √ratio); the transmission-line types come in 1 : n².</div>
+      </div>`;
+  }
+
+  function linesHTML() {
+    const T = BLN_TOPO[state.topo], zb = T.r * state.zu, V = Math.sqrt(T.r);
+    if (T.kind === "h") {
+      const lam = BLN_LIGHT / state.f, l = (lam * state.vf) / 2;
+      return `${head("Line length", len(l), `${lenIn(l)} · half a wave of cable at ${fq(state.f)}`)}
+        ${grid([cell("Balanced side", `${n3(zb)} Ω`, "c1"), cell("Voltage gain", `× ${n3(V)}`, "c2"), cell("In the cable", `λ = ${wl(lam * state.vf)}`, "c3")])}
+        <div class="field notation-box">${row("Wavelength, free space", wl(lam), "wl")}<div class="cx-note" data-res="note">${BLN_NOTE.h}</div></div>`;
+    }
+    const z0 = T.kind === "g" ? zb / T.n : Math.sqrt(state.zu * zb);
+    return `${head("Line impedance", `${n3(z0)} Ω`, T.kind === "g" ? (T.n > 1 ? `${T.n} lines, inputs in parallel, outputs in series` : "one bifilar line") : "one bifilar line, the load across both windings")}
+      ${grid([cell("Balanced side", `${n3(zb)} Ω`, "c1"), cell("Voltage gain", `× ${n3(V)}`, "c2"), cell("Lines", String(T.n), "c3")])}
+      <div class="field notation-box"><div class="cx-note" data-res="note">${BLN_NOTE[T.kind]}</div></div>`;
+  }
+
+  function balanceHTML() {
+    const b = balance(), ideal = b.c >= 300, none = b.c <= -300, share = ideal ? 0 : none ? Infinity : 10 ** (-b.c / 20);
+    let rows = "";
+    if (state.from === "sp") rows += row("Differential gain Gdm", isFinite(b.dm) ? `${n3(b.dm)} dB` : "none", "gdm") + row("Common-mode gain Gcm", isFinite(b.cm) ? `${n3(b.cm)} dB` : "none", "gcm");
+    if (state.target > 0) {
+      const al = allowed(state.target, b.r);
+      rows += row(`For ${n3(state.target)} dB: the phase alone, up to`, `${n3(al.phase)}°`, "ta") + row("the amplitude alone, up to", `${n3(al.amp)} dB`, "tb")
+        + row("the phase, at this amplitude, up to", isFinite(al.at) ? `${n3(al.at)}°` : warn("none: the amplitude alone is too much"), "tc");
+    }
+    return `${head("Common-mode rejection, CMRR", cmrrText(b.c), ideal ? "an ideal balun: equal outputs, exactly opposite" : none ? "the outputs are in phase: there is no differential signal" : `wanted : unwanted common-mode part = ${n3(1 / share)} : 1`)}
+      ${grid([cell("Amplitude imbalance", `${n3(b.a)} dB`, "c1"), cell("Phase imbalance", `${n3(b.p)}°`, "c2"), cell("Common-mode part", none ? "only common mode" : `${n3(share * 100)} %`, "c3")])}
+      ${rows ? `<div class="field notation-box">${rows}</div>` : ""}`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    return state.mode === "ratio" ? ratioHTML() : state.mode === "lines" ? linesHTML() : balanceHTML();
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "50 Ω coax to a 200 Ω load", note: "A 1:4 balun does it exactly: 200 Ω comes down to 50 Ω, a turns ratio of 1:2.",
+      apply: example({ mode: "ratio", zu: 50, zb: 200, pick: 0 }) },
+    { title: "A 73 Ω dipole on 50 Ω coax", note: "Not exact: 1:1 leaves VSWR 1.46, 1:2 leaves 1.37; a 1 : 1.46 transformer would match.",
+      apply: example({ mode: "ratio", zu: 50, zb: 73, pick: 0 }) },
+    { title: "A Guanella 1:4 from 50 Ω", note: "Two lines of 100 Ω each; the load of 200 Ω gets twice the voltage.",
+      apply: example({ mode: "lines", topo: "g4", zu: 50 }) },
+    { title: "A half-wave balun at 145 MHz", note: "Half a wave of RG-58 (VF 0.66) is 68.2 cm: the second output is 180° behind the first.",
+      apply: example({ mode: "lines", topo: "h4", zu: 50, f: 145e6, fUnit: "MHz", vf: 0.66, cable: "8259" }) },
+    { title: "0.66 at 0° and 0.75 at −170°", note: "Arar's worked example: 1.11 dB and 10° of imbalance, a CMRR of 19.3 dB.",
+      apply: example({ mode: "balance", from: "sp", mag: "linear", s21: 0.66, p21: 0, s31: 0.75, p31: -170, target: NaN }) },
+    { title: "A good balun, 0.1 dB and 1°", note: "Imbalances this small give about 40 dB; a poor one (1 dB, 10°) gives about 20 dB.",
+      apply: example({ mode: "balance", from: "imb", da: 0.1, dp: 1, target: NaN }) },
+  ]);
+
+  function paint() {
+    const fld = (name, key, val, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(val)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const T = BLN_TOPO[state.topo];
+    let fields = "", heading = "", chips = "";
+    if (state.mode === "ratio") {
+      fields = `<div class="field-pair">${fld("Unbalanced side", "zu", state.zu, fixed("Ω"))}${fld("Balanced side", "zb", state.zb, fixed("Ω"))}</div>`;
+      chips = `<div class="chip-row" style="margin:0 16px 8px;gap:6px">${[[50, "50 Ω"], [73, "73 Ω dipole"], [100, "100 Ω"], [200, "200 Ω"]].map(([z, t]) => `<button class="chip-btn" style="padding:6px 9px;font-size:13px" data-zb="${z}">${t}</button>`).join("")}</div>`;
+    } else if (state.mode === "lines") {
+      fields = `<div class="field-pair"><div class="field"><label><span class="field-name">Balun</span></label>${sel("data-topo", Object.entries(BLN_TOPO).map(([k, t]) => [k, t.name]), state.topo)}</div>${fld("Source", "zu", state.zu, fixed("Ω"))}</div>`;
+      if (T.kind === "h") {
+        fields += `<div class="field-pair">${fld("Frequency", "f", state.f / BLN_F_UNITS[state.fUnit], sel("data-funit", Object.keys(BLN_F_UNITS).map((u) => [u, u]), state.fUnit))}${fld("Velocity factor", "vf", state.vf, "")}</div>`;
+        heading = sel('class="label-select" data-cable', [["typed", "Typed velocity factor"], ...COAX_CABLES.map((c) => [c.key, `${c.name} · ${c.vf}`])], state.cable);
+      }
+    } else {
+      if (state.from === "imb") {
+        fields = `<div class="field-pair">${fld("Amplitude imbalance", "da", state.da, fixed("dB"))}${fld("Phase imbalance", "dp", state.dp, fixed("°"))}</div>`;
+        chips = `<div class="chip-row" style="margin:0 16px 8px;gap:6px">${[[1, 10, "±1 dB, ±10°"], [0.2, 2, "±0.2 dB, ±2°"], [0.1, 1, "±0.1 dB, ±1°"]].map(([a, p, t]) => `<button class="chip-btn" style="padding:6px 9px;font-size:13px" data-da="${a}" data-dp="${p}">${t}</button>`).join("")}</div>`;
+      } else {
+        const mu = sel("data-mag", [["linear", "linear"], ["dB", "dB"]], state.mag);
+        fields = `<div class="field-pair">${fld("S21 magnitude", "s21", state.s21, mu)}${fld("S21 phase", "p21", state.p21, fixed("°"))}</div><div class="field-pair">${fld("S31 magnitude", "s31", state.s31, sel("data-mag", [["linear", "linear"], ["dB", "dB"]], state.mag))}${fld("S31 phase", "p31", state.p31, fixed("°"))}</div>`;
+      }
+      fields += `<div class="field-pair">${fld("Target CMRR (optional)", "target", state.target, fixed("dB"))}</div>`;
+      heading = sel('class="label-select" data-from', [["imb", "Given: imbalances"], ["sp", "Given: S-parameters"]], state.from);
+    }
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Impedance ratio, line types and balance of a balun")}
+
+      ${pillRow(Object.entries(BLN_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+      ${chips}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${heading}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Z2 = n² Z1, n = N2 / N1", "VSWR = max(Z, Zu) / min(Z, Zu)", "Guanella 1:n²: Z0 = RL / n", "Ruthroff 1:4: Z0 = √(Rs RL)", "half-wave line: l = c VF / (2 f)", "CMRR = |S21 − S31| / |S21 + S31|"],
+        "A balun joins a balanced circuit, two lines carrying equal and opposite voltages (a dipole, a twisted pair), to an unbalanced one, a signal and a ground (coax). Ideally it is a three-port splitter with two equal outputs 180° apart: S21 = −S31. The balanced impedance is the one between the two lines, twice the impedance from one line to ground. A transformer balun with turns ratio n = N2 / N1 gives n times the voltage, 1 / n the current and n² the impedance, so 200 Ω on 50 Ω is a 1:4 impedance ratio and 1:2 turns; whatever is left mismatched shows as a VSWR, the larger of the two impedances over the smaller, with a mismatch loss of −10 log(1 − Γ²) for the reflection Γ = (Zin − Zu) / (Zin + Zu). Transmission-line baluns, a bifilar coil (two wires wound side by side) or a cable on a ferrite core, have no DC isolation and work over a wide band: Guanella's puts n lines in parallel at the input and in series at the output (1 : n², each line Z0 = Zb / n); Ruthroff's has one line (1:4, Z0 = √(Zu Zb)) and less bandwidth; the half-wave balun takes one output after half a wavelength of cable, l = c VF / (2 f), and works at one frequency. No balun is perfect: the amplitude imbalance is the ratio of the two outputs in dB and the phase imbalance their deviation from 180°. With Gdm = (S21 − S31) / √2 the differential gain and Gcm = (S21 + S31) / √2 the common-mode gain, the common-mode rejection ratio is CMRR = |Gdm / Gcm|: 1 dB and 10° leave about 20 dB, 0.1 dB and 1° about 40 dB."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const num = (key, apply) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el) el.oninput = () => { apply(parseFloat(el.value)); show(); }; };
+    num("zu", (v) => { state.zu = v; state.pick = 0; });
+    num("zb", (v) => { state.zb = v; state.pick = 0; });
+    num("f", (v) => { state.f = v * BLN_F_UNITS[state.fUnit]; });
+    num("vf", (v) => { state.vf = v; state.cable = "typed"; const cs = app.querySelector("select[data-cable]"); if (cs) cs.value = "typed"; });
+    num("da", (v) => { state.da = v; });
+    num("dp", (v) => { state.dp = v; });
+    num("s21", (v) => { state.s21 = v; });
+    num("p21", (v) => { state.p21 = v; });
+    num("s31", (v) => { state.s31 = v; });
+    num("p31", (v) => { state.p31 = v; });
+    num("target", (v) => { state.target = v; });
+    const pick = (attr, name, repaint) => { const el = app.querySelector(`select[${attr}]`); if (el) el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); repaint ? paint() : show(); }; };
+    pick("data-topo", "topo", true);
+    pick("data-funit", "fUnit", true);
+    pick("data-from", "from", true);
+    app.querySelectorAll("select[data-mag]").forEach((el) => {
+      el.onchange = () => {
+        // The same two numbers in the other unit: changing the picker converts what is typed.
+        const toDb = el.value === "dB" && state.mag === "linear", toLin = el.value === "linear" && state.mag === "dB";
+        if (toDb) { state.s21 = db(state.s21); state.s31 = db(state.s31); } else if (toLin) { state.s21 = 10 ** (state.s21 / 20); state.s31 = 10 ** (state.s31 / 20); }
+        state.mag = el.value; setPref(C, "mag", state.mag); paint();
+      };
+    });
+    const cs = app.querySelector("select[data-cable]");
+    if (cs) cs.onchange = () => { state.cable = cs.value; const c = cableOf(); if (c) state.vf = c.vf; paint(); };
+    app.querySelectorAll(".chip-btn[data-zb]").forEach((b) => { b.onclick = () => { state.zb = +b.dataset.zb; state.pick = 0; paint(); }; });
+    app.querySelectorAll(".chip-btn[data-da]").forEach((b) => { b.onclick = () => { state.da = +b.dataset.da; state.dp = +b.dataset.dp; paint(); }; });
+    app.querySelector('[data-res="result"]').onclick = (e) => {
+      const r = e.target.closest(".notation-row.sol");
+      if (r) { state.pick = +r.dataset.r; show(); }
     };
   }
 

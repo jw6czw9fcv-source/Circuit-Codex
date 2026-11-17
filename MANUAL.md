@@ -111,6 +111,7 @@ will key on, since that is the id the app already holds for each tool.
 - Mixing & conversion → [Image frequency](#image-frequency)
 - Reference → [Microwave bands](#microwave-bands)
 - Reference → [Amateur radio bands](#amateur-bands)
+- RF components → [Balun](#balun)
 
 ### Power electronics
 
@@ -14589,6 +14590,240 @@ Published answers reproduced:
 | 2 m, US | 47 CFR 97.301(a) | 144 to 148 MHz (Region 2), 97.303 (a), (k) | 144 to 148 MHz, (a), (k) |
 | 60 m channels, US | 47 CFR 97.303(h)(3) | centre 5332, 5348, 5373, 5405 kHz, 2.8 kHz | the four channels, 2.8 kHz |
 | 4 mm, Canada | RBR-4 items 32 to 35 | 76 to 77.5 *, 77.5 to 78 -, 78 to 81 *, 81 to 81.5 5.561A | the four segments: secondary, none, secondary, 5.561A |
+
+[↑ Index](#index)
+
+---
+
+<a id="balun"></a>
+## Balun
+
+`calc: balun` · RF & microwave › RF components
+
+### What it computes
+
+A balun joins a balanced circuit (two lines carrying equal and opposite voltages: a
+dipole, a twisted pair) to an unbalanced one (a signal and a ground: coax). It can also
+change the impedance. The tool covers three things a designer asks of one. Three pills:
+
+- **Ratio:** the unbalanced side's impedance Zu (50 Ω) and the balanced side's Zb
+  (200 Ω), both in ohms; chips set the balanced side to 50, 73 (a dipole in free space),
+  100 and 200 Ω. The big result is the impedance ratio needed, 1 : Zb/Zu, with the
+  turns ratio of a flux-coupled transformer under it. In three cells, for the ratio
+  chosen: the turns ratio, the VSWR left on the unbalanced side and the mismatch loss.
+  Below, the ratios in common use (1:1, 1:2, 1:4, 1:9, 1:16), each with the impedance it
+  brings the load to and the VSWR; the best is chosen, and a tap on another draws it.
+  Typing an impedance goes back to the best. The drawing is the transformer with its
+  centre tap, the unbalanced port at the left (its ground at the bottom) and the
+  balanced load at the right; the transformer and the ratio are green.
+- **Lines:** a transmission-line balun, one of Guanella 1:1, 1:4, 1:9, 1:16 (one, two,
+  three or four lines), Ruthroff 1:4 or the half-wave coax 1:4, from the source impedance
+  Zu. For Guanella's and Ruthroff's: the line impedance Z0 each line should have, the
+  balanced impedance it is made for (ratio × Zu) and the voltage gain; the drawing
+  shows how the lines are joined. For the half-wave balun, a frequency and a velocity
+  factor (typed, or the cable picker in the Output heading, with the Belden cables of the
+  Coax tool): the length of cable, the free-space wavelength and the wavelength in the
+  cable.
+- **Balance:** how well the two outputs match, and what that leaves of the rejection of
+  a common-mode signal. The inputs are the two imbalances (the amplitude imbalance in dB,
+  the phase imbalance in degrees from 180°; chips for ±1 dB and ±10°, ±0.2 dB and ±2°,
+  ±0.1 dB and ±1°), or, with the picker in the Output heading, the S-parameters S21 and
+  S31 (magnitude, linear or dB, and phase). The big result is the CMRR; in three cells the
+  two imbalances and the common-mode part of the signal as a percentage of the wanted
+  part; from S-parameters also Gdm and Gcm. An optional target CMRR gives the largest
+  phase imbalance, the largest amplitude imbalance, and the largest phase imbalance at the
+  amplitude given, that still reach it. The chart is the CMRR against the phase imbalance,
+  the green curve for the amplitude imbalance typed, grey ones for 0.1, 0.5, 1 and 2 dB,
+  a blue stem at the phase.
+
+- **Units:** ohms; the frequency in kHz, MHz or GHz; S-parameter magnitudes linear or dB
+  (changing the picker converts the numbers typed).
+- **Remembered:** the pill, the balun, the frequency unit, the given picker and the
+  magnitude unit.
+
+Examples: 50 Ω coax to a 200 Ω load, a 73 Ω dipole on 50 Ω coax, a Guanella 1:4 from
+50 Ω, a half-wave balun at 145 MHz, Arar's worked S-parameters, and a good balun (0.1 dB
+and 1°).
+
+### Terms
+
+- **Balanced and unbalanced:** a balanced circuit has two conductors carrying equal and
+  opposite voltages, neither at ground (a dipole's two arms, a twisted pair); an
+  unbalanced one has a signal conductor and a ground (coax, whose outer conductor is the
+  ground). The balanced impedance is the one between the two lines, twice the impedance
+  from one line to ground (Marki).
+- **Balun:** short for balanced-unbalanced. Ideally a three-port device whose two
+  balanced outputs are equal and 180° apart, S21 = −S31 (Marki, Arar). The unbalanced port
+  is port 1, the two balanced terminals ports 2 and 3.
+- **Impedance ratio, turns ratio:** for a transformer with N1 turns on the unbalanced
+  side and N2 on the other, n = N2 / N1; the voltage is n times, the current 1 / n times
+  and the impedance n² times (Mini-Circuits; Marki). The impedance ratio is the square of
+  the turns ratio: 1 : 2 in turns is 1 : 4 in impedance.
+- **Flux-coupled (conventional) transformer:** two windings on a magnetic core; it
+  can have any ratio, gives DC isolation, and is limited in frequency (Marki: under
+  about 1 GHz; Mini-Circuits: 2 GHz for the core-and-wire kinds). A **centre tap** on the balanced
+  winding, to ground, improves the balance (Marki; Mini-Circuits).
+- **Transmission-line transformer; bifilar coil:** a transformer whose windings behave as
+  a transmission line: two wires wound side by side (or a coax) on a ferrite core.
+  Wider band than a flux-coupled one; no DC isolation (Mini-Circuits). **Guanella's:**
+  n lines, inputs in parallel, outputs in series, so 1 : n². **Ruthroff's:** one line, a
+  1:4 with less bandwidth. A **half-wave balun** takes one output straight from the cable
+  and the other after a half wavelength of cable (Arar; Creative Science).
+- **Unun:** an unbalanced-to-unbalanced transformer (Ruthroff's 1:4 without the balun
+  connection). Not computed here.
+- **Amplitude imbalance, phase imbalance:** the difference of the two outputs' magnitudes
+  in dB, 20 log(|S21| / |S31|), and the deviation of their phase difference from 180°
+  (Mini-Circuits; Arar).
+- **Differential and common-mode gain:** Gdm = (S21 − S31) / √2 and Gcm = (S21 + S31) / √2
+  (Arar). **CMRR:** the common-mode rejection ratio, |Gdm / Gcm| in dB: how much the
+  wanted differential signal exceeds the unwanted common-mode part that leaks through
+  the imbalance.
+- **VSWR, mismatch loss:** for the impedance Zin a balun brings the load to, on the
+  unbalanced side Zu: Γ = (Zin − Zu) / (Zin + Zu), VSWR = (1 + |Γ|) / (1 − |Γ|), the larger
+  impedance over the smaller; the mismatch loss is −10 log(1 − Γ²), the power not
+  delivered.
+- **Velocity factor (VF):** how fast the wave travels on the cable compared with light;
+  a half wave of cable is c · VF / (2 f) long.
+
+### Sources
+
+- **Marki Microwave, "Balun Primer" (Jorgesen and Marki; the PDF edited 2026; read):** a
+  balun is a three-port device with S12 = −S13 = S21 = −S31 and S11 = −∞; phase and
+  amplitude balance and the CMRR set by their vector addition; "low performance" baluns
+  ±1 dB and ±10° at 15 to 20 dB of CMRR, Marki's own up to 45 dB; the impedance ratio
+  (stated 1:1, 1:2, 1:4) is the square of the turns ratio, and the differential impedance
+  is twice the impedance to ground; the centre tap; the transmission-line types, its
+  Figure 5 (1:1, Guanella 1:4, Ruthroff 1:4, looked at). Its Figure 2, CMRR against the
+  amplitude and phase balances, was read from the picture.
+- **Mini-Circuits, "Application Note on Transformers", AN-20-002 Rev. B (2015; the PDF,
+  read):** n = N2 / N1, V2 = n V1, I2 = I1 / n, Z2 = n² Z1 (its example: n = 2 on 50 Ω
+  is 200 Ω); the definitions of amplitude and phase unbalance, and that a well designed
+  transformer might have 0.1 dB and 1°; the table of configurations (frequency
+  ranges, impedance ratios, which have no DC isolation: the transmission-line ones).
+- **Dr. Steve Arar, All About Circuits, "Balun Basics and Practical Performance
+  Parameters" (21 January 2024; the page, read):** S21 = −S31; Gdm = (S21 − S31) / √2,
+  Gcm = (S21 + S31) / √2, CMRR = |Gdm / Gcm| = |(S21 − S31) / (S21 + S31)|; the worked
+  example S21 = 0.66 at 0°, S31 = 0.75 at −170°: 1.11 dB, 10°, Gdm −0.06 dB, Gcm −19.4 dB,
+  CMRR 19.3 dB; ±1 dB and ±10° typical of a low-performance balun, ±0.2 dB and ±2° of a
+  higher-performance one. **"Understanding the Guanella Transmission Line Balun"
+  (4 February 2024, read):** the 1:4 balun from two lines, Z0 = RL / 2; the 1:n² balun
+  from n lines, Z0 = RL / n and RS = RL / n²; the half-wavelength balun as a narrowband
+  1:4. **"A Brief Introduction to Ruthroff Transmission Line Transformers" (7 April 2024,
+  read):** the 1:4 unun and balun from one bifilar coil, Z0 = √(RS RL); no DC isolation;
+  less bandwidth than Guanella's. I looked at the figures of the last two to get the
+  connections right (Guanella 1:4, Ruthroff 1:4 balun); the drawings are my own.
+- **L. B. Cebik, W4RNL, "The Impedance-Transformation Properties of Common 4:1 Balun
+  Types", part 1 (the PDF, read):** a 4:1 balun is made to transform a 200 Ω load to
+  50 Ω, normally over 3.5 to 30 MHz; baluns divide into voltage and current types.
+- **Dr. Jonathan Hare, The Creative Science Centre, "The 4:1 half-wave coax balun" (the
+  page, read):** one output from the cable, the other after a half wave of cable, the
+  shields joined at one point; 180° apart, twice the voltage, 4:1.
+- **Keysight (HP) 5988-5635EN, balanced measurements (the PDF, read):** the mixed-mode
+  S-parameter naming; that the balun method of measuring a balanced device cannot show
+  mode conversion.
+- **For the antenna feed point:** the 73 Ω of a dipole in free space is NEETS's, as in
+  the Antenna length tool. RF Essentials' glossary page on baluns (read) gives
+  CMRR ≈ −20 log(√(ΔA² + Δφ²)) with ΔA = dB / 20 and Δφ in radians, and an example,
+  0.5 dB and 5° giving 25 dB; the formula gives 20.8 dB, so it was not used.
+- **Not read:** Jerry Sevick's books and his High Frequency Electronics article
+  (its address returned 404), nor Trask's there; Ruthroff's 1959 paper and Guanella's
+  patents; the IEEE standards; Texas Instruments' and Analog Devices' balun notes. Two servers refused or hid their pages (Mouser's copy of a Marki note, and
+  Pasternack's blog, behind a bot check) and were left alone.
+
+### Why the formulas are these
+
+**Ratio.** The ideal transformer gives Z2 = n² Z1 (Mini-Circuits), so a balanced load
+Zb seen through a balun of impedance ratio r is Zin = Zb / r on the unbalanced side. The
+VSWR of a real impedance Zin against Zu is the larger over the smaller; the reflection is
+Γ = (Zin − Zu) / (Zin + Zu), the mismatch loss −10 log(1 − Γ²). The best of the
+ratios in common use is the one with the least VSWR (the smaller wins a tie), which for a
+need of 1 : 1.46 (73 Ω on 50 Ω) is 1 : 2, with 1.37, not 1 : 1, with 1.46.
+
+**Lines.** Arar's Guanella 1:4 gets twice the voltage from two lines, and each line sees
+half the load, so Z0 = RL / 2; with n lines Z0 = RL / n and RS = RL / n², which makes
+Z0 = √(RS RL), the form Arar gives for Ruthroff's. The half-wave length is c · VF / (2 f)
+with c = 299 792 458 m/s.
+
+**Balance.** Put S21 = 1 and S31 = r at 180° + ψ (r the ratio of the magnitudes, ψ the
+phase imbalance). Then |S21 − S31|² = 1 + r² + 2 r cos ψ and |S21 + S31|² = 1 + r² −
+2 r cos ψ, and Arar's CMRR is
+
+    CMRR = 10 log [(1 + r² + 2 r cos ψ) / (1 + r² − 2 r cos ψ)]
+
+which the tool evaluates as [(1 + r)² − 4 r sin²(ψ/2)] / [(r − 1)² + 4 r sin²(ψ/2)] so
+that it does not lose its digits near perfect balance. For small imbalances it is about
+20 log (2 / √(ε² + ψ²)) with ε = ln r (0.115 per dB) and ψ in radians. From the S-parameters
+directly the tool computes Gdm and Gcm as Arar does. A target T dB gives, with
+x = 10^(−T/20): the phase alone ψ = 2 atan x (r = 1), the amplitude alone
+r = (1 + x) / (1 − x), and, for a given r, sin²(ψ/2) = [(1 + r)² − K (r − 1)²] /
+[4 r (1 + K)] with K = 10^(T/10); these three are derived, not published.
+
+### Assumptions and limits
+
+- **Ideal parts.** The transformer ratio and the line impedances are the lossless ideal.
+  A real balun has insertion loss, a lowest and a highest frequency, and finite coupling
+  (Marki, Mini-Circuits); none of that is computed. The "wide" and "narrow" of the notes
+  are those of Arar, Marki and Mini-Circuits.
+- **The ratios in common use** are the three Marki states (1:1, 1:2, 1:4) and Guanella's
+  1:n² (1:9 and 1:16 with three and four lines). A flux-coupled transformer can be made
+  with any ratio (Marki; Mini-Circuits give 1 to 16, 25 or 36); the big result is the exact
+  one.
+- **Guanella's and Ruthroff's Z0 are the optimum** Arar gives for an ideal, lossless
+  line; a cable of that impedance may not exist (100 Ω for a 1:4 from 50 Ω), and what is
+  used instead mismatches a little. Not computed.
+- **The half-wave balun is exact at one frequency.** At exactly half a wavelength the
+  line's matrix is minus the identity, so the far end is the exact opposite of the near
+  end whatever the load or the cable's impedance (derived); away from that frequency
+  the balance depends on both, and the tool does not compute it. The velocity factors of
+  the cable list are the Belden sheets' of the Coax tool; a real length is trimmed.
+- **Marki's CMRR figure.** Its Figure 2 reads 2 to 3 dB below Arar's formula (about
+  −19 dB at 1.2 dB and 7°, where the formula gives 21 dB). Arar's worked example
+  reproduces to the digit, as do Marki's and Arar's round numbers (about 20 dB for
+  ±1 dB and ±10°), so the formula was kept; I could not tell why the figure differs.
+- **CMRR is of the balun alone.** The imbalance of the antenna or the load, and a
+  choke's common-mode impedance, are not here (Common mode choke is its own tool).
+- **The antenna feed point** is not computed: the 73 Ω chip is a dipole in free space,
+  and a real one is anything from 0 to about 100 Ω over a ground plane (the Antenna
+  length tool's manual).
+- **Display.** Three figures; a CMRR of 300 dB or more is "no limit", and outputs in
+  phase leave no differential signal ("none").
+
+### How it was checked
+
+111 cases, the expected values from a Python implementation written from the formulas
+above (every figure and every label of the drawings):
+- Ratio: the example, the dipole, 1:2, 1:9, 1:16, equal, a balanced side below the
+  unbalanced, 2 kΩ and 5 Ω, and the middles between two ratios; a tap on each of the five
+  rows; the chips; a pick dropped when an impedance is typed; the refusals;
+- Lines: the six baluns from 50 and 75 Ω; the half-wave balun at five frequencies and
+  velocity factors; each of the seven cables; the pickers; the refusals; the remembered
+  choices;
+- Balance: the low-performance and the good balun, ideal, phase only, amplitude only,
+  negative and wrapped imbalances; five targets; eight S-parameter sets in linear and dB,
+  and the conversion of the picker; the two edges (90° of phase imbalance is 0 dB,
+  outputs in phase leave no differential signal);
+- the six examples and the formula-search card.
+
+About 1 800 more cases (600 random plans in each of three batches: random impedances and
+picks, random baluns, frequencies and velocity factors, random imbalances and
+S-parameters with and without a target) compared every figure and label with the
+Python implementation; they were run and not kept. One batch found the rounding noise at
+exactly 0 dB (shown as 0.0000000000000019 dB) and the in-phase case (a logarithm of zero),
+both now handled.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| Transformer, n = 2 on 50 Ω | Mini-Circuits AN-20-002 | V2 = 2 V1, I2 = I1 / 2, Z2 = 4 Z1 = 200 Ω | 50 Ω to 200 Ω: 1 : 4, turns 1 : 2 |
+| 4:1 balun | Cebik, part 1 | made for 200 Ω to 50 Ω | the same, VSWR 1 |
+| 1:2 balun | Marki, section II.E | 50 Ω unbalanced, 100 Ω differential | 50 Ω to 100 Ω: 1 : 2, VSWR 1 |
+| Guanella 1:4 | Arar, equation 2 | Z0 = RL / 2 | 100 Ω for 200 Ω |
+| Guanella 1:n² | Arar, equations 3 and 4 | Z0 = RL / n, RS = RL / n² | n = 3 from 50 Ω: 450 Ω, Z0 150 Ω |
+| Ruthroff 1:4 | Arar, equation 4 | Z0 = √(RS RL) | 100 Ω |
+| Worked CMRR | Arar | 1.11 dB, 10°, Gdm −0.06 dB, Gcm −19.4 dB, CMRR 19.3 dB | from the dB values he prints (−3.61, −2.5 dB): the same to the digit; from 0.66 and 0.75: Gdm −0.0589 dB, the rest the same |
+| Low-performance balun | Marki, Arar | 15 to 20 dB; about 20 dB | ±1 dB, ±10°: 19.6 dB |
+| Good balun | Marki | up to 45 dB | ±0.1 dB, ±1°: 39.6 dB; ±0.1 dB, ±0.4°: 43.4 dB |
 
 [↑ Index](#index)
 

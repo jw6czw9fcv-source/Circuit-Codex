@@ -386,6 +386,12 @@ const FORMULAS = [
     note: "Which amateur band a frequency is in, and what Canada, the United States and the three ITU Regions allow there. Canada and the Regions from ISED's RBR-4 (Issue 3, 2022), the United States from 47 CFR 97.301 and 97.303 (Amateur Extra class); the ITU table was cross-checked only in part (see the manual).",
   },
   {
+    tool: "Balun",
+    domain: "rf",
+    formulas: ["Z2 = n² Z1, n = N2 / N1", "VSWR = max(Z, Zu) / min(Z, Zu)", "Guanella 1:n²: Z0 = RL / n", "Ruthroff 1:4: Z0 = √(Rs RL)", "half-wave line: l = c VF / (2 f)", "CMRR = |S21 − S31| / |S21 + S31|"],
+    note: "The impedance ratio and turns ratio of a balun, the line impedance of Guanella's and Ruthroff's transmission-line types, the length of a half-wave coax balun, and the CMRR from the amplitude and phase imbalance or the S-parameters. From Marki's and Mini-Circuits' application notes and Arar's articles (read); the Marki CMRR figure reads 2 to 3 dB under the formula (see the manual).",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],
