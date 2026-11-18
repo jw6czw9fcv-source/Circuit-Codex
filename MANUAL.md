@@ -113,6 +113,7 @@ will key on, since that is the id the app already holds for each tool.
 - Reference → [Amateur radio bands](#amateur-bands)
 - RF components → [Common mode choke](#cm-choke)
 - RF components → [Balun](#balun)
+- RF components → [SAW filter](#saw-filter)
 
 ### Power electronics
 
@@ -15032,6 +15033,301 @@ Published answers reproduced:
 | Worked CMRR | Arar | 1.11 dB, 10°, Gdm −0.06 dB, Gcm −19.4 dB, CMRR 19.3 dB | from the dB values he prints (−3.61, −2.5 dB): the same to the digit; from 0.66 and 0.75: Gdm −0.0589 dB, the rest the same |
 | Low-performance balun | Marki, Arar | 15 to 20 dB; about 20 dB | ±1 dB, ±10°: 19.6 dB |
 | Good balun | Marki | up to 45 dB | ±0.1 dB, ±1°: 39.6 dB; ±0.1 dB, ±0.4°: 43.4 dB |
+
+[↑ Index](#index)
+
+---
+
+<a id="saw-filter"></a>
+## SAW filter
+
+`calc: saw-filter` · RF & microwave › RF components
+
+### What it computes
+
+A surface-acoustic-wave (SAW) filter is two metal combs, interdigital transducers (IDTs), on a
+piezoelectric crystal. A voltage on the first comb launches a wave along the surface of the
+crystal; the second comb turns it back into a voltage. The wave is slow, 2 000 to 5 000 m/s
+(the standard), so the structure is small and a long delay fits on a chip. The tool does four jobs, one per pill. The
+picker in the Output heading chooses the crystal (the six of the standard's table, each with its
+wave speed); the first three pills use it.
+
+- **Transducer:** one comb of a filter of two identical uniform combs. The inputs, three to a
+  row: the centre frequency (MHz), the finger pairs N of each comb, the aperture in
+  wavelengths (the standard's own way of giving it); then the resistance of the source and of
+  the load (Ω, the same at both ends). The big result is the period λ of the fingers, one
+  wavelength, v / f0, with the width of a finger and of a gap, λ/4, under it. Cells: the −3 dB
+  width of the response, the static capacitance CT of the comb and the shunt coil that tunes it
+  out. Rows: the relative bandwidth; the radiation resistance Ra of the comb (what the power
+  that leaves as sound looks like to the circuit) and its Q; the loss at the centre in that
+  source and load; the aperture that would make Ra equal to R; the size of the comb; and the
+  widest bandwidth the crystal can be tuned for, met or not. The drawing is one comb, tuned:
+  the source (blue), then the coil, CT and Ra across it (green), and the sound leaving.
+- **Echoes:** the distance between the two combs (mm), the insertion loss of the filter (dB)
+  and, if you have it from a data sheet, the echo level (dB); left empty, the rule 2 IL + 6
+  gives it. The big result is the delay t = distance / wave speed. Cells: how much later than
+  the wanted signal the echo comes (2t), the period of the ripple the echo makes in the
+  passband, 1 / (2t), and of the one the direct leakage makes, 1 / t. Rows: the echo level; the
+  ripple it makes, peak to peak; and the group-delay ripple. The drawing is the two combs on the
+  crystal, the wanted signal crossing once (green) and the echo crossing twice more (amber).
+- **Drift:** how far the response moves over a temperature range. The frequency (MHz), the cold
+  and the hot end (°C), the reference temperature at which the frequency is given (25 °C),
+  and, for the two crystals whose response is a parabola (ST quartz and Li₂B₄O₇), the turnover
+  temperature. The big result is the span of the shift over the range; cells: the shift at the
+  cold end and at the hot end from the reference, and the coefficient (ppm/K, or ppm/K² for a
+  parabola). The drawing is the shift against temperature.
+- **Resonator:** the equivalent circuit of a one-port SAW resonator. The picker in the Output
+  heading chooses what you know. *Given: R, L, C:* the motional resistance Rm (Ω), inductance
+  Lm (µH) and capacitance Cm (fF), the static capacitance C0 and a series load capacitance CL
+  (pF); the big result is the series resonance fs; cells: the antiresonance fp, Q and the
+  capacitance ratio C0 / Cm. *Given: fs, fp, Q:* the two resonances (MHz) and Q, with C0 and
+  CL; the tool finds Rm (big result), Lm, Cm and the ratio. In both, rows: the split fp − fs,
+  the coupling K², the resonance with CL in series and the pulling CL makes. The drawing is the
+  Butterworth-Van Dyke circuit, the parts you typed in blue and the ones found in green.
+
+- **Units:** fixed (MHz, mm, °C, pF, fF, µH, Ω); the crystal and the way into the Resonator are
+  the two pickers.
+- **Remembered:** the pill, the crystal and the way into the Resonator.
+
+Examples: 100 MHz on 128° LiNbO₃, 433.92 MHz on ST quartz, too wide for quartz, a 40 dB echo (the
+standard's example), 5 mm and 20 dB of loss, −40 to 85 °C on LiNbO₃ and on quartz, a measured
+resonator at 435 MHz and the same from its frequencies.
+
+### Terms
+
+- **SAW, Rayleigh wave:** an acoustic wave that travels along the surface of a solid, its
+  amplitude falling off exponentially with depth (IEC), so its energy stays within about a
+  wavelength of the surface. Lord Rayleigh described it in 1885 (Hribšek et al.).
+- **IDT, finger, pair, period:** a transducer is two comb-shaped metal electrodes with
+  interleaved fingers on the crystal; a finger of each comb makes a pair; the period 2d is the
+  distance between two fingers of the same comb, and it is one wavelength: f0 = v / (2d).
+  With equal lines and spaces a finger and a gap are λ/4 each; in a split-finger comb, four
+  fingers to the wavelength, λ/8 (the standard's Figure 9).
+- **Aperture:** the width over which the fingers overlap; in the standard, the width of the
+  beam in wavelengths. **Apodization:** varying the overlap along the comb to shape the
+  response (not computed here; the tool's combs are uniform).
+- **Coupling coefficient k² (K²):** the relative change of the wave's speed when metal shorts the
+  surface, times two: k² = 2Δv / v. It is the share of the electrical energy the crystal turns
+  into sound: the larger, the wider and the lower-loss the filter can be.
+- **Effective permittivity εr:** of an anisotropic crystal, √(ε11 ε33 − ε13²) (the standard).
+  It sets the capacitance of the comb.
+- **Radiation conductance Ga, resistance Ra = 1/Ga:** at the centre frequency the power that
+  leaves the comb as sound is, to the circuit, a conductance in parallel with the comb's
+  capacitance. **Shunt coil:** an inductor across the comb that resonates its capacitance at f0,
+  leaving only Ga. **Q of the comb:** ω0 CT / Ga.
+- **Insertion loss; bidirectional loss:** a comb sends the wave both ways, so each comb loses
+  3 dB and a filter of two loses 6 dB at least; the standard says so.
+- **Triple-transit echo (TTE):** the wave reflected by the output comb and again by the input
+  comb arrives three transits after launch, two delays behind the wanted signal.
+  **Feed-through:** the signal that goes straight across by capacitance, with no delay.
+  Both ripple the passband.
+- **Group delay:** the derivative of the phase with respect to angular frequency.
+- **TCF, TCD, turnover:** the temperature coefficient of frequency (ppm per kelvin) and of delay
+  (the same size, the opposite sign). Quartz and Li₂B₄O₇ have a turnover temperature where it
+  is zero, and a response that bends like a parabola about it.
+- **Motional branch, static capacitance C0:** the Butterworth-Van Dyke circuit of a resonator is
+  a series Rm, Lm, Cm (the vibration: loss, mass, stiffness) in parallel with the capacitance
+  C0 of the comb. **fs, fp:** the series resonance, where the branch is a short, and the
+  antiresonance just above it, where it and C0 resonate. **Q** = ωs Lm / Rm. **Capacitance
+  ratio** C0 / Cm. **Load capacitance, pulling:** a capacitor in series with a crystal or a
+  SAW resonator in an oscillator moves the frequency from fs towards fp.
+- **Ladder, lattice, coupled-resonator, unidirectional, three-IDT and IIDT filters; shape factor:**
+  the other filters and specifications of the standard, not computed (the loss of an IIDT
+  filter is 10 log((N + 1) / N) dB for N output and N + 1 input combs, the standard says).
+
+### Sources
+
+- **IS/IEC 60862-2 : 2002, "Surface acoustic wave (SAW) filters of assessed quality, Part 2:
+  Guidance on use" (the Bureau of Indian Standards' identical copy, posted by Public.Resource.Org
+  on law.resource.org; all 58 PDF pages read as text; pages 19, 46, 47, 48 and 49 also
+  rendered and read as printed):** the definitions (SAW, IDT, aperture, k² = 2Δv/v, the shape
+  factor, the group delay, the triple-transit echo, the reflection coefficient); f0 = v / (2d)
+  (5.1 and 7.1 a); the response of two uniform identical transducers T(f) = (sin x / x)²,
+  x = Nπ (f − f0) / f0 (equation 3); 3 dB lost at each transducer and so 6 dB at the least (5.3);
+  CT = w N (1 + εr) ε0 for equal lines and spaces (7.1 d); the comb is capacitive and is tuned
+  with coils, and it can be matched when k² > (π / 4) (Δf / f0)² (7.2 a, rendered: the extracted text had
+  lost the square), otherwise the conversion loss is limited, as the minimum loss curves of
+  Figure 37 show; the echo is 2t behind the main signal and ripples the passband with period
+  1 / (2t), the feed-through with 1 / t (Figure 39); an echo 40 dB down gives about ±0.1 dB of ripple and ±0.02 t of group delay;
+  the echo is suppressed twice as much as the loss is increased (7.2 c); Table 1, the substrates.
+  **The 2002 edition; I did not read a later one.**
+- **Spectrum Control, "Introduction to SAW Filter Theory & Design Techniques" (white paper, 16
+  pages; Table 1 rendered):** seven substrates with their speed, temperature coefficient and
+  coupling; the response of all but quartz shifts up at low temperature and down at high
+  temperature; quartz is a downward parabola with a turnover temperature; the loss of a
+  bidirectional filter is 3 dB at each transducer; the triple transit TT = 2 IL + 6 dB (its own
+  example: 6 dB of loss, about 18 dB).
+- **COMSOL blog, "Leveraging the mBVD Circuit Model for MEMS Resonator Design" (read in full):**
+  Cm = C0 ((fp / fs)² − 1), Lm = 1 / ((2π fs)² Cm), Rm = √(Lm / Cm) / Q, fs = 1 / (2π √(Lm Cm));
+  the gap between fs and fp sets the coupling and so the achievable bandwidth.
+- **Westrelin, Abdallah, Debavelear, Lefebvre, Lmimouni, Stienne and Hafsi, "Design and
+  Fabrication Of Multiplexed One-Port SAW Resonators On A Single Chip" (arXiv 2506.13788, 9
+  pages, read):** the Butterworth-Van Dyke circuit of a resonator (fr from Lm and Cm, Q = ωr Lm / Rm,
+  fa = fr √(1 + Cm / C0)), the finger width of a quarter wavelength, and the measured values
+  of two ST-quartz resonators near 435 MHz (its Table 2).
+- **Wang, Lee, Yang and Park, "Design Optimization of SAW Pressure Sensor with Equivalent
+  Circuit Model", Sensors and Materials 18 (2006) 301 (read; page 4 rendered):** the crossed-field
+  circuit of a comb, with the radiation conductance g_a = (4/π) K² ω0 N Ct, Ct = N Cs W λ the
+  total static capacitance, and the susceptance. **The paper prints the conductance as
+  g_a (sin x / x), without the square the model has (and the standard's two-comb response
+  T = (sin x / x)² needs); I took the square.** K² is the 2Δv/v of the standard (17.2 % for 41° YX
+  LiNbO₃ from its 4 792.2 and 4 379.7 m/s).
+- **Hribšek, Ristić, Živković and Tošić, "Modelling of SAW biosensors" (BIODEVICES 2009,
+  read):** the delta-function model is the simplest and fast, but its use is limited to small
+  loads and substrates of lower coupling; Lord Rayleigh's 1885 discovery.
+- **Asakawa et al. (IEEE IUS 2019) and Gomi et al. (Symposium on Ultrasonic Electronics 2016)
+  (read):** K² = 2(vf − vm)/vf, the same definition; their subjects (bonded thin plates) are
+  not used.
+- **Agilent Application Note 1373-5, "Balanced Measurement Example: SAW Filters" (read):** a
+  SAW filter is most conveniently designed for high port impedances, and one for 350 Ω per
+  terminal (700 Ω differential) measured in 50 Ω shows 14.5 dB single-ended against 8.9 dB
+  in its own system. Not used in the numbers.
+- **Read and not used:** the next.gr tutorial "Surface Acoustic Wave (SAW) Filters" (its
+  radiation conductance has CT N² where the model has N CT, its aperture W = N p and
+  1/QL = 1/Qu + K² are not in any source I read), and a vendor page that gives f = v / λ with v
+  about 3 100 m/s.
+- **Not read:** IEC 61019-1 and -2 (SAW resonators; only the contents, foreword and scope
+  pages of the previews), Hashimoto's lecture notes at Chiba University (the host name did not
+  resolve), Morgan's and Campbell's books, the makers' data sheets. Four pages refused the
+  download (urgentcomm.com, core.ac.uk, zenodo.org, and a PMC table behind a robot check) and
+  were left alone.
+
+### Why the formulas are these
+
+**The period.** The wave crosses one period of the comb in one cycle of the signal, so
+f0 = v / λ with λ the period (IEC equation 2: f0 = v / (2d), 2d the period). 128° LiNbO₃ at
+100 MHz: λ = 4 000 / 100 · 10⁶ = 40 µm, a finger 10 µm.
+
+**The bandwidth.** One comb of N pairs has the response sin x / x, x = Nπ (f − f0) / f0; two
+identical combs give T = (sin x / x)² (IEC equation 3). I read T as an amplitude ratio, which is what a
+transfer function is (the standard does not say so in words), so the −3 dB points are where
+(sin x / x)² = 10^(−3/20), at x = 1.00025: the width is 2 x f0 / (π N) = 0.637 f0 / N (derived
+here; the standard prints the response, not this width. The null-to-null width is 2 f0 / N and
+the −6 dB one 0.884 f0 / N). Twenty pairs at 100 MHz: 3.18 MHz.
+
+**The capacitance and the conductance.** CT = w N (1 + εr) ε0 for an aperture w = (aperture in
+wavelengths) × λ and the standard's εr (7.1 d). The crossed-field circuit gives the
+conductance at the centre Ga = 8 k² f0 N CT, which is (4/π) k² ω0 N CT of Wang et al.
+**Check:** the comb's Q is ω0 CT / Ga = π / (4 k² N), and it can be tuned across the band when its
+bandwidth 1 / Q is at least the acoustic one, f0 / N (to a factor of order one):
+k² ≥ (π / 4) / N² = (π / 4) (Δf / f0)², the condition the standard prints. That the two agree is
+the reason to trust the 8 in Ga. The widest bandwidth that can be tuned perfectly is that
+condition solved for Δf / f0: √(4 k² / π): 4.5 % for ST quartz, 9.0 % for X-112° LiTaO₃, 24.8 % for
+YZ LiNbO₃ and 26.6 % for 128° LiNbO₃, where the four curves of the standard's Figure 37 leave 0 dB
+at about 4, 9, 20 and 25 % (read by eye on the rendered page). Beyond it the standard says the
+conversion loss is limited and inversely proportional to k²; the tool does not compute it
+(the figure shows about 40 dB more per decade of bandwidth).
+
+**The coil.** The comb is capacitive (the standard); a shunt coil L resonates it at f0,
+L = 1 / (ω0² CT) (derived; the standard says the comb is tuned with coils and gives an example,
+"a shunt wire wound inductor of 200 nH" at 97.3 MHz, which is 13.4 pF).
+
+**The loss at the centre (derived).** A tuned comb is, at f0, the conductance Ga. With a source or
+a load of conductance GL = 1 / R, y = GL / Ga = Ra / R, a comb that sends the wave both ways
+couples a fraction 4y / (1 + y)² of the power to or from half of the sound, so each comb loses
+3 dB plus 10 log((1 + y)² / 4y), and two with the same R lose 20 log((1 + y)² / (2y)). It is 6.02 dB
+at y = 1, the standard's 6 dB at the least, and grows as Ra and R part. 433.92 MHz on ST quartz
+with 100 pairs and 50 λ has Ra = 1.02 kΩ: 21 dB between 50 Ω ends, 6.02 dB between 1 kΩ ones.
+
+**The aperture for Ra = R.** Ga is proportional to the aperture, so Ra = R at the aperture
+(typed aperture) × Ra / R.
+
+**The delay and the echoes.** t = distance / v. The echo has crossed the filter three times, so it
+is 2t late; its ripple has the period 1 / (2t) and the feed-through's 1 / t (IEC Figure 39). An echo of
+ratio a to the main signal makes a wave of amplitude 1 + a e^(−jω·2t): the response swings
+between 1 + a and 1 − a, 20 log((1 + a) / (1 − a)) dB peak to peak, and the group delay by
+a · 2t either way. For 40 dB (a = 0.01) that is 0.174 dB peak to peak (±0.087 dB) and ±0.02 t: the
+standard gives about ±0.1 dB and ±0.02 t for it. The echo level from the loss is the rule of
+Spectrum Control, TT = 2 IL + 6 dB; the standard only says the suppression improves twice
+as much as the loss is increased.
+
+**The drift.** Δf / f = TCF · ΔT for the straight-line crystals (IEC 7.1 c, Table 1); for ST quartz and
+Li₂B₄O₇ the first-order term is zero and the second is −34 and −270 ·10⁻⁹ per K²
+about the turnover, Δf / f = c2 ((T − T0)² − (Tref − T0)²). The span is the highest minus the lowest
+shift over the range (the turnover itself when it is inside).
+
+**The resonator.** fs = 1 / (2π √(Lm Cm)), fp = fs √(1 + Cm / C0) (the antiresonance of Lm and Cm in series with C0
+in parallel), Q = ωs Lm / Rm (the paper's equations). From measurements the COMSOL formulas give
+Cm, Lm and Rm. The coupling (π² / 8) Cm / C0 is the relation that gives the 0.29 and 0.22 % of
+the paper's Table 2 from its Cm and C0 (it is not printed there). With a capacitor CL in series
+the resonance of the whole is where the branch has the reactance 1 / (ω (C0 + CL)), which gives
+fL = fs √(1 + Cm / (C0 + CL)) exactly for the lossless circuit (derived; CL = 0 gives fp and a
+large CL gives fs). The pulling is (fL − fs) / fs.
+
+### Assumptions and limits
+
+- **Two uniform, bidirectional combs with equal lines and spaces.** Real filters are weighted
+  (apodized or with fingers withdrawn) to shape the passband, unidirectional or resonator-based to
+  lose less; their bandwidth, loss and echoes are not these. The −3 dB width is that of the
+  uniform response; the shape factor, the passband ripple and the stop band are not computed.
+- **The loss is the ideal minimum.** Propagation, diffraction, bulk-wave, resistive and
+  package losses, and the reflection of the fingers, are not in it; the standard lists them. The
+  radiation conductance is the delta-function / crossed-field model, which the 2009 paper says is limited
+  to small loads and lower coupling: for the very large k² of 41° YX or 64° YX LiNbO₃ it would be
+  rough (and their rows are not in the picker anyway).
+- **R is the same at both ends and the tool designs no matching network.** The comb is tuned
+  with a shunt coil, so Ra is what the source sees. A real filter is specified for its own
+  terminating impedance, often 200 to 700 Ω (Agilent), or comes with a matching network;
+  the "Aperture for Ra = R" row can be very large on a weakly coupled crystal (about 1 000
+  wavelengths for the quartz example in 50 Ω), which is why quartz filters are not made for 50 Ω ends.
+  The Smith chart tool does the network.
+- **The substrate table is the standard's, as printed.** Others differ: Spectrum Control has
+  3 992 m/s for 128° LiNbO₃ (the standard 4 000), 0.116 % for quartz (0.16 %) and 0.75 % for
+  112° LiTaO₃ (0.64 %); the standard's column "temperature coefficient" is not marked TCF or TCD:
+  its values are negative and Spectrum Control says the frequency falls as the temperature rises,
+  so I read it as the TCF (an inference). Two rows are left out: LST quartz (its temperature
+  law is third order) and 64° YX LiNbO₃ (the table gives no permittivity). Spectrum
+  Control's 41°, 64° and 42° cuts are not in the tool.
+- **The turnover temperature is yours.** The standard gives none for quartz or Li₂B₄O₇ (it says the
+  cut angle sets it). The default is 25 °C, an assumption. The second-order terms are the
+  standard's; a real quartz device with heavy electrodes differs (the arXiv paper measured 18 ppm/K).
+- **The echo rule is a rule.** For two matched combs (6 dB of loss) it says 18 dB; an ideal tuned
+  three-port model of the combs (derived here, not in a source) gives 12 dB there, and 22.5, 28.2,
+  40.2, 51.1 dB for 8, 10, 15, 20 dB of loss where the rule says 22, 26, 36, 46. It is a good guide
+  from 8 dB up and a little pessimistic above 10 dB. A typed echo level replaces it.
+- **The echo ripple is small-echo arithmetic** (one echo, no further bounces), exact for
+  the amplitude and the delay of that echo.
+- **The resonator is the single-resonance circuit.** No series resistance of the busbars, no spurious
+  modes, no package capacitances; the paper's own fit adds them, and its printed fr of the second
+  resonator (436.960 MHz) is a fit that the parts alone do not give (436.990 MHz). Q is the
+  unloaded one. The coupling row is an estimate from Cm / C0. The load capacitor is in series, as for a crystal; the IEC
+  61019 sections on load capacitance and pulling were not read.
+- **Display.** Three figures; the resonator frequencies seven; capacitances in fF, pF, nF; lengths
+  in µm or mm; times in ns, µs, ms.
+
+### How it was checked
+
+152 cases, the expected values from a Python implementation written from the formulas above
+(every figure and label of the drawings; the substrate table read out of the tool and compared with
+a second typing of the standard's, the notes read out of the tool; the −3 dB constant solved
+there, the loss built from its two terms):
+- Transducer: the default, each of the six crystals, 22 other settings (frequencies from 10 MHz to
+  2.45 GHz, 1 to 300 pairs, half a pair, other apertures and resistances, a match that is met and
+  one that is not), the crystal picker, eight refusals and the opening values;
+- Echoes: the default, the standard's 40 dB, each crystal, 15 other distances, losses and typed
+  levels, an empty level back to the rule, a typed level without a loss, five refusals;
+- Drift: the default, each crystal (the turnover field only on the two parabolas), 16 other
+  ranges, references, turnovers above, under and inside the range, six refusals;
+- Resonator: the paper's two resonators, from the frequencies, other load capacitances,
+  resistances and values from 10 MHz to 900 MHz, the picker, fourteen refusals, and the remembered
+  pill, crystal and way in;
+- the nine examples and the formula-search card.
+
+600 more cases (three batches of 200: random crystals, frequencies, pairs, apertures,
+resistances, distances, losses, echo levels, temperatures, resonator parts and frequencies)
+compared every figure and label with the Python implementation; they were run and not kept.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| 6 dB lost in two matched combs | IEC 60862-2, 5.3 | 3 dB each, 6 dB at least | 6.02 dB at Ra = R |
+| A 40 dB echo | IEC 7.2 c | about ±0.1 dB and ±0.02 t | 0.174 dB peak to peak (±0.087 dB); ±25 ns = 0.02 t at 1.25 µs |
+| Tuning a comb | IEC 7.2 a, Figure 37 | k² > (π/4)(Δf/f0)²; curves leave 0 dB near 4, 9, 20, 25 % | 4.51, 9.03, 24.8, 26.6 % |
+| Resonator 1, Lm 45.727 µH, Cm 2.925 fF, Rm 50.824 Ω, C0 1.232 pF | arXiv 2506.13788, Table 2 | fr 435.183 MHz, QBVD 2460, K²BVD 0.29 % | 435.1819 MHz, Q 2460, K² 0.293 % |
+| Resonator 2, 75.154 µH, 1.765 fF, 52.135 Ω, 0.974 pF | the same | fr 436.960 MHz, QBVD 3958, K²BVD 0.22 % | 436.9902 MHz, Q 3960 (3958), K² 0.224 % |
+| Tuning coil, 200 nH at 97.3 MHz | IEC 5.3.2 | a shunt coil of 200 nH | resonates 13.4 pF (a check of the formula, not a printed value) |
+| Echo from the loss | Spectrum Control | 6 dB of loss: about 18 dB | 18 dB by the rule |
 
 [↑ Index](#index)
 

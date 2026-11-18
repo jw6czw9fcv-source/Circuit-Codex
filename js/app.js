@@ -680,6 +680,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "amateur-bands") return renderAmateurBands(domain, tool, favId);
   if (calcId === "balun") return renderBalun(domain, tool, favId);
   if (calcId === "cm-choke") return renderCmChoke(domain, tool, favId);
+  if (calcId === "saw-filter") return renderSawFilter(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -19234,6 +19235,358 @@ function renderCmChoke(domain, tool, favId) {
     if (ps) ps.onchange = () => { state.part = ps.value; const p = part(); if (p) { state.ln = p[3]; state.ls = p[4]; } paint(); };
     const fu = app.querySelector("select[data-funit]");
     if (fu) fu.onchange = () => { state.fUnit = fu.value; setPref(C, "fUnit", state.fUnit); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- SAW filter ----------
+// A surface-acoustic-wave (SAW) filter: the period, bandwidth, capacitance and tuning coil of its transducers, the delay and the echoes between two of them, the drift with temperature,
+// and the equivalent circuit of a SAW resonator. Sources, as read this session:
+//  - IS/IEC 60862-2 : 2002, "Surface acoustic wave (SAW) filters of assessed quality, Part 2: Guidance on use" (the Bureau of Indian Standards' identical copy from law.resource.org; all
+//    58 PDF pages read as text, pages 19 and 46 to 49 also rendered): the definitions (the coupling coefficient k_s^2 = 2 dv_s / v_s, the interdigital transducer (IDT), the aperture as a
+//    number of wavelengths, the triple transit echo (TTE), the shape factor, the group delay, the return attenuation); the centre frequency f0 = v_s / (2 d) with 2 d the IDT period
+//    (clause 5.1 equation 2, 7.1 a); the response of two uniform identical transducers T(f) = (sin x / x)^2, x = N pi (f - f0) / f0 (equation 3); 3 dB lost at each transducer, so 6 dB at
+//    least for two (5.3); the static capacitance of an IDT with equal lines and spaces C_T = w N (1 + eps_r) eps0 (7.1 d); the transducer is capacitive and is tuned with coils (7.2 a), the
+//    match being perfect when k_s^2 > (pi / 4) (df / f0)^2 and the conversion loss limited otherwise (Figure 37, curves read); the TTE comes 2 t behind the main signal and ripples the
+//    passband with the period 1 / (2 t), the feed-through with 1 / t, a TTE 40 dB down making about +-0.1 dB and +-0.02 t, and the suppression improves twice as much as the loss added
+//    (7.2 c); Table 1, the substrates (velocity, k_s^2, temperature coefficient, eps_r).
+//  - Spectrum Control, "Introduction to SAW Filter Theory & Design Techniques", white paper (16 pages; Table 1 rendered): seven substrates, the frequency of all but quartz falling as the
+//    temperature rises, TT = 2 IL + 6 dB for the triple transit, 3 dB lost at each transducer of a bidirectional filter.
+//  - COMSOL blog, "Leveraging the mBVD Circuit Model for MEMS Resonator Design" (September 2026): C_m = C_0 ((f_p / f_s)^2 - 1), L_m = 1 / ((2 pi f_s)^2 C_m), R_m = sqrt(L_m / C_m) / Q.
+//  - Westrelin et al., "Design and Fabrication Of Multiplexed One-Port SAW Resonators On A Single Chip" (arXiv 2506.13788): the Butterworth-Van Dyke model and the values of two ST-quartz
+//    resonators at 435 MHz (its Table 2), the quarter-wavelength finger width.
+//  - Wang, Lee, Yang and Park, Sensors and Materials 18 (2006) 301 (page 4 rendered): the crossed-field circuit of an IDT, G_a = g_a (sin x / x)^2 with g_a = (4 / pi) K^2 w0 N C_t.
+//  - Agilent Application Note 1373-5 (SAW filters): the port impedance of a SAW filter is high, 350 to 700 ohm, not 50 ohm. Not used in the numbers.
+//  Not read: IEC 61019 (SAW resonators; only the contents pages of its previews), Hashimoto's lectures (the host name did not resolve), Morgan's and Campbell's books, the makers' data sheets.
+//  Derived here, not printed in a source read: the -3 dB width 0.637 f0 / N from T(f); the loss of two tuned transducers 20 log((1 + y)^2 / (2 y)) with y = R_a / R; the coil that resonates
+//  C_T; the load resonance f_L = f_s sqrt(1 + C_m / (C_0 + C_L)); the coupling (pi^2 / 8) C_m / C_0, which reproduces the 0.29 and 0.22 % of Table 2 of the arXiv paper.
+const SAW_MODES = { idt: "Transducer", echo: "Echoes", drift: "Drift", res: "Resonator" };
+// IEC 60862-2 Table 1: id, name, velocity (m/s), coupling k_s^2 (%), temperature coefficient (ppm/K; 0 where the response is a parabola), second order (ppb/K^2; null for a straight line),
+// relative permittivity. Left out: LST quartz (third-order temperature law) and 64° YX LiNbO3 (the table gives no permittivity).
+const SAW_SUBS = [
+  ["stq", "ST quartz 42.75° YX", 3157, 0.16, 0, -34, 4.5],
+  ["lnz", "LiNbO₃ YZ", 3488, 4.82, -94, null, 36.7],
+  ["ln128", "LiNbO₃ 128° YX", 4000, 5.56, -74, null, 39.1],
+  ["lt112", "LiTaO₃ X 112° Y", 3295, 0.64, -18, null, 44.0],
+  ["lt36", "LiTaO₃ 36° YX", 4178, 4.8, -33, null, 48.3],
+  ["lbo", "Li₂B₄O₇ 45° XZ", 3401, 1.0, 0, -270, 9.6],
+];
+const SAW_EPS0 = 8.8541878188e-12;
+// The x where (sin x / x)^2 is 3 dB down (as an amplitude, 10^(-3/20)): the -3 dB width of two identical uniform transducers is 2 x / pi * f0 / N = 0.6368 f0 / N.
+const SAW_X3 = 1.000251804345175;
+const SAW_NOTE = {
+  idt: "The transducer's period is one wavelength, λ = v / f0, and each finger and each gap is λ/4 wide (λ/8 with split fingers). With N finger pairs the response is about f0 / N wide, so a narrow filter needs many fingers. The comb is a capacitor CT in parallel with Ra, the resistance that stands for the power leaving as sound; a shunt coil tunes CT out. Between two transducers the filter loses 6 dB at least (3 dB at each, the sound goes both ways), more when Ra and the terminating resistance R do not match.",
+  echo: "The wave reflected by the output transducer and again by the input one arrives three transits after it was launched, two delays t behind the wanted signal: the triple-transit echo. It ripples the passband with a period of 1 / (2t); the signal that leaks straight across by capacitance, the feed-through, ripples it with 1 / t. Mismatching the transducers costs loss and lowers the echo, about 2 dB for each dB: the rule of thumb is echo = 2 · loss + 6 dB. An echo of ratio a to the main signal ripples the passband by 20 log((1 + a) / (1 − a)) dB peak to peak.",
+  drift: "The wave's speed changes with temperature and the whole response moves with it. Most cuts shift linearly, by their temperature coefficient of frequency in ppm per kelvin: negative, so a warm filter sits lower. Quartz and Li₂B₄O₇ have no linear term at their turnover temperature and bend like a parabola around it, so they are used near it. The passband must be wide enough for the shift.",
+  res: "A SAW resonator is a transducer between two reflecting gratings. Its model is a series branch, the resistance Rm, inductance Lm and capacitance Cm of the vibration, in parallel with the static capacitance C0 of the comb. The branch resonates at fs and, with C0, again at fp just above it; Q = 2π fs Lm / Rm. A capacitor CL in series, as in an oscillator, pulls the frequency from fs a little towards fp. C0 / Cm is the capacitance ratio: the smaller it is, the wider the filters made from the resonator.",
+};
+
+function renderSawFilter(domain, tool, favId) {
+  const C = "saw-filter";
+  const state = {
+    mode: pref(C, "mode", "idt", Object.keys(SAW_MODES)),
+    sub: pref(C, "sub", "ln128", SAW_SUBS.map((s) => s[0])),
+    known: pref(C, "known", "parts", ["parts", "freq"]),
+    f: 100, n: 20, a: 30, r: 50,                        // Transducer: MHz, finger pairs, aperture in wavelengths, ohms
+    len: 5, il: 20, tte: NaN,                           // Echoes: mm, dB, dB (empty: the rule)
+    t1: -40, t2: 85, tr: 25, t0: 25,                    // Drift: °C
+    rm: 50.824, lm: 45.727, cm: 2.925, c0: 1.232, cl: 5, // Resonator from its parts: Ω, µH, fF, pF, pF
+    fs: 435.183, fp: 435.659, q: 2466,                  // Resonator from its frequencies: MHz, MHz, Q
+  };
+  // Three figures, never in exponent form.
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const PI = Math.PI;
+  const hz = (f) => (f >= 1e9 ? `${n3(f / 1e9)} GHz` : f >= 1e6 ? `${n3(f / 1e6)} MHz` : f >= 1e3 ? `${n3(f / 1e3)} kHz` : `${n3(f)} Hz`);
+  const sh = (f) => (f === 0 ? "0 Hz" : `${f > 0 ? "+" : "−"}${hz(Math.abs(f))}`);
+  const mhz = (f) => `${String(Number((f / 1e6).toPrecision(7)))} MHz`;
+  const tm = (s) => (s >= 1e-3 ? `${n3(s * 1e3)} ms` : s >= 1e-6 ? `${n3(s * 1e6)} µs` : `${n3(s * 1e9)} ns`);
+  const lenm = (m) => (m >= 1e-3 ? `${n3(m * 1e3)} mm` : `${n3(m * 1e6)} µm`);
+  const cap = (c) => (c >= 1e-6 ? `${n3(c * 1e6)} µF` : c >= 1e-9 ? `${n3(c * 1e9)} nF` : c >= 1e-12 ? `${n3(c * 1e12)} pF` : `${n3(c * 1e15)} fF`);
+  const ind = (l) => (l >= 1e-3 ? `${n3(l * 1e3)} mH` : l >= 1e-6 ? `${n3(l * 1e6)} µH` : `${n3(l * 1e9)} nH`);
+  const ohm = (v) => (v >= 1e6 ? `${n3(v / 1e6)} MΩ` : v >= 1e3 ? `${n3(v / 1e3)} kΩ` : `${n3(v)} Ω`);
+  const sub = () => SAW_SUBS.find((s) => s[0] === state.sub);
+  const parabola = () => sub()[5] !== null;
+
+  // ---------------- the numbers ----------------
+  // The transducer: IEC 60862-2 for the period, the width, the capacitance and the match; the crossed-field circuit for the radiation conductance; the rest derived.
+  function idt() {
+    const s = sub(), k2 = s[3] / 100, f0 = state.f * 1e6, lam = s[2] / f0, w = state.a * lam;
+    const ct = w * state.n * (1 + s[6]) * SAW_EPS0;
+    const ga = 8 * k2 * f0 * state.n * ct, w0 = 2 * PI * f0;
+    const y = 1 / (state.r * ga), bw = (2 * SAW_X3 / PI) * f0 / state.n, brel = bw / f0;
+    return {
+      lam, w, ct, ga, ra: 1 / ga, q: (w0 * ct) / ga, l: 1 / (w0 * w0 * ct), il: 20 * Math.log10((1 + y) ** 2 / (2 * y)),
+      bw, brel, blim: Math.sqrt((4 * k2) / PI), ok: k2 > (PI / 4) * brel ** 2, am: (state.a * (1 / ga)) / state.r, len: state.n * lam,
+    };
+  }
+  // The echoes: the delay between the transducers, the periods of the ripples, the level of the echo (typed, or the rule 2 IL + 6) and what it does to the passband.
+  function echo() {
+    const t = (state.len * 1e-3) / sub()[2], typed = isFinite(state.tte), tte = typed ? state.tte : 2 * state.il + 6, a = 10 ** (-tte / 20);
+    return { t, typed, tte, a, pp: 20 * Math.log10((1 + a) / (1 - a)), gd: a * 2 * t };
+  }
+  // The drift: the shift of the response from the reference temperature, a straight line or a parabola about the turnover; the span is the highest minus the lowest over the range.
+  function drift() {
+    const s = sub(), f0 = state.f * 1e6;
+    const P = s[5] === null ? (T) => s[4] * 1e-6 * (T - state.tr) : (T) => s[5] * 1e-9 * ((T - state.t0) ** 2 - (state.tr - state.t0) ** 2);
+    const pts = [state.t1, state.t2];
+    if (s[5] !== null && state.t0 > state.t1 && state.t0 < state.t2) pts.push(state.t0);
+    const v = pts.map(P), hi = Math.max(...v), lo = Math.min(...v);
+    return { P, hi, lo, cold: f0 * P(state.t1), hot: f0 * P(state.t2), span: f0 * (hi - lo), ppm: (hi - lo) * 1e6 };
+  }
+  // The resonator: the Butterworth-Van Dyke circuit, from its parts or from its frequencies.
+  function reson() {
+    const c0 = state.c0 * 1e-12, cl = state.cl * 1e-12;
+    let fs, fp, cm, lm, rm, q;
+    if (state.known === "parts") {
+      lm = state.lm * 1e-6; cm = state.cm * 1e-15; rm = state.rm;
+      const ws = 1 / Math.sqrt(lm * cm);
+      fs = ws / (2 * PI); fp = fs * Math.sqrt(1 + cm / c0); q = (ws * lm) / rm;
+    } else {
+      fs = state.fs * 1e6; fp = state.fp * 1e6; q = state.q;
+      cm = c0 * ((fp / fs) ** 2 - 1); lm = 1 / ((2 * PI * fs) ** 2 * cm); rm = Math.sqrt(lm / cm) / q;
+    }
+    const fl = fs * Math.sqrt(1 + cm / (c0 + cl));
+    return { fs, fp, cm, lm, rm, q, ratio: c0 / cm, k2: (PI ** 2 / 8) * (cm / c0), fl, pull: (fl - fs) / fs };
+  }
+
+  function problem() {
+    if (state.mode === "idt") {
+      if (!(state.f > 0)) return "Enter the centre frequency.";
+      if (!(state.n >= 1)) return "Enter the finger pairs, 1 or more.";
+      if (!(state.a > 0)) return "Enter the aperture.";
+      if (!(state.r > 0)) return "Enter the terminating resistance.";
+      return "";
+    }
+    if (state.mode === "echo") {
+      if (!(state.len > 0)) return "Enter the distance between the transducers.";
+      if (isFinite(state.tte)) return state.tte > 0 ? "" : "Enter the echo level, above 0 dB.";
+      return state.il >= 0 ? "" : "Enter the insertion loss, 0 dB or more.";
+    }
+    if (state.mode === "drift") {
+      if (!(state.f > 0)) return "Enter the centre frequency.";
+      if (![state.t1, state.t2, state.tr].every(isFinite) || (parabola() && !isFinite(state.t0))) return "Enter the temperatures.";
+      return state.t2 > state.t1 ? "" : "The hot end must be above the cold end.";
+    }
+    if (state.known === "parts") {
+      if (!(state.lm > 0 && state.cm > 0)) return "Enter the motional inductance and capacitance.";
+      if (!(state.rm > 0)) return "Enter the motional resistance.";
+    } else {
+      if (!(state.fs > 0)) return "Enter the resonance frequency.";
+      if (!(state.fp > state.fs)) return "The anti-resonance must be above the resonance.";
+      if (!(state.q > 0)) return "Enter the quality factor.";
+    }
+    if (!(state.c0 > 0)) return "Enter the static capacitance.";
+    return state.cl >= 0 ? "" : "Enter the load capacitance, 0 or more.";
+  }
+
+  // ---------------- the drawings ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", AMBER = "#E0A85E", WIRE = "#5A6169", GREY = "#8A9099";
+  // A label sits on top of the lines, with a halo in the box's own colour so a line running through it does not hide it.
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const w = (d, c = WIRE, sw = 1.8) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const dot = (x, y, c = WIRE) => `<circle cx="${x}" cy="${y}" r="2.3" fill="${c}"/>`;
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${WIRE}" stroke-width="1.6"/>`;
+  const coilH = (x, y, c) => w(`M${x} ${y}` + " a5 5 0 0 1 10 0".repeat(4), c, 2);
+  const coilV = (x, y1, y2, n, c) => { const r = (y2 - y1) / (2 * n); return w(`M${x} ${y1}` + ` a${r} ${r} 0 0 1 0 ${2 * r}`.repeat(n), c, 2); };
+  const plates = (x, y1, y2, c) => w(`M${x - 8} ${y1} H${x + 8} M${x - 8} ${y2} H${x + 8}`, c, 2.4);
+  const zigH = (x1, x2, y, c) => { let d = `M${x1} ${y}`; const n = 6, s = (x2 - x1) / n; for (let i = 0; i < n; i++) d += ` L${x1 + s * (i + 0.5)} ${y + (i % 2 ? 5 : -5)}`; return w(`${d} L${x2} ${y}`, c, 1.8); };
+  const zigV = (x, y1, y2, c) => { let d = `M${x} ${y1}`; const n = 6, s = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + s * (i + 0.5)}`; return w(`${d} L${x} ${y2}`, c, 1.8); };
+
+  // One transducer, tuned: the source, then the comb's capacitance, the coil and the radiation resistance across it.
+  function idtDrawing() {
+    if (problem()) return "";
+    const k = idt();
+    let o = port(14, 48) + port(14, 100) + w("M17 48 H36") + zigH(36, 76, 48, BLUE) + w("M76 48 H230") + w("M17 100 H230");
+    o += w("M110 48 V56") + coilV(110, 56, 92, 4, GREEN) + w("M110 92 V100") + dot(110, 48) + dot(110, 100);
+    o += w("M170 48 V68") + plates(170, 68, 80, GREEN) + w("M170 80 V100") + dot(170, 48) + dot(170, 100);
+    o += w("M230 48 V58") + zigV(230, 58, 90, GREEN) + w("M230 90 V100") + dot(230, 48) + dot(230, 100);
+    o += w("M246 74 H284 M278 70 L284 74 L278 78", GREEN) + lbl(null, 265, 66, "sound", GREY, "middle");
+    o += lbl("pr", 56, 34, `R ${n3(state.r)} Ω`, BLUE, "middle");
+    o += lbl("pl", 110, 120, `L ${ind(k.l)}`, GREEN, "middle") + lbl("pc", 170, 120, `CT ${cap(k.ct)}`, GREEN, "middle") + lbl("pa", 230, 120, `Ra ${ohm(k.ra)}`, GREEN, "middle");
+    return o;
+  }
+
+  // Two transducers on the crystal: the wanted signal crosses once, the echo twice more.
+  function echoDrawing() {
+    if (problem()) return "";
+    const e = echo();
+    const comb = (x) => w(`M${x} 46 H${x + 30} M${x} 102 H${x + 30}`, BLUE, 2.4) + w(`M${x + 4} 46 V92 M${x + 16} 46 V92 M${x + 28} 46 V92 M${x + 10} 102 V56 M${x + 22} 102 V56`, BLUE, 2);
+    let o = `<rect x="14" y="40" width="272" height="68" rx="7" fill="none" stroke="${WIRE}" stroke-width="1.4"/>` + comb(34) + comb(236);
+    o += w("M72 58 H226 M220 54 L226 58 L220 62", GREEN) + w("M226 76 H72 M78 72 L72 76 L78 80", AMBER) + w("M72 92 H226 M220 88 L226 92 L220 96", AMBER);
+    o += w("M49 26 H251 M49 22 V30 M251 22 V30", GREY, 1.2);
+    o += lbl("pL", 150, 20, `L ${n3(state.len)} mm`, GREY, "middle") + lbl("pt", 150, 52, `t ${tm(e.t)}`, GREEN, "middle") + lbl("pe", 150, 126, `echo at 3t = ${tm(3 * e.t)}`, AMBER, "middle");
+    return o;
+  }
+
+  // The shift of the frequency with temperature over the range, from the reference.
+  function driftDrawing() {
+    if (problem()) return "";
+    const d = drift(), X0 = 44, X1 = 276, Y0 = 108, Y1 = 28;
+    const lo = Math.min(0, d.lo), hi = Math.max(0, d.hi), span = hi - lo || 1;
+    const xT = (T) => X0 + ((T - state.t1) / (state.t2 - state.t1)) * (X1 - X0), yP = (p) => Y0 - ((p - lo) / span) * (Y0 - Y1);
+    let pts = "";
+    for (let i = 0; i <= 40; i++) { const T = state.t1 + ((state.t2 - state.t1) * i) / 40; pts += `${i ? "L" : "M"}${xT(T).toFixed(1)} ${yP(d.P(T)).toFixed(1)} `; }
+    let o = w(`M${X0} ${Y0 + 6} V${Y1 - 4} M${X1} ${Y0 + 6} V${Y1 - 4}`, WIRE, 1.2);
+    o += `<path d="M${X0} ${yP(0).toFixed(1)} H${X1}" stroke="${GREY}" stroke-width="1.2" stroke-dasharray="4 3" fill="none"/>`;
+    if (parabola() && state.t0 > state.t1 && state.t0 < state.t2) o += `<path d="M${xT(state.t0).toFixed(1)} ${Y0 + 6} V${Y1 - 4}" stroke="${GREY}" stroke-width="1" stroke-dasharray="2 3" fill="none"/>`;
+    o += w(pts, GREEN, 2.2) + dot(X0, yP(d.P(state.t1)).toFixed(1), GREEN) + dot(X1, yP(d.P(state.t2)).toFixed(1), GREEN);
+    o += lbl("pd1", 14, 14, `${n3(state.t1)} °C: ${sh(d.cold)}`, GREEN) + lbl("pd2", 286, 14, `${n3(state.t2)} °C: ${sh(d.hot)}`, GREEN, "end");
+    o += lbl(null, 150, 128, `shift from ${n3(state.tr)} °C`, GREY, "middle");
+    return o;
+  }
+
+  // The Butterworth-Van Dyke circuit: the static capacitance across the motional branch, a series capacitor for the load. Calculated parts are green, typed ones blue.
+  function resDrawing() {
+    if (problem()) return "";
+    const r = reson(), fromF = state.known === "freq", calc = fromF ? GREEN : BLUE, out = fromF ? BLUE : GREEN;
+    let o = port(14, 68) + port(286, 68) + w("M17 68 H30 M38 68 H60 M250 68 H283") + w("M30 60 V76 M38 60 V76", BLUE, 2.4);
+    o += w("M60 44 V92 M250 44 V92") + dot(60, 68) + dot(250, 68);
+    o += w("M60 44 H146 M154 44 H250") + w("M146 36 V52 M154 36 V52", BLUE, 2.4);
+    o += w("M60 92 H78") + zigH(78, 110, 92, calc) + w("M110 92 H122") + coilH(122, 92, calc) + w("M162 92 H194") + w("M194 84 V100 M202 84 V100", calc, 2.4) + w("M202 92 H250");
+    o += lbl("pcl", 34, 52, `CL ${n3(state.cl)} pF`, BLUE, "middle") + lbl("pc0", 150, 30, `C0 ${n3(state.c0)} pF`, BLUE, "middle");
+    o += lbl("prm", 94, 78, `Rm ${ohm(r.rm)}`, calc, "middle") + lbl("plm", 142, 114, `Lm ${ind(r.lm)}`, calc, "middle") + lbl("pcm", 198, 78, `Cm ${cap(r.cm)}`, calc, "middle");
+    o += lbl("pfs", 150, 134, `fs ${mhz(r.fs)} · fp ${mhz(r.fp)}`, out, "middle");
+    return o;
+  }
+
+  function diagram() {
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${{ idt: idtDrawing, echo: echoDrawing, drift: driftDrawing, res: resDrawing }[state.mode]()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, subline) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${subline}</div>
+        </div>`;
+  const body = (cells, rows, note) => `${grid(cells)}
+      <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${note}</div></div>`;
+
+  function idtHTML() {
+    const k = idt();
+    const rows = row("Relative bandwidth", `${n3(k.brel * 100)} %`, "rb") + row("Ra and Q of the comb", `${ohm(k.ra)} · Q ${n3(k.q)}`, "ra")
+      + row("Loss at the centre", `${n3(k.il)} dB with ${n3(state.r)} Ω`, "il") + row("Aperture for Ra = R", `${n3(k.am)} λ · ${lenm(k.am * k.lam)}`, "am")
+      + row("Size", `${lenm(k.len)} long · ${lenm(k.w)} wide`, "sz") + row("Tuned match, up to", `${n3(k.blim * 100)} % wide: ${k.ok ? "met" : "not met"}`, "lim");
+    return head("IDT period λ", lenm(k.lam), `fingers and gaps λ/4 = ${lenm(k.lam / 4)}`)
+      + body([cell("−3 dB width", hz(k.bw), "c1"), cell("Capacitance", cap(k.ct), "c2"), cell("Shunt coil", ind(k.l), "c3")], rows, SAW_NOTE.idt);
+  }
+
+  function echoHTML() {
+    const e = echo();
+    const rows = row("Echo level", `${n3(e.tte)} dB below the main signal${e.typed ? "" : " (2 IL + 6)"}`, "tte") + row("Amplitude ripple", `${n3(e.pp)} dB peak to peak`, "pp")
+      + row("Group delay ripple", `±${tm(e.gd)}`, "gd");
+    return head("Delay between the transducers", tm(e.t), `${n3(state.len)} mm at ${sub()[2]} m/s`)
+      + body([cell("Echo is late by", tm(2 * e.t), "c1"), cell("Echo ripple", hz(1 / (2 * e.t)), "c2"), cell("Feed-through", hz(1 / e.t), "c3")], rows, SAW_NOTE.echo);
+  }
+
+  function driftHTML() {
+    const d = drift(), s = sub(), par = parabola();
+    const rows = row("Relative span", `${n3(d.ppm / 1e4)} %`, "rs") + row("Law", par ? "a parabola about the turnover" : "a straight line", "law") + row("Frequency at the reference", `${n3(state.f)} MHz at ${n3(state.tr)} °C`, "ref");
+    return head("Span over the range", hz(d.span), `${n3(d.ppm)} ppm of ${n3(state.f)} MHz`)
+      + body([cell("Cold end", sh(d.cold), "c1"), cell("Hot end", sh(d.hot), "c2"), cell("Coefficient", par ? `${n3(s[5] / 1000)} ppm/K²` : `${n3(s[4])} ppm/K`, "c3")], rows, SAW_NOTE.drift);
+  }
+
+  function resHTML() {
+    const r = reson(), parts = state.known === "parts";
+    const rows = row("Split fp − fs", `${hz(r.fp - r.fs)} · ${n3((r.fp / r.fs - 1) * 100)} %`, "sp") + row("Coupling K²", `about ${n3(r.k2 * 100)} %`, "k2")
+      + row("Load resonance with CL", mhz(r.fl), "fl") + row("Pulling by CL", `${n3(r.pull * 1e6)} ppm`, "pl");
+    const cells = parts ? [cell("Anti-resonance fp", mhz(r.fp), "c1"), cell("Q", n3(r.q), "c2"), cell("C0 / Cm", n3(r.ratio), "c3")]
+      : [cell("Lm", ind(r.lm), "c1"), cell("Cm", cap(r.cm), "c2"), cell("C0 / Cm", n3(r.ratio), "c3")];
+    return (parts ? head("Series resonance fs", mhz(r.fs), `Q ${n3(r.q)}, Rm ${ohm(r.rm)}`) : head("Motional resistance Rm", ohm(r.rm), `from Q ${n3(r.q)} at ${mhz(r.fs)}`)) + body(cells, rows, SAW_NOTE.res);
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    return { idt: idtHTML, echo: echoHTML, drift: driftHTML, res: resHTML }[state.mode]();
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "100 MHz on LiNbO₃ 128°", note: "20 pairs, 40 µm: 3.18 MHz wide, 8.52 pF tuned by 297 nH, 7.99 dB lost in 50 Ω.",
+      apply: example({ mode: "idt", sub: "ln128", f: 100, n: 20, a: 30, r: 50 }) },
+    { title: "433.92 MHz on ST quartz", note: "Period 7.28 µm. Ra 1.02 kΩ: 6.02 dB in 1000 Ω, but 21 dB in 50 Ω.",
+      apply: example({ mode: "idt", sub: "stq", f: 433.92, n: 100, a: 50, r: 1000 }) },
+    { title: "Too wide for quartz", note: "12 pairs make 5.31 % of bandwidth; quartz can be tuned up to 4.51 %.",
+      apply: example({ mode: "idt", sub: "stq", f: 433.92, n: 12, a: 50, r: 50 }) },
+    { title: "A 40 dB echo, the IEC's example", note: "0.174 dB peak to peak (the IEC: about ±0.1 dB), ±25 ns = 0.02 t of delay.",
+      apply: example({ mode: "echo", sub: "ln128", len: 5, il: 20, tte: 40 }) },
+    { title: "5 mm, 20 dB of loss", note: "1.25 µs of delay; a 46 dB echo ripples the passband by 0.0871 dB each 400 kHz.",
+      apply: example({ mode: "echo", sub: "ln128", len: 5, il: 20, tte: NaN }) },
+    { title: "−40 to 85 °C on LiNbO₃ 128°", note: "−74 ppm/K: a 100 MHz filter is 481 kHz up when cold, 444 kHz down when hot.",
+      apply: example({ mode: "drift", sub: "ln128", f: 100, t1: -40, t2: 85, tr: 25, t0: 25 }) },
+    { title: "ST quartz at 433.92 MHz", note: "A parabola about 25 °C: 62.3 kHz down at −40 °C, 53.1 kHz at 85 °C.",
+      apply: example({ mode: "drift", sub: "stq", f: 433.92, t1: -40, t2: 85, tr: 25, t0: 25 }) },
+    { title: "A measured resonator, 435 MHz", note: "Westrelin et al.'s parts give 435.18 MHz and Q 2460 (printed: 435.183 MHz, 2460).",
+      apply: example({ mode: "res", known: "parts", rm: 50.824, lm: 45.727, cm: 2.925, c0: 1.232, cl: 5 }) },
+    { title: "From fs, fp, C0 and Q", note: "Measured 435.183 and 435.659 MHz, 1.23 pF, Q 2466: Cm 2.7 fF, Lm 49.6 µH, Rm 55 Ω.",
+      apply: example({ mode: "res", known: "freq", fs: 435.183, fp: 435.659, c0: 1.232, q: 2466, cl: 5 }) },
+  ]);
+
+  function paint() {
+    const fld = (name, key, val, unit, ph) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(val)}"${ph ? ` placeholder="${ph}"` : ""} />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    let fields = "", heading = sel('class="label-select" data-sub', SAW_SUBS.map((s) => [s[0], `${s[1]} · ${s[2]} m/s`]), state.sub);
+    if (state.mode === "idt") {
+      fields = `<div class="field-pair">${fld("Frequency", "f", state.f, fixed("MHz"))}${fld("Finger pairs", "n", state.n, fixed("N"))}${fld("Aperture", "a", state.a, fixed("λ"))}</div>
+        <div class="field-pair">${fld("Source and load", "r", state.r, fixed("Ω"))}</div>`;
+    } else if (state.mode === "echo") {
+      fields = `<div class="field-pair">${fld("Distance", "len", state.len, fixed("mm"))}${fld("Insertion loss", "il", state.il, fixed("dB"))}</div>
+        <div class="field-pair">${fld("Echo level (optional)", "tte", state.tte, fixed("dB"), "from the rule")}</div>`;
+    } else if (state.mode === "drift") {
+      fields = `<div class="field-pair">${fld("Frequency", "f", state.f, fixed("MHz"))}${fld("Cold end", "t1", state.t1, fixed("°C"))}${fld("Hot end", "t2", state.t2, fixed("°C"))}</div>
+        <div class="field-pair">${fld("Reference", "tr", state.tr, fixed("°C"))}${parabola() ? fld("Turnover", "t0", state.t0, fixed("°C")) : ""}</div>`;
+    } else {
+      heading = sel('class="label-select" data-known', [["parts", "Given: R, L, C"], ["freq", "Given: fs, fp, Q"]], state.known);
+      const first = state.known === "parts"
+        ? `${fld("Motional R", "rm", state.rm, fixed("Ω"))}${fld("Motional L", "lm", state.lm, fixed("µH"))}${fld("Motional C", "cm", state.cm, fixed("fF"))}`
+        : `${fld("Resonance fs", "fs", state.fs, fixed("MHz"))}${fld("Anti-res. fp", "fp", state.fp, fixed("MHz"))}${fld("Q", "q", state.q, "")}`;
+      fields = `<div class="field-pair">${first}</div><div class="field-pair">${fld("Static C0", "c0", state.c0, fixed("pF"))}${fld("Load CL", "cl", state.cl, fixed("pF"))}</div>`;
+    }
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "IDT design, echoes, drift, resonator")}
+
+      ${pillRow(Object.entries(SAW_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${heading}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["f0 = v / λ (λ = IDT period)", "CT = w N (1 + εr) ε0", "Ga = 8 k² f0 N CT", "k² > (π / 4) (Δf / f0)²", "TTE ≈ 2 IL + 6 dB", "fs = 1 / (2π √(Lm Cm))", "fp = fs √(1 + Cm / C0)", "fL = fs √(1 + Cm / (C0 + CL))"],
+        "A SAW filter is two metal combs, interdigital transducers (IDTs), on a piezoelectric crystal. A voltage on the first comb launches a surface acoustic wave, a ripple of the crystal surface that travels at 2000 to 5000 m/s; the second comb turns it back into a voltage. The wave is some 75 000 times slower than light, so the structure is small and a long delay fits on a chip. The IDT period λ, the distance between two fingers of the same polarity, is one wavelength: f0 = v / λ. The crystal sets v and the coupling k² = 2Δv / v, how much the wave's speed changes when metal shorts the surface, which is the share of electrical energy it turns into sound. N finger pairs make the response sin x / x with x = Nπ (f − f0) / f0, and two identical combs the product, (sin x / x)², whose −3 dB width is about 0.64 f0 / N: more fingers, a narrower filter. The comb is a capacitor CT = w N (1 + εr) ε0, for an aperture w and the crystal's relative permittivity εr, in parallel with a conductance Ga = 8 k² f0 N CT, where the power leaves as sound; a coil L = 1 / (ω0² CT) tunes the capacitance out. The comb can be tuned across the band when k² > (π / 4) (Δf / f0)², so a wide filter needs a strongly coupled crystal (lithium niobate) and a narrow one can be made on quartz. Each comb sends the sound both ways, so each loses 3 dB: 6 dB is the least a two-comb filter loses. The part of the wave that is reflected at the output comb and again at the input comb arrives three transits late, the triple-transit echo (TTE), and ripples the passband; mismatching the combs costs loss and lowers the echo, TTE ≈ 2 IL + 6 dB. A SAW resonator is one comb between reflectors: a series branch Rm, Lm, Cm in parallel with the static capacitance C0, with a resonance fs = 1 / (2π √(Lm Cm)) and an antiresonance fp = fs √(1 + Cm / C0); a capacitor CL in series pulls it to fL = fs √(1 + Cm / (C0 + CL))."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const num = (key, apply) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el) el.oninput = () => { apply(parseFloat(el.value)); show(); }; };
+    ["f", "n", "a", "r", "len", "il", "tte", "t1", "t2", "tr", "t0", "rm", "lm", "cm", "c0", "cl", "fs", "fp", "q"].forEach((k) => num(k, (v) => { state[k] = v; }));
+    const pick = (attr, name) => { const el = app.querySelector(`select[${attr}]`); if (el) el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); paint(); }; };
+    pick("data-sub", "sub");
+    pick("data-known", "known");
   }
 
   paint();

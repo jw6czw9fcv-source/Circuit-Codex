@@ -398,6 +398,12 @@ const FORMULAS = [
     note: "The Y- and X-capacitors of a mains EMC filter built round a common-mode choke, from the attenuation needed at a harmonic, and the impedance and resonance of a choke from its inductance and winding capacitance. From Schaffner's RB choke application note (its worked example is reproduced), Arar's article and Omicron Lab's note (read); the insertion loss of a series impedance is derived.",
   },
   {
+    tool: "SAW filter",
+    domain: "rf",
+    formulas: ["f0 = v / λ (λ = IDT period)", "CT = w N (1 + εr) ε0", "Ga = 8 k² f0 N CT", "k² > (π / 4) (Δf / f0)²", "TTE ≈ 2 IL + 6 dB", "fs = 1 / (2π √(Lm Cm))", "fp = fs √(1 + Cm / C0)", "fL = fs √(1 + Cm / (C0 + CL))"],
+    note: "The period, bandwidth, capacitance and tuning coil of a SAW filter's transducers, the echoes between two of them, the drift with temperature, and the equivalent circuit of a SAW resonator. From IEC 60862-2 (the standard's text and tables, read) with the COMSOL and arXiv notes on the Butterworth-Van Dyke circuit; the loss of tuned transducers, the coil and the load resonance are derived.",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],
