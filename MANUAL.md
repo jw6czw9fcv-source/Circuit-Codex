@@ -114,6 +114,7 @@ will key on, since that is the id the app already holds for each tool.
 - RF components → [Common mode choke](#cm-choke)
 - RF components → [Balun](#balun)
 - RF components → [SAW filter](#saw-filter)
+- RF components → [RF diode types](#rf-diodes)
 
 ### Power electronics
 
@@ -15328,6 +15329,215 @@ Published answers reproduced:
 | Resonator 2, 75.154 µH, 1.765 fF, 52.135 Ω, 0.974 pF | the same | fr 436.960 MHz, QBVD 3958, K²BVD 0.22 % | 436.9902 MHz, Q 3960 (3958), K² 0.224 % |
 | Tuning coil, 200 nH at 97.3 MHz | IEC 5.3.2 | a shunt coil of 200 nH | resonates 13.4 pF (a check of the formula, not a printed value) |
 | Echo from the loss | Spectrum Control | 6 dB of loss: about 18 dB | 18 dB by the rule |
+
+[↑ Index](#index)
+
+---
+
+<a id="rf-diodes"></a>
+## RF diode types
+
+`calc: rf-diodes` · RF & microwave › RF components
+
+### What it computes
+
+Diodes at RF are built for one job each. The tool is a reference of ten families and a calculator
+for the three whose behaviour is a formula. Four pills:
+
+- **Types:** the picker in the Output heading chooses the family (PIN, PIN limiter, Schottky,
+  varactor, step-recovery, Gunn, IMPATT, TRAPATT, tunnel, point-contact). The big result is its name
+  and what it is; in three cells what controls it, what it acts as and what it is used for; rows: the
+  parameter that matters, its range or limit, and which pill (if any) calculates it; and a short
+  description. The drawing is the diode symbol with what controls it and what it becomes.
+- **PIN:** a PIN diode in a line of system impedance Z0, as a switch or an attenuator. The inputs,
+  three to a row: the frequency (MHz), the system impedance (Ω) and the RF power (W); the series
+  resistance RS (Ω) and the capacitance CT (pF). The picker in the Output heading fills RS and CT from
+  the Skyworks SMP1320 series at a bias current (mA, a field that appears with the part); typing RS
+  goes back to typed values. The big result is the loss of a series switch when it is on (forward
+  biased); cells: its isolation when off, the loss of a shunt switch when it is on (reverse biased)
+  and its isolation when off (forward biased). Rows: the power the on-state diode dissipates in each
+  switch, and for the SMP1320 the transit-time frequency limit. The same two series and shunt
+  equations are the attenuation of a PIN attenuator set to the resistance RS: 50 Ω in a 50 Ω line
+  is 3.52 dB either way. The drawing is the two switches in a line.
+- **Varactor:** the capacitance at 0 V (pF), the contact potential Φ (V) and γ; a low and a high
+  reverse voltage (V) and the series resistance RS (Ω); the frequency (MHz), the tuning inductor
+  (nH) and the package capacitance (pF). The picker in the Output heading chooses the doping (abrupt
+  γ 0.47, ideal abrupt 0.5, hyperabrupt about 2, or a typed γ, which typing γ selects). The big
+  result is the tuning ratio C(low) / C(high); cells: the two capacitances and the Q at the high
+  voltage; rows: Q at both, the highest frequency of a VCO and of a tunable filter, the drift of the
+  capacitance with temperature, and the resonance of the tuning inductor with the junction and package
+  capacitance at the two voltages. The drawing is the package model.
+- **Schottky:** a detector diode. The saturation current IS (nA), the bias current IB (µA), the
+  load RL (kΩ), the junction capacitance Cj (pF), the series resistance RS (Ω), the frequency (GHz)
+  and the input power (µW). The picker fills the numbers of the HP 5082-2755 of Application Note 988. The big result is the video resistance
+  RV; cells: the voltage sensitivity with the load, without it, and the frequency; rows: the share of the
+  voltage the load takes, the output for the input power, and the matching bandwidth for |ρ| = 0.5.
+  The drawing is the video source: the diode with RS and Cj, RV, the load.
+
+- **Units:** fixed (MHz, GHz, Ω, kΩ, pF, nH, V, mA, µA, nA, µW, W); the pickers are the family, the part,
+  the doping and the Schottky part.
+- **Remembered:** the pill and the family.
+
+Examples: the SMP1320 at 1 mA and at 10 mA, a PIN as a 3.52 dB attenuator, the 1969 article's C4 / C60
+of 3, a hyperabrupt varactor, the 5082-2755 at zero bias at 10 GHz and with 20 µA and 100 kΩ, the PIN
+limiter and the step-recovery diode.
+
+### Terms
+
+- **PIN diode, I region:** a P layer, an N layer and between them a thick intrinsic (undoped, in practice
+  lightly doped) layer of width W. Forward current stores charge in it, which lowers its resistance
+  to RS; at zero or reverse bias it is a capacitor CT. **Carrier lifetime τ:** how long the stored
+  charge lives. **Transit-time frequency:** about 1300 / W² MHz (W in µm); below it the diode acts as an
+  ordinary junction diode.
+- **Series, shunt switch; loss, isolation:** the diode in the line, or across it to ground. Loss is what
+  the switch costs when it passes the signal, isolation how much it blocks when it should not.
+  **Reflective:** the diode reflects the blocked signal instead of absorbing it.
+- **System impedance Z0:** the impedance of the line, usually 50 Ω. **PAV:** the power available
+  from the source, V² / (4 Z0).
+- **Varactor (varicap), tuning ratio, Φ, γ:** a reverse-biased junction used as a voltage-controlled
+  capacitor; the ratio of its capacitance at a low voltage to that at a high one; the contact
+  potential of the junction (0.7 V silicon, 1.3 V GaAs); the slope of log C against log (V + Φ).
+  **Abrupt, hyperabrupt:** the doping profiles, γ near 0.5 and about 2.
+- **Q, Tcc:** the quality factor 1 / (2π f RS C) of a capacitor with a series resistance; the
+  temperature coefficient of the capacitance in ppm per °C.
+- **Schottky diode, saturation current IS, video resistance RV:** a metal-semiconductor diode; the
+  current at the knee of its I-V law; the resistance the detected (video) voltage sees, 0.026 V /
+  (IS + IB), 0.026 V being kT / q. **Square-law:** a small-signal detector's output is proportional to
+  the input power.
+- **Step-recovery diode (SRD):** stores charge when forward biased and gives it back as a very
+  fast edge when the voltage reverses (the snap), so it makes harmonics. **Gunn, IMPATT, TRAPATT,
+  tunnel, point-contact:** microwave sources and detectors without a formula here.
+
+### Sources
+
+- **Skyworks Application Note 200312D, "Design With PIN Diodes" (October 2012; the PDF, all 19
+  pages read as text; pages 2 to 7 rendered and read as printed):** the PIN diode as a current-controlled
+  resistor; RS = W² / ((µn + µp) Q) with Q = IF τ (equation 2), valid above the transit-time frequency
+  f > 1300 / W² (MHz, µm) (3); CT = ε A / W (4); the series switch, loss 20 log(1 + RS / 2Z0) (9)
+  and isolation 10 log(1 + (4π f CT Z0)⁻²) (10); the shunt switch, loss 10 log(1 + (π f CT Z0)²) (18) and
+  isolation 20 log(1 + Z0 / 2RS) (19); 6 dB more isolation for a multi-throw switch; the on-state
+  dissipation 4 RS Z0 / (2 Z0 + RS)² PAV for a series diode (11) and 4 RS Z0 / (Z0 + 2 RS)² PAV for a shunt
+  one (20), for a perfectly matched line; the attenuation of series and shunt PIN attenuators (31, 32),
+  the same equations; more than 40 dB from one diode is hard.
+- **Skyworks SMP1320 data sheet (200047 Rev. E, February 2006; read):** 0.3 pF typical at 30 V; 2 Ω
+  typical at 1 mA and 0.9 Ω at 10 mA at 100 MHz; I region 8 µm; carrier lifetime 0.4 µs; and the
+  table of RS against current and temperature at 500 MHz, whose 25 °C column the tool uses.
+- **Skyworks Application Note 200480 Rev. C, "PIN Limiter Diodes in Receiver Protectors" (read):**
+  RS = k IF^−α + RSAT with 0.84 < α < 0.9; the limiter as a power-controlled resistor (under 0.5 dB of
+  loss at small signal), 20 to 30 dB a stage, thresholds of 7 to 10 dBm (1 µm I layer) to 20 to 23 dBm
+  (7 to 10 µm); gold doping for a short lifetime.
+- **Skyworks Application Note 200824 Rev. A, "Varactor Diodes" (read; pages 3 and 5 rendered):**
+  C = C0 / (V / Φ + 1)^0.47 with γ 0.5 for an ideal abrupt junction and 0.47 for a practical one, Φ 0.7 V
+  (Si) and 1.3 V (GaAs), hyperabrupt junctions not fitted by one γ (a curve-fit model is advised);
+  Tcc = K γ / (V + Φ) ppm per °C with K = 2300 (abrupt) and 1700 (hyperabrupt); Q = 1 / (2π f RS C), Q(f1)
+  = Q(f2) f2 / f1, and the limits fmax = Qref fref / 10 for a VCO and / 100 for a tunable filter; Q
+  varying as T^−3/2; the package model with CP and LP.
+- **Irwin Carroll, "Variable-Capacitance Diodes", Electronics World, July 1969 (the RF Cafe copy,
+  read):** the same law with Φ about 0.6 V and γ about 0.45 for an abrupt junction and γ about 2 for a
+  hyperabrupt one; the rating C4 / C60 = 3; tuning ratios of 4:1 (diffused), 5:1 (alloy) and 20:1 and
+  more (hyperabrupt); Φ changing by 1.5 to 2.7 mV per °C; step-recovery diodes up to the 25th harmonic,
+  about 30 % efficient at ×8 and 10 % at ×25.
+- **Hewlett-Packard Application Note 988, "All Schottky Diodes are Zero Bias Detectors" (1982; the PDF
+  from a copy on hpmemoryproject.org, read; equations rendered) and Application Note 956-5, "Dynamic Range
+  Extension of Schottky Detectors" (1975; read):** the detector as a video source RV feeding RL,
+  RV = 0.026 / (IS + IB); the basic voltage sensitivity 0.020 RV, degraded to 0.02 RV / (1 + ω² C² RS RV) by the
+  parasitics and by RL / (RL + RV); the matching bandwidth Δf = 1 / (2 R C ln(1 / |ρ|)); the 5082-2755:
+  IS about 6.2 × 10⁻¹⁰ A, 42 MΩ at zero bias and 1300 Ω with 20 µA, RS 16 Ω, C 0.1 pF; small-signal
+  detectors are square-law, a bias current lowers the sensitivity but widens the square-law range.
+- **Electronics Notes, "Diode Types" (read):** the families without a formula here: Gunn, IMPATT (about
+  3 to 100 GHz and more, ten watts and more), TRAPATT, tunnel, point-contact, backward and BARITT diodes,
+  and the Schottky forward drop of 0.15 to 0.4 V against 0.6 V for silicon. **HP Application Note 920,
+  "Harmonic Generation Using Step Recovery Diodes" (a poor scan; read in part):** the step-recovery diode as a
+  charge-controlled switch, for multipliers and combs.
+- **Not read:** the data sheets of any varactor or Schottky part, HP Application Notes 969 and 923 (scans), Skyworks'
+  notes APN1003, APN1011 and APN1014 (not found in a form I could download), and the Gunn and IMPATT literature. A first copy of AN 988
+  at mikrocontroller.net and the dtsheet.com copy of APN1014 were refused (403), and an HSMS-286x data sheet page at elcodis.com failed its
+  certificate check; all were left alone.
+
+### Why the formulas are these
+
+**The PIN switch.** A source and a load of Z0 each, with a resistance RS in series, give the load Z0 / (2 Z0 + RS)
+of the source voltage instead of 1/2: the loss is 20 log(1 + RS / 2Z0) (Skyworks 9; the divider is derived here
+and reproduces it). Off, the diode is the capacitor CT whose reactance 1 / (2π f CT) takes the place of RS: the isolation is
+10 log(1 + (1 / (4π f CT Z0))²) (10). Across the line the roles swap: the capacitance in parallel with the line
+costs 10 log(1 + (π f CT Z0)²) (18) and the forward resistance shorts it, 20 log(1 + Z0 / 2RS) (19). A
+series diode and a shunt diode of the same RS = 50 Ω in 50 Ω both give 20 log(1.5) = 3.52 dB, which is why the
+attenuator equations (31, 32) are the same ones. The dissipation of the diode in the on state is the share of
+the available power the diode's resistance takes, 4 RS Z0 / (2 Z0 + RS)² for a series diode (and the shunt
+equivalent); both are for a matched line, as the note says.
+
+**RS from the SMP1320 table.** The data sheet gives RS at 500 MHz for eight currents from 0.02 to 100 mA at 25 °C. Between
+two rows the tool draws a straight line on log-log paper (derived; RS falls roughly as a power of the current, the
+α of the limiter note, 0.84 to 0.9 for its diodes; the table's own slope goes from 0.8 at the lowest currents to 0.2 at the
+highest as the bulk resistance takes over), so 1 mA gives 1.9 Ω and 10 mA 0.76 Ω as printed. The headline figures are for 100 MHz (2 Ω and
+0.9 Ω max): RS depends a little on frequency, which the tool ignores.
+
+**The varactor.** C = C0 / (V / Φ + 1)^γ is the junction capacitance of a depletion layer that widens with the
+reverse voltage; γ 0.5 is the ideal abrupt junction (Skyworks) and 0.45 is the 1969 article's typical value. The
+tuning ratio is C(V1) / C(V2). Q = 1 / (2π f RS C) (Skyworks, Carroll's equation 2); the highest frequencies are
+the manufacturer's empirical rules, Q f / 10 and Q f / 100. The drift Tcc = K γ / (V + Φ) is C's dependence on
+Φ: from C ∝ (V + Φ)^−γ and a Φ that falls about 2.3 mV per °C, (1 / C) dC/dT = γ · 2.3 mV / (V + Φ), which is the
+note's K = 2300 (ppm V per °C) and agrees with the article's 1.5 to 2.7 mV per °C. The resonance is
+1 / (2π √(L (CJ + CP))).
+
+**The detector.** The diode equation I = IS (e^((V − I RS) / 0.026) − 1) has the small-signal resistance
+0.026 / (IS + IB) at the operating point (AN 988), the video resistance, and a current sensitivity of about 20 A/W, so the
+voltage sensitivity 0.02 RV in mV per µW. Its parasitics divide it by 1 + ω² C² RS RV and the load by RL / (RL + RV).
+The output for a small power is the sensitivity times the power. The bandwidth 1 / (2 RV C ln 2) is the note's
+Bode formula with |ρ| = 0.5 and the video resistance as R.
+
+### Assumptions and limits
+
+- **Ideal diodes in a perfect line.** The PIN equations are for a purely resistive RS and a purely capacitive CT,
+  without the package inductance (under about 1 nH, which limits the isolation of a shunt diode at higher
+  frequencies) or the board; the note says more than 40 dB is hard from one diode and that a faulty switch is
+  usually the circuit, not the diode. The 6 dB for a multi-throw switch is stated in the tool's text, not added. CT is the
+  data sheet's at 30 V; at zero bias it is higher. RS is the 500 MHz table's at any frequency, and the 25 °C column.
+- **Switching speed, distortion and the large-signal conditions** (the note's equations 1, 5, 6, the speed
+  table, the thermal model) are not computed.
+- **The varactor's γ is one number.** For hyperabrupt junctions the slope changes with the bias (Skyworks), so the
+  ratio and the capacitances are approximate; the manufacturer's C-V curve is better. RS is one value for both
+  voltages though it falls as the bias rises, so Q at the low voltage is pessimistic. The empirical frequency limits and K
+  are the rules of the notes. Leakage and breakdown (the reverse voltage should stay at least 5 V under
+  breakdown) are not checked.
+- **The detector is small-signal and matched.** The sensitivity assumes the diode is matched to the source (AN 988
+  says matching its high impedance to 50 Ω is the limit of bandwidth), the thermal constant is 0.026 V for
+  an ideality factor of 1, the temperature dependence (RS proportional to T, IS exponential) is not in it, and the output
+  stops being proportional to the power at the compression point (AN 956-5). The 5082-2755 is discontinued.
+- **The Types texts are summaries** of the notes above; the ranges quoted (3 to 100 GHz, thresholds, harmonic
+  limits) are theirs and vary with the part.
+- **Display.** Three figures; dB, W, mW or µW as the size asks.
+
+### How it was checked
+
+125 cases, the expected values from a Python implementation written from the formulas above (every
+figure and every label of the drawings; the types table and the notes read out of the tool; the SMP1320
+table and the doping choices compared with a second typing):
+- Types: all ten families, the opening pill, the picker and the remembered family;
+- PIN: the default, the SMP1320 at 14 currents from 0.02 to 100 mA, 15 other settings (frequencies from 10 MHz to
+  2 GHz, 25 and 75 Ω, powers from 1 mW to 25 W, RS and CT other values), the return to typed values, the picker,
+  eight refusals;
+- Varactor: the default, the four dopings, γ typed, 16 other settings (the 1969 C4 / C60, equal and reversed voltages,
+  GaAs, other frequencies and tank inductances), nine refusals;
+- Schottky: the default, the 5082-2755 picker, zero bias into 10 GΩ, 17 other settings, the return to typed values, the
+  picker, seven refusals and the remembered pill;
+- the nine examples and the formula-search card.
+
+540 more cases (three batches of 180: random currents, frequencies, impedances, powers, capacitances,
+voltages, potentials, γ, inductances, saturation and bias currents, loads) compared every figure and label with the
+Python implementation; they were run and not kept.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| RS of the SMP1320 | SMP1320 data sheet | 1.9 Ω at 1 mA and 0.76 Ω at 10 mA (the table) | 1.9 Ω and 0.76 Ω |
+| Transit-time frequency, 8 µm | Skyworks 200312D (3) | 1300 / W² MHz | 20.3 MHz (the data sheet's range starts at 10 MHz) |
+| Video resistance of the 5082-2755 | HP AN 988 | 42 MΩ at zero bias, 1300 Ω at 20 µA | 41.9 MΩ and 1.3 kΩ |
+| Its sensitivity at zero bias, 10 GHz | HP AN 988 | above 30 mV/µW measured | 31.5 mV/µW |
+| Matching bandwidth, 0.1 pF, 3 × 10⁷ Ω, |ρ| = 0.5 | HP AN 988 | 240 kHz | 240 kHz (IS 0.867 nA, no bias, so RV = 3 × 10⁷ Ω) |
+| Tuning ratio, Φ 0.6 V, γ 0.45, 4 V to 60 V | Electronics World 1969 | a typical rating C4 / C60 = 3 | 3.19 |
+| Series or shunt PIN, 50 Ω in 50 Ω | Skyworks 200312D (31, 32) | the same equation for both | 3.52 dB both |
 
 [↑ Index](#index)
 

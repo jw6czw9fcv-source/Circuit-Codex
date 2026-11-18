@@ -404,6 +404,12 @@ const FORMULAS = [
     note: "The period, bandwidth, capacitance and tuning coil of a SAW filter's transducers, the echoes between two of them, the drift with temperature, and the equivalent circuit of a SAW resonator. From IEC 60862-2 (the standard's text and tables, read) with the COMSOL and arXiv notes on the Butterworth-Van Dyke circuit; the loss of tuned transducers, the coil and the load resonance are derived.",
   },
   {
+    tool: "RF diode types",
+    domain: "rf",
+    formulas: ["IL = 20 log(1 + RS / 2Z0), series", "Iso = 20 log(1 + Z0 / 2RS), shunt", "IL = 10 log(1 + (π f C Z0)²), shunt", "C = C0 / (V/Φ + 1)^γ", "Q = 1 / (2π f RS C)", "Tcc = K γ / (V + Φ)", "RV = 0.026 / (IS + IB)", "γ = 0.02 RV / (1 + ω²C²RS RV)"],
+    note: "What the diodes of RF work do, and the numbers of three: a PIN diode as a switch or attenuator, a varactor as a tuning capacitor, a Schottky diode as a detector. From Skyworks' notes on PIN and varactor diodes and HP's on Schottky detectors (equations read on the printed pages), with the 1969 Electronics World article; the families without a formula are described from Electronics Notes.",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],

@@ -681,6 +681,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "balun") return renderBalun(domain, tool, favId);
   if (calcId === "cm-choke") return renderCmChoke(domain, tool, favId);
   if (calcId === "saw-filter") return renderSawFilter(domain, tool, favId);
+  if (calcId === "rf-diodes") return renderRfDiodes(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -19587,6 +19588,341 @@ function renderSawFilter(domain, tool, favId) {
     const pick = (attr, name) => { const el = app.querySelector(`select[${attr}]`); if (el) el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); paint(); }; };
     pick("data-sub", "sub");
     pick("data-known", "known");
+  }
+
+  paint();
+}
+
+// ---------- RF diode types ----------
+// The diodes of RF work and what they do: a reference of the families, and the numbers of the three whose behaviour is a formula, the PIN diode as a switch or attenuator, the varactor as a
+// tuning capacitor and the Schottky diode as a detector. Sources, as read this session:
+//  - Skyworks Application Note 200312D, "Design With PIN Diodes" (October 2012; the PDF, all 19 pages as text, pages 2 to 7 rendered): the PIN diode is a current-controlled resistor at RF,
+//    RS = W^2 / ((un + up) Q) with Q = IF tau (equation 2), valid above the transit-time frequency 1300 / W^2 (MHz, um) (3), CT = e A / W (4); the series switch IL = 20 log(1 + RS / 2 Z0) (9),
+//    Iso = 10 log(1 + (4 pi f CT Z0)^-2) (10); the shunt switch IL = 10 log(1 + (pi f CT Z0)^2) (18), Iso = 20 log(1 + Z0 / 2 RS) (19); 6 dB more isolation for a multi-throw switch; the
+//    dissipation of an on-state diode 4 RS Z0 / (2 Z0 + RS)^2 PAV in a series switch (11) and 4 RS Z0 / (Z0 + 2 RS)^2 PAV in a shunt one (20); the attenuation of a series or shunt PIN
+//    attenuator (31, 32) is the same pair of equations.
+//  - Skyworks Application Note 200480 Rev. C, "PIN Limiter Diodes in Receiver Protectors" (the PDF, 12 pages, read): RS = k IF^-alpha + RSAT with 0.84 < alpha < 0.9, a limiter diode as a
+//    power-controlled resistor, a single stage 20 to 30 dB, thresholds from 7 to 10 dBm (1 um I layer) to 20 to 23 dBm (7 to 10 um).
+//  - Skyworks SMP1320 data sheet (200047 Rev. E, February 2006; read): 0.3 pF typical at 30 V, 2 ohm at 1 mA and 0.9 ohm at 10 mA at 100 MHz, 8 um I region, 0.4 us lifetime, and the
+//    table of RS against current and temperature at 500 MHz (the 25 C column is the table of the tool).
+//  - Skyworks Application Note 200824 Rev. A, "Varactor Diodes" (the PDF, 6 pages, read; pages 3 and 5 rendered): C = C0 / (V / phi + 1)^0.47, gamma 0.5 ideal and 0.47 practical for an abrupt
+//    junction, phi 0.7 V (silicon) and 1.3 V (GaAs), hyperabrupt junctions not described by one gamma; Tcc = K gamma / (V + phi) ppm per degree with K 2300 (abrupt) and 1700 (hyperabrupt); Q = 1 /
+//    (2 pi f RS C), Q(f1) = Q(f2) f2 / f1, fmax = Qref fref / 10 for a VCO and / 100 for a tunable filter, Q falling as T^-3/2; the package model with CP and LP.
+//  - Irwin Carroll, "Variable-Capacitance Diodes", Electronics World, July 1969 (read): the same C-V law with phi about 0.6 V and gamma about 0.45 for an abrupt junction, gamma about 2 for a
+//    hyperabrupt one; C4 / C60 = 3 as a typical rating; step-recovery varactors give useful power up to the 25th harmonic, efficiency about 30 % at x8 and 10 % at x25.
+//  - Hewlett-Packard Application Notes 988 (1982) and 956-5 (1975) (read; AN 988's equations rendered): a detector diode is a video source of resistance RV feeding the load RL, RV = 0.026 /
+//    (IS + IB), voltage sensitivity 0.02 RV / (1 + w^2 C^2 RS RV) times RL / (RL + RV) (mV per uW), the matching bandwidth df = 1 / (2 R C ln(1 / rho)); the 5082-2755 has IS 6.2e-10 A (42 Mohm
+//    at zero bias, 1300 ohm at 20 uA), RS 16 ohm and C 0.1 pF; small-signal detectors are square-law.
+//  - Electronics Notes, "Diode Types" (read), and HP Application Note 920 (a poor scan; read in part): the families that have no formula here (Gunn, IMPATT, TRAPATT, tunnel, point contact,
+//    step-recovery).
+//  Not read: the data sheets of any varactor or Schottky part, AN 969 and AN 923 (scans), Skyworks' switch and attenuator notes APN1003 and APN1011 (the dtsheet.com copies refused), the
+//  Gunn and IMPATT literature. Derived here: the series-resistance interpolation (log-log between the table's rows) and the Q and tuning-range arithmetic.
+const RFD_MODES = { types: "Types", pin: "PIN", var: "Varactor", sch: "Schottky" };
+// id, name, what it is, control, acts as, used for, the parameter that matters, range, calculator, note
+const RFD_TYPES = [
+  ["pin", "PIN diode", "a current-controlled resistor at RF", "bias current", "resistor", "switches", "RS forward, CT reverse", "above 1300 / W² MHz (W in µm)", "the PIN pill",
+    "A thick undoped I layer sits between the P and N layers. Forward current fills it with charge and the diode becomes a resistor RS that falls as the current rises; at zero or reverse bias it is a small capacitor CT. A small DC current controls a large RF signal: switches, attenuators, transmit/receive switches. A thick I layer takes more RF voltage and distorts less; a thin one switches faster."],
+  ["limiter", "PIN limiter diode", "a resistor set by the RF power", "the RF power", "resistor", "protection", "I layer thickness sets the threshold", "one stage 20 to 30 dB; 7 to 23 dBm", "none",
+    "In a receiver protector the diode sits across the line. A small signal leaves it a high impedance (under 0.5 dB of loss); a large one drives carriers into the I layer, the impedance falls and most of the power is reflected, not absorbed. The threshold goes with the I layer thickness, from 7 to 10 dBm for 1 µm to 20 to 23 dBm for 7 to 10 µm. Gold doping shortens the carrier lifetime, so the recovery."],
+  ["schottky", "Schottky diode", "a fast metal-semiconductor diode", "the signal", "detector", "detectors, mixers", "IS, RV = 0.026 / (IS + IB)", "drop 0.15 to 0.4 V (PN: 0.6 V)", "the Schottky pill",
+    "A metal-to-semiconductor contact: a lower forward drop than a PN diode and no stored charge to slow it, so it works at microwave frequencies. Used as a detector, a mixer and a clamp. Small signals give a square-law output, proportional to the power; large ones a peak (linear) output. Its video resistance RV and its saturation current IS decide the sensitivity."],
+  ["varactor", "Varactor diode", "a voltage-controlled capacitor", "reverse voltage", "capacitor", "tuning, VCOs", "C(V), γ, Q", "abrupt γ 0.47 to 0.5, hyperabrupt about 2", "the Varactor pill",
+    "Reverse-biased, no current flows and the depletion layer is the dielectric of a capacitor: more voltage widens it and lowers the capacitance. C = C0 / (V / Φ + 1)^γ with Φ the contact potential. Abrupt junctions have γ near 0.5 and tuning ratios to about 5:1, hyperabrupt ones (γ about 2) 10:1 and more. Q = 1 / (2π f RS C) limits the frequency."],
+  ["srd", "Step-recovery diode", "a charge-controlled switch", "forward charge", "switch", "multipliers", "transition time", "up to about the 25th harmonic", "none",
+    "Forward bias stores charge; when the voltage reverses the stored charge flows back as a burst of reverse current that stops abruptly (the snap), a very fast edge rich in harmonics. It makes high-order multipliers and combs, from crystal-controlled frequencies into the microwave range; the efficiency falls with the order, about 30 % at x8 and 10 % at x25."],
+  ["gunn", "Gunn diode", "a transferred-electron device", "DC voltage", "oscillator", "microwave sources", "no PN junction", "microwave and above", "none",
+    "Not a PN junction diode at all: it uses the Gunn effect, a two-terminal bulk semiconductor device that generates microwave signals and can also amplify (transferred-electron amplifier)."],
+  ["impatt", "IMPATT diode", "an avalanche transit-time source", "DC bias", "oscillator", "microwave power", "power", "about 3 to 100 GHz and more; 10 W and more", "none",
+    "A microwave signal generator working on avalanche ionisation and transit time. Its power is much higher than a Gunn diode's, often ten watts and more; it is less used now."],
+  ["trapatt", "TRAPATT diode", "of the IMPATT family", "DC bias", "oscillator", "microwave power", "noise", "lower noise, lower frequency than IMPATT", "none",
+    "Belongs to the IMPATT family; offers lower noise but does not reach such high frequencies."],
+  ["tunnel", "Tunnel diode", "a negative-resistance diode", "DC voltage", "negative R", "oscillators", "the negative-resistance region", "microwave; little used now", "none",
+    "Over part of its voltage range the current falls as the voltage rises, a negative resistance, which makes microwave oscillators and amplifiers. Not widely used today; the backward diode is a variant."],
+  ["point", "Point-contact diode", "a wire on a crystal", "the signal", "detector", "cheap detectors", "very low capacitance", "performance not repeatable", "none",
+    "The oldest form: a sharp metal point on a semiconductor. Very low capacitance, so good at RF, and cheap, but not repeatable from one to the next."],
+];
+// Skyworks SMP1320 series: capacitance at 30 V (pF), I region width (um), and RS (ohm) against forward current (mA) at 500 MHz and 25 C from its table
+const RFD_SMP = { ct: 0.3, w: 8, rs: [[0.02, 30.8], [0.1, 8.3], [0.3, 3.8], [0.5, 2.8], [1, 1.9], [10, 0.76], [20, 0.64], [100, 0.47]] };
+// HP 5082-2755 detector diode, AN 988: IS (nA), RS (ohm), junction capacitance (pF)
+const RFD_HP = { is: 0.62, rs: 16, cj: 0.1 };
+// doping: name, gamma, K (ppm V per degree)
+const RFD_DOP = { abrupt: ["Abrupt, γ 0.47", 0.47, 2300], ideal: ["Ideal abrupt, γ 0.5", 0.5, 2300], hyper: ["Hyperabrupt, γ about 2", 2, 1700], typed: ["Typed γ", NaN, 2300] };
+const RFD_NOTE = {
+  pin: "A PIN diode in a 50 Ω line. As a series switch it passes the signal when forward biased (loss from RS) and blocks it at zero or reverse bias, where it is the capacitor CT (isolation). As a shunt switch it is the opposite: forward biased it shorts the line (isolation from RS), reverse biased it only adds CT (loss). Add 6 dB of isolation for a multi-throw switch. The same two equations are the attenuation of a PIN attenuator whose diode is set to the resistance RS.",
+  var: "A varactor's capacitance falls as the reverse voltage rises; the ratio of the two capacitances is the tuning ratio. Q is for one series resistance RS, which really falls a little as the bias rises. The frequency limits are the empirical rules of the manufacturer: the VCO fails where Q falls to 10, a tunable filter where it falls to 100. Tcc is the drift of the capacitance with temperature.",
+  sch: "A Schottky detector is a video source: the diode's resistance RV, from its saturation current IS and the bias current IB, feeds the load RL, which takes RL / (RL + RV) of the voltage. The junction capacitance and the series resistance spoil the sensitivity at high frequency. A bias current lowers RV and so the sensitivity, but widens the square-law range. The output is for a small signal, where it follows the power.",
+};
+
+function renderRfDiodes(domain, tool, favId) {
+  const C = "rf-diodes";
+  const state = {
+    mode: pref(C, "mode", "types", Object.keys(RFD_MODES)),
+    ty: pref(C, "ty", "pin", RFD_TYPES.map((t) => t[0])),
+    ppart: "typed", dop: "abrupt", spart: "typed",
+    pz: 50, pf: 500, pr: 1.9, pc: 0.3, pi: 1, pp: 1,                          // PIN: ohm, MHz, ohm, pF, mA, W
+    vc: 10, vphi: 0.7, vg: 0.47, v1: 1, v2: 20, vr: 0.5, vf: 100, vl: 50, vp: 0.15, // Varactor: pF, V, -, V, V, ohm, MHz, nH, pF
+    si: 0.62, sb: 20, sl: 100, sc: 0.1, sr: 16, sf: 10, sp: 1,                // Schottky: nA, uA, kohm, pF, ohm, GHz, uW
+  };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const PI = Math.PI;
+  const hz = (f) => (f >= 1e9 ? `${n3(f / 1e9)} GHz` : f >= 1e6 ? `${n3(f / 1e6)} MHz` : f >= 1e3 ? `${n3(f / 1e3)} kHz` : `${n3(f)} Hz`);
+  const cap = (c) => (c >= 1e-6 ? `${n3(c * 1e6)} µF` : c >= 1e-9 ? `${n3(c * 1e9)} nF` : c >= 1e-12 ? `${n3(c * 1e12)} pF` : `${n3(c * 1e15)} fF`);
+  const ohm = (v) => (v >= 1e6 ? `${n3(v / 1e6)} MΩ` : v >= 1e3 ? `${n3(v / 1e3)} kΩ` : `${n3(v)} Ω`);
+  const pw = (p) => (p >= 1 ? `${n3(p)} W` : p >= 1e-3 ? `${n3(p * 1e3)} mW` : `${n3(p * 1e6)} µW`);
+  const db = (v) => `${n3(v)} dB`;
+  const type = () => RFD_TYPES.find((t) => t[0] === state.ty);
+
+  // ---------------- the numbers ----------------
+  // RS of the SMP1320 at a current: straight between the rows of the table on log-log paper.
+  const rsAt = (i) => {
+    const t = RFD_SMP.rs;
+    let k = 1;
+    while (k < t.length - 1 && i > t[k][0]) k++;
+    const [i0, r0] = t[k - 1], [i1, r1] = t[k];
+    return r0 * (r1 / r0) ** (Math.log(i / i0) / Math.log(i1 / i0));
+  };
+  function pin() {
+    const z0 = state.pz, f = state.pf * 1e6, rs = state.pr, c = state.pc * 1e-12;
+    return {
+      ilS: 20 * Math.log10(1 + rs / (2 * z0)), isoS: 10 * Math.log10(1 + (1 / (4 * PI * f * c * z0)) ** 2),
+      ilP: 10 * Math.log10(1 + (PI * f * c * z0) ** 2), isoP: 20 * Math.log10(1 + z0 / (2 * rs)),
+      pdS: ((4 * rs * z0) / (2 * z0 + rs) ** 2) * state.pp, pdP: ((4 * rs * z0) / (z0 + 2 * rs) ** 2) * state.pp,
+    };
+  }
+  function varactor() {
+    const g = state.vg, f = state.vf * 1e6, l = state.vl * 1e-9, cp = state.vp * 1e-12, K = RFD_DOP[state.dop][2];
+    const cj = (v) => (state.vc * 1e-12) / (v / state.vphi + 1) ** g;
+    const q = (v) => 1 / (2 * PI * f * state.vr * cj(v));
+    const tcc = (v) => (K * g) / (v + state.vphi);
+    const fr = (v) => 1 / (2 * PI * Math.sqrt(l * (cj(v) + cp)));
+    return { c1: cj(state.v1), c2: cj(state.v2), ratio: cj(state.v1) / cj(state.v2), q1: q(state.v1), q2: q(state.v2), t1: tcc(state.v1), t2: tcc(state.v2), f1: fr(state.v1), f2: fr(state.v2) };
+  }
+  function schottky() {
+    const rv = 0.026 / (state.si * 1e-9 + state.sb * 1e-6), w = 2 * PI * state.sf * 1e9, rl = state.sl * 1e3, c = state.sc * 1e-12;
+    const div = rl / (rl + rv), g = ((0.02 * rv) / (1 + w * w * c * c * state.sr * rv)) * div;
+    return { rv, div, g, out: g * state.sp, bw: 1 / (2 * rv * c * Math.log(2)) };
+  }
+
+  function problem() {
+    if (state.mode === "types") return "";
+    if (state.mode === "pin") {
+      if (!(state.pz > 0)) return "Enter the system impedance.";
+      if (!(state.pf > 0)) return "Enter the frequency.";
+      if (state.ppart !== "typed" && !(state.pi >= 0.02 && state.pi <= 100)) return "Enter a bias current from 0.02 to 100 mA.";
+      if (!(state.pr > 0)) return "Enter the series resistance.";
+      if (!(state.pc > 0)) return "Enter the capacitance.";
+      return state.pp > 0 ? "" : "Enter the power.";
+    }
+    if (state.mode === "var") {
+      if (!(state.vc > 0)) return "Enter the zero-bias capacitance.";
+      if (!(state.vphi > 0)) return "Enter the contact potential.";
+      if (!(state.vg > 0)) return "Enter γ.";
+      if (!(state.v1 >= 0 && state.v2 >= 0)) return "Enter the reverse voltages, 0 or more.";
+      if (!(state.vr > 0)) return "Enter the series resistance.";
+      if (!(state.vf > 0)) return "Enter the frequency.";
+      if (!(state.vl > 0)) return "Enter the inductance.";
+      return state.vp >= 0 ? "" : "Enter the package capacitance, 0 or more.";
+    }
+    if (!(state.si >= 0 && state.sb >= 0 && state.si + state.sb > 0)) return "Enter the saturation current or a bias current.";
+    if (!(state.sl > 0)) return "Enter the load resistance.";
+    if (!(state.sc > 0)) return "Enter the junction capacitance.";
+    if (!(state.sr >= 0)) return "Enter the series resistance, 0 or more.";
+    if (!(state.sf > 0)) return "Enter the frequency.";
+    return state.sp >= 0 ? "" : "Enter the input power, 0 or more.";
+  }
+
+  // ---------------- the drawings ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", WIRE = "#5A6169", GREY = "#8A9099";
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const w = (d, c = WIRE, sw = 1.8) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const dot = (x, y, c = WIRE) => `<circle cx="${x}" cy="${y}" r="2.3" fill="${c}"/>`;
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${WIRE}" stroke-width="1.6"/>`;
+  const gnd = (x, y) => w(`M${x} ${y} V${y + 3}`) + w(`M${x - 7} ${y + 3} H${x + 7} M${x - 4.5} ${y + 6} H${x + 4.5} M${x - 2} ${y + 9} H${x + 2}`);
+  const zigH = (x1, x2, y, c) => { let d = `M${x1} ${y}`; const n = 6, s = (x2 - x1) / n; for (let i = 0; i < n; i++) d += ` L${x1 + s * (i + 0.5)} ${y + (i % 2 ? 5 : -5)}`; return w(`${d} L${x2} ${y}`, c, 1.8); };
+  const zigV = (x, y1, y2, c) => { let d = `M${x} ${y1}`; const n = 6, s = (y2 - y1) / n; for (let i = 0; i < n; i++) d += ` L${x + (i % 2 ? 5 : -5)} ${y1 + s * (i + 0.5)}`; return w(`${d} L${x} ${y2}`, c, 1.8); };
+  const platesH = (x, y, c) => w(`M${x - 4} ${y - 8} V${y + 8} M${x + 4} ${y - 8} V${y + 8}`, c, 2.4);
+  const platesV = (x, y, c) => w(`M${x - 8} ${y - 4} H${x + 8} M${x - 8} ${y + 4} H${x + 8}`, c, 2.4);
+  const diodeR = (x, y, c = BLUE) => w(`M${x - 7} ${y - 8} V${y + 8} L${x + 7} ${y} Z`, c, 2) + w(`M${x + 7} ${y - 8} V${y + 8}`, c, 2);
+  const diodeD = (x, y, c = BLUE) => w(`M${x - 8} ${y - 7} H${x + 8} L${x} ${y + 7} Z`, c, 2) + w(`M${x - 8} ${y + 7} H${x + 8}`, c, 2);
+
+  function typesDrawing() {
+    const t = type();
+    return diodeR(150, 62) + w("M60 62 H143 M157 62 H240") + port(56, 62) + port(244, 62) + lbl("pt1", 150, 30, t[1], BLUE, "middle") + lbl("pt2", 150, 110, `${t[3]} → ${t[4]}`, GREEN, "middle");
+  }
+  // Two switches in a line of Z0: the diode in series, the diode across the line.
+  function pinDrawing() {
+    if (problem()) return "";
+    const k = pin();
+    let o = port(14, 34) + w("M17 34 H93") + diodeR(100, 34) + w("M107 34 H283") + port(286, 34);
+    o += lbl("pa", 150, 20, `series: ${n3(k.ilS)} dB on · ${n3(k.isoS)} dB off`, GREEN, "middle");
+    o += port(14, 84) + w("M17 84 H283") + port(286, 84) + dot(150, 84) + w("M150 84 V92") + diodeD(150, 99) + w("M150 106 V112") + gnd(150, 112);
+    o += lbl("pb", 150, 70, `shunt: ${n3(k.ilP)} dB on · ${n3(k.isoP)} dB off`, GREEN, "middle");
+    o += lbl("pg", 150, 136, `RS ${n3(state.pr)} Ω · CT ${n3(state.pc)} pF · Z0 ${n3(state.pz)} Ω`, BLUE, "middle");
+    return o;
+  }
+  // The package model of a varactor: the junction capacitance and the series resistance, with the package capacitance across them.
+  function varDrawing() {
+    if (problem()) return "";
+    const k = varactor();
+    let o = port(14, 68) + port(286, 68) + w("M17 68 H60 M240 68 H283") + w("M60 44 V92 M240 44 V92") + dot(60, 68) + dot(240, 68);
+    o += w("M60 44 H90") + zigH(90, 130, 44, BLUE) + w("M130 44 H160 M168 44 H240") + platesH(164, 44, GREEN);
+    o += w("M60 92 H146 M154 92 H240") + platesH(150, 92, BLUE);
+    o += lbl("prs", 110, 30, `RS ${n3(state.vr)} Ω`, BLUE, "middle") + lbl("pcj", 200, 30, `CJ ${cap(k.c1)} → ${cap(k.c2)}`, GREEN, "middle") + lbl("pcp", 150, 116, `CP ${n3(state.vp)} pF`, BLUE, "middle");
+    return o;
+  }
+  // The detector as a video source: the diode (with its junction capacitance and series resistance), the video resistance RV, the load.
+  function schDrawing() {
+    if (problem()) return "";
+    const k = schottky();
+    let o = port(14, 60) + w("M17 60 H30") + zigH(30, 62, 60, BLUE) + w("M62 60 H86") + diodeR(93, 60) + w("M100 60 H148") + dot(120, 60);
+    o += w("M120 60 V80") + platesV(120, 84, BLUE) + w("M120 88 V100") + gnd(120, 100);
+    o += zigH(148, 184, 60, GREEN) + w("M184 60 H249") + dot(228, 60) + port(252, 60);
+    o += w("M228 60 V74") + zigV(228, 74, 104, BLUE) + w("M228 104 V108") + gnd(228, 108);
+    o += lbl("psr", 46, 44, `RS ${n3(state.sr)} Ω`, BLUE, "middle") + lbl("psc", 132, 90, `Cj ${n3(state.sc)} pF`, BLUE) + lbl("psv", 166, 44, `RV ${ohm(k.rv)}`, GREEN, "middle") + lbl("psl", 238, 92, `RL ${ohm(state.sl * 1e3)}`, BLUE);
+    return o;
+  }
+  function diagram() {
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${{ types: typesDrawing, pin: pinDrawing, var: varDrawing, sch: schDrawing }[state.mode]()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, subline) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${subline}</div>
+        </div>`;
+  const body = (cells, rows, note) => `${grid(cells)}
+      <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${note}</div></div>`;
+
+  function typesHTML() {
+    const t = type();
+    const rows = row("Parameter that matters", t[6], "kp") + row("Range", t[7], "rg") + row("Calculator here", t[8], "ca");
+    return head("Diode", t[1], t[2]) + body([cell("Controlled by", t[3], "c1"), cell("Acts as", t[4], "c2"), cell("Used for", t[5], "c3")], rows, t[9]);
+  }
+  function pinHTML() {
+    const k = pin();
+    let rows = row("Dissipation, series diode on", `${pw(k.pdS)} of ${pw(state.pp)}`, "ds") + row("Dissipation, shunt diode on", `${pw(k.pdP)} of ${pw(state.pp)}`, "dp");
+    if (state.ppart !== "typed") rows += row("Transit-time limit", `${n3(1300 / RFD_SMP.w ** 2)} MHz (I region ${RFD_SMP.w} µm)`, "tt");
+    return head("Series switch, on", db(k.ilS), `RS ${n3(state.pr)} Ω in ${n3(state.pz)} Ω`)
+      + body([cell("Series, off", db(k.isoS), "c1"), cell("Shunt, on", db(k.ilP), "c2"), cell("Shunt, off", db(k.isoP), "c3")], rows, RFD_NOTE.pin);
+  }
+  function varHTML() {
+    const k = varactor(), K = RFD_DOP[state.dop][2];
+    const rows = row("Q", `${n3(k.q1)} at ${n3(state.v1)} V · ${n3(k.q2)} at ${n3(state.v2)} V`, "q") + row("Highest frequency, VCO · filter", `${hz(k.q2 * state.vf * 1e6 / 10)} · ${hz(k.q2 * state.vf * 1e6 / 100)}`, "fm")
+      + row("Drift Tcc", `${n3(k.t1)} · ${n3(k.t2)} ppm/°C (K ${K})`, "tc") + row(`Resonance with ${n3(state.vl)} nH and CP`, `${hz(k.f1)} to ${hz(k.f2)}`, "fr");
+    return head("Tuning ratio", n3(k.ratio), `${n3(state.v1)} V to ${n3(state.v2)} V`)
+      + body([cell(`C at ${n3(state.v1)} V`, cap(k.c1), "c1"), cell(`C at ${n3(state.v2)} V`, cap(k.c2), "c2"), cell("Q at the high end", n3(k.q2), "c3")], rows, RFD_NOTE.var);
+  }
+  function schHTML() {
+    const k = schottky();
+    const rows = row("Divider RL / (RL + RV)", `${n3(k.div * 100)} %`, "dv") + row(`Output for ${n3(state.sp)} µW`, `${n3(k.out)} mV`, "eo") + row("Match bandwidth, |ρ| = 0.5", hz(k.bw), "bw");
+    return head("Video resistance RV", ohm(k.rv), `0.026 V / (IS + IB) = ${n3(state.si)} nA + ${n3(state.sb)} µA`)
+      + body([cell("Sensitivity", `${n3(k.g)} mV/µW`, "c1"), cell("Without load", `${n3((0.02 * k.rv) / (1 + (2 * PI * state.sf * 1e9) ** 2 * (state.sc * 1e-12) ** 2 * state.sr * k.rv))} mV/µW`, "c2"), cell("At", `${n3(state.sf)} GHz`, "c3")], rows, RFD_NOTE.sch);
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    return { types: typesHTML, pin: pinHTML, var: varHTML, sch: schHTML }[state.mode]();
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "SMP1320 at 1 mA in 50 Ω", note: "RS 1.9 Ω: series 0.163 dB on, 20.6 dB off; shunt 0.00241 dB on, 23 dB off.",
+      apply: example({ mode: "pin", ppart: "smp1320", pf: 500, pz: 50, pp: 1, pi: 1, pr: 1.9000000000000001, pc: 0.3 }) },
+    { title: "SMP1320 at 10 mA", note: "RS 0.76 Ω (data sheet: 0.9 Ω at 100 MHz): 0.0658 dB on, 30.6 dB shunt isolation.",
+      apply: example({ mode: "pin", ppart: "smp1320", pf: 500, pz: 50, pp: 1, pi: 10, pr: 0.76, pc: 0.3 }) },
+    { title: "A PIN as an attenuator", note: "50 Ω in a 50 Ω line, in series or across it: 3.52 dB.",
+      apply: example({ mode: "pin", ppart: "typed", pf: 100, pz: 50, pp: 1, pr: 50, pc: 0.3 }) },
+    { title: "The 1969 C4 / C60 of 3", note: "Φ 0.6 V and γ 0.45, as the article: a ratio of 3.19 from 4 V to 60 V.",
+      apply: example({ mode: "var", dop: "typed", vphi: 0.6, vg: 0.45, v1: 4, v2: 60 }) },
+    { title: "A hyperabrupt varactor", note: "γ about 2 from 1 V to 8 V: a ratio of 26.2; Tcc 2000 ppm/°C at 1 V.",
+      apply: example({ mode: "var", dop: "hyper", vg: 2, v1: 1, v2: 8 }) },
+    { title: "5082-2755 at zero bias, 10 GHz", note: "41.9 MΩ of video resistance; into 10 GΩ the sensitivity is 31.5 mV/µW (AN 988: over 30).",
+      apply: example({ mode: "sch", spart: "hp", si: 0.62, sb: 0, sl: 10000000.0, sc: 0.1, sr: 16, sf: 10, sp: 1 }) },
+    { title: "The same with 20 µA and 100 kΩ", note: "RV falls to 1.3 kΩ; the sensitivity is 14.1 mV/µW and the load takes 98.7 %.",
+      apply: example({ mode: "sch", spart: "hp", si: 0.62, sb: 20, sl: 100, sc: 0.1, sr: 16, sf: 10, sp: 1 }) },
+    { title: "A PIN limiter diode", note: "A resistor set by the RF power: 20 to 30 dB a stage, thresholds from 7 to 23 dBm.",
+      apply: example({ mode: "types", ty: "limiter" }) },
+    { title: "A step-recovery diode", note: "A charge-controlled switch: harmonics up to about the 25th, 30 % efficient at ×8.",
+      apply: example({ mode: "types", ty: "srd" }) },
+  ]);
+
+  function paint() {
+    const fld = (name, key, val, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(val)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    let fields = "", heading = "";
+    if (state.mode === "types") {
+      heading = sel('class="label-select" data-ty', RFD_TYPES.map((t) => [t[0], t[1]]), state.ty);
+    } else if (state.mode === "pin") {
+      const part = state.ppart !== "typed";
+      fields = `<div class="field-pair">${fld("Frequency", "pf", state.pf, fixed("MHz"))}${fld("System", "pz", state.pz, fixed("Ω"))}${fld("Power", "pp", state.pp, fixed("W"))}</div>
+        <div class="field-pair">${fld("Series resistance RS", "pr", state.pr, fixed("Ω"))}${fld("Capacitance CT", "pc", state.pc, fixed("pF"))}${part ? fld("Bias current", "pi", state.pi, fixed("mA")) : ""}</div>`;
+      heading = sel('class="label-select" data-ppart', [["typed", "Diode: typed values"], ["smp1320", "Skyworks SMP1320 series"]], state.ppart);
+    } else if (state.mode === "var") {
+      fields = `<div class="field-pair">${fld("C at 0 V", "vc", state.vc, fixed("pF"))}${fld("Potential Φ", "vphi", state.vphi, fixed("V"))}${fld("γ", "vg", state.vg, "")}</div>
+        <div class="field-pair">${fld("Low voltage", "v1", state.v1, fixed("V"))}${fld("High voltage", "v2", state.v2, fixed("V"))}${fld("RS", "vr", state.vr, fixed("Ω"))}</div>
+        <div class="field-pair">${fld("Frequency", "vf", state.vf, fixed("MHz"))}${fld("Tank L", "vl", state.vl, fixed("nH"))}${fld("Package CP", "vp", state.vp, fixed("pF"))}</div>`;
+      heading = sel('class="label-select" data-dop', Object.entries(RFD_DOP).map(([k, v]) => [k, v[0]]), state.dop);
+    } else {
+      fields = `<div class="field-pair">${fld("Saturation IS", "si", state.si, fixed("nA"))}${fld("Bias IB", "sb", state.sb, fixed("µA"))}${fld("Load RL", "sl", state.sl, fixed("kΩ"))}</div>
+        <div class="field-pair">${fld("Junction Cj", "sc", state.sc, fixed("pF"))}${fld("RS", "sr", state.sr, fixed("Ω"))}${fld("Frequency", "sf", state.sf, fixed("GHz"))}</div>
+        <div class="field-pair">${fld("Input power", "sp", state.sp, fixed("µW"))}</div>`;
+      heading = sel('class="label-select" data-spart', [["typed", "Diode: typed values"], ["hp", "HP 5082-2755 (AN 988)"]], state.spart);
+    }
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Diode families, PIN, varactor, detector")}
+
+      ${pillRow(Object.entries(RFD_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${heading}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["IL = 20 log(1 + RS / 2Z0), series", "Iso = 20 log(1 + Z0 / 2RS), shunt", "IL = 10 log(1 + (π f C Z0)²), shunt", "C = C0 / (V/Φ + 1)^γ", "Q = 1 / (2π f RS C)", "Tcc = K γ / (V + Φ)", "RV = 0.026 / (IS + IB)", "γ = 0.02 RV / (1 + ω²C²RS RV)"],
+        "Diodes used at RF are built for one job. A PIN diode has a thick undoped layer: forward current fills it with charge and it becomes a resistor RS, so as a series switch (or attenuator) its loss is 20 log(1 + RS / 2Z0) when forward biased and its isolation comes from the capacitance CT when not, 10 log(1 + 1 / (4π f CT Z0)²); as a shunt switch the roles swap, loss 10 log(1 + (π f CT Z0)²) and isolation 20 log(1 + Z0 / 2RS). A varactor is a reverse-biased junction whose depletion layer is the dielectric of a capacitor: C = C0 / (V / Φ + 1)^γ, with γ about 0.5 for an abrupt junction and about 2 for a hyperabrupt one; its Q is 1 / (2π f RS C), and its capacitance drifts with temperature by Tcc = K γ / (V + Φ) ppm per °C, with K 2300 for an abrupt junction and 1700 for a hyperabrupt one. A Schottky detector is a video source of resistance RV = 0.026 / (IS + IB), where 0.026 V is kT / q; its voltage sensitivity is 0.02 RV / (1 + ω²C²RS RV) in mV per µW, less the divider RL / (RL + RV) with its load. Step-recovery diodes make harmonics, and Gunn, IMPATT, TRAPATT and tunnel diodes are microwave sources; they have no formula here."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const num = (key, apply) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el) el.oninput = () => { apply(parseFloat(el.value)); show(); }; };
+    const typedPart = () => { state.ppart = "typed"; const s = app.querySelector("select[data-ppart]"); if (s) s.value = "typed"; };
+    const typedSch = () => { state.spart = "typed"; const s = app.querySelector("select[data-spart]"); if (s) s.value = "typed"; };
+    ["pf", "pz", "pp", "pc", "vc", "vphi", "v1", "v2", "vr", "vf", "vl", "vp", "sl", "sf", "sp"].forEach((k) => num(k, (v) => { state[k] = v; }));
+    num("pr", (v) => { state.pr = v; typedPart(); });
+    num("pi", (v) => { state.pi = v; if (v >= 0.02 && v <= 100) state.pr = rsAt(v); });
+    num("vg", (v) => { state.vg = v; state.dop = "typed"; const s = app.querySelector("select[data-dop]"); if (s) s.value = "typed"; });
+    num("si", (v) => { state.si = v; typedSch(); });
+    num("sb", (v) => { state.sb = v; });
+    num("sc", (v) => { state.sc = v; typedSch(); });
+    num("sr", (v) => { state.sr = v; typedSch(); });
+    const pick = (attr, apply) => { const el = app.querySelector(`select[${attr}]`); if (el) el.onchange = () => { apply(el.value); paint(); }; };
+    pick("data-ty", (v) => { state.ty = v; setPref(C, "ty", v); });
+    pick("data-ppart", (v) => { state.ppart = v; if (v !== "typed") { state.pc = RFD_SMP.ct; state.pr = rsAt(state.pi); } });
+    pick("data-dop", (v) => { state.dop = v; if (RFD_DOP[v][1] > 0) state.vg = RFD_DOP[v][1]; });
+    pick("data-spart", (v) => { state.spart = v; if (v === "hp") { state.si = RFD_HP.is; state.sr = RFD_HP.rs; state.sc = RFD_HP.cj; } });
   }
 
   paint();
