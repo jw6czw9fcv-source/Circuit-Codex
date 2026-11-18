@@ -111,6 +111,7 @@ will key on, since that is the id the app already holds for each tool.
 - Mixing & conversion → [Image frequency](#image-frequency)
 - Reference → [Microwave bands](#microwave-bands)
 - Reference → [Amateur radio bands](#amateur-bands)
+- RF components → [Common mode choke](#cm-choke)
 - RF components → [Balun](#balun)
 
 ### Power electronics
@@ -14590,6 +14591,213 @@ Published answers reproduced:
 | 2 m, US | 47 CFR 97.301(a) | 144 to 148 MHz (Region 2), 97.303 (a), (k) | 144 to 148 MHz, (a), (k) |
 | 60 m channels, US | 47 CFR 97.303(h)(3) | centre 5332, 5348, 5373, 5405 kHz, 2.8 kHz | the four channels, 2.8 kHz |
 | 4 mm, Canada | RBR-4 items 32 to 35 | 76 to 77.5 *, 77.5 to 78 -, 78 to 81 *, 81 to 81.5 5.561A | the four segments: secondary, none, secondary, 5.561A |
+
+[↑ Index](#index)
+
+---
+
+<a id="cm-choke"></a>
+## Common mode choke
+
+`calc: cm-choke` · RF & microwave › RF components
+
+### What it computes
+
+A common-mode choke is two identical windings on one core. A current that goes in on one
+line and comes back on the other (the wanted, differential one) makes opposite fluxes
+that cancel; a current that goes the same way in both (common mode, the noise that
+leaks to earth) makes fluxes that add and meets the whole inductance. The tool does two
+jobs with one. Two pills:
+
+- **Filter:** the capacitors that go with the choke in a mains EMC filter, by the procedure
+  of Schaffner's application note. The inputs, three to a row: the frequency of the
+  noise to be cut (kHz), the limit and the safety margin (dBµV, dB); the common-mode and
+  the differential-mode noise at that frequency (dBµV) and the rated voltage (V); the
+  choke's nominal inductance LN and stray inductance LS per path (mH, µH) and the rated
+  frequency (Hz). The picker in the Output heading fills LN and LS from one of
+  Schaffner's 24 RB chokes (typing either goes back to "typed values"). The big result
+  is the Y-capacitor of each line; in three cells the X-capacitor, the differential
+  corner frequency and the leakage current of the Y-capacitor. Rows: the attenuation
+  needed in each mode (noise − limit + margin); the next E6 value above each capacitor
+  with the attenuation it gives at the frequency (and, for the Y-capacitor, its leakage
+  current); and, for a listed choke, its current rating and its saturation limits as the
+  note prints them. A mode whose noise is already under the limit needs no capacitor.
+  The drawing is the filter: the choke's two windings on one core (blue), the
+  X-capacitor across the lines and a Y-capacitor from each line to earth (green).
+- **Choke:** the choke alone. The inductance (mH), the winding capacitance in parallel
+  with it (pF, 0 for none), the frequency (kHz or MHz) and the resistance of the source and
+  load together (Ω). The big result is the impedance at the frequency; in three cells the
+  resonance, the ideal impedance ωL and the attenuation the impedance makes between
+  that source and load. It says whether the choke is inductive or capacitive there. The
+  drawing is the inductor with its capacitance in parallel.
+
+- **Units:** kHz and MHz for the Choke pill's frequency; the other numbers have a fixed
+  unit.
+- **Remembered:** the pill and the Choke pill's frequency unit.
+
+Examples: Schaffner's 1.6 kW converter, the 3 mH choke RB8522-16-3M0, the same on 120 V and
+60 Hz, a common mode already under the limit, a measured choke (19.6 mH, 45.9 pF) and 1 mH
+at 1 MHz.
+
+### Terms
+
+- **Common mode, differential mode:** common-mode noise is the same on both lines and
+  returns through earth; differential-mode noise is opposite on the two lines, like the
+  wanted signal.
+- **Nominal inductance LN:** the inductance of one winding path, tested by Schaffner at
+  1 kHz; the choke's inductance for common mode. **Stray inductance LS:** the part of the
+  flux the two windings do not share, the choke's inductance for differential mode; about
+  1 % of LN (0.6 to 1.1 % in the table below).
+- **X-capacitor, Y-capacitor:** a capacitor across the two lines (X) holds back
+  differential noise; one from each line to earth (Y) holds back common-mode noise and
+  lets a leakage current flow to earth at the mains frequency, which the safety standards
+  limit. **PE:** protective earth.
+- **Conducted emissions, quasi-peak limit:** the noise a device puts on its mains cable,
+  limited from 150 kHz (9 kHz for some products) by standards such as IEC/EN 61000-6-3;
+  the quasi-peak (QP) is the detector the limit is written for. **dBµV:** decibels above
+  one microvolt.
+- **Harmonic; corner frequency:** the filter is designed at the first harmonic of the
+  switching frequency above 150 kHz (the 9th of 20 kHz is 180 kHz). A second-order LC
+  low-pass passes everything below its corner frequency fc and attenuates 40 dB per decade
+  above it, A = 40 log(f / fc).
+- **Saturation; ICM max, IDM max:** a core saturates when too much flux drives it.
+  Schaffner gives, per choke, the largest current through one winding that does not
+  (ICM max, common mode) and the largest peak current back and forth through both
+  (IDM max, differential).
+- **Winding capacitance, self-resonant frequency (SRF):** the capacitance between the
+  turns, in parallel with the inductance; at 1 / (2π√(LC)) the pair resonates and the
+  impedance peaks, below it the choke is inductive, above it capacitive.
+- **E6:** the series of preferred values 1.0, 1.5, 2.2, 3.3, 4.7, 6.8 (and ×10).
+- **Bifilar, sectional winding:** the two wires wound side by side (low leakage
+  inductance, for signal lines) or in separate sections (more separation for high
+  voltage, higher leakage inductance) (Arar, from Würth's figure).
+
+### Sources
+
+- **Schaffner, "EMC/EMI Filter Design with RB Common-Mode Chokes", application note
+  (07/2013; the PDF, from simpex.ch, read):** the choke and its windings; LN tested at
+  1 kHz and the stray LS (about 1 % of LN); CM noise held back by LN and the Y-capacitors,
+  DM noise by LS and the X-capacitor; the saturation limits ICM max and IDM max; Z = ωL (equation
+  2) and the resonance 1 / (2π√(L CWI)) (equation 3), for a copper resistance under 10 Ω and
+  an iron loss over 1 MΩ; the design example (1.6 kW half-bridge on 115 V AC, 20 kHz,
+  IEC/EN 61000-6-3, the QP limit of 65 dBµV at the 9th harmonic, 180 kHz, a margin of 3 dB):
+  A = An − LQP + m (equation 6), A = 40 log(f / fc), fc = f · 10^(−A/40) (7),
+  fc,DM = 1 / (2π√(2 LS CX)), fc,CM = 1 / (2π√(2 LN CY)) and C = 1 / (8π² L fc²) (8),
+  Ilk = 2π fR UR CY (9), with its numbers; the table of 24 RB chokes. **Equations 7 to 9
+  are pictures in the PDF whose text came out in pieces: I put them together and
+  checked them against every number the example prints, to the digit.**
+- **Dr. Steve Arar, All About Circuits, "Common-Mode Chokes: From Working Principles to
+  Important Performance Parameters" (5 May 2024; the page, read):** fluxes cancel for a
+  differential current and add for a common-mode one, so the core does not saturate on the
+  wanted current; Zdm = jωL − jωM + R, about R, and Zcm = jωL + jωM + R, about jω 2L for
+  each winding when L = M; the winding capacitance makes a parallel resonance, inductive
+  below it and capacitive above; bifilar and sectional windings.
+- **Omicron Lab, Bode 500 application note "Modeling Multi-Resonance Common-Mode Chokes"
+  (the PDF, read):** the common-mode impedance of a choke is measured with terminals 1 and 3
+  joined and 2 and 4 joined (the two windings in parallel), the differential one by
+  exciting between 1 and 3 with 2 and 4 shorted (through both windings); for a Würth WE-CMB
+  744824220 the fitted first stage is L = 19.636 mH and C = 45.872 pF, which resonate at
+  about 168 kHz (f0 = 1 / (2π√(LC))), against a first measured peak at 164.8 kHz.
+- **Not read:** Würth's application notes and Coilcraft's note (both servers refused the
+  download and were left alone); IEC/EN 61000-6-3, CISPR 17 and the safety standards
+  (the 65 dBµV and the 3.5 mA are the note's); Stevanovic's behavioural model;
+  other makers' chokes and the signal-line chokes (USB, CAN, Ethernet), whose datasheets
+  give the common-mode impedance at 100 MHz.
+
+### Why the formulas are these
+
+**The attenuation needed.** The first harmonic above 150 kHz carries the noise An; the
+filter has to bring it under the limit LQP with a margin m: A = An − LQP + m. 108 − 65 + 3 is
+46 dB for common mode and 101 − 65 + 3 is 39 dB for differential mode in Schaffner's
+example.
+
+**The corner.** A second-order LC low-pass attenuates 40 dB per decade above its corner
+(Schaffner), so A = 40 log(f / fc) and fc = f · 10^(−A/40): 19.07 kHz and 12.74 kHz.
+
+**The capacitors.** For common mode the two windings are in parallel, which gives the
+choke's LN (Omicron's measurement, Arar's Zcm per winding 2L over two windings), and the
+two Y-capacitors are in parallel, 2 CY: fc = 1 / (2π√(2 LN CY)). For differential mode the
+current goes through both windings, 2 LS, with the X-capacitor across the lines:
+fc = 1 / (2π√(2 LS CX)). Solving, C = 1 / (8π² L fc²) for each. A capacitor off the list gives
+A = 40 log(f / fc) = 20 log(8π² L C f²), which the tool uses for the E6 values.
+
+**The leakage.** Ilk = 2π fR UR CY is the reactive current of the Y-capacitor at the rated
+voltage and frequency (250 V at 50 Hz: 33 nF leaks 2.6 mA, 100 nF 7.9 mA).
+
+**The choke alone.** Schaffner's Z = ωL and f = 1 / (2π√(L C)) are the first two lines. With
+the winding capacitance in parallel the impedance is jωL / (1 − ω² L C), inductive under the
+resonance and capacitive over it (derived; Arar and Schaffner describe the shape). Between
+a source and a load of R in all and a reactance of impedance Z, the voltage across the load
+falls by |R + jZ| / R, an insertion loss of 10 log(1 + (Z / R)²) (derived from the
+definition; none of the sources gives it).
+
+### Assumptions and limits
+
+- **An ideal second-order filter.** Schaffner's own measurements are close at the
+  designed frequency (45 and 44 dBµV of common-mode attenuation measured for 46 designed;
+  39 dBµV of differential measured for 39 in the first design, 30 for 39 in the second, until
+  a load-side X-capacitor made 63) and then fall away above 300 kHz from parasitics. The
+  note says so; the tool is the design step, not the verification.
+- **Single-phase, two-wire.** The equations are those of the note's single-phase example.
+  The three-wire chokes (RBxx32) are listed with their data, but the note gives no
+  three-phase filter equations and none is computed.
+- **LN is the 1 kHz value.** The permeability of the core falls with frequency (the note's
+  Figure 4): the inductance at 180 kHz is lower, which the tool does not know. Real
+  attenuation can be less.
+- **The levels are yours.** The noise levels and the limit are typed; the tool does not
+  know the standard or estimate the noise (the note does it by hand with a Fourier
+  series and an envelope).
+- **Leakage and safety.** The leakage current is for one Y-capacitor at the rated values;
+  the limits (the note's second design aims at 3.5 mA) are not stored. X and Y
+  capacitors have to be of the safety classes the application needs (the note says X2 and Y2
+  for class I), which the tool does not check.
+- **The E6 value shown is the next one above** the computed capacitance, so the attenuation
+  is at least the one asked; Schaffner picked 100 nF and 4.7 µF in the first design, 33 nF and
+  1.5 µF in the second, choosing by leakage and by availability.
+- **The choke's table is Schaffner's as printed.** Its last column, the common-mode limit at
+  100 °C, is headed IDMmax by mistake. RB6532-50-0M5 prints 0.18 mH although its code says
+  0.5 mH (the RB6132-50-0M2 has 0.18). The example uses LS = 6.3 µH for the RB6522-16-1M0
+  where the table prints 6.2. The tool takes the table's values. Only the saturation limits at
+  25 °C are shown; the heating (I²R) and the line current are not computed.
+- **The rounding in the example.** Schaffner rounds the corner frequencies to 19 and 12.7 kHz
+  before taking the capacitors and prints 5.6 µF and 79 nF; the tool keeps the unrounded
+  corners and gives 5.53 µF and 78 nF (with 19 and 12.7 kHz: 5.57 µF and 78.5 nF).
+- **The Choke pill is the first resonance only.** A real choke has several (Omicron's fit
+  has four stages) and losses; the impedance at the resonance is then finite, the tool's
+  model has none and says "no limit" at it. The common-mode and the differential impedance
+  of a datasheet, the bandwidth of a signal-line choke and its signal integrity are not
+  here.
+- **Display.** Three figures; capacitances in pF, nF or µF, impedances in Ω, kΩ or MΩ.
+
+### How it was checked
+
+85 cases, the expected values from a Python implementation written from the formulas above
+(every figure and every label of the drawings; the parts table and the notes read out of the
+tool):
+- Filter: Schaffner's example; each of the 24 chokes; frequencies from 9 kHz to 1.5 MHz, other
+  limits, margins and noise levels, three mains voltages and frequencies, two other
+  inductances, a mode under the limit, both under, exactly 0 dB and a negative need; the
+  picker and its return to typed values; nine refusals;
+- Choke: Omicron's pair at 100 kHz, without capacitance, just under and just over the
+  resonance, at 1 kHz and 10 MHz, other loops, the frequency unit picker, six refusals and the
+  remembered choices;
+- the six examples and the formula-search card.
+
+About 1 200 more cases (four batches of 300: random frequencies, limits, margins, noise
+levels, voltages, chokes and inductances, random inductances, capacitances, frequencies and
+loops) compared every figure and label with the Python implementation; they were run and not
+kept.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| Attenuation needed | Schaffner, equation 6 | 101 − 65 + 3 = 39; 108 − 65 + 3 = 46 | 39 dB and 46 dB |
+| Corner frequencies | equation 7 | 19 kHz and 12.7 kHz | 19.07 kHz and 12.74 kHz |
+| Capacitors, RB6x22-16-1M0 | equation 8 | CX 5.6 µF, CY 79 nF | 5.53 µF and 78 nF (5.57 µF and 78.5 nF from his rounded corners) |
+| Capacitors, RB8522-16-3M0 | the note's text | 1.6 µF and 26 nF | 1.57 µF and 26 nF |
+| Leakage at 250 V, 50 Hz | equation 9 | 2.6 mA for 33 nF, 7.9 mA for 100 nF | 2.59 mA (the 3 mH design's next E6 value, 33 nF); 7.85 mA (100 nF) |
+| Resonance of a measured choke | Omicron | L = 19.636 mH, C = 45.872 pF: about 168 kHz (peak measured at 164.8 kHz) | 167.7 kHz |
 
 [↑ Index](#index)
 

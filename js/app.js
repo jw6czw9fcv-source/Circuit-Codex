@@ -679,6 +679,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "microwave-bands") return renderMicrowaveBands(domain, tool, favId);
   if (calcId === "amateur-bands") return renderAmateurBands(domain, tool, favId);
   if (calcId === "balun") return renderBalun(domain, tool, favId);
+  if (calcId === "cm-choke") return renderCmChoke(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -18951,6 +18952,288 @@ function renderBalun(domain, tool, favId) {
       const r = e.target.closest(".notation-row.sol");
       if (r) { state.pick = +r.dataset.r; show(); }
     };
+  }
+
+  paint();
+}
+
+// ---------- Common mode choke ----------
+// The capacitors and the corner frequency of a mains EMC filter built round a common-mode choke, and what a choke's winding capacitance does to its impedance.
+// Sources, as read this session:
+//  - Schaffner, "EMC/EMI Filter Design with RB Common-Mode Chokes", application note, 07/2013 (the PDF, from simpex.ch): the choke is wound with at least two identical windings, the
+//    line current flows through both in opposite directions and almost cancels the flux, so the core does not saturate in normal use; its inductance is the nominal L_N (common mode,
+//    tested at 1 kHz) and the stray L_S (about 1 % of L_N, differential mode); common-mode noise is damped by L_N and the Y-capacitors to earth, differential-mode noise by L_S and the
+//    X-capacitor. The design example: 1.6 kW, 115 V AC, 20 kHz, IEC/EN 61000-6-3, the quasi-peak limit of 65 dBuV at the 9th harmonic, 180 kHz; A = A_n - L_QP + m (equation 6),
+//    A = 40 log(f / f_c) (7), f_c,DM = 1 / (2 pi sqrt(2 L_S C_X)) and f_c,CM = 1 / (2 pi sqrt(2 L_N C_Y)) so C = 1 / (8 pi^2 L f_c^2) (8), I_lk = 2 pi f_R U_R C_Y (9), and, for the
+//    choke alone, Z = w L (2) and f_res = 1 / (2 pi sqrt(L C_WI)) (3). Equations 7 to 9 are pictures in the PDF whose text came out in pieces: they were put together and checked against
+//    every number the example prints. The table of 24 RB chokes below is the note's (its CM column of the 100 C limits is headed IDMmax by mistake; RB6532-50-0M5 prints 0.18 mH although
+//    its code says 0.5 mH; the example uses L_S = 6.3 uH for the RB6522-16-1M0 where the table prints 6.2).
+//  - Dr. Steve Arar, All About Circuits, "Common-Mode Chokes: From Working Principles to Important Performance Parameters" (2024): a differential signal's fluxes cancel, a common-mode
+//    one's add; Z_dm = jwL - jwM + R, about R, and Z_cm = jwL + jwM + R, about jw 2L for each winding when L = M; the winding capacitance makes a parallel resonance, inductive below it
+//    and capacitive above; bifilar windings have the lower leakage inductance.
+//  - Omicron Lab, Bode 500 application note "Modeling Multi-Resonance Common-Mode Chokes": the common-mode impedance is measured with the two windings joined in parallel, the differential
+//    one between the windings; for a Wuerth WE-CMB 744824220 the fitted first stage is L = 19.636 mH and C = 45.872 pF, a resonance of about 168 kHz by f0 = 1 / (2 pi sqrt(L C)); the
+//    first measured peak was at 164.8 kHz.
+//  Not read: Wuerth's and Coilcraft's notes (their servers refused the download). The insertion loss of a series impedance is derived here from its definition.
+// Schaffner's RB choke table (application note, 07/2013): code, nominal current at 60 C by convection (A), with 3 m/s air (A), nominal inductance per path at 1 kHz (mH),
+// typical stray inductance per path (uH), resistance per path (mOhm), maximum differential-mode peak current at 25 and 100 C (A), maximum common-mode current at 25 and 100 C (A).
+const CMC_PARTS = [
+  ["RB6122-16-1M0", 16, 25, 1, 6.3, 4.8, 135, 95, 0.24, 0.16],
+  ["RB6122-25-0M6", 25, 39, 0.64, 4, 2.7, 160, 112, 0.31, 0.21],
+  ["RB6122-36-0M5", 36, 53, 0.45, 3.6, 1.5, 185, 130, 0.41, 0.28],
+  ["RB6122-50-0M3", 50, 80, 0.25, 1.8, 0.9, 270, 189, 0.58, 0.4],
+  ["RB6522-16-1M0", 16, 25, 1, 6.2, 4.6, 135, 95, 0.24, 0.16],
+  ["RB6522-25-0M6", 25, 39, 0.64, 3.9, 2.6, 160, 112, 0.31, 0.21],
+  ["RB6522-36-0M5", 36, 53, 0.45, 3.6, 1.5, 185, 130, 0.41, 0.28],
+  ["RB6522-50-0M3", 50, 80, 0.25, 2, 0.9, 270, 189, 0.58, 0.4],
+  ["RB8522-16-3M0", 16, 25, 3, 22.2, 8.4, 73, 51, 0.17, 0.11],
+  ["RB8522-25-2M0", 25, 39, 2, 13.6, 4.2, 126, 88, 0.27, 0.18],
+  ["RB8522-36-1M5", 36, 58, 1.5, 12.8, 3, 165, 116, 0.4, 0.27],
+  ["RB8522-50-0M8", 50, 83, 0.75, 6.5, 1.7, 225, 158, 0.55, 0.36],
+  ["RB6132-16-0M8", 16, 26.5, 0.8, 5.8, 4.6, 155, 109, 0.32, 0.22],
+  ["RB6132-25-0M5", 25, 41, 0.47, 3.3, 2.4, 225, 158, 0.41, 0.28],
+  ["RB6132-36-0M4", 36, 60, 0.42, 2.9, 1.4, 330, 231, 0.59, 0.39],
+  ["RB6132-50-0M2", 50, 81, 0.18, 1.9, 0.9, 335, 235, 0.88, 0.59],
+  ["RB6532-16-0M8", 16, 26.5, 0.8, 6.9, 4.7, 155, 109, 0.32, 0.22],
+  ["RB6532-25-0M5", 25, 41, 0.47, 3.6, 2.4, 225, 158, 0.41, 0.28],
+  ["RB6532-36-0M4", 36, 60, 0.42, 4.2, 1.5, 330, 231, 0.59, 0.39],
+  ["RB6532-50-0M5", 50, 81, 0.18, 1.5, 0.8, 335, 235, 0.88, 0.59],
+  ["RB8532-16-1M3", 16, 27, 1.3, 9.1, 5.7, 128, 90, 0.26, 0.17],
+  ["RB8532-25-0M9", 25, 41, 0.94, 6.7, 3, 195, 137, 0.39, 0.26],
+  ["RB8532-36-0M8", 36, 58, 0.83, 7.3, 2.3, 260, 182, 0.55, 0.36],
+  ["RB8532-50-0M3", 50, 82, 0.33, 3.1, 1.2, 395, 277, 0.88, 0.59]
+];
+const CMC_MODES = { filter: "Filter", choke: "Choke" };
+const CMC_F_UNITS = { kHz: 1e3, MHz: 1e6 };
+const CMC_E6 = [1.0, 1.5, 2.2, 3.3, 4.7, 6.8];
+const CMC_NOTE = {
+  filter: "Common-mode noise is held back by the choke's inductance LN and the Y-capacitors to earth, differential-mode noise by its stray inductance LS and the X-capacitor across the lines. Each is a second-order low-pass, rising 40 dB per decade above its corner.",
+  choke: "Below its resonance a choke is an inductor, Z = ωL. Its winding capacitance in parallel makes the impedance peak at 1 / (2π√(LC)) and fall like a capacitor above it. A real choke has several resonances and losses; this is the first. The attenuation is that of a series reactance between a source and a load, 10 log(1 + (Z / R)²) with R their sum.",
+};
+
+function renderCmChoke(domain, tool, favId) {
+  const C = "cm-choke";
+  const state = {
+    mode: pref(C, "mode", "filter", Object.keys(CMC_MODES)),
+    fUnit: pref(C, "fUnit", "kHz", Object.keys(CMC_F_UNITS)),
+    part: "typed",
+    f: 180, ncm: 108, ndm: 101, lim: 65, m: 3, ln: 1, ls: 6.3, ur: 250, fr: 50, // f in kHz
+    lc: 19.636, cw: 45.872, fz: 100e3, rl: 100, // the Choke pill: mH, pF, Hz, ohms
+  };
+  // Three figures, never in exponent form.
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const KU = { kHz: 1e3, MHz: 1e6, GHz: 1e9 };
+  const unitOf = (hz) => (hz >= 1e9 ? "GHz" : hz >= 1e6 ? "MHz" : "kHz");
+  const fq = (hz) => { const u = unitOf(hz); return `${String(Number((hz / KU[u]).toPrecision(4)))} ${u}`; };
+  const cap = (c) => (c >= 1e-6 ? `${n3(c * 1e6)} µF` : c >= 1e-9 ? `${n3(c * 1e9)} nF` : `${n3(c * 1e12)} pF`);
+  const ohm = (v) => (v >= 1e6 ? `${n3(v / 1e6)} MΩ` : v >= 1e3 ? `${n3(v / 1e3)} kΩ` : `${n3(v)} Ω`);
+  const ma = (i) => `${n3(i * 1e3)} mA`;
+  const PI = Math.PI;
+
+  // ---------------- the numbers ----------------
+  const F = () => state.f * 1e3;
+  const aOf = (n) => n - state.lim + state.m; // the attenuation needed, dB
+  const fcOf = (a) => F() * 10 ** (-a / 40);
+  const cyOf = (a) => 1 / (8 * PI ** 2 * (state.ln * 1e-3) * fcOf(a) ** 2);
+  const cxOf = (a) => 1 / (8 * PI ** 2 * (state.ls * 1e-6) * fcOf(a) ** 2);
+  const leak = (c) => 2 * PI * state.fr * state.ur * c;
+  // The attenuation a capacitor c gives with the inductance l (henries) at the frequency: 40 log(f / f_c) with f_c = 1 / (2 pi sqrt(2 l c)).
+  const attOf = (c, l) => 20 * Math.log10(8 * PI ** 2 * l * c * F() ** 2);
+  // The E6 values on each side of a capacitance.
+  const e6 = (c) => {
+    const d = 10 ** Math.floor(Math.log10(c) + 1e-12), mant = c / d, list = [...CMC_E6, 10];
+    let down = list[0], up = list[list.length - 1];
+    for (const q of list) if (q <= mant * (1 + 1e-9)) down = q;
+    for (const q of [...list].reverse()) if (q >= mant * (1 - 1e-9)) up = q;
+    return { down: down * d, up: up * d };
+  };
+  // The choke alone: the impedance of L in parallel with the winding capacitance, the first resonance, the loss it makes between a source and a load.
+  function choke() {
+    const w = 2 * PI * state.fz, L = state.lc * 1e-3, Cw = state.cw * 1e-12, den = 1 - w * w * L * Cw;
+    const Z = Math.abs(den) < 1e-9 ? Infinity : (w * L) / Math.abs(den);
+    return { Z, ind: den > 0, f0: Cw > 0 ? 1 / (2 * PI * Math.sqrt(L * Cw)) : Infinity, zid: w * L, il: isFinite(Z) ? 10 * Math.log10(1 + (Z / state.rl) ** 2) : Infinity };
+  }
+  const part = () => CMC_PARTS.find((p) => p[0] === state.part);
+
+  function problem() {
+    if (state.mode === "filter") {
+      if (!(state.f > 0)) return "Enter the frequency.";
+      if (![state.ncm, state.ndm, state.lim, state.m].every(isFinite)) return "Enter the noise levels, the limit and the margin.";
+      if (!(state.ln > 0 && state.ls > 0)) return "Enter both inductances.";
+      if (!(state.ur > 0 && state.fr > 0)) return "Enter the rated voltage and frequency.";
+      return "";
+    }
+    if (!(state.lc > 0)) return "Enter the inductance.";
+    if (!(state.cw >= 0)) return "Enter the winding capacitance, 0 or more.";
+    if (!(state.fz > 0)) return "Enter the frequency.";
+    if (!(state.rl > 0)) return "Enter the source and load impedance.";
+    return "";
+  }
+
+  // ---------------- the drawings ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", AMBER = "#E0A85E", WIRE = "#5A6169", GREY = "#8A9099";
+  // A label sits on top of the lines, with a halo in the box's own colour so a line running through it does not hide it.
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const w = (d, c = WIRE, sw = 1.8) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const dot = (x, y, c = WIRE) => `<circle cx="${x}" cy="${y}" r="2.3" fill="${c}"/>`;
+  const gnd = (x, y) => w(`M${x} ${y} V${y + 3}`) + w(`M${x - 7} ${y + 3} H${x + 7} M${x - 4.5} ${y + 6} H${x + 4.5} M${x - 2} ${y + 9} H${x + 2}`);
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${WIRE}" stroke-width="1.6"/>`;
+  const coilH = (x, y, c, up = true) => w(`M${x} ${y}` + ` a5 5 0 0 ${up ? 1 : 0} 10 0`.repeat(4), c, 2);
+  const coilV = (x, y1, y2, n, c) => { const r = (y2 - y1) / (2 * n); return w(`M${x} ${y1}` + ` a${r} ${r} 0 0 1 0 ${2 * r}`.repeat(n), c, 2); };
+  const plates = (x, y1, y2, c) => w(`M${x - 8} ${y1} H${x + 8} M${x - 8} ${y2} H${x + 8}`, c, 2.4);
+
+  // The filter: the line in, the choke (two windings on one core), the X-capacitor across the lines, a Y-capacitor from each line to earth.
+  function filterDrawing() {
+    if (problem()) return "";
+    const acm = aOf(state.ncm), adm = aOf(state.ndm);
+    let o = port(14, 46) + port(286, 46) + port(14, 86) + port(286, 86);
+    o += w("M17 46 H100") + w("M140 46 H283") + w("M17 86 H100") + w("M140 86 H283");
+    o += coilH(100, 46, BLUE, true) + coilH(100, 86, BLUE, false) + w("M98 63 H142 M98 69 H142", WIRE, 2) + dot(96, 52, BLUE) + dot(96, 80, BLUE);
+    // C_X across the lines, C_Y from each line to earth
+    o += w("M190 46 V59") + plates(190, 59, 66, GREEN) + w("M190 66 V86") + dot(190, 46) + dot(190, 86);
+    o += w("M236 46 V54") + plates(236, 54, 59, GREEN) + w("M236 59 V66") + w("M236 86 V78") + plates(236, 78, 73, GREEN) + w("M236 73 V66") + w("M236 66 H256") + gnd(256, 66) + dot(236, 46) + dot(236, 86) + dot(236, 66);
+    o += lbl(null, 14, 28, "line", GREY) + lbl(null, 286, 28, "load", GREY, "end");
+    o += lbl("pln", 120, 28, `LN ${n3(state.ln)} mH`, BLUE, "middle") + lbl("pls", 120, 114, `LS ${n3(state.ls)} µH`, BLUE, "middle");
+    o += lbl("pcx", 184, 114, adm > 0 ? `CX ${cap(cxOf(adm))}` : "CX none", GREEN, "middle") + lbl("pcy", 256, 114, acm > 0 ? `CY ${cap(cyOf(acm))}` : "CY none", GREEN, "middle");
+    return o;
+  }
+
+  // The choke alone: L in parallel with its winding capacitance, between the two terminals whose impedance is wanted.
+  function chokeDrawing() {
+    if (problem()) return "";
+    const k = choke();
+    let o = port(14, 50) + port(14, 98) + w("M17 50 H190") + w("M17 98 H190") + dot(100, 50) + dot(100, 98) + dot(190, 50) + dot(190, 98);
+    o += coilV(100, 50, 98, 4, BLUE) + w("M190 50 V68") + plates(190, 68, 80, BLUE) + w("M190 80 V98");
+    o += lbl("pl", 92, 78, `L ${n3(state.lc)} mH`, BLUE, "end") + lbl("pc", 202, 78, `C ${n3(state.cw)} pF`, BLUE);
+    o += lbl("pz", 150, 126, isFinite(k.Z) ? `|Z| ${ohm(k.Z)}` : "|Z| no limit", GREEN, "middle");
+    o += lbl("pf", 150, 24, isFinite(k.f0) ? `resonance ${fq(k.f0)}` : "no winding capacitance", GREEN, "middle");
+    return o;
+  }
+
+  function diagram() {
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${state.mode === "filter" ? filterDrawing() : chokeDrawing()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, sub) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>`;
+
+  function filterHTML() {
+    const acm = aOf(state.ncm), adm = aOf(state.ndm), p = part();
+    const cy = acm > 0 ? cyOf(acm) : 0, cx = adm > 0 ? cxOf(adm) : 0;
+    let rows = row("Attenuation needed, common mode", `${n3(acm)} dB`, "acm") + row("Attenuation needed, differential mode", `${n3(adm)} dB`, "adm");
+    if (acm > 0) { const u = e6(cy).up; rows += row("Y-capacitor, next E6 value", `${cap(u)} · ${n3(attOf(u, state.ln * 1e-3))} dB · ${ma(leak(u))}`, "ey"); }
+    if (adm > 0) { const u = e6(cx).up; rows += row("X-capacitor, next E6 value", `${cap(u)} · ${n3(attOf(u, state.ls * 1e-6))} dB`, "ex"); }
+    if (p) rows += row("Choke", `${p[0]} · ${p[1]} A`, "part") + row("Saturation, 25 °C", `${n3(p[6])} A differential peak · ${n3(p[8])} A common mode`, "sat");
+    return `${head(acm > 0 ? "Y-capacitor, each line" : "Common mode", acm > 0 ? cap(cy) : "none needed", acm > 0 ? `${n3(acm)} dB at ${n3(state.f)} kHz: corner ${fq(fcOf(acm))}` : "the common-mode noise is already under the limit")}
+      ${grid([cell("X-capacitor", adm > 0 ? cap(cx) : "none needed", "c1"), cell("Differential corner", adm > 0 ? fq(fcOf(adm)) : "—", "c2"), cell("Leakage", acm > 0 ? ma(leak(cy)) : "—", "c3")])}
+      <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${CMC_NOTE.filter}</div></div>`;
+  }
+
+  function chokeHTML() {
+    const k = choke();
+    const sub = !isFinite(k.Z) ? "at the resonance the model has no loss" : state.cw > 0 ? (k.ind ? `inductive, under the resonance of ${fq(k.f0)}` : `capacitive, over the resonance of ${fq(k.f0)}`) : "inductive: no winding capacitance typed";
+    return `${head("Impedance at the frequency", isFinite(k.Z) ? ohm(k.Z) : "no limit", sub)}
+      ${grid([cell("Resonance", state.cw > 0 ? fq(k.f0) : "—", "c1"), cell("Ideal ωL", ohm(k.zid), "c2"), cell("Attenuation", isFinite(k.il) ? `${n3(k.il)} dB` : "no limit", "c3")])}
+      <div class="field notation-box"><div class="cx-note" data-res="note">${CMC_NOTE.choke}</div></div>`;
+  }
+
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    return state.mode === "filter" ? filterHTML() : chokeHTML();
+  }
+
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  const typed = { part: "typed", ln: 1, ls: 6.3, ncm: 108, ndm: 101, lim: 65, m: 3, f: 180, ur: 250, fr: 50 };
+  useExamples([
+    { title: "A 1.6 kW converter, 1 mH choke", note: "Schaffner's example: 46 dB and 39 dB at 180 kHz need about 78 nF and 5.5 µF.",
+      apply: example({ mode: "filter", ...typed }) },
+    { title: "The 3 mH choke, RB8522-16-3M0", note: "Three times the inductance: a third of the Y-capacitor (26 nF), so a third of the leakage current.",
+      apply: example({ mode: "filter", ...typed, part: "RB8522-16-3M0", ln: 3, ls: 22.2 }) },
+    { title: "The same on 120 V, 60 Hz", note: "The leakage current follows the voltage and the frequency: 100 nF now leaks 4.5 mA, not 7.9.",
+      apply: example({ mode: "filter", ...typed, ur: 120, fr: 60 }) },
+    { title: "Common mode under the limit", note: "60 dBµV against 65 and a 3 dB margin: no Y-capacitor is needed.",
+      apply: example({ mode: "filter", ...typed, ncm: 60 }) },
+    { title: "A measured choke, 19.6 mH and 45.9 pF", note: "Omicron's fit of a WE-CMB: resonance near 168 kHz, where the impedance peaks.",
+      apply: example({ mode: "choke", lc: 19.636, cw: 45.872, fz: 100e3, fUnit: "kHz", rl: 100 }) },
+    { title: "1 mH at 1 MHz, no winding capacitance", note: "Z = ωL = 6.28 kΩ; in a 100 Ω loop that is 36 dB of attenuation.",
+      apply: example({ mode: "choke", lc: 1, cw: 0, fz: 1e6, fUnit: "MHz", rl: 100 }) },
+  ]);
+
+  function paint() {
+    const fld = (name, key, val, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(val)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    let fields = "", heading = "";
+    if (state.mode === "filter") {
+      fields = `<div class="field-pair">${fld("Frequency", "f", state.f, fixed("kHz"))}${fld("Limit", "lim", state.lim, fixed("dBµV"))}${fld("Margin", "m", state.m, fixed("dB"))}</div>
+        <div class="field-pair">${fld("CM noise", "ncm", state.ncm, fixed("dBµV"))}${fld("DM noise", "ndm", state.ndm, fixed("dBµV"))}${fld("Rated", "ur", state.ur, fixed("V"))}</div>
+        <div class="field-pair">${fld("LN per path", "ln", state.ln, fixed("mH"))}${fld("LS per path", "ls", state.ls, fixed("µH"))}${fld("Rated", "fr", state.fr, fixed("Hz"))}</div>`;
+      heading = sel('class="label-select" data-part', [["typed", "Choke: typed values"], ...CMC_PARTS.map((p) => [p[0], `${p[0]} · ${p[1]} A`])], state.part);
+    } else {
+      fields = `<div class="field-pair">${fld("Inductance", "lc", state.lc, fixed("mH"))}${fld("Winding capacitance", "cw", state.cw, fixed("pF"))}</div>
+        <div class="field-pair">${fld("Frequency", "fz", state.fz / CMC_F_UNITS[state.fUnit], sel("data-funit", Object.keys(CMC_F_UNITS).map((u) => [u, u]), state.fUnit))}${fld("Source + load", "rl", state.rl, fixed("Ω"))}</div>`;
+    }
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Filter capacitors and choke impedance")}
+
+      ${pillRow(Object.entries(CMC_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${heading}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["A = An − LQP + m", "fc = f · 10^(−A / 40)", "CY = 1 / (8π² LN fc²)", "CX = 1 / (8π² LS fc²)", "Ilk = 2π fR UR CY", "fres = 1 / (2π √(L C))"],
+        "A common-mode choke has two identical windings on one core. A current that goes in on one line and comes back on the other (the differential, wanted one) makes opposite fluxes that cancel, so the choke does not saturate and barely holds it back (only its stray inductance LS, about 1 % of LN); a current that goes the same way in both (common mode, the noise that leaks to earth) makes fluxes that add, so it meets the full inductance LN. In a mains filter the choke is followed by an X-capacitor across the lines and a Y-capacitor from each line to earth, each making a second-order low-pass with the choke. The attenuation needed at the first harmonic above 150 kHz is the noise level there, minus the limit (the quasi-peak limit of the standard), plus a margin; a second-order low-pass attenuates A = 40 log(f / fc) dB, 40 dB per decade above its corner fc, so fc = f · 10^(−A / 40). The loop of two windings in parallel and two Y-capacitors gives fc = 1 / (2π √(2 LN CY)) for common mode and the loop through both windings and the X-capacitor fc = 1 / (2π √(2 LS CX)) for differential mode, hence the capacitors C = 1 / (8π² L fc²). A Y-capacitor carries a leakage current from the line to earth, Ilk = 2π fR UR CY at the rated frequency and voltage, which the safety standards limit. The winding capacitance of a real choke resonates with its inductance at f = 1 / (2π √(LC)): below it the choke is inductive, above it capacitive. dBµV is decibels above one microvolt; QP is quasi-peak, the detector the limits use."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const num = (key, apply) => { const el = app.querySelector(`input[data-key="${key}"]`); if (el) el.oninput = () => { apply(parseFloat(el.value)); show(); }; };
+    const typedPart = () => { state.part = "typed"; const ps = app.querySelector("select[data-part]"); if (ps) ps.value = "typed"; };
+    num("f", (v) => { state.f = v; });
+    num("lim", (v) => { state.lim = v; });
+    num("m", (v) => { state.m = v; });
+    num("ncm", (v) => { state.ncm = v; });
+    num("ndm", (v) => { state.ndm = v; });
+    num("ur", (v) => { state.ur = v; });
+    num("fr", (v) => { state.fr = v; });
+    num("ln", (v) => { state.ln = v; typedPart(); });
+    num("ls", (v) => { state.ls = v; typedPart(); });
+    num("lc", (v) => { state.lc = v; });
+    num("cw", (v) => { state.cw = v; });
+    num("fz", (v) => { state.fz = v * CMC_F_UNITS[state.fUnit]; });
+    num("rl", (v) => { state.rl = v; });
+    const ps = app.querySelector("select[data-part]");
+    if (ps) ps.onchange = () => { state.part = ps.value; const p = part(); if (p) { state.ln = p[3]; state.ls = p[4]; } paint(); };
+    const fu = app.querySelector("select[data-funit]");
+    if (fu) fu.onchange = () => { state.fUnit = fu.value; setPref(C, "fUnit", state.fUnit); paint(); };
   }
 
   paint();

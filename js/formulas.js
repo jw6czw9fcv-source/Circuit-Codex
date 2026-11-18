@@ -392,6 +392,12 @@ const FORMULAS = [
     note: "The impedance ratio and turns ratio of a balun, the line impedance of Guanella's and Ruthroff's transmission-line types, the length of a half-wave coax balun, and the CMRR from the amplitude and phase imbalance or the S-parameters. From Marki's and Mini-Circuits' application notes and Arar's articles (read); the Marki CMRR figure reads 2 to 3 dB under the formula (see the manual).",
   },
   {
+    tool: "Common mode choke",
+    domain: "rf",
+    formulas: ["A = An − LQP + m", "fc = f · 10^(−A / 40)", "CY = 1 / (8π² LN fc²)", "CX = 1 / (8π² LS fc²)", "Ilk = 2π fR UR CY", "fres = 1 / (2π √(L C))"],
+    note: "The Y- and X-capacitors of a mains EMC filter built round a common-mode choke, from the attenuation needed at a harmonic, and the impedance and resonance of a choke from its inductance and winding capacitance. From Schaffner's RB choke application note (its worked example is reproduced), Arar's article and Omicron Lab's note (read); the insertion loss of a series impedance is derived.",
+  },
+  {
     tool: "Radio wavelength",
     domain: "rf",
     formulas: ["λ = c / f", "T = 1 / f"],
