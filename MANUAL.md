@@ -38,6 +38,7 @@ will key on, since that is the id the app already holds for each tool.
 - Capacitors → [Capacitor energy](#capacitor-energy)
 - Inductors → [Inductor color code](#inductor-color-code)
 - Inductors → [Inductor SMD code](#inductor-smd-code)
+- Inductors → [Air-core coil (Wheeler)](#air-coil)
 - Inductors → [Series/parallel (L)](#ind-series-parallel)
 - Passive filters → [RC filter](#rc-filter)
 - Passive filters → [RL filter](#rl-filter)
@@ -1887,6 +1888,137 @@ standard or datasheet shows. It read a tolerance letter as part of the stamp,
 where datasheets put it only in the part number, and it had no ±30%. And its
 note said that "100" means 10 nH on some parts, a claim no source supported;
 it was removed.
+
+[↑ Index](#index)
+
+---
+
+<a id="air-coil"></a>
+## Air-core coil (Wheeler)
+
+`calc: air-coil` · Passive components › Inductors
+
+### What it computes
+
+The inductance of a coil with no core, from its dimensions, and the turns that give a wanted
+inductance. Four pills; the length boxes (form diameter, wire diameter, winding length, pitch, inside
+diameter, depth) each have their own mm / cm / in picker, and changing one changes all the others.
+
+- **Solenoid:** a single-layer coil. The form diameter, the wire diameter, the turns and the winding
+  length. The big result is the Bureau of Standards' inductance: Nagaoka's sheet-of-current value from
+  its exact coefficient K, less the round-wire correction. Cells: Wheeler's formula, how far Wheeler's is
+  from the big result, and K. Rows: the sheet value and the correction, diameter over length and wire over
+  pitch, which of Wheeler's two formulas applies (and whether the coil is outside its range), the length
+  of wire. The drawing is the coil with its diameter and length.
+- **Turns:** the inductance wanted (µH), the form diameter, the wire diameter and the pitch (the distance
+  from one turn to the next). The big result is the turns, not rounded; cells: the whole turns, the
+  winding length and how far Wheeler's answer is from it; rows: the inductance of the whole turns,
+  the turns Wheeler's formula would give, the length of wire. The turns are found by trying: the
+  inductance rises a little faster than the square of the turns, because the coil lengthens.
+- **Multilayer:** a coil wound in layers with a rectangular cross-section: the inside diameter, the turns, the
+  length b and the depth c. The big result is Wheeler's formula; rows: how much each of 6a, 9b and 10c
+  takes of the denominator (about equal is the best case) and the accuracy. The drawing is the cross-section of
+  Wheeler's figure.
+- **Spiral:** a flat coil of round wire: the inside diameter, the wire diameter, the turns and the pitch. The big result is
+  the Bureau of Standards' formula for the equivalent coil, less the round-wire correction; cells: Wheeler's formula,
+  how far it is, and the mean radius; rows: the width c = n D, c / a and wire over pitch, Wheeler's accuracy, the
+  sheet value and the correction.
+
+- **Units:** mm, cm or in for every length (the formulas use cm or inches inside); µH for the inductance wanted.
+- **Remembered:** the pill and the length unit.
+
+Examples: the Bureau's 400-turn coil, a 10-turn coil on a 20 mm form, a single loop (outside Wheeler's range),
+10 µH on a 20 mm form, 1 µH close-wound on 10 mm, the Bureau's 1000-turn multilayer coil, an IF coil, a flat spiral.
+
+### Terms
+
+- **Inductance L:** the flux a coil links per ampere of current. **Air core:** no magnetic material, so L depends on
+  the shape alone and grows as the square of the turns n.
+- **Mean radius a:** the radius to the middle of the winding (to the centre of the wire for a single layer). **Length b:** the length
+  of the winding. **Depth c:** the thickness of a layered winding. **Pitch D:** the distance from the centre of one turn to the
+  next; **d / D** is the wire diameter over the pitch (1 for wire turns touching).
+- **Nagaoka's coefficient K:** the number by which a very long solenoid's inductance, 4π² a² n² / b (in
+  cm, in µH, 0.03948 a² n² / b), is multiplied for a coil of finite length. K is a function of 2a / b, the
+  diameter over the length: nearly 1 for a long coil, 0.818 for a length of two diameters, 0.083 for 2a / b = 34.
+- **Round-wire correction:** Nagaoka's formula is for a sheet of current; wire has gaps and its current
+  does not spread, which lowers the inductance a little. The correction is 0.01257 n a (A + B) µH (a in cm), A from d / D
+  and B from the number of turns.
+- **Self-resonance, skin effect:** the capacitance between turns resonates with L at a frequency above which the coil is a
+  capacitor; at RF the current flows in the surface of the wire and raises its resistance. Neither is in these formulas.
+
+### Sources
+
+- **Harold A. Wheeler, "Simple Inductance Formulas for Radio Coils", Proceedings of the IRE 16 (10), October 1928,
+  pp. 1398–1400 (the PDF of the issue from worldradiohistory.com; the three pages read as text and rendered, with
+  their figures):** L = 0.8 a² n² / (6a + 9b + 10c) µH for a multilayer coil (a mean radius, b length, c depth, in inches), right to about
+  1 % when the three terms of the denominator are about equal; L = a² n² / (9a + 10b) for a single-layer coil, right to 1 % for
+  b > 0.8 a with a the radius; L = a² n² / (8a + 11c) for a spiral, right to 5 % for c > 0.2 a; the helix formula (9a + 10b) for b > a
+  and the other for a > b > 0.2 a, equal at b = a; the accuracy is lower with few turns, wide spacing, skin effect or capacitance. Wheeler
+  derived them from the formulas and curves of Circular 74.
+- **Bureau of Standards Circular No. 74, "Radio Instruments and Measurements" (the 1937 edition, the PDF from
+  nvlpubs.nist.gov; 360 pages as text, pages 252–253, 260–263 and 283–284 rendered):** the single-layer coil
+  L = 0.03948 a² n² K / b with K from Table 10 (2a / b from 0 to 100); for round wire L = Ls − 0.01257 n a (A + B) (155), A from Table 11
+  against d / D, B from Table 12 against the turns; the worked example of 400 turns, a = 10 cm, b = 40 cm, d / D = 0.5: Ls = 12 919 µH, A + B = 0.199,
+  correction 9.99 µH, L = 12 909 µH; the multilayer example (1000 turns, a = b = 10 cm, c = 1 cm) 195.2 mH; the flat spiral of round wire as the
+  equivalent coil of width c = n D and mean radius a = a1 + (n − 1) D / 2, L = 0.01257 a n² {ln(8a / c) − ½ + c² / (96 a²) (ln(8a / c) + 43/12)} (160), with the same correction.
+- **David Knight and Rodger Rosenbaum, "Grover's Inductance Calculations: supplementary information and errata" (g3ynh.info, 2012; page 5 rendered):** the exact
+  Nagaoka coefficient K(z) = 4 / (3π) (√(1 + z²) / z² (K(m) − E(m)) + √(1 + z²) E(m) − z), z = 2a / b, m = z² / (1 + z²), with the complete elliptic
+  integrals K and E. The tool computes them by the arithmetic-geometric mean; the formula reproduces 13 rows of Table 10 (z from 0.05 to 100) to its four figures.
+- **The Radio-Craft article of May 1932 (RF Cafe copy) and Jim Lux's page of Wheeler's formulas (read):** both repeat Wheeler's formulas; the 1932 text wrongly says "length greater
+  than four-fifths of the diameter" where Wheeler says 0.8 of the radius (b > 0.8 a, so a length over 0.4 diameters).
+- **Not read:** Wheeler's 1982 paper, Grover's book itself, Rosa's papers, the Bureau's multilayer formula (156) beyond the example, and the Radio Broadcast page of Wheeler's
+  article (refused by its bot check; left alone); the IEEE copies are behind a paywall. Table 11 (A) is replaced by the fit A = ln(d / D) + 0.557, which agrees
+  with the 45 printed rows to the 0.001 they give; Table 12 (B) is the printed table, interpolated straight in ln n. The Bureau's 38-turn ribbon spiral (324.2 µH calculated, 323.5 measured) is for rectangular
+  wire and is not reproduced here.
+
+### Why the formulas are these
+
+**Solenoid.** A long solenoid has the flux density μ0 n I / b inside and so L = μ0 n² π a² / b, which is 4π² × 10⁻³ a² n² / b µH with a and b in cm
+(0.03948). A finite coil loses flux at its ends: Nagaoka solved it exactly for a sheet of current, and K is the result. The
+round wire is not a sheet; the Bureau corrects it with two tabulated terms, A (a function of d / D) and B (a function of the number of turns). Table 10 is the exact formula to four figures, so the tool uses the formula, not the table.
+
+**Wheeler's formulas.** Fits of Circular 74's results by simple fractions: for a long coil 9a + 10b tends to 10b, giving L → a² n² / 10b, the long-solenoid
+value in inches; the 9a term is the end effect. The second form, for shorter coils, is the spiral's 8a + 11c with the length b in place of the depth c. The tool compares Wheeler's with the exact K
+and says in the cell by how much they differ; for a single turn of a thin loop (b < 0.2 a) Wheeler's formula is outside its range and reads some 15 % low.
+
+**Turns.** The inductance, with the length b = n × pitch, is a continuous function of n that rises with n: the tool halves an interval of
+turns 200 times between 1 and 10 million until it matches the wanted inductance. (Derived here; the same for Wheeler's formula.) The whole turns are the rounded
+result, and the row below tells what they give.
+
+**Multilayer, spiral.** Wheeler's (1) and the Bureau's (160) as quoted. For the spiral the tool uses the equivalent coil of the Bureau and the same correction
+(A and B as for a single layer); the sheet value of (160) for a coil of zero length with width c.
+
+### Assumptions and limits
+
+- **Round wire, no insulation thickness beyond the pitch,** a form with no core or shield nearby, and a coil far smaller than a wavelength. The inductance is at low
+  frequency (DC). Near the self-resonance, with skin effect or a core, a real coil differs.
+- **The correction table** is Circular 74's (A as a fit, B by interpolation); it is for a coil of several turns, B is 0 for one turn, and past 1000 turns B is held at 0.336.
+- **Single-layer coils** need diameter over length of at most 100 (the Bureau's table); the pitch cannot be less than the wire diameter.
+- **Wheeler's formulas** are within their stated accuracy only in their ranges; the tool shows both numbers so the difference is visible. The multilayer pill has no
+  second formula to compare. The turns of a multilayer coil are not computed.
+- **Display.** Three figures; nH, µH or mH as the size asks; the wire length in the length unit, or in metres from 1 m.
+
+### How it was checked
+
+109 cases, the expected values from a Python implementation (scipy's elliptic integrals; the tool uses the arithmetic-geometric mean), every figure and label of the drawings:
+- Solenoid: the opening screen, 24 other coils (long, short, a single loop, 2 to 1500 turns, the three length units, wire as thick as the pitch,
+  very thin wire, diameter over length from 0.0005 to 50, Wheeler's two formulas and the range where it fails), the Bureau's 400-turn example, six refusals;
+- Units: cm and in on all four pills, the unit remembered and offered, carried from one pill to another;
+- Turns: the opening, 12 settings, seven refusals (an inductance one turn exceeds, one that needs 10 million turns, thick wire…) and the pill remembered;
+- Multilayer: the opening, 12 settings, four refusals; Spiral: the opening, 12 settings, five refusals;
+- the eight examples and the formula-search card.
+
+540 more cases (three batches of 180: random coils, inductances, windings and spirals in the three length units) compared every figure and label with the Python
+implementation; they were run and not kept.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| Nagaoka's K, 13 values of 2a / b from 0.05 to 100 | Circular 74 Table 10 | four-figure table | the same to the four figures (checked on the formula in Python) |
+| 400 turns, a = 10 cm, b = 40 cm, d / D = 0.5 | Circular 74 | Ls 12 919 µH, correction 9.99 µH, 12 909 µH | 12.9 mH (Ls 12.9 mH, correction 10 µH) |
+| Wheeler's formula for the same coil | derived, not printed | not in the source | 12.9 mH, 0.418 % below |
+| Multilayer, 1000 turns, a = b = 10 cm, c = 1 cm | Circular 74 | 195.2 mH (the Bureau's longer method) | 197 mH by Wheeler, 0.85 % above |
 
 [↑ Index](#index)
 

@@ -682,6 +682,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "cm-choke") return renderCmChoke(domain, tool, favId);
   if (calcId === "saw-filter") return renderSawFilter(domain, tool, favId);
   if (calcId === "rf-diodes") return renderRfDiodes(domain, tool, favId);
+  if (calcId === "air-coil") return renderAirCoil(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -19923,6 +19924,309 @@ function renderRfDiodes(domain, tool, favId) {
     pick("data-ppart", (v) => { state.ppart = v; if (v !== "typed") { state.pc = RFD_SMP.ct; state.pr = rsAt(state.pi); } });
     pick("data-dop", (v) => { state.dop = v; if (RFD_DOP[v][1] > 0) state.vg = RFD_DOP[v][1]; });
     pick("data-spart", (v) => { state.spart = v; if (v === "hp") { state.si = RFD_HP.is; state.sr = RFD_HP.rs; state.sc = RFD_HP.cj; } });
+  }
+
+  paint();
+}
+
+// ---------- Air-core coil (Wheeler) ----------
+// The inductance of an air-core coil from its dimensions: a single-layer solenoid (Nagaoka's exact coefficient and the round-wire correction of the Bureau of Standards, beside Wheeler's
+// formula), the turns that give a wanted inductance, a multilayer coil (Wheeler) and a flat spiral (Bureau of Standards, beside Wheeler). Sources, as read this session:
+//  - Harold A. Wheeler, "Simple Inductance Formulas for Radio Coils", Proceedings of the IRE 16 (10), October 1928, pp. 1398-1400 (the PDF of that issue from worldradiohistory.com; pages
+//    1398 to 1400 read as text and rendered, with its three figures): L = 0.8 a^2 n^2 / (6a + 9b + 10c) microhenries for a multilayer coil, a the mean radius, b the length, c the depth of the
+//    winding, in inches (Hazeltine's formula, right to about 1 % when the three terms of the denominator are about equal); L = a^2 n^2 / (9a + 10b) for a single-layer coil, right to 1 % for
+//    b > 0.8 a (a the radius); L = a^2 n^2 / (8a + 11c), or with b for the helix, for a spiral, right to 5 % for c > 0.2 a; the helical formula (2) for b > a, the other for a > b > 0.2 a, equal at
+//    b = a; the accuracy is less with few turns, a wide spacing, skin effect or capacitance. The formulas were derived from the formulas and curves of Circular 74.
+//  - Bureau of Standards Circular No. 74, "Radio Instruments and Measurements" (1937 edition; the PDF from nvlpubs.nist.gov, 360 pages as text; pages 252, 253, 260, 261, 262, 263, 283 and
+//    284 rendered): the single-layer coil L = 0.03948 a^2 n^2 K / b microhenries, a and b in centimetres, with Nagaoka's coefficient K a function of 2a / b (Table 10, 0 to 100);
+//    for round wire L = Ls - 0.01257 n a (A + B) (155), A from Table 11 against d / D (wire diameter over pitch), B from Table 12 against the turns; the worked example of 400 turns, a = 10 cm,
+//    b = 40 cm, d / D = 0.5: Ls = 12 919 uH, A + B = 0.199, correction 9.99, 12 909 uH; the multilayer example 1000 turns, a = b = 10 cm, c = 1 cm: 195.2 mH; the flat spiral of round wire, the
+//    equivalent coil of width c = n D and mean radius a = a1 + (n - 1) D / 2: L = 0.01257 a n^2 {ln(8a / c) - 1/2 + c^2 / (96 a^2) (ln(8a / c) + 43/12)} (160) with the same correction; the
+//    apparent inductance La = L (1 + w^2 C L 10^-18) with a capacitance C (154).
+//  - David Knight and Rodger Rosenbaum, "Grover's Inductance Calculations: supplementary information and errata" (g3ynh.info, 2012; page 5 rendered): the exact Nagaoka coefficient,
+//    f(z) = 4 / (3 pi) ( sqrt(1 + z^2) / z^2 (K(m) - E(m)) + sqrt(1 + z^2) E(m) - z ), m = z^2 / (1 + z^2), z = 2a / b, K and E the complete elliptic integrals; it reproduces every row of
+//    Table 10 that was checked (13 of them) to the four figures printed.
+//  - The Radio-Craft article of May 1932 (RF Cafe copy) and Jim Lux's page of Wheeler's formulas: read; both repeat Wheeler's formulas, the 1932 one wrongly as "length greater than four-fifths
+//    of the diameter", where Wheeler's paper says b > 0.8 a with a the RADIUS (so a length over 0.4 diameters).
+//  Not read: Wheeler's 1982 paper, Grover's book itself, Rosa's papers (the tables A and B are used as printed in Circular 74; A fits ln(d / D) + 0.557 to the 0.001 printed at the 45 rows
+//  checked), the formulas of the Bureau of Standards for multilayer coils (156). The turns for a wanted inductance and the comparison percentages are derived.
+const ACL_MODES = { sol: "Solenoid", turns: "Turns", multi: "Multilayer", spiral: "Spiral" };
+const ACL_U = { mm: 1e-3, cm: 1e-2, in: 0.0254 };
+// Circular 74, Table 12: B against the number of turns
+const ACL_B = [[1, 0], [2, 0.114], [3, 0.166], [4, 0.197], [5, 0.218], [6, 0.233], [7, 0.244], [8, 0.253], [9, 0.26], [10, 0.266], [15, 0.286], [20, 0.297], [25, 0.304], [30, 0.308], [35, 0.312],
+  [40, 0.315], [45, 0.317], [50, 0.319], [60, 0.322], [70, 0.324], [80, 0.326], [90, 0.327], [100, 0.328], [150, 0.331], [200, 0.333], [300, 0.334], [400, 0.335], [500, 0.336], [700, 0.336], [1000, 0.336]];
+const ACL_NOTE = {
+  sol: "A single-layer coil's inductance is that of an equivalent sheet of current, 4π² a² n² K / b with Nagaoka's coefficient K (1 for a coil very long against its diameter, less as it shortens), less a small correction for the round wire, which is not a sheet. Wheeler's formula a² n² / (9a + 10b) is the same within 1 % for coils longer than 0.4 diameters. a is the radius to the centre of the wire, b the length, d / D the wire over the pitch.",
+  turns: "The turns that give the inductance wanted on a given form, wire and pitch: the inductance grows a little faster than the square of the turns (the coil lengthens, K falls), so it is found by trying turns until the formula gives it. Wheeler's own answer is beside it.",
+  multi: "Wheeler's formula for a coil wound in layers, with a rectangular cross-section: a the mean radius (to the middle of the winding), b its length, c its depth, all in inches in the formula. It is right to about 1 % when the three terms 6a, 9b and 10c are about equal, that is, for a winding that is neither long and thin nor flat and wide.",
+  spiral: "A flat spiral is a coil of zero length: the equivalent coil has the width c = n D of the winding and the mean radius a = a1 + (n − 1) D / 2, a1 the inside radius to the wire's centre. The Bureau of Standards formula, with the round-wire correction, is the big result; Wheeler's a² n² / (8a + 11c) is within 5 % of the truth for c > 0.2 a.",
+};
+
+function renderAirCoil(domain, tool, favId) {
+  const C = "air-coil";
+  const state = {
+    mode: pref(C, "mode", "sol", Object.keys(ACL_MODES)),
+    unit: pref(C, "unit", "mm", Object.keys(ACL_U)),
+    df: 0.02, dw: 0.0008, n: 10, len: 0.015,                // Solenoid: form diameter, wire diameter (m), turns, length (m)
+    tl: 10, tdf: 0.02, tdw: 0.0008, tp: 0.0015,              // Turns: wanted inductance (uH), form, wire, pitch (m)
+    mid: 0.025, mb: 0.01, mc: 0.006, mn: 150,                // Multilayer: inside diameter, length, depth (m), turns
+    sid: 0.01, sdw: 0.001, sp: 0.0015, sn: 10,               // Spiral: inside diameter, wire diameter, pitch (m), turns
+  };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const PI = Math.PI;
+  const ind = (l) => (l >= 1e-3 ? `${n3(l * 1e3)} mH` : l >= 1e-6 ? `${n3(l * 1e6)} µH` : `${n3(l * 1e9)} nH`);
+  const lenU = (m) => `${n3(m / ACL_U[state.unit])} ${state.unit}`;
+  const tn = (n) => `${n3(n)} turn${n === 1 ? "" : "s"}`;
+
+  // ---------------- the numbers ----------------
+  // The complete elliptic integrals of the first and second kind of the parameter m, by the arithmetic-geometric mean.
+  function ellip(m) {
+    let a = 1, b = Math.sqrt(1 - m), c = Math.sqrt(m), s = 0.5 * c * c, p = 0.5;
+    for (let i = 0; i < 60 && Math.abs(c) > 1e-17; i++) { const an = (a + b) / 2; c = (a - b) / 2; b = Math.sqrt(a * b); a = an; p *= 2; s += p * c * c; }
+    const K = PI / (2 * a);
+    return [K, K * (1 - s)];
+  }
+  // Nagaoka's coefficient for z = 2a / b (diameter over length).
+  function nagaoka(z) {
+    if (z < 1e-3) return 1 - (4 * z) / (3 * PI) + (z * z) / 8;
+    const m = (z * z) / (1 + z * z), [K, E] = ellip(m), s = Math.sqrt(1 + z * z);
+    return (4 / (3 * PI)) * ((s / (z * z)) * (K - E) + s * E - z);
+  }
+  // Table 12: B against the turns, straight on a log scale of the turns between rows.
+  function bOf(n) {
+    if (n >= 1000) return 0.336;
+    let k = 1;
+    while (k < ACL_B.length - 1 && n > ACL_B[k][0]) k++;
+    const [n0, b0] = ACL_B[k - 1], [n1, b1] = ACL_B[k];
+    return b0 + ((b1 - b0) * Math.log(n / n0)) / Math.log(n1 / n0);
+  }
+  const aOf = (dD) => Math.log(dD) + 0.557;                 // Table 11 as a formula
+  // Wheeler's formulas in inches (a, b, c in metres here).
+  const wh = (a, b) => { const ai = a / 0.0254, bi = b / 0.0254; return { l2: (ai * ai * 1) / (9 * ai + 10 * bi), l3: (ai * ai) / (8 * ai + 11 * bi), ai, bi }; };
+  // A single-layer coil: the sheet, the round-wire correction and Wheeler. df, dw, len in metres.
+  function sol(df, dw, n, len) {
+    const a = ((df + dw) / 2) * 100, b = len * 100, D = len / n, z = (2 * a) / b, K = nagaoka(z);
+    const ls = ((4 * PI * PI * 1e-3) * a * a * n * n * K) / b, corr = 4 * PI * 1e-3 * n * a * (aOf(dw / D) + bOf(n));
+    const w = wh(a / 100, len), use2 = len > a / 100, wl = (use2 ? w.l2 : w.l3) * n * n;
+    return { a, b, D, z, K, ls: ls * 1e-6, corr: corr * 1e-6, l: (ls - corr) * 1e-6, w: wl * 1e-6, use2, dD: dw / D };
+  }
+  // The turns that give a wanted inductance (uH) with a pitch: the inductance rises with the turns, so bisection.
+  function turnsFor(target, df, dw, p, wheelerToo) {
+    const f = (n) => (wheelerToo ? (() => { const a = (df + dw) / 2, b = n * p, w = wh(a, b); return ((b > a ? w.l2 : w.l3) * n * n); })() : sol(df, dw, n, n * p).l * 1e6);
+    if (f(1) > target) return NaN;
+    let lo = 1, hi = 1e7;
+    if (f(hi) < target) return Infinity;
+    for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (f(mid) < target) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  }
+  // A multilayer coil, Wheeler (1): the mean radius to the middle of the winding.
+  function multi() {
+    const a = state.mid / 2 + state.mc / 2, ai = a / 0.0254, bi = state.mb / 0.0254, ci = state.mc / 0.0254;
+    const t1 = 6 * ai, t2 = 9 * bi, t3 = 10 * ci, tot = t1 + t2 + t3;
+    return { a, l: ((0.8 * ai * ai * state.mn * state.mn) / tot) * 1e-6, s1: t1 / tot, s2: t2 / tot, s3: t3 / tot };
+  }
+  // A flat spiral of round wire: the Bureau of Standards equivalent coil, and Wheeler (3).
+  function spiral() {
+    const a1 = (state.sid + state.sdw) / 2, D = state.sp, n = state.sn, a = a1 + ((n - 1) * D) / 2, c = n * D;
+    const ac = a * 100, cc = c * 100, lg = Math.log((8 * ac) / cc);
+    const ls = 4 * PI * 1e-3 * ac * n * n * (lg - 0.5 + ((cc * cc) / (96 * ac * ac)) * (lg + 43 / 12));
+    const corr = 4 * PI * 1e-3 * n * ac * (aOf(state.sdw / D) + bOf(n)), ai = a / 0.0254, ci = c / 0.0254;
+    return { a, c, l: (ls - corr) * 1e-6, ls: ls * 1e-6, corr: corr * 1e-6, w: ((ai * ai * n * n) / (8 * ai + 11 * ci)) * 1e-6, outer: state.sid + 2 * ((n - 1) * D + state.sdw), dD: state.sdw / D };
+  }
+
+  function problem() {
+    const fit = (dw, p) => (dw > p * (1 + 1e-12) ? "The wire does not fit: its diameter is more than the pitch." : "");
+    if (state.mode === "sol") {
+      if (!(state.df > 0)) return "Enter the form diameter.";
+      if (!(state.dw > 0)) return "Enter the wire diameter.";
+      if (!(state.n >= 1)) return "Enter the turns, 1 or more.";
+      if (!(state.len > 0)) return "Enter the winding length.";
+      const f = fit(state.dw, state.len / state.n);
+      if (f) return f;
+      return sol(state.df, state.dw, state.n, state.len).z > 100 ? "The coil is shorter than the tables allow: diameter over length is above 100." : "";
+    }
+    if (state.mode === "turns") {
+      if (!(state.tl > 0)) return "Enter the inductance.";
+      if (!(state.tdf > 0)) return "Enter the form diameter.";
+      if (!(state.tdw > 0)) return "Enter the wire diameter.";
+      if (!(state.tp > 0)) return "Enter the pitch.";
+      const f = fit(state.tdw, state.tp);
+      if (f) return f;
+      const n = turnsFor(state.tl, state.tdf, state.tdw, state.tp);
+      if (n === Infinity) return "That needs more than 10 million turns.";
+      if (!isFinite(n)) return "One turn already gives more than that: use a smaller form.";
+      return sol(state.tdf, state.tdw, n, n * state.tp).z > 100 ? "The coil is shorter than the tables allow: diameter over length is above 100." : "";
+    }
+    if (state.mode === "multi") {
+      if (!(state.mid > 0)) return "Enter the inside diameter.";
+      if (!(state.mb > 0)) return "Enter the winding length.";
+      if (!(state.mc > 0)) return "Enter the winding depth.";
+      return state.mn > 0 ? "" : "Enter the turns.";
+    }
+    if (!(state.sid > 0)) return "Enter the inside diameter.";
+    if (!(state.sdw > 0)) return "Enter the wire diameter.";
+    if (!(state.sp > 0)) return "Enter the pitch.";
+    if (!(state.sn >= 1)) return "Enter the turns, 1 or more.";
+    return fit(state.sdw, state.sp);
+  }
+
+  // ---------------- the drawings ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", WIRE = "#5A6169", GREY = "#8A9099";
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const w = (d, c = WIRE, sw = 1.8) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const dim = (x1, y1, x2, y2) => w(`M${x1} ${y1} L${x2} ${y2}`, GREY, 1.2);
+  // A coil seen from the side: one wire, a helix of 7 turns, with a lead at each end.
+  function coilDrawing(extra) {
+    const X0 = 60, P = 20, D = 7, R = 30, N = 7;
+    let d = "";
+    for (let i = 0; i <= N * 24; i++) {
+      const t = (i / 24) * 2 * PI;
+      d += `${i ? "L" : "M"}${(X0 + (P * t) / (2 * PI) + D * Math.cos(t)).toFixed(1)} ${(70 - R * Math.sin(t)).toFixed(1)} `;
+    }
+    const xs = X0 + D, xe = X0 + P * N + D;
+    let o = w(`M40 70 H${xs} M${xe} 70 H${xe + 16}`) + w(d, BLUE, 2.2);
+    o += w("M246 40 V100 M242 44 L246 40 L250 44 M242 96 L246 100 L250 96", GREY, 1.2) + w(`M${xs} 114 H${xe} M${xs + 4} 110 L${xs} 114 L${xs + 4} 118 M${xe - 4} 110 L${xe} 114 L${xe - 4} 118`, GREY, 1.2);
+    return o + extra;
+  }
+  function solDrawing() {
+    if (problem()) return "";
+    const k = sol(state.df, state.dw, state.n, state.len);
+    return coilDrawing(lbl("pd", 246, 34, `ø ${lenU(state.df)}`, BLUE, "middle") + lbl("pb", 137, 134, `b ${lenU(state.len)}`, BLUE, "middle") + lbl("pl", 137, 22, `L ${ind(k.l)}`, GREEN, "middle"));
+  }
+  function turnsDrawing() {
+    if (problem()) return "";
+    const n = turnsFor(state.tl, state.tdf, state.tdw, state.tp);
+    return coilDrawing(lbl("pd", 246, 34, `ø ${lenU(state.tdf)}`, BLUE, "middle") + lbl("pb", 137, 134, `b ${lenU(n * state.tp)}`, GREEN, "middle") + lbl("pn", 137, 22, `${tn(n)} for ${ind(state.tl * 1e-6)}`, GREEN, "middle"));
+  }
+  // Wheeler's Figure 1: the cross-section of the winding, with a, b and c.
+  function multiDrawing() {
+    if (problem()) return "";
+    const k = multi();
+    let o = w("M40 112 H260", GREY, 1.2).replace('fill="none"', 'fill="none" stroke-dasharray="6 4"');
+    o += `<rect x="120" y="34" width="70" height="38" fill="${BLUE}" fill-opacity="0.25" stroke="${BLUE}" stroke-width="2"/>`;
+    o += w("M214 112 V53 M210 108 L214 112 L218 108 M210 57 L214 53 L218 57", GREY, 1.2) + w("M120 24 H190 M124 20 L120 24 L124 28 M186 20 L190 24 L186 28", GREY, 1.2) + w("M104 34 V72 M100 38 L104 34 L108 38 M100 68 L104 72 L108 68", GREY, 1.2);
+    return o + lbl("pa", 222, 86, `a ${lenU(k.a)}`, GREEN) + lbl("pb", 155, 14, `b ${lenU(state.mb)}`, BLUE, "middle") + lbl("pc", 98, 58, `c ${lenU(state.mc)}`, BLUE, "end") + lbl("pl", 150, 134, `L ${ind(k.l)}`, GREEN, "middle");
+  }
+  function spiralDrawing() {
+    if (problem()) return "";
+    const k = spiral();
+    let d = "";
+    for (let i = 0; i <= 90; i++) { const t = (i / 90) * 5 * 2 * PI, r = 12 + (t / (10 * PI)) * 42; d += `${i ? "L" : "M"}${(150 + r * Math.cos(t)).toFixed(1)} ${(70 + r * Math.sin(t)).toFixed(1)} `; }
+    return w(d, BLUE, 2) + lbl("pi", 150, 12, `outer ø ${lenU(k.outer)}`, BLUE, "middle") + lbl("pw", 212, 74, `a ${lenU(k.a)}`, GREEN) + lbl("pl", 150, 134, `L ${ind(k.l)}`, GREEN, "middle");
+  }
+  function diagram() {
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${{ sol: solDrawing, turns: turnsDrawing, multi: multiDrawing, spiral: spiralDrawing }[state.mode]()}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, subline) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${subline}</div>
+        </div>`;
+  const body = (cells, rows, note) => `${grid(cells)}
+      <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${note}</div></div>`;
+  const pct = (a, b) => (isFinite(a) && isFinite(b) ? `${a >= b ? "+" : "−"}${n3(Math.abs((a / b - 1) * 100))} %` : "n/a");
+  const wireL = (m) => (m >= 1 ? `${n3(m)} m` : lenU(m));
+
+  function solHTML(df, dw, n, len, label, note) {
+    const k = sol(df, dw, n, len);
+    const rows = row("Sheet − correction", `${ind(k.ls)} − ${ind(k.corr)}`, "ns") + row("Diameter / length, wire / pitch", `${n3(k.z)} · ${n3(k.dD)}`, "zr")
+      + row("Wheeler's formula", k.use2 ? "(2): 9a + 10b" : (len > 0.2 * k.a / 100 ? "(3): 8a + 11b, for b < a" : "(3), outside its range (b < 0.2 a)"), "wf") + row("Wire", `${wireL(PI * (df + dw) * n)} of ${lenU(dw)} wire`, "wl");
+    return head(label, ind(k.l), `${tn(n)}, ${lenU(len)} long on ${lenU(df)}`) + body([cell("Wheeler", ind(k.w), "c1"), cell("Wheeler off by", pct(k.w, k.l), "c2"), cell("Nagaoka K", n3(k.K), "c3")], rows, note);
+  }
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    if (state.mode === "sol") return solHTML(state.df, state.dw, state.n, state.len, "Inductance", ACL_NOTE.sol);
+    if (state.mode === "turns") {
+      const n = turnsFor(state.tl, state.tdf, state.tdw, state.tp), r = Math.round(n), k = sol(state.tdf, state.tdw, Math.max(r, 1), Math.max(r, 1) * state.tp), nw = turnsFor(state.tl, state.tdf, state.tdw, state.tp, true);
+      const rows = row("With the whole turns", `${tn(r)} give${r === 1 ? "s" : ""} ${ind(k.l)}`, "wt") + row("Wheeler's formula gives", isFinite(nw) ? tn(nw) : "none found", "wn") + row("Wire", `${wireL(PI * (state.tdf + state.tdw) * n)} of ${lenU(state.tdw)} wire`, "wl");
+      return head("Turns", n3(n), `for ${ind(state.tl * 1e-6)} on ${lenU(state.tdf)} at ${lenU(state.tp)} pitch`)
+        + body([cell("Whole turns", n3(r), "c1"), cell("Winding length", lenU(n * state.tp), "c2"), cell("Wheeler off by", pct(nw, n), "c3")], rows, ACL_NOTE.turns);
+    }
+    if (state.mode === "multi") {
+      const k = multi();
+      const rows = row("Terms 6a · 9b · 10c", `${n3(k.s1 * 100)} · ${n3(k.s2 * 100)} · ${n3(k.s3 * 100)} %`, "tm") + row("Accuracy, equal terms", "about 1 %", "ac");
+      return head("Inductance", ind(k.l), `${tn(state.mn)}, mean radius ${lenU(k.a)}`) + body([cell("Mean radius a", lenU(k.a), "c1"), cell("Length b", lenU(state.mb), "c2"), cell("Depth c", lenU(state.mc), "c3")], rows, ACL_NOTE.multi);
+    }
+    const k = spiral();
+    const rows = row("Width c = n D", lenU(k.c), "cw") + row("c / a, wire / pitch", `${n3(k.c / k.a)} · ${n3(k.dD)}`, "cr") + row("Wheeler's accuracy", k.c > 0.2 * k.a ? "5 % (c > 0.2 a)" : "worse than 5 % (c < 0.2 a)", "wa")
+      + row("Sheet − correction", `${ind(k.ls)} − ${ind(k.corr)}`, "ns");
+    return head("Inductance", ind(k.l), `${tn(state.sn)}, outer diameter ${lenU(k.outer)}`) + body([cell("Wheeler", ind(k.w), "c1"), cell("Wheeler off by", pct(k.w, k.l), "c2"), cell("Mean radius a", lenU(k.a), "c3")], rows, ACL_NOTE.spiral);
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "The Bureau's 400-turn coil", note: "Circular 74 gets 12 909 µH; this gives 12.9 mH, Wheeler's formula 0.418 % less.",
+      apply: example({ mode: "sol", unit: "cm", df: 0.1995, dw: 0.0005, n: 400, len: 0.4 }) },
+    { title: "10 turns on a 20 mm form", note: "1.72 µH with 0.8 mm wire over 15 mm; Wheeler's formula is 1.53 % above.",
+      apply: example({ mode: "sol", unit: "mm", df: 0.02, dw: 0.0008, n: 10, len: 0.015 }) },
+    { title: "A single loop, 100 mm", note: "273 nH; the loop is thin (b < 0.2 a), outside Wheeler's range, which reads 15 % low.",
+      apply: example({ mode: "sol", unit: "mm", df: 0.1, dw: 0.002, n: 1, len: 0.003 }) },
+    { title: "10 µH on a 20 mm form", note: "40.9 turns of 0.8 mm wire at 1.5 mm pitch, 61.3 mm long; Wheeler's formula says 40.6.",
+      apply: example({ mode: "turns", unit: "mm", tl: 10, tdf: 0.02, tdw: 0.0008, tp: 0.0015 }) },
+    { title: "1 µH on 10 mm, close-wound", note: "10.2 turns of 0.5 mm wire at 0.6 mm pitch, 6.13 mm long; Wheeler's formula, 9.92.",
+      apply: example({ mode: "turns", unit: "mm", tl: 1, tdf: 0.01, tdw: 0.0005, tp: 0.0006 }) },
+    { title: "The Bureau's 1000-turn coil", note: "Circular 74 gets 195.2 mH by its longer method; Wheeler's formula, 197 mH.",
+      apply: example({ mode: "multi", unit: "mm", mid: 0.19, mb: 0.1, mc: 0.01, mn: 1000 }) },
+    { title: "An IF coil, 150 turns", note: "154 µH; 6a, 9b and 10c are 29, 39 and 32 % of the sum, about equal as Wheeler asks.",
+      apply: example({ mode: "multi", unit: "mm", mid: 0.006, mb: 0.004, mc: 0.003, mn: 150 }) },
+    { title: "A flat spiral, 10 turns", note: "2.19 µH on a 10 mm hole, 39 mm across with 1 mm wire at 1.5 mm pitch; Wheeler, +2.7 %.",
+      apply: example({ mode: "spiral", unit: "mm", sid: 0.01, sdw: 0.001, sp: 0.0015, sn: 10 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const lu = () => sel("data-lu", Object.keys(ACL_U).map((u) => [u, u]), state.unit);
+    const fld = (name, key, val, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(val)}" />${unit}</div></div>`;
+    const len = (name, key) => fld(name, key, state[key] / ACL_U[state.unit], lu());
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    let fields = "";
+    if (state.mode === "sol") fields = `<div class="field-pair">${len("Form diameter", "df")}${len("Wire diameter", "dw")}</div><div class="field-pair">${fld("Turns", "n", state.n, "")}${len("Winding length", "len")}</div>`;
+    else if (state.mode === "turns") fields = `<div class="field-pair">${fld("Inductance wanted", "tl", state.tl, fixed("µH"))}${len("Form diameter", "tdf")}</div><div class="field-pair">${len("Wire diameter", "tdw")}${len("Pitch", "tp")}</div>`;
+    else if (state.mode === "multi") fields = `<div class="field-pair">${len("Inside diameter", "mid")}${fld("Turns", "mn", state.mn, "")}</div><div class="field-pair">${len("Length b", "mb")}${len("Depth c", "mc")}</div>`;
+    else fields = `<div class="field-pair">${len("Inside diameter", "sid")}${len("Wire diameter", "sdw")}</div><div class="field-pair">${fld("Turns", "sn", state.sn, "")}${len("Pitch", "sp")}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Solenoid, turns, multilayer, spiral")}
+
+      ${pillRow(Object.entries(ACL_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["L = 0.03948 a² n² K / b  (µH, cm)", "ΔL = 0.01257 n a (A + B)", "L = a² n² / (9a + 10b)  (µH, in)", "L = a² n² / (8a + 11c)  (µH, in)", "L = 0.8 a² n² / (6a + 9b + 10c)", "A = ln(d / D) + 0.557"],
+        "The inductance of a coil is the magnetic flux it links per ampere. An air core has nothing to concentrate the flux, so L comes from the shape alone and grows as the square of the turns n. A very long thin solenoid has L = μ0 n² A / b; a shorter one has less, because the flux leaks out of its ends. Nagaoka's coefficient K is that loss exactly, for a sheet of current: K is 1 for a coil very long against its diameter, 0.818 when it is two diameters long and 0.083 for a ring 34 times wider than it is long. Real wire is not a sheet, so the Bureau of Standards subtracts a correction 0.01257 n a (A + B): A depends on the wire diameter d over the pitch D, the distance from one turn to the next, and B on the number of turns. The units of the printed formulas are centimetres, or inches for Wheeler's. Wheeler's 1928 formulas are simple fits to those results: a² n² / (9a + 10b) µH for a solenoid longer than its radius (right to 1 %), a² n² / (8a + 11b) for a shorter one, 0.8 a² n² / (6a + 9b + 10c) for a coil wound in layers of depth c, and a² n² / (8a + 11c) for a flat spiral. a is the mean radius of the winding, b its length. The formulas do not include the capacitance between turns, which makes the coil resonate; the skin effect, which raises its resistance; or a core. Use the coil well below its self-resonance."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const lens = ["df", "dw", "len", "tdf", "tdw", "tp", "mid", "mb", "mc", "sid", "sdw", "sp"];
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value); state[key] = lens.includes(key) ? v * ACL_U[state.unit] : v; show(); };
+    });
+    app.querySelectorAll("select[data-lu]").forEach((el) => { el.onchange = () => { state.unit = el.value; setPref(C, "unit", state.unit); paint(); }; });
   }
 
   paint();

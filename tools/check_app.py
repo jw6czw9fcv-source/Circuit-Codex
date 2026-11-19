@@ -30,8 +30,8 @@ def dump_dom(url):
         out = subprocess.run(
             [chrome(), "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
              f"--user-data-dir={profile}", "--window-size=560,1000",
-             "--virtual-time-budget=600000", "--dump-dom", url],
-            capture_output=True, timeout=600)
+             "--virtual-time-budget=1200000", "--dump-dom", url],
+            capture_output=True, timeout=1200)
         return out.stdout.decode("utf-8", "replace")
     finally:
         shutil.rmtree(profile, ignore_errors=True)
