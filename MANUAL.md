@@ -40,6 +40,7 @@ will key on, since that is the id the app already holds for each tool.
 - Inductors → [Inductor SMD code](#inductor-smd-code)
 - Inductors → [Air-core coil (Wheeler)](#air-coil)
 - Inductors → [Toroid winding](#toroid-winding)
+- Inductors → [Transformer (turns ratio)](#transformer)
 - Inductors → [Series/parallel (L)](#ind-series-parallel)
 - Passive filters → [RC filter](#rc-filter)
 - Passive filters → [RL filter](#rl-filter)
@@ -2126,6 +2127,98 @@ Published answers reproduced:
 | T50-2: 49 µH per 100 turns, 4.9 nH/N² | Amidon reprint, Micrometals 2023 | the same number in two units | 4.9 nH/N², 45.2 turns for 10 µH |
 | Percent permeability at 200 Oe, 12 mixes (−1 to −17, −30, −63) | Micrometals 2023 mix pages | 82.2, 95.9, 60.1, 98.1, 96.7, 60.1, 99.6, 91.8, 74.7, 99.5, 66.7, 51.7 % | within 0.6 points of each (81.8, 96.0, 59.5 …), shown in the Bias pill |
 | Core table, 96 parts that are in both | Micrometals 2023 against the Amidon reprint | AL within 2 % for 89, different for 7 (for example T-80-17: 3.2 and 2.2 nH/N²); the geometry the same except five mix-2 rows whose inside diameters Amidon prints wrongly | Micrometals' values |
+
+[↑ Index](#index)
+
+---
+
+<a id="transformer"></a>
+## Transformer (turns ratio)
+
+`calc: transformer` · Passive components › Inductors
+
+### What it computes
+
+The ratio, the voltages and currents and the reflected impedance of a transformer; the turns it needs for a core and a flux density; and its regulation and
+efficiency under load. Three pills:
+
+- **Ratio:** the picker in the Output heading says what is given. **Turns:** the primary and secondary turns (a = Np / Ns); **voltages:** the primary and the secondary voltage (a = Vp / Vs);
+  **impedances:** the impedance the primary must show (a = √(Zin / RL)). Always: the primary voltage and the load RL (Ω). The big result is the turns ratio a : 1; cells: the secondary voltage,
+  the secondary current and the primary current; rows: the load as the primary sees it (a² RL), the power, the kind (step-down, step-up, 1 : 1 isolation), and the turns or the voltages. The drawing is two coils on a core
+  with the voltages, the ratio and the load.
+- **Turns:** the primary and secondary voltage, the frequency (Hz, kHz, MHz), the core's cross-section Ae (cm² or mm²) and the peak flux density B (mT or gauss); the picker in the Output heading chooses a sine
+  wave (K = 4.44, the voltage rms) or a square wave (K = 4, the voltage its amplitude). The big result is the primary turns, not rounded; cells: the whole turns (rounded up, so B stays under the limit), the secondary turns
+  (rounded to the nearest) and the volts per turn; rows: B with the whole turns, the exact secondary turns, the constant.
+- **Loaded:** the primary voltage, the turns ratio Np / Ns, the winding resistances Rp and Rs, the load and the core loss (W). The big result is the loaded secondary voltage; cells: the regulation, the efficiency and the output power;
+  rows: the no-load secondary voltage, the currents, the copper loss and the resistance the source sees.
+
+- **Units:** V, Ω and W are fixed; Hz / kHz / MHz, cm² / mm² and mT / G are pickers, each in its own box.
+- **Remembered:** the pill, the way the ratio is given, the waveform and the three units.
+
+Examples: 230 V to 12 V into 8 Ω; matching 50 Ω to 200 Ω; the turns of a 50 Hz mains core of 8 cm² at 1.2 T; a 100 kHz ferrite with a square wave at Magnetics' flux level; a small mains transformer and a heavily loaded one.
+
+### Terms
+
+- **Primary, secondary, turns ratio a:** the winding the source drives, the winding that feeds the load, and Np / Ns. a above 1 is step-down (the secondary voltage is lower), a below 1 step-up. Some books write the ratio the other way round.
+- **Ideal transformer:** no losses, no leakage, infinite magnetizing inductance: the voltages are in the ratio of the turns, the currents the other way, and power in equals power out.
+- **Reflected impedance:** a load ZL on the secondary appears from the primary as a² ZL, which is how a transformer matches a source to a load.
+- **EMF equation:** the voltage of a winding is its turns times the rate of change of flux. For a sine wave the rms voltage is 2π f N Ae B / √2, about 4.44 f N Ae B, B the peak flux density and Ae the core's cross-section (m², tesla);
+  for a square wave of amplitude V, V = 4 f N Ae B. With B in gauss and Ae in cm², N = V 10⁸ / (K f Ae B).
+- **Flux density B, saturation:** B can't exceed the core's saturation (ferrite saturates at a substantially lower flux density than laminated steel, Wikipedia), and at high frequency the core loss limits B much lower (Magnetics: 200 mT at 20 kHz down to 70 mT at 250 kHz for a power ferrite).
+- **Regulation:** how much the secondary voltage falls from no load to load, over the loaded voltage. **Efficiency:** output power over the output plus the copper and core losses.
+- **Copper loss, core loss:** the heat in the windings (I² R) and in the core (hysteresis and eddy currents).
+
+### Sources
+
+- **Magnetics, "Ferrite Cores for Power: Transformer Design" (the 2013 guide, 9 pages read as text; the PDF from acalbfi.com):** Np = Vp 10⁸ / (4 B Ac f) for a square wave with B in gauss, Ac in cm² and f in Hz, Ns = Np Vs / Vp,
+  Ip = Pin / Vin and Is = Pout / Vout, efficiency = Pout / (Pout + wire losses + core losses), voltage regulation = (|V no load| − |V full load|) / |V full load| × 100, K Wa = Np Awp + Ns Aws with K 0.4 for toroids and 0.6 for pot, E and U cores, and the flux
+  density it gives for a power ferrite against frequency (200 mT at 20 kHz, 130 mT at 50 kHz, 90 mT at 100 kHz, 70 mT at 250 kHz). The guide cites A. I. Pressman's "Switching Power Supply Design" for its area-product method; the book was not read.
+- **Micrometals, "Iron Powder Cores" catalog (2023; page 18 rendered):** the sine-wave flux density Bpk = Erms 10⁸ / (4.44 Ae N f) in gauss, volts, cm² and Hz, the same equation as the tool's.
+- **Wikipedia, "Transformer" (the page downloaded and read as text; a secondary source):** the ideal transformer identity Vp / Vs = Is / Ip = Np / Ns = a (its equation 5), the load impedance seen from the primary a² ZL (equation 7), the universal EMF equation
+  Erms = 2π f N A Bpeak / √2 ≈ 4.44 f N A Bpeak, and the equivalent circuit: winding resistances and leakage reactances in series, referred to the primary by multiplying the secondary's by a², and the magnetizing branch, which can be moved
+  to the input to give two series impedances that simply add. Its sign convention (step-up a < 1) is the one used here.
+- **Fair-Rite data sheet 5943002721 (read):** Ae 0.78 cm² of a 43-mix toroid, used for the example of the 100 kHz core.
+- **Not read:** IEEE C57 and IEC 60076 (power transformer standards), the open- and short-circuit tests, autotransformers, three-phase connections, leakage inductance and winding capacitance formulas. The tool is for single-phase two-winding transformers.
+
+### Why the formulas are these
+
+**Ratio.** Faraday's law gives each winding a voltage proportional to its turns; conservation of power gives the currents the other way; a load RL on the secondary draws Vs / RL, and the primary current is that divided by a, so the primary sees Vp / Ip = a² RL (Wikipedia, Magnetics).
+When the ratio is given by two voltages or by two impedances the same relations are used the other way: a = Vp / Vs, or a = √(Zin / RL).
+
+**Turns.** The EMF equation solved for N: V 10⁸ / (K f Ae B) with the units of the printed forms (B in gauss, Ae in cm², the tool converts from tesla and m²). The whole turns are rounded up because fewer turns would raise B above the value asked for; B with the whole turns is shown. The secondary turns
+are the primary's whole turns times Vs / Vp, rounded to the nearest. K is 4.44 for a sine wave (rms) and 4 for a square wave (amplitude). The exact sine constant is 2π / √2 = 4.4429; the printed 4.44 is used.
+
+**Loaded (derived here).** In the simplified equivalent circuit (magnetizing branch at the input, leakage reactance ignored) the source drives Rp, the secondary resistance referred as a² Rs and the load as a² RL in series: Ip = Vp / (Rp + a² (Rs + RL)); then Is = a Ip and Vs = Is RL. The no-load secondary voltage is Vp / a. The regulation
+is (Vno-load − Vloaded) / Vloaded. The copper loss is Ip² Rp + Is² Rs. The core loss is typed in and goes into the efficiency only (the magnetizing current it implies is not added to Ip).
+
+### Assumptions and limits
+
+- **A resistive load, one frequency, sine or square-wave drive.** The Loaded pill leaves out the leakage reactance and the magnetizing current, so its regulation is the resistive part only; a real mains transformer's leakage reactance adds to it for loads with reactance, and the core loss is a number you supply.
+- **No saturation check beyond B.** The tool gives B; whether it is acceptable depends on the core and the temperature (the Magnetics levels above are for a power ferrite at a 100 mW/cm³ loss limit).
+- **Turns are rounded for the core, not for the winding window.** Whether the wire fits is the Toroid winding tool's business (or the area product K Wa = Np Awp + Ns Aws).
+- **Skin effect and proximity effect, winding capacitance, tolerances of the turns ratio** are not modelled.
+- **Display.** Three figures; V or mV or kV, A or mA or µA, Ω or kΩ or MΩ, W or mW or kW as the size asks.
+
+### How it was checked
+
+81 cases, the expected values from a Python implementation of the equations above (every figure and every label of the drawing):
+- Ratio: the opening screen, 9 settings by turns (1 : 1 to 1000 : 1, fractions of a turn, 50 mV to 1 kV, 0.1 Ω to 100 kΩ), 8 by voltages, 8 by impedances (equal, 50 Ω to 200 Ω, 1 MΩ to 50 Ω), six refusals;
+- Turns: the opening screen, 12 settings (sine and square wave, 50 Hz to 1 MHz, 0.25 to 100 cm² and mm² sections, 40 to 1500 mT, and in gauss), five refusals, the constant and the picker;
+- Loaded: the opening screen, 12 settings (no losses, almost shorted, almost unloaded, 1 : 1, step-up, 1 kV), five refusals;
+- the pickers and their memory, the units, and the six examples.
+
+540 more cases (three batches of 180: random turns, voltages, impedances, frequencies, flux densities, sections, resistances, loads and core losses, in the three frequency, two flux and two area units) compared every figure and label with the Python implementation; they were run and not kept.
+The loaded circuit was also compared, on 2000 random transformers, with the Thevenin form (the no-load voltage Vp / a behind Rs + Rp / a²) and with the power balance (source power = output + copper loss): the differences were at the level of rounding (5 × 10⁻¹⁶).
+
+Published relations reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| Ideal identity: 230 V : 12 V = 19.2 : 1, I : 78.3 mA : 1.5 A | Wikipedia, equation 5 | Vp / Vs = Is / Ip = Np / Ns | 19.2 : 1, 1.5 A out, 78.3 mA in |
+| Reflected load of 8 Ω at 19.2 : 1 | Wikipedia, equation 7 | a² ZL | 2.94 kΩ |
+| 50 Ω to 200 Ω | the same | a = √(Zin / RL) | 0.5 : 1 (1 : 2) |
+| EMF equation, sine wave | Micrometals 2023, Wikipedia | Bpk = Erms 10⁸ / (4.44 Ae N f) | 1080 turns for 230 V, 50 Hz, 8 cm², 1.2 T, and B = 1200 mT back from the whole turns |
+| Square wave, 24 V, 100 kHz, 0.78 cm², 900 G | Magnetics 2013, Np = Vp 10⁸ / (4 B Ac f) | the formula and the flux level for 100 kHz (no worked example is printed) | 8.55 turns, 9 whole (85.5 mT) |
 
 [↑ Index](#index)
 

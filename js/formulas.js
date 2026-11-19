@@ -80,6 +80,12 @@ const FORMULAS = [
     note: "The turns for a wanted inductance on a toroid from its AL, the inductance of a number of turns, the wire (window fill, one-layer turns, length, DC resistance) and the fall of inductance with a direct current. From Micrometals' 2023 catalog (the core table, tolerances and equations), Magnetics' catalog (the wire table and winding factor) and Fair-Rite's definition of AL; the wire length and flux density are derived.",
   },
   {
+    tool: "Transformer (turns ratio)",
+    domain: "passive",
+    formulas: ["Vp / Vs = Is / Ip = Np / Ns = a", "ZL' = a² ZL  (from the primary)", "N = V 10⁸ / (4.44 f Ae B)  sine", "N = V 10⁸ / (4 f Ae B)  square", "Regulation = (V0 − VL) / VL", "η = Pout / (Pout + Pcu + Pcore)"],
+    note: "The turns ratio, secondary voltage and current and reflected impedance of a transformer, the turns for a core and a flux density (sine or square wave), and the regulation and efficiency under load. From Magnetics' ferrite transformer design guide (turns, regulation and efficiency) and the Micrometals catalog (the 4.44 equation), with the Transformer page of Wikipedia for the ideal identity and the equivalent circuit; the loaded circuit is derived.",
+  },
+  {
     tool: "Series/parallel (L)",
     domain: "passive",
     formulas: ["Series: L = L1 + L2 + …", "Parallel: 1/L = 1/L1 + 1/L2 + …"],

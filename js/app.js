@@ -684,6 +684,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rf-diodes") return renderRfDiodes(domain, tool, favId);
   if (calcId === "air-coil") return renderAirCoil(domain, tool, favId);
   if (calcId === "toroid-winding") return renderToroidWinding(domain, tool, favId);
+  if (calcId === "transformer") return renderTransformer(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -20606,6 +20607,242 @@ function renderToroidWinding(domain, tool, favId) {
     if (mx) mx.onchange = () => { state.mix = mx.value; setPref(C, "mix", state.mix); paint(); };
     const aw = app.querySelector("select[data-awg]");
     if (aw) aw.onchange = () => { state.awg = parseInt(aw.value, 10); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- Transformer (turns ratio) ----------
+// The ratio, voltages, currents and reflected impedance of a transformer, the turns for a core and a flux density, and the regulation and efficiency under load. Sources, as read this session:
+//  - Magnetics, "Ferrite Cores for Power: Transformer Design" (the 2013 guide, 9 pages as text; the PDF from acalbfi.com): Np = Vp 10^8 / (4 B Ac f) (B in gauss, Ac in cm2, f in Hz, a square wave), Ns = Np Vs / Vp,
+//    Ip = Pin / Vin, Is = Pout / Vout, efficiency = Pout / (Pout + wire losses + core losses), voltage regulation = (|V no load| - |V full load|) / |V full load| x 100, K Wa = Np Awp + Ns Aws with K 0.4 for toroids and
+//    0.6 for pot, E and U cores; the flux density the guide uses against frequency for a power ferrite (200 mT at 20 kHz, 130 mT at 50 kHz, 90 mT at 100 kHz, 70 mT at 250 kHz).
+//  - Micrometals, "Iron Powder Cores" catalog 2023 (the mix pages; page 18 rendered): the sine-wave flux density Bpk = Erms 10^8 / (4.44 Ae N f) (gauss, volts, cm2, Hz).
+//  - Wikipedia, "Transformer" (the raw page, read as text; a secondary source): the ideal transformer identity Vp / Vs = Is / Ip = Np / Ns = a, a load Z seen from the primary as a^2 Z, the universal EMF equation
+//    Erms = 2 pi f N A Bpeak / sqrt(2), about 4.44 f N A Bpeak, and the equivalent circuit with winding resistances and leakage reactances referred to the primary by a^2, the magnetizing branch moved to the input.
+//  - Fair-Rite data sheet 5943002721 (read): Ae 0.78 cm2, le 8.9 cm of a 43-mix toroid, used in an example.
+//  Not read: IEEE C57 and IEC 60076, Pressman's book (Magnetics cites it for the area product and the flux levels), the open- and short-circuit tests. Derived here: the loaded circuit (the winding resistances in series with the load, the
+//  magnetizing current and the leakage reactance ignored) and the percentages; the core loss is an input and enters the efficiency only.
+const TR_MODES = { ratio: "Ratio", turns: "Turns", loaded: "Loaded" };
+const TR_KNOWN = [["turns", "Given: turns"], ["volts", "Given: voltages"], ["imp", "Given: impedances"]];
+const TR_WAVE = [["sine", "Sine, K 4.44"], ["square", "Square, K 4"]];
+const TR_UF = { Hz: 1, kHz: 1e3, MHz: 1e6 };
+const TR_UB = { mT: 1e-3, G: 1e-4 };
+const TR_UA = { "cm²": 1e-4, "mm²": 1e-6 };
+const TR_NOTE = {
+  ratio: "An ideal transformer passes power: Vp / Vs = Is / Ip = Np / Ns = a, the turns ratio, so the voltage falls by a (step-down, a above 1) and the current rises by a. A load RL on the secondary looks like a² RL from the primary, which is how a transformer matches impedances. Real windings add losses and leakage (the Loaded pill).",
+  turns: "The voltage across a winding is its turns times the rate of change of the flux: for a sine wave Erms = 4.44 f N Ae B (B the peak flux density, Ae the core's cross-section); for a square wave V = 4 f N Ae B. So the turns for a core are V / (K f Ae B), and more frequency or more core needs fewer. Take the whole turns upward, so B stays under the limit.",
+  loaded: "The windings' resistances Rp and Rs are in series with the load; seen from the primary the total is Rp + a² (Rs + RL). The secondary voltage falls below Vp / a as the load current flows: that fall, over the loaded voltage, is the regulation. Efficiency is the output over the output plus the copper and core losses.",
+};
+
+function renderTransformer(domain, tool, favId) {
+  const C = "transformer";
+  const state = {
+    mode: pref(C, "mode", "ratio", Object.keys(TR_MODES)), known: pref(C, "known", "turns", TR_KNOWN.map((k) => k[0])), wave: pref(C, "wave", "sine", TR_WAVE.map((k) => k[0])),
+    uf: pref(C, "uf", "Hz", Object.keys(TR_UF)), ub: pref(C, "ub", "mT", Object.keys(TR_UB)), ua: pref(C, "ua", "cm²", Object.keys(TR_UA)),
+    vp: 230, np: 1000, ns: 52, vsi: 12, rl: 8, zin: 50,                       // Ratio: volts, turns, volts wanted, ohms
+    tv: 230, tvs: 12, tf: 50, tae: 8e-4, tb: 1.2,                       // Turns: volts, volts wanted, Hz, m2, T
+    lv: 230, la: 19.2, rp: 5, rs: 0.05, lrl: 5, pcore: 1,                     // Loaded: volts, ratio, ohms, ohms, ohms, watts
+  };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const volt = (v) => (v >= 1e3 ? `${n3(v / 1e3)} kV` : v >= 1 ? `${n3(v)} V` : `${n3(v * 1e3)} mV`);
+  const amp = (i) => (i >= 1 ? `${n3(i)} A` : i >= 1e-3 ? `${n3(i * 1e3)} mA` : `${n3(i * 1e6)} µA`);
+  const ohm = (r) => (r >= 1e6 ? `${n3(r / 1e6)} MΩ` : r >= 1e3 ? `${n3(r / 1e3)} kΩ` : r >= 1 ? `${n3(r)} Ω` : `${n3(r * 1e3)} mΩ`);
+  const watt = (p) => (p >= 1e3 ? `${n3(p / 1e3)} kW` : p >= 1 ? `${n3(p)} W` : `${n3(p * 1e3)} mW`);
+  const hz = (f) => (f >= 1e6 ? `${n3(f / 1e6)} MHz` : f >= 1e3 ? `${n3(f / 1e3)} kHz` : `${n3(f)} Hz`);
+  const tn = (n) => `${n3(n)} turn${n === 1 ? "" : "s"}`;
+  const pc = (v) => `${n3(v)} %`;
+
+  // ---------------- the numbers ----------------
+  // The ideal transformer: the ratio a = Np / Ns from the turns, from the voltages or from the impedances (a^2 RL = Zin).
+  function ideal() {
+    const a = state.known === "turns" ? state.np / state.ns : state.known === "volts" ? state.vp / state.vsi : Math.sqrt(state.zin / state.rl);
+    const vs = state.vp / a, is = vs / state.rl, ip = is / a;
+    return { a, vs, is, ip, p: state.vp * ip, zin: a * a * state.rl };
+  }
+  // The turns for a core: V 10^8 / (K f Ae B), B in gauss and Ae in cm2.
+  function turns() {
+    const K = state.wave === "sine" ? 4.44 : 4, ae = state.tae * 1e4, bg = state.tb * 1e4, n = (state.tv * 1e8) / (K * state.tf * ae * bg), w = Math.ceil(n);
+    const bw = (state.tv * 1e8) / (K * state.tf * ae * w), ns = (n * state.tvs) / state.tv, nsw = Math.max(1, Math.round((w * state.tvs) / state.tv));
+    return { K, n, w, bw, ns, nsw, vpt: state.tv / n };
+  }
+  // The loaded transformer: the windings' resistances in series with the load, the core loss in the efficiency only.
+  function loaded() {
+    const a = state.la, rt = state.rp + a * a * (state.rs + state.lrl), ip = state.lv / rt, is = a * ip, vs = is * state.lrl, vno = state.lv / a;
+    const pout = is * is * state.lrl, pcu = ip * ip * state.rp + is * is * state.rs;
+    return { a, ip, is, vs, vno, pout, pcu, reg: ((vno - vs) / vs) * 100, eff: (pout / (pout + pcu + state.pcore)) * 100, rt };
+  }
+
+  function problem() {
+    if (state.mode === "ratio") {
+      if (!(state.vp > 0)) return "Enter the primary voltage.";
+      if (!(state.rl > 0)) return "Enter the load.";
+      if (state.known === "turns") return state.np > 0 && state.ns > 0 ? "" : "Enter the turns of both windings.";
+      if (state.known === "volts") return state.vsi > 0 ? "" : "Enter the secondary voltage.";
+      return state.zin > 0 ? "" : "Enter the impedance the primary must show.";
+    }
+    if (state.mode === "turns") {
+      if (!(state.tv > 0)) return "Enter the voltage.";
+      if (!(state.tvs > 0)) return "Enter the secondary voltage.";
+      if (!(state.tf > 0)) return "Enter the frequency.";
+      if (!(state.tae > 0)) return "Enter the core's cross-section.";
+      return state.tb > 0 ? "" : "Enter the flux density.";
+    }
+    if (!(state.lv > 0)) return "Enter the primary voltage.";
+    if (!(state.la > 0)) return "Enter the turns ratio.";
+    if (!(state.rp >= 0 && state.rs >= 0)) return "Enter the winding resistances, 0 or more.";
+    if (!(state.lrl > 0)) return "Enter the load.";
+    return state.pcore >= 0 ? "" : "Enter the core loss, 0 or more.";
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", WIRE = "#5A6169", GREY = "#8A9099";
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const w = (d, c = WIRE, sw = 1.8) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const dot = (x, y) => `<circle cx="${x}" cy="${y}" r="2.3" fill="${GREY}"/>`;
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" fill="none" stroke="${WIRE}" stroke-width="1.6"/>`;
+  const humps = (x, y1, y2, n, sign, c) => { const r = (y2 - y1) / (2 * n); return w(`M${x} ${y1}` + ` a${r} ${r} 0 0 ${sign} 0 ${2 * r}`.repeat(n), c, 2.2); };
+  // Two coils on a core: the primary left, the secondary right, a lead at each end.
+  function xfmr(pcol, scol) {
+    let o = w("M40 44 H112 V54") + w("M112 94 V104 H40") + humps(112, 54, 94, 4, 0, pcol) + w("M148 54 V94", GREY, 2) + w("M154 54 V94", GREY, 2);
+    o += w("M190 54 V44 H262") + w("M190 94 V104 H262") + humps(190, 54, 94, 4, 1, scol) + port(40, 44) + port(40, 104) + port(262, 44) + port(262, 104) + dot(124, 50) + dot(178, 50);
+    return o;
+  }
+  function diagram() {
+    if (problem()) return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none"></svg>`;
+    let o;
+    if (state.mode === "ratio") {
+      const k = ideal(), fromT = state.known === "turns";
+      o = xfmr(BLUE, BLUE) + lbl("pa", 151, 24, `${n3(k.a)} : 1`, GREEN, "middle") + lbl("pv", 8, 34, `Vp ${volt(state.vp)}`, BLUE) + lbl("ps", 292, 34, `Vs ${volt(k.vs)}`, GREEN, "end")
+        + lbl("pr", 292, 124, `RL ${ohm(state.rl)}`, BLUE, "end") + lbl("pz", 8, 124, `${ohm(k.zin)}`, state.known === "imp" ? BLUE : GREEN);
+      if (fromT) o += lbl("pt", 151, 124, `${n3(state.np)} : ${n3(state.ns)}`, BLUE, "middle");
+    } else if (state.mode === "turns") {
+      const k = turns();
+      o = xfmr(GREEN, GREEN) + lbl("pa", 151, 24, `${tn(k.w)} : ${tn(k.nsw)}`, GREEN, "middle") + lbl("pv", 8, 34, volt(state.tv), BLUE) + lbl("ps", 292, 34, volt(state.tvs), BLUE, "end")
+        + lbl("pb", 151, 124, `${n3(k.bw * 0.1)} mT at ${hz(state.tf)}`, GREEN, "middle");
+    } else {
+      const k = loaded();
+      o = xfmr(BLUE, BLUE) + lbl("pa", 151, 24, `${n3(k.a)} : 1`, BLUE, "middle") + lbl("pv", 8, 34, `Vp ${volt(state.lv)}`, BLUE) + lbl("ps", 292, 34, `Vs ${volt(k.vs)}`, GREEN, "end")
+        + lbl("pr", 8, 124, `Rp ${ohm(state.rp)} · Rs ${ohm(state.rs)}`, BLUE) + lbl("pe", 292, 124, `${n3(k.eff)} %`, GREEN, "end");
+    }
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, subline) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${subline}</div>
+        </div>`;
+  const body = (cells, rows, note) => `${grid(cells)}
+      <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${note}</div></div>`;
+
+  function ratioHTML() {
+    const k = ideal(), kind = Math.abs(k.a - 1) < 1e-9 ? "1 : 1, isolation" : k.a > 1 ? "step-down" : "step-up";
+    const rows = row("Seen from the primary", `${ohm(k.zin)} (a² RL)`, "zi") + row("Power", watt(k.p), "pw") + row("Kind", kind, "kd")
+      + (state.known === "turns" ? row("Turns", `${n3(state.np)} : ${n3(state.ns)}`, "tu") : row("Voltage ratio", `${n3(state.vp)} V : ${n3(k.vs)} V`, "vr"));
+    return head("Turns ratio Np : Ns", `${n3(k.a)} : 1`, `${volt(state.vp)} in, ${volt(k.vs)} out into ${ohm(state.rl)}`)
+      + body([cell("Secondary V", volt(k.vs), "c1"), cell("Secondary I", amp(k.is), "c2"), cell("Primary I", amp(k.ip), "c3")], rows, TR_NOTE.ratio);
+  }
+  function turnsHTML() {
+    const k = turns();
+    const rows = row("Flux density B with the whole turns", `${n3(k.bw * 0.1)} mT · ${n3(k.bw)} G`, "bw") + row("Secondary turns, exact", n3(k.ns), "nx") + row("Constant", `K ${k.K} (${state.wave === "sine" ? "sine, rms" : "square, peak"})`, "kk");
+    return head("Primary turns", n3(k.n), `${volt(state.tv)} at ${hz(state.tf)} on ${n3(state.tae * 1e4)} cm² at ${n3(state.tb * 1e3)} mT`)
+      + body([cell("Whole turns", n3(k.w), "c1"), cell("Secondary turns", n3(k.nsw), "c2"), cell("Volts per turn", volt(k.vpt), "c3")], rows, TR_NOTE.turns);
+  }
+  function loadedHTML() {
+    const k = loaded();
+    const rows = row("No-load secondary", volt(k.vno), "vn") + row("Currents Ip · Is", `${amp(k.ip)} · ${amp(k.is)}`, "ci") + row("Copper loss", watt(k.pcu), "cu") + row("Total seen by the source", ohm(k.rt), "rt");
+    return head("Loaded secondary voltage", volt(k.vs), `${pc(k.reg)} below the no-load ${volt(k.vno)}`)
+      + body([cell("Regulation", pc(k.reg), "c1"), cell("Efficiency", pc(k.eff), "c2"), cell("Output", watt(k.pout), "c3")], rows, TR_NOTE.loaded);
+  }
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    return { ratio: ratioHTML, turns: turnsHTML, loaded: loadedHTML }[state.mode]();
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "230 V to 12 V into 8 Ω", note: "19.2 : 1: 1.5 A out, 78.3 mA in; the primary sees 2.94 kΩ.",
+      apply: example({ mode: "ratio", known: "volts", vp: 230, vsi: 12, rl: 8 }) },
+    { title: "50 Ω to 200 Ω", note: "A 1 : 2 step-up, 0.5 : 1: 1 V in gives 2 V and 10 mA out.",
+      apply: example({ mode: "ratio", known: "imp", vp: 1, zin: 50, rl: 200 }) },
+    { title: "A mains core at 50 Hz", note: "230 V on 8 cm² at 1.2 T needs 1080 turns, and 56 for 12 V.",
+      apply: example({ mode: "turns", wave: "sine", tv: 230, tvs: 12, tf: 50, tae: 0.0008, tb: 1.2, uf: "Hz" }) },
+    { title: "A ferrite at 100 kHz, square", note: "24 V, 0.78 cm², 90 mT: 8.55 turns, 9 whole (85.5 mT), 5 secondary.",
+      apply: example({ mode: "turns", wave: "square", tv: 24, tvs: 12, tf: 100000, tae: 7.8e-05, tb: 0.09, uf: "kHz" }) },
+    { title: "A small mains transformer", note: "11.8 V loaded, 1.27 % regulation, 95.4 % efficient, 356 mW of copper.",
+      apply: example({ mode: "loaded", lv: 230, la: 19.2, rp: 5, rs: 0.05, lrl: 5, pcore: 1 }) },
+    { title: "A heavy load", note: "10.1 V loaded: 18.8 % regulation, 81.2 % efficient, 12.7 W of copper.",
+      apply: example({ mode: "loaded", lv: 230, la: 19.2, rp: 30, rs: 0.2, lrl: 1.5, pcore: 3 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur, cls = "") => `<select ${cls ? `class="${cls}" ` : ""}${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const usel = (attr, units, cur) => sel(attr, Object.keys(units).map((u) => [u, u]), cur);
+    const fld = (name, key, val, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(val)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    let fields = "", heading = "";
+    if (state.mode === "ratio") {
+      heading = sel("data-known", TR_KNOWN, state.known, "label-select");
+      const fvp = fld("Primary voltage", "vp", state.vp, fixed("V")), frl = fld("Load", "rl", state.rl, fixed("Ω"));
+      if (state.known === "turns") fields = `<div class="field-pair">${fvp}${frl}</div><div class="field-pair">${fld("Primary turns", "np", state.np, "")}${fld("Secondary turns", "ns", state.ns, "")}</div>`;
+      else if (state.known === "volts") fields = `<div class="field-pair">${fvp}${fld("Secondary voltage", "vsi", state.vsi, fixed("V"))}</div><div class="field-pair">${frl}</div>`;
+      else fields = `<div class="field-pair">${fvp}${fld("Primary must show", "zin", state.zin, fixed("Ω"))}</div><div class="field-pair">${frl}</div>`;
+    } else if (state.mode === "turns") {
+      heading = sel("data-wave", TR_WAVE, state.wave, "label-select");
+      fields = `<div class="field-pair">${fld("Primary voltage", "tv", state.tv, fixed("V"))}${fld("Secondary voltage", "tvs", state.tvs, fixed("V"))}</div>
+        <div class="field-pair">${fld("Frequency", "tf", state.tf / TR_UF[state.uf], usel("data-uf", TR_UF, state.uf))}${fld("Core section Ae", "tae", state.tae / TR_UA[state.ua], usel("data-ua", TR_UA, state.ua))}</div>
+        <div class="field-pair">${fld("Peak flux density B", "tb", state.tb / TR_UB[state.ub], usel("data-ub", TR_UB, state.ub))}</div>`;
+    } else {
+      fields = `<div class="field-pair">${fld("Primary voltage", "lv", state.lv, fixed("V"))}${fld("Turns ratio Np / Ns", "la", state.la, "")}</div>
+        <div class="field-pair">${fld("Primary resistance", "rp", state.rp, fixed("Ω"))}${fld("Secondary resistance", "rs", state.rs, fixed("Ω"))}</div>
+        <div class="field-pair">${fld("Load", "lrl", state.lrl, fixed("Ω"))}${fld("Core loss", "pcore", state.pcore, fixed("W"))}</div>`;
+    }
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Ratio, turns for a core, regulation")}
+
+      ${pillRow(Object.entries(TR_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      ${fields}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${heading}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Vp / Vs = Is / Ip = Np / Ns = a", "ZL' = a² ZL  (from the primary)", "N = V 10⁸ / (4.44 f Ae B)  sine", "N = V 10⁸ / (4 f Ae B)  square", "Regulation = (V0 − VL) / VL", "η = Pout / (Pout + Pcu + Pcore)"],
+        "A transformer couples two windings through the flux in a shared core. The same flux links every turn, so the voltage of a winding is proportional to its turns: Vp / Vs = Np / Ns = a, the turns ratio. Power is conserved, so the currents go the other way, Is / Ip = a, and a load ZL on the secondary looks like a² ZL from the primary, which is how a transformer matches impedances. The flux in the core follows from the voltage: for a sine wave Erms = 4.44 f N Ae B, with the peak flux density B in tesla and Ae in m², and for a square wave of amplitude V it is V = 4 f N Ae B; the turns for a core are V / (K f Ae B), rounded up so that B stays under the limit (the printed forms with B in gauss and Ae in cm² carry a factor 10⁸). Real windings have resistance: Rp and Rs, seen from the primary as Rp + a² Rs, so the secondary voltage falls under load; the regulation is that fall over the loaded voltage, and the efficiency is the output over the output plus the copper and core losses. The magnetizing current and the leakage reactance are not in the Loaded pill, so it is for resistive loads at low frequency."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const unit = { tf: ["uf", TR_UF], tae: ["ua", TR_UA], tb: ["ub", TR_UB] };
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value); state[key] = unit[key] ? v * unit[key][1][state[unit[key][0]]] : v; show(); };
+    });
+    const pick = (attr, name) => app.querySelectorAll(`select[${attr}]`).forEach((el) => { el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); paint(); }; });
+    pick("data-known", "known"); pick("data-wave", "wave"); pick("data-uf", "uf"); pick("data-ua", "ua"); pick("data-ub", "ub");
   }
 
   paint();
