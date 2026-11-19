@@ -74,6 +74,12 @@ const FORMULAS = [
     note: "The inductance of a single-layer coil from Nagaoka's coefficient K with the round-wire correction, Wheeler's quick formulas for a solenoid, a multilayer coil and a flat spiral, and the turns that give a wanted inductance. From Wheeler's 1928 paper and the Bureau of Standards' Circular 74 (the formulas and tables read); the turns and the comparison with Wheeler are derived.",
   },
   {
+    tool: "Toroid winding",
+    domain: "passive",
+    formulas: ["L = AL N²  (AL in nH)", "N = √(L / AL)", "H = 0.4π N I / le  (Oe, cm)", "%µi = 1 / (a + b H^c) + d", "B = L I / (N Ae)", "fill = N (d / ID)²", "N1 = π (ID − d) / d", "MLT = 2(HT + (OD − ID) / 2) + 4d"],
+    note: "The turns for a wanted inductance on a toroid from its AL, the inductance of a number of turns, the wire (window fill, one-layer turns, length, DC resistance) and the fall of inductance with a direct current. From Micrometals' 2023 catalog (the core table, tolerances and equations), Magnetics' catalog (the wire table and winding factor) and Fair-Rite's definition of AL; the wire length and flux density are derived.",
+  },
+  {
     tool: "Series/parallel (L)",
     domain: "passive",
     formulas: ["Series: L = L1 + L2 + …", "Parallel: 1/L = 1/L1 + 1/L2 + …"],

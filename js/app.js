@@ -683,6 +683,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "saw-filter") return renderSawFilter(domain, tool, favId);
   if (calcId === "rf-diodes") return renderRfDiodes(domain, tool, favId);
   if (calcId === "air-coil") return renderAirCoil(domain, tool, favId);
+  if (calcId === "toroid-winding") return renderToroidWinding(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -20227,6 +20228,384 @@ function renderAirCoil(domain, tool, favId) {
       el.oninput = () => { const v = parseFloat(el.value); state[key] = lens.includes(key) ? v * ACL_U[state.unit] : v; show(); };
     });
     app.querySelectorAll("select[data-lu]").forEach((el) => { el.onchange = () => { state.unit = el.value; setPref(C, "unit", state.unit); paint(); }; });
+  }
+
+  paint();
+}
+
+// ---------- Toroid winding ----------
+// The turns, the inductance, the wire and the DC bias of a wound toroid, from the maker's inductance factor AL. Sources, as read this session:
+//  - Micrometals, "Iron Powder Cores" catalog 2023 (the PDF from micrometals.com, 88 pages as text; pages 18, 19 and 30 rendered): the table of toroids (PDF pages 48 onward: part number, outside and inside
+//    diameter and height in inches and mm, Ae cm2, le cm, Ve cm3, AL nH/N2, reference permeability, mix; 616 parts in 101 sizes are used here), the note that AL is for a peak flux density of 10 gauss at 10 kHz on an
+//    evenly spaced full single-layer winding and that a few unevenly spaced turns read higher; the typical AL tolerance of each mix (PDF page 47); the equations of every mix page: H = 0.4 pi N I / le (oersteds, le in cm),
+//    %ui = 1 / (a + b H^c) + d with the coefficients of the table on PDF page 44, and Bpk = Erms 10^8 / (4.44 Ae N f). The catalog's own 200 Oe figure of each mix is the check of the fit (see the manual).
+//  - Magnetics, "Powder Core Catalog" 2017 (the PDF from mag-inc.com, 112 pages as text) and its "Powder Core Calculations" page: LN = AL N2 10^-3 (uH, AL in nH/T2), N = sqrt(L 10^3 / AL), H = N I / le in A.T/cm (1 A.T/cm = 1.26 Oe),
+//    the winding factor N Aw / WA with WA = pi ID2 / 4 (20 to 60 %, 35 to 40 % usual; single layer limited by the inside circumference over the wire diameter; up to about 65 % only by hand), the wire table AWG 6 to 49 (resistance
+//    in ohm per metre and heavy-build outside diameter), the single-layer winding tables (turns and DC resistance per gauge), and the worked example of 127 turns of 17 AWG (1.177 mm2) in a 427 mm2 window = 35 %.
+//  - Fair-Rite's toroid data sheet 5943002721 (AL = L / N2, tested at 10 kHz, tolerance +20 / -25 % for that part): the definition of AL for ferrite.
+//  Not read: the Amidon reprint's text was read for cross-checking (qsl.net copy; some printed cells are wrong), Fair-Rite's catalog and Ferroxcube's data, AC core loss and temperature rise, the equations of Magnetics' leakage-flux adder
+//  (a formula that holds for Magnetics cores, with +/- 50 % scatter). The mean length of a turn, the pitch of the single-layer count and the flux density from L I / (N Ae) are derived here and checked against Magnetics' tables.
+const TW_MODES = { turns: "Turns", ind: "Inductance", wind: "Winding", bias: "Bias" };
+const TW_UL = { nH: 1e-9, "µH": 1e-6, mH: 1e-3 };
+const TW_UI = { mA: 1e-3, A: 1 };
+const TW_UH = { mm: 1e-3, in: 0.0254 };
+// typical AL tolerance (+/- %) of each mix, Micrometals page 47
+const TW_TOL = { 1: 10, 2: 5, 3: 10, 6: 5, 7: 5, 8: 10, 10: 5, 14: 10, 15: 10, 17: 5, 18: 10, 19: 10, 26: 10, 30: 10, 34: 10, 35: 10, 38: 10, 40: 10, 45: 10, 52: 10, 60: 10, 61: 10, 63: 10, 65: 10, 66: 10, 70: 10 };
+// DC-bias fit %ui = 1 / (a + b H^c) + d (H in Oe), for the mixes where it reproduces the catalog's own 200 Oe figure: mix: [a, b, c, d, the catalog's nominal % at 200 Oe]
+const TW_BIAS = { 1: [1e-2, 1.14e-6, 1.43, 0, 82.2], 2: [1e-2, 1.83e-7, 1.46, 0, 95.9], 3: [1e-2, 3.49e-6, 1.43, 0, 60.1], 6: [1e-2, 4.87e-8, 1.57, 0, 98.1], 7: [1e-2, 1.48e-7, 1.46, 0, 96.7],
+  8: [1e-2, 3.49e-6, 1.43, 0, 60.1], 10: [1e-2, 5.54e-9, 1.69, 0, 99.6], 14: [1e-2, 3.9e-7, 1.46, 0, 91.8], 15: [1e-2, 1.78e-6, 1.43, 0, 74.7], 17: [1e-2, 1.34e-8, 1.55, 0, 99.5],
+  30: [1e-2, 4.1e-6, 1.34, 0, 66.7], 63: [1e-2, 1.29e-5, 1.24, 0, 51.7] };
+// Magnetics wire table: AWG, ohm per metre, heavy-build outside diameter (mm)
+const TW_AWG = [[6,0.0013,4.21],[7,0.00163,3.76],[8,0.00206,3.36],[9,0.0026,2.99],[10,0.00328,2.67],[11,0.00414,2.38],[12,0.00521,2.13],[13,0.00656,1.902],[14,0.00828,1.715],[15,0.01044,1.529],[16,0.01319,1.369],[17,0.01658,1.224],[18,0.02095,1.095],[19,0.0264,0.98],[20,0.03323,0.879],[21,0.0419,0.785],[22,0.05315,0.701],[23,0.06663,0.632],[24,0.08422,0.566],[25,0.1062,0.505],[26,0.13458,0.452],[27,0.16873,0.409],[28,0.214,0.366],[29,0.266,0.33],[30,0.34,0.295],[31,0.429,0.267],[32,0.532,0.241],[33,0.675,0.216],[34,0.857,0.1905],[35,1.085,0.1702],[36,1.361,0.1524],[37,1.68,0.1397],[38,2.13,0.1245],[39,2.78,0.1092],[40,3.54,0.0965],[41,4.34,0.0864],[42,5.44,0.0762],[43,7.03,0.0686],[44,8.51,0.0635],[45,10.98,0.0546],[46,13.8,0.0498],[47,17.36,0.0452],[48,22.1,0.0394],[49,27.6,0.0353]];
+// Micrometals toroids: size, OD, ID, HT (mm), Ae (cm2), le (cm), [mix, AL (nH/N2), reference permeability]
+const TW_TOROIDS = [
+  ["T5", 1.27, 0.64, 0.64, 0.0019, 0.3, [["0",0.16,1],["6",1,8.5],["10",0.7,6],["17",0.42,4]]],
+  ["T7", 1.78, 0.89, 0.76, 0.0035, 0.42, [["0",0.3,1],["2",1.35,10],["6",1.3,8.5],["10",0.9,6],["17",0.6,4]]],
+  ["T10", 2.46, 1.12, 0.76, 0.0045, 0.56, [["0",0.24,1],["2",1.35,10],["6",1.15,8.5],["10",0.8,6],["17",0.5,4]]],
+  ["T10B", 2.46, 1.12, 1.27, 0.0075, 0.56, [["2",1.8,10],["10",1.25,6]]],
+  ["T12", 3.18, 1.57, 1.27, 0.01, 0.75, [["0",0.24,1],["2",2,10],["6",1.7,8.5],["10",1.2,6],["17",0.75,4],["26",13,75],["45",16,100]]],
+  ["T12A", 3.18, 1.57, 0.76, 0.0057, 0.75, [["6",1.02,8.5],["10",0.72,6]]],
+  ["T12B", 3.18, 1.57, 1.07, 0.008, 0.75, [["2",1.62,10],["6",1.35,8.5],["10",1,6]]],
+  ["T14", 3.43, 1.7, 1.07, 0.0084, 0.81, [["6",1.26,8.5]]],
+  ["T14A", 3.43, 1.7, 1.52, 0.012, 0.81, [["45",16.5,100],["52",11.5,75]]],
+  ["T16", 4.06, 1.98, 1.52, 0.015, 0.93, [["0",0.3,1],["2",2.2,10],["3",6.1,35],["6",1.9,8.5],["10",1.3,6],["15",5.5,25],["17",0.8,4],["18",9.5,55],["26",14.5,75],["45",17,100],["52",13.5,75],["60",9.5,55]]],
+  ["T18", 4.7, 2.59, 1.02, 0.01, 1.14, [["6",0.9,8.5]]],
+  ["T20", 5.08, 2.24, 1.78, 0.023, 1.15, [["0",0.35,1],["2",2.5,10],["6",2.2,8.5],["8/90",7.8,35],["10",1.6,6],["15",6.5,25],["17",1,4],["18",13,55],["26",18.5,75],["40",16,60],["52",17.5,75],["66",15.5,66],["63",7.8,35],["70",22.5,100]]],
+  ["T20E", 5.08, 2.24, 5.33, 0.069, 1.15, [["52",52.4,75]]],
+  ["T22", 5.66, 2.46, 3.63, 0.052, 1.28, [["0",0.71,1],["6",4.5,8.5],["10",3.2,6],["17",2,4],["26",38.5,75],["52",38.5,75]]],
+  ["T22A", 5.66, 2.46, 2.44, 0.037, 1.28, [["0",0.51,1],["10",2.2,6],["17",2.2,6]]],
+  ["T25", 6.48, 3.05, 2.44, 0.037, 1.5, [["0",0.45,1],["2",3.4,10],["3",10,35],["6",2.7,8.5],["10",1.9,6],["15",8.5,25],["17",1.2,4],["18",17,55],["26",24.5,75],["45",31,100],["52",23,75],["63",10,35],["66",20,66]]],
+  ["T25A", 6.48, 3.05, 1.65, 0.027, 1.5, [["6",1.8,8.5],["52",14.9,75]]],
+  ["T26", 6.73, 2.67, 4.83, 0.09, 1.47, [["8/90",24,35],["18",41.5,55],["26",57,75],["45",77,100],["52",56,75]]],
+  ["T27", 7.11, 3.84, 3.25, 0.047, 1.71, [["0",0.45,1],["2",3.3,10],["6",2.7,8.5],["8/90",11.5,35],["10",2.2,6],["17",1.3,4],["18",18.5,55],["52",25.5,75],["26",27.5,75]]],
+  ["T30A", 7.8, 3.84, 1.78, 0.033, 1.83, [["52",16.5,75]]],
+  ["T30B", 7.8, 3.84, 2.03, 0.038, 1.83, [["6",2.3,8.5]]],
+  ["T30", 7.8, 3.84, 3.25, 0.06, 1.84, [["0",0.6,1],["2",4.3,10],["6",3.6,8.5],["7",3.7,9],["8/90",14,35],["10",2.5,6],["17",1.6,4],["26",33.5,75],["18",22,55],["52",30.5,75],["63",14,35],["66",26.5,66]]],
+  ["T32", 8.31, 4.29, 4.01, 0.073, 1.96, [["52",35,75]]],
+  ["T37", 9.53, 5.21, 3.25, 0.064, 2.31, [["0",0.49,1],["1",8,20],["2",4,10],["3",12,35],["6",3,8.5],["7",3.2,9],["8/90",12,35],["10",2.5,6],["15",9,25],["17",1.5,4],["18",19,55],["26",28.5,75],["45",34,100],["52",26,75],["63",12,35],["66",22.5,66]]],
+  ["T37C", 9.53, 5.21, 2.44, 0.05, 2.31, [["52",18,75]]],
+  ["T38", 9.53, 4.45, 4.83, 0.114, 2.18, [["2",7.4,10],["8/90",20,35],["18",36,55],["26",49,75],["45",65,100],["52",49,75],["63",22.5,35],["66",43,66]]],
+  ["T40", 10.16, 5.21, 4.14, 0.093, 2.41, [["26",36,75],["52",36,75],["66",31.5,66]]],
+  ["T44", 11.18, 5.82, 4.04, 0.099, 2.68, [["0",0.65,1],["2",5.2,10],["6",4.2,8.5],["7",4.6,9],["8/90",18,35],["10",3.3,6],["14",6.2,14],["15",16,25],["17",1.85,4],["18",25.5,55],["26",37,75],["45",46.5,100],["52",35,75],["63",18,35],["66",30.5,66],["70",46.5,100]]],
+  ["T44A", 11.18, 5.82, 3.25, 0.08, 2.68, [["2",3.6,10]]],
+  ["T44B", 11.18, 5.82, 4.98, 0.1225, 2.68, [["52",43,75]]],
+  ["T44C", 11.18, 5.82, 6.35, 0.157, 2.68, [["52",55,75]]],
+  ["T44D", 11.18, 5.82, 8.59, 0.212, 2.68, [["52",70,75]]],
+  ["T45", 11.18, 6.22, 3.25, 0.0765, 2.73, [["40",22,60]]],
+  ["T50", 12.7, 7.7, 4.83, 0.112, 3.19, [["0",0.64,1],["1",10,20],["2",4.9,10],["3",17.5,35],["6",4,8.5],["7",4.3,9],["8/90",17.5,35],["10",3.1,6],["14",5.9,14],["17",1.8,4],["18",24,55],["26",33,75],["45",44,100],["52",33,75],["63",15.5,35],["66",29,66],["70",44,100]]],
+  ["T50B", 12.7, 7.7, 6.35, 0.148, 3.19, [["2",6.1,10],["8/90",23,35],["18",32,55],["26",43.5,75],["45",58,100],["52",43.5,75],["63",20,35],["66",38,66]]],
+  ["T50C", 12.7, 7.7, 8.51, 0.2, 3.19, [["18",43,55],["26",61,75]]],
+  ["T50D", 12.7, 7.7, 9.53, 0.223, 3.19, [["18",48,55],["26",72,75],["52",66,75]]],
+  ["T51", 12.7, 5.08, 12.7, 0.46, 2.79, [["0",2.6,1],["6",16.4,8.5]]],
+  ["T51A", 12.7, 5.08, 9.53, 0.345, 2.79, [["2",16.6,10]]],
+  ["T51B", 12.7, 5.08, 7.92, 0.282, 2.79, [["2",13.8,10],["6",10.2,8.5]]],
+  ["T51C", 12.7, 5.08, 6.35, 0.233, 2.79, [["8/90",37,35],["18",55,55],["26",83,75],["52",75,75]]],
+  ["T57", 14.55, 6.93, 4.98, 0.178, 3.38, [["45",67,100],["52",49.5,75]]],
+  ["T57A", 14.55, 6.93, 6.68, 0.239, 3.38, [["45",88,100],["52",66,75]]],
+  ["T60", 15.24, 8.53, 5.94, 0.187, 3.74, [["0",0.88,1],["2",6.5,10],["6",5.5,8.5],["8/90",19,35],["10",4,6],["14",8.3,14],["17",2.6,4],["18",34.5,55],["26",50,75],["45",62,100],["52",47,75],["60",34.5,55],["63",21.5,35],["66",41,66]]],
+  ["T60D", 15.24, 8.53, 11.94, 0.374, 3.74, [["8/90",38,35],["26",97,75],["52",94,75]]],
+  ["T68", 17.53, 9.4, 4.83, 0.179, 4.23, [["0",0.75,1],["1",11.5,20],["2",5.7,10],["3",19.5,35],["6",4.7,8.5],["7",5.2,9],["8/90",19.5,35],["10",3.2,6],["14",7,14],["17",2.1,4],["18",29,55],["26",43.5,75],["40",35,60],["45",53,100],["52",40,75],["60",29,55],["63",18.5,35],["66",35,66]]],
+  ["T68A", 17.53, 9.4, 6.35, 0.242, 4.23, [["2",7,10],["3",26,35],["6",6.2,8.5],["8/90",26,35],["14",9.5,14],["17",2.8,4],["18",39.5,55],["26",58,75],["40",47,60],["45",71,100],["52",54,75],["60",39.5,55],["63",25,35],["66",47,66]]],
+  ["T68D", 17.53, 9.4, 9.53, 0.358, 4.23, [["2",11.4,10],["6",9.4,8.5],["14",14.2,14],["8/90",39,35],["17",4.2,4],["18",58,55],["26",87,75],["52",80,75]]],
+  ["T68E", 17.53, 9.4, 12.7, 0.49, 4.23, [["17",5.7,4]]],
+  ["T69", 17.53, 8.53, 9.32, 0.394, 4.09, [["45",120,100]]],
+  ["T72", 18.29, 7.11, 6.6, 0.349, 4.01, [["0",1.5,1],["2",12.8,10],["6",9,8.5],["7",9.5,9],["8/90",36,35],["17",4.5,4],["18",60,55],["26",90,75],["40",71,60],["52",82,75]]],
+  ["T73", 18.29, 9.88, 8.38, 0.333, 4.01, [["26",70,75]]],
+  ["T80", 20.19, 12.57, 6.35, 0.231, 5.14, [["0",0.85,1],["1",11.5,20],["2",5.5,10],["6",4.5,8.5],["7",5,9],["8/90",18,35],["10",3.2,6],["14",7.4,14],["17",2.2,4],["18",31,55],["26",46,75],["40",39.5,60],["52",42,75],["60",31,55],["66",37,66],["63",19.5,35]]],
+  ["T80B", 20.19, 12.57, 9.53, 0.347, 5.14, [["2",9.5,10],["6",6.8,8.5],["7",8.4,9],["8/90",29.5,35],["14",11,14],["18",46.5,55],["26",71,75],["40",59,60],["45",84,100],["52",63,75],["60",46.5,55],["63",29.5,35],["66",55,66]]],
+  ["T80D", 20.19, 12.57, 12.7, 0.453, 5.14, [["2",11,10],["6",9,8.5],["8/90",36,35],["14",13.3,14],["17",4.4,4],["26",92,75],["40",79,60],["52",83,75]]],
+  ["T90", 22.86, 13.97, 9.53, 0.395, 5.78, [["8/90",30,35],["18",47,55],["26",70,75],["52",64,75],["60",47,55]]],
+  ["T90/66", 23.93, 14.22, 7.92, 0.362, 5.97, [["66",56,66]]],
+  ["T94", 23.93, 14.22, 7.92, 0.362, 5.97, [["0",1.06,1],["2",8.4,10],["6",7,8.5],["8/90",25,35],["10",5.8,6],["14",10,14],["15",20,25],["17",2.9,4],["18",42,55],["26",60,75],["40",49,60],["52",57,75],["60",42,55],["63",26,35],["66",50,66]]],
+  ["T94D", 23.93, 14.22, 15.88, 0.724, 5.97, [["26",115,75]]],
+  ["T95B", 23.93, 12.57, 9.53, 0.51, 5.72, [["26",84,75],["52",84,75]]],
+  ["T106", 26.92, 14.48, 11.1, 0.659, 6.49, [["0",1.9,1],["1",28,20],["2",13.5,10],["3",45,35],["6",11.6,8.5],["7",13.3,9],["8/90",45,35],["10",8.5,6],["14",17,14],["17",5.1,4],["26",93,75],["30",30,22],["34",40,33],["35",40,33],["18",70,55],["40",81,60],["45",125,100],["52",95,75],["60",70,55],["63",44.5,35],["66",84,66]]],
+  ["T106A", 26.92, 14.48, 7.92, 0.461, 6.49, [["18",49,55],["26",67,75],["40",58,60],["52",67,75],["66",59,66]]],
+  ["T106B", 26.92, 14.48, 14.61, 0.858, 6.49, [["2",17.6,10],["6",15.2,8.5],["10",11.1,6],["17",6.6,4],["18",91,55],["26",124,75],["34",55,33],["40",106,60],["52",124,75],["60",91,55],["63",57,35],["66",109,66]]],
+  ["T124", 31.62, 18.03, 7.11, 0.459, 7.75, [["26",58,75]]],
+  ["T130", 33.02, 19.81, 11.1, 0.698, 8.28, [["0",1.5,1],["2",11,10],["3",35,35],["6",9.6,8.5],["7",10.3,9],["8/90",35,35],["10",6.83,6],["14",14,14],["15",25,25],["17",4,4],["18",58,55],["26",81,75],["30",25,22],["34",33.5,33],["45",105,100],["52",79,75],["63",36,35],["60",58,55],["66",69,66]]],
+  ["T130A", 33.02, 19.81, 5.72, 0.361, 8.28, [["26",41,75],["40",34,60],["52",41,75]]],
+  ["T131", 33.02, 16.26, 11.1, 0.885, 7.72, [["6",13.2,8.5],["8/90",52.5,35],["18",79,55],["26",116,75],["34",46.5,33],["35",46.5,33],["63",52.5,35],["40",93,60],["52",108,75]]],
+  ["T132", 33.02, 17.78, 11.1, 0.805, 7.96, [["26",103,75],["52",95,75]]],
+  ["T141", 35.94, 22.35, 10.46, 0.674, 9.14, [["8/90",32,35],["26",75,75],["52",69,75]]],
+  ["T150", 38.35, 21.46, 11.1, 0.887, 9.38, [["2",11.5,10],["6",10,8.5],["18",65,55],["26",96,75],["30",26,22],["52",89,75],["60",65,55],["63",41,35],["66",78,66]]],
+  ["T150A", 38.35, 21.46, 8.26, 0.657, 9.38, [["26",66,75]]],
+  ["T157", 39.88, 24.13, 14.48, 1.06, 10.1, [["0",1.8,1],["1",32,20],["2",14,10],["6",11.5,8.5],["7",12,9],["8/90",42,35],["10",8.2,6],["14",17.5,14],["15",36,25],["17",5.3,4],["18",73,55],["26",100,75],["30",31.5,22],["34",43.5,33],["35",43.5,33],["40",86,60],["52",99,75],["60",73,55],["63",45,35],["66",87,66]]],
+  ["T157B", 39.88, 24.13, 18.03, 1.32, 10.1, [["26",122,75]]],
+  ["T175", 44.45, 27.18, 16.51, 1.34, 11.2, [["2",15,10],["6",12.5,8.5],["8/90",48,35],["18",82,55],["26",105,75],["52",105,75],["60",82,55],["66",82,55]]],
+  ["T184", 46.74, 24.13, 18.03, 1.88, 11.2, [["0",3,1],["2",24,10],["3",72,35],["6",19.5,8.5],["8/90",72,35],["10",13.8,6],["14",28,14],["15",55,25],["17",8.7,4],["18",116,55],["26",169,75],["30",51,22],["34",70,33],["35",70,33],["40",143,60],["52",159,75],["60",116,55],["63",72,35],["66",139,66]]],
+  ["T200", 50.8, 31.75, 13.97, 1.27, 13, [["2",12,10],["6",10.4,8.5],["7",10.5,9],["8/90",42.5,35],["18",67,55],["26",92,75],["34",37,33],["52",92,75],["60",67,55],["66",80,66]]],
+  ["T200B", 50.8, 31.75, 25.4, 2.31, 13, [["2",21.8,10],["8/90",78.5,35],["18",120,55],["26",160,75],["35",74,33],["40",142,60],["52",155,75],["60",120,55],["66",145,66]]],
+  ["T200C", 50.8, 31.75, 19.05, 1.73, 13, [["26",122,75]]],
+  ["T201", 50.8, 24.13, 22.23, 2.81, 11.8, [["8/90",104,35],["18",164,55],["26",224,75],["40",194,60],["52",224,75]]],
+  ["T224C", 57.15, 31.75, 19.05, 2.31, 14, [["26",155,75],["52",155,75]]],
+  ["T225", 57.15, 35.69, 13.97, 1.42, 14.6, [["2",12,10],["6",10.4,8.5],["8/90",42.5,35],["18",67,55],["26",98,75],["30",28,22],["34",37,33],["35",37,33],["40",78,60],["52",92,75],["60",67,55],["63",42.5,35],["66",80,66]]],
+  ["T225B", 57.15, 35.69, 25.4, 2.59, 14.6, [["2",21.5,10],["6",18.5,8.5],["14",28,14],["26",160,75],["34",67,33],["52",155,75],["60",120,55],["66",145,66]]],
+  ["T249", 63.5, 35.69, 25.4, 3.36, 15.6, [["26",203,75],["34",89,33],["52",203,75]]],
+  ["T250", 63.5, 31.75, 25.4, 3.84, 15, [["2",31,10],["8/90",113,35],["14",43,14],["15",82.5,25],["18",177,55],["26",242,75],["34",106,33],["52",242,75],["60",177,55],["61",113,38],["63",113,35],["66",210,66]]],
+  ["T250A", 63.5, 31.75, 12.7, 1.92, 15, [["52",121,75],["61",56,38]]],
+  ["T270D", 68.45, 40.39, 26.8, 3.57, 17.1, [["40",187,60]]],
+  ["T282", 71.37, 46.99, 25.4, 2.94, 18.6, [["26",149,75]]],
+  ["T281A", 71.63, 38.1, 16.51, 2.63, 17.2, [["40",130,60]]],
+  ["T300", 77.22, 49.02, 12.7, 1.68, 19.8, [["0",1.5,1],["2",11.4,10],["6",9.5,8.5],["8/90",37,35],["18",58,55],["26",80,75],["30",23,22],["34",34.5,33],["35",34.5,33],["52",80,75],["60",58,55],["66",70,66],["61",37,38]]],
+  ["T300C", 77.22, 49.02, 19.05, 2.55, 19.8, [["26",120,75]]],
+  ["T300D", 77.22, 49.02, 25.4, 3.38, 19.8, [["2",22.8,10],["8/90",74,35],["14",28,14],["18",116,55],["26",160,75],["30",46,22],["34",69,33],["35",69,33],["40",142,60],["52",160,75],["60",116,55],["63",74,35]]],
+  ["T353B", 89.66, 53.98, 25.4, 4.31, 22.6, [["40",161.5,60]]],
+  ["T355", 90.17, 57.15, 24.77, 3.88, 23.1, [["26",150,75]]],
+  ["T355A", 90.17, 57.15, 23.11, 3.63, 23.1, [["26",140,75]]],
+  ["T355D", 90.17, 57.15, 33.02, 5.18, 23.1, [["26",200,75]]],
+  ["T400", 101.6, 57.15, 16.51, 3.46, 25, [["0",2.4,1],["2",18,10],["6",15,8.5],["8/90",60,35],["14",22.75,14],["18",96,55],["26",131,75],["30",40.5,22],["34",55,33],["35",55,33],["40",115,60],["52",131,75],["60",96,55],["66",114,66]]],
+  ["T400B", 101.6, 57.15, 25.4, 5.35, 25, [["26",205,75],["35",89,33]]],
+  ["T400D", 101.6, 57.15, 33.02, 6.85, 25, [["0",4.8,1],["6",30.5,8.5],["14",45.5,14],["17",14.4,4],["26",262,75],["30",81,22],["34",110,33],["40",230,60],["52",262,75],["60",192,55],["63",120,35],["66",228,66]]],
+  ["T520", 132.08, 78.23, 20.32, 5.24, 33.1, [["2",20,10],["26",149,75],["30",45,22],["35",65,33],["40",119,60],["52",137,75],["63",68,35],["66",130,66]]],
+  ["T520D", 132.08, 78.23, 40.64, 10.5, 33.1, [["30",90,22],["34",130,33],["35",130,33],["40",240,60]]],
+  ["T650", 165.1, 88.9, 50.8, 18.4, 39.9, [["2",58,10],["8/90",200,35],["14",75,14],["26",434,75],["30",127,22],["35",191,33],["34",191,33],["52",405,75],["63",200,35],["66",380,66]]],
+];
+const TW_NOTE = {
+  turns: "AL is the inductance of one turn, in nH: with N turns L = AL N², so the turns for a wanted L are the square root of L / AL. Take the whole turns and read the inductance of the next ones in the rows. The catalog tests AL on an evenly spaced single layer; a few turns bunched together read higher than L says.",
+  ind: "L = AL N² nH. AL is the maker's figure for the core, tested at 1 mT and 10 kHz, within the tolerance of its mix (±5 or ±10 %). The result is the inductance at low current: a direct current lowers it (the Bias pill).",
+  wind: "Window fill is the wire's cross-section over the hole's area; 20 to 60 % is the range, 35 to 40 % usual, and a single layer when the turns just fit round the inside circumference. The wire length is turns times the mean length of a turn, the perimeter of the core's section plus 4 wire diameters.",
+  bias: "A direct current makes H = 0.4π N I / le oersteds in the core (le the path length in cm). A powder core loses permeability as H rises, so the inductance falls to the percentage the catalog's curve fit gives. B is the flux density: L I / (N Ae).",
+};
+
+function renderToroidWinding(domain, tool, favId) {
+  const C = "toroid-winding";
+  const state = {
+    mode: pref(C, "mode", "turns", Object.keys(TW_MODES)),
+    size: pref(C, "size", "T50", TW_TOROIDS.map((t) => t[0]).concat(["typed"])),
+    mix: pref(C, "mix", "2", ["2"].concat(TW_TOROIDS.flatMap((t) => t[6].map((m) => m[0])))),
+    ul: pref(C, "ul", "µH", Object.keys(TW_UL)), ui: pref(C, "ui", "A", Object.keys(TW_UI)), uh: pref(C, "uh", "mm", Object.keys(TW_UH)),
+    tl: 10e-6, n: 20, awg: 24, ib: 0.5,                          // wanted inductance (H), turns, AWG, DC current (A)
+    tal: 50, tod: 0.0127, tid: 0.0077, tht: 0.00483,             // a typed core: AL (nH/N2), OD, ID, HT (m)
+  };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const PI = Math.PI;
+  const ind = (l) => (l >= 1 ? `${n3(l)} H` : l >= 1e-3 ? `${n3(l * 1e3)} mH` : l >= 1e-6 ? `${n3(l * 1e6)} µH` : `${n3(l * 1e9)} nH`);
+  const cur = (a) => (a < 1 ? `${n3(a * 1e3)} mA` : `${n3(a)} A`);
+  const ohm = (v) => (v >= 1e3 ? `${n3(v / 1e3)} kΩ` : v >= 1 ? `${n3(v)} Ω` : `${n3(v * 1e3)} mΩ`);
+  const lenm = (m) => (m >= 1 ? `${n3(m)} m` : `${n3(m * 1e3)} mm`);
+  const tn = (n) => `${n3(n)} turn${n === 1 ? "" : "s"}`;
+  const pc = (v) => `${n3(v)} %`;
+  const mixNum = (m) => parseInt(m, 10);
+
+  // ---------------- the numbers ----------------
+  // The core: a catalog size and mix, or the typed AL and dimensions (le and Ae then follow from the dimensions).
+  function core() {
+    if (state.size === "typed") {
+      const od = state.tod * 1e3, id = state.tid * 1e3, ht = state.tht * 1e3;
+      return { name: "typed core", od, id, ht, le: (PI * (od + id)) / 20, ae: (ht * (od - id)) / 200, al: state.tal, tol: null, mu: null, mix: null, typed: true };
+    }
+    const s = TW_TOROIDS.find((t) => t[0] === state.size), m = s[6].find((x) => x[0] === state.mix) || s[6][0], mn = mixNum(m[0]);
+    return { name: `${s[0]}-${m[0]}`, od: s[1], id: s[2], ht: s[3], ae: s[4], le: s[5], al: m[1], tol: TW_TOL[mn] === undefined ? null : TW_TOL[mn], mu: m[2], mix: mn, typed: false };
+  }
+  const wire = () => TW_AWG.find((w) => w[0] === state.awg);
+  // L = AL N^2 (nH), and the turns for a wanted L.
+  const lOf = (c, n) => c.al * n * n * 1e-9;
+  const nOf = (c, l) => Math.sqrt((l * 1e9) / c.al);
+  // The winding: the fill of the window, the turns one layer holds, the mean length of a turn, the length and the resistance of the wire.
+  function winding(c) {
+    const w = wire(), d = w[2], t = (c.od - c.id) / 2, mlt = 2 * (c.ht + t) + 4 * d, len = (state.n * mlt) / 1000;
+    return { d, wa: (PI * c.id * c.id) / 4, fill: state.n * (d / c.id) ** 2, n1: Math.round((PI * (c.id - d)) / d), mlt, len, r: len * w[1] };
+  }
+  // The DC bias: H in oersteds, the percentage of the initial permeability, the inductance and the flux density.
+  function bias(c) {
+    const f = TW_BIAS[c.mix], H = (0.4 * PI * state.n * state.ib) / c.le, p = 1 / (f[0] + f[1] * H ** f[2]) + f[3], l0 = lOf(c, state.n), lb = (l0 * p) / 100;
+    return { H, p, l0, lb, B: (lb * state.ib) / (state.n * c.ae * 1e-4), p200: 1 / (f[0] + f[1] * 200 ** f[2]) + f[3], nom: f[4] };
+  }
+
+  function problem() {
+    const c = core();
+    if (c.typed) {
+      if (!(state.tal > 0)) return "Enter the inductance factor AL.";
+      if (!(state.tod > 0 && state.tid > 0 && state.tht > 0)) return "Enter the outside diameter, the inside diameter and the height.";
+      if (!(state.tod > state.tid)) return "The outside diameter must be more than the inside diameter.";
+    }
+    if (state.mode === "turns") return state.tl > 0 ? "" : "Enter the inductance.";
+    if (!(state.n >= 1)) return "Enter the turns, 1 or more.";
+    if (state.mode === "wind") return wire()[2] < c.id ? "" : "The wire does not fit through the hole: its diameter is more than the inside diameter.";
+    if (state.mode === "bias") {
+      if (c.typed) return "Choose a catalog core: a typed core has no permeability curve.";
+      if (c.mix === 0) return "Mix 0 has no permeability curve in the catalog.";
+      if (!TW_BIAS[c.mix]) return "No DC-bias figure for this mix: the catalog's curve fit does not reproduce its own 200 Oe value.";
+      return state.ib >= 0 ? "" : "Enter the current, 0 or more.";
+    }
+    return "";
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", WIRE = "#5A6169", GREY = "#8A9099";
+  const lbl = (id, x, y, t, c, a = "start") => `<text${id ? ` data-res="${id}"` : ""} x="${x.toFixed(1)}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const w = (d, c = WIRE, sw = 1.8, op = 1) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  // A toroid seen from above and in front, with one continuous wire round it (the part under the core fainter) and a lead at each end.
+  function ring(n) {
+    const CX = 172, CY = 74, R = 44, r = 14, T = (42 * PI) / 180, sT = Math.sin(T), cT = Math.cos(T);
+    const ell = (rx, ry, dy) => `M${CX - rx} ${(CY + dy).toFixed(1)} a${rx} ${ry.toFixed(1)} 0 1 0 ${2 * rx} 0 a${rx} ${ry.toFixed(1)} 0 1 0 ${-2 * rx} 0`;
+    const dz = r * cT;
+    let o = `<path d="${ell(R + r, (R + r) * sT, dz)} ${ell(R - r, (R - r) * sT, dz)}" fill="${GREY}" fill-opacity=".10" fill-rule="evenodd" stroke="${GREY}" stroke-width="1.2" stroke-opacity=".6"/>`;
+    o += `<path d="${ell(R + r, (R + r) * sT, -dz)} ${ell(R - r, (R - r) * sT, -dz)}" fill="${GREY}" fill-opacity=".14" fill-rule="evenodd" stroke="${GREY}" stroke-width="1.2"/>`;
+    const turns = Math.max(4, Math.min(26, Math.round(n))), th0 = (200 * PI) / 180, th1 = th0 + (320 * PI) / 180, M = turns * 14, rw = r + 2;
+    const pts = [];
+    for (let i = 0; i <= M; i++) {
+      const u = i / M, th = th0 + u * (th1 - th0), ph = u * turns * 2 * PI, rho = R + rw * Math.cos(ph), z = rw * Math.sin(ph);
+      pts.push([CX + rho * Math.cos(th), CY + rho * Math.sin(th) * sT - z * cT, z]);
+    }
+    let front = "", back = "";
+    for (let i = 1; i < pts.length; i++) {
+      const s = `M${pts[i - 1][0].toFixed(1)} ${pts[i - 1][1].toFixed(1)} L${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)} `;
+      if (pts[i][2] + pts[i - 1][2] >= 0) front += s; else back += s;
+    }
+    o += w(back, BLUE, 2, 0.35) + w(front, BLUE, 2.2);
+    const a = pts[0], b = pts[pts.length - 1];
+    o += w(`M${a[0].toFixed(1)} ${a[1].toFixed(1)} H30 M${b[0].toFixed(1)} ${b[1].toFixed(1)} H30`, WIRE, 1.8);
+    return o;
+  }
+  function diagram() {
+    if (problem()) return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none"></svg>`;
+    const c = core(), calcN = state.mode === "turns";
+    const n = calcN ? Math.max(1, Math.round(nOf(c, state.tl))) : state.n;
+    let o = ring(n) + lbl("pc", 14, 14, c.name, BLUE) + lbl("pn", 150, 136, calcN ? `${tn(n)}` : `${tn(state.n)}`, calcN ? GREEN : BLUE, "middle");
+    if (state.mode === "turns") o += lbl("pl", 286, 14, `L ${ind(state.tl)}`, BLUE, "end");
+    else if (state.mode === "ind") o += lbl("pl", 286, 14, `L ${ind(lOf(c, state.n))}`, GREEN, "end");
+    else if (state.mode === "wind") o += lbl("pl", 286, 14, `${n3(winding(c).fill * 100)} % fill`, GREEN, "end");
+    else o += lbl("pl", 286, 14, `${n3(bias(c).p)} % of L`, GREEN, "end");
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  const grid = (cells) => `<div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells.join("")}</div>`;
+  const head = (label, value, subline) => `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${value}</span></div>
+          <div class="result-sub" data-res="sub">${subline}</div>
+        </div>`;
+  const body = (cells, rows, note) => `${grid(cells)}
+      <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${note}</div></div>`;
+  const coreRow = (c) => row("Core", c.typed ? `typed · ${n3(c.al)} nH/N²` : `${c.name} · µ ${n3(c.mu)} · ${n3(c.al)} nH/N²`, "cr")
+    + row("Path · section", `${n3(c.le)} cm · ${n3(c.ae)} cm²`, "cz") + row("Size", `${n3(c.od)} × ${n3(c.id)} × ${n3(c.ht)} mm`, "cs");
+  const tolText = (c, l) => (c.tol === null ? "no tolerance given" : `${ind(l * (1 - c.tol / 100))} to ${ind(l * (1 + c.tol / 100))}`);
+
+  function turnsHTML(c) {
+    const n = nOf(c, state.tl), r = Math.max(1, Math.round(n)), l = lOf(c, r);
+    const rows = row("With the tolerance", tolText(c, l), "tr") + row("One turn less, more", `${r > 1 ? `${n3(r - 1)}: ${ind(lOf(c, r - 1))}` : "none"} · ${n3(r + 1)}: ${ind(lOf(c, r + 1))}`, "tn") + coreRow(c);
+    return head("Turns", n3(n), `for ${ind(state.tl)} on ${c.name}`)
+      + body([cell("Whole turns", n3(r), "c1"), cell("They give", ind(l), "c2"), cell("AL tolerance", c.tol === null ? "none given" : `±${c.tol} %`, "c3")], rows, TW_NOTE.turns);
+  }
+  function indHTML(c) {
+    const l = lOf(c, state.n);
+    const rows = row("One turn less · more", `${ind(lOf(c, state.n - 1))} · ${ind(lOf(c, state.n + 1))}`, "t1") + coreRow(c);
+    return head("Inductance", ind(l), `${tn(state.n)} on ${c.name}`)
+      + body([cell("Low", c.tol === null ? "n/a" : ind(l * (1 - c.tol / 100)), "c1"), cell("High", c.tol === null ? "n/a" : ind(l * (1 + c.tol / 100)), "c2"), cell("AL", `${n3(c.al)} nH`, "c3")], rows, TW_NOTE.ind);
+  }
+  function windHTML(c) {
+    const k = winding(c), f = k.fill;
+    const range = f > 1 ? "does not fit: over 100 %" : f > 0.65 ? "over about 65 %: by hand only" : f > 0.45 ? "high fill, up to about 65 %" : f >= 0.3 ? "full winding, 30 to 45 %" : "low fill, under 30 %";
+    const rows = row("Fill range", range, "fr") + row("One layer holds", `${tn(k.n1)}: ${state.n <= k.n1 ? "this winding fits in one" : "this one needs more layers"}`, "ol")
+      + row("Window · wire diameter", `${n3(k.wa)} mm² · ${n3(k.d)} mm`, "wd") + row("Mean length of a turn", `${n3(k.mlt)} mm`, "ml");
+    return head("Window fill", pc(f * 100), `${tn(state.n)} of ${state.awg} AWG on ${c.name}`)
+      + body([cell("Wire length", lenm(k.len), "c1"), cell("DC resistance", ohm(k.r), "c2"), cell("One layer", tn(k.n1), "c3")], rows, TW_NOTE.wind);
+  }
+  function biasHTML(c) {
+    const k = bias(c);
+    const rows = row("H in A·T/cm", n3((state.n * state.ib) / c.le), "ha") + row("Without the current", ind(k.l0), "l0") + row("The fit at 200 Oe", `${n3(k.p200)} % · the catalog's ${n3(k.nom)} %`, "fit") + coreRow(c);
+    return head("Inductance with bias", ind(k.lb), `${pc(k.p)} of the initial inductance at ${cur(state.ib)}`)
+      + body([cell("H", `${n3(k.H)} Oe`, "c1"), cell("Permeability", pc(k.p), "c2"), cell("Flux density B", `${n3(k.B * 1e3)} mT`, "c3")], rows, TW_NOTE.bias);
+  }
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const c = core();
+    return { turns: turnsHTML, ind: indHTML, wind: windHTML, bias: biasHTML }[state.mode](c);
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "10 µH on a T50-2", note: "45.2 turns: 45 give 9.92 µH, 9.43 to 10.4 µH within the ±5 % of mix 2.",
+      apply: example({ mode: "turns", size: "T50", mix: "2", tl: 1e-05 }) },
+    { title: "1 µH on a T37-6", note: "18.3 turns: 18 give 972 nH; 17 give 867 nH and 19 give 1.08 µH.",
+      apply: example({ mode: "turns", size: "T37", mix: "6", tl: 1e-06, ul: "µH" }) },
+    { title: "30 turns on a T68-2", note: "5.13 µH, 4.87 to 5.39 µH (AL 5.7 nH/N², ±5 %).",
+      apply: example({ mode: "ind", size: "T68", mix: "2", n: 30 }) },
+    { title: "45 turns, 26 AWG, T50-2", note: "15.5 % of the window, 741 mm of wire, 99.7 mΩ; one layer holds 50 turns.",
+      apply: example({ mode: "wind", size: "T50", mix: "2", n: 45, awg: 26 }) },
+    { title: "60 turns, 20 AWG, T106-2", note: "22.1 % of the window, 2.29 m of wire; one layer holds only 49 turns.",
+      apply: example({ mode: "wind", size: "T106", mix: "2", n: 60, awg: 20 }) },
+    { title: "5 A through a T50-3", note: "H 118 Oe: the permeability falls to 75.7 %, 63 µH to 47.7 µH; B 355 mT.",
+      apply: example({ mode: "bias", size: "T50", mix: "3", n: 60, ib: 5 }) },
+    { title: "3 A through a T106-2", note: "Mix 2 holds up: 23.2 Oe leaves 99.8 % of 21.6 µH.",
+      apply: example({ mode: "bias", size: "T106", mix: "2", n: 40, ib: 3 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur2, cls = "") => `<select ${cls ? `class="${cls}" ` : ""}${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur2) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const c = core();
+    const sizeOpts = TW_TOROIDS.map((t) => [t[0], t[0]]).concat([["typed", "typed"]]);
+    const mixes = state.size === "typed" ? [] : TW_TOROIDS.find((t) => t[0] === state.size)[6].map((m) => [m[0], `−${m[0]}`]);
+    const fld = (name, key, val, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(val)}" />${unit}</div></div>`;
+    const usel = (attr, units, cur2) => sel(attr, Object.keys(units).map((u) => [u, u]), cur2);
+    const hl = (key) => fld(key === "tod" ? "Outside diameter" : key === "tid" ? "Inside diameter" : "Height", key, state[key] / TW_UH[state.uh], usel("data-uh", TW_UH, state.uh));
+    let fields = "";
+    if (state.mode === "turns") fields = `<div class="field-pair">${fld("Inductance wanted", "tl", state.tl / TW_UL[state.ul], usel("data-ul", TW_UL, state.ul))}</div>`;
+    else if (state.mode === "ind") fields = `<div class="field-pair">${fld("Turns", "n", state.n, "")}</div>`;
+    else if (state.mode === "wind") {
+      const wire2 = `<div class="field"><label><span class="field-name">Wire gauge</span></label><div class="field-row">${sel("data-awg", TW_AWG.map((a) => [a[0], `${a[0]} AWG`]), state.awg)}</div></div>`;
+      fields = `<div class="field-pair">${fld("Turns", "n", state.n, "")}${wire2}</div>`;
+    } else fields = `<div class="field-pair">${fld("Turns", "n", state.n, "")}${fld("DC current", "ib", state.ib / TW_UI[state.ui], usel("data-ui", TW_UI, state.ui))}</div>`;
+    const typed = state.size === "typed"
+      ? `<div class="field-pair">${fld("AL", "tal", state.tal, '<span class="unit-fixed">nH/N²</span>')}${hl("tod")}</div><div class="field-pair">${hl("tid")}${hl("tht")}</div>` : "";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Turns, inductance, wire, DC bias")}
+
+      ${pillRow(Object.entries(TW_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Core</span><span></span><span>${sel("data-size", sizeOpts, state.size, "label-select")}${mixes.length ? sel("data-mix", mixes, c.typed ? "" : state.mix, "label-select") : ""}</span>
+      </div>
+      ${typed}
+      ${fields}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["L = AL N²  (AL in nH)", "N = √(L / AL)", "H = 0.4π N I / le  (Oe, cm)", "%µi = 1 / (a + b H^c) + d", "B = L I / (N Ae)", "fill = N (d / ID)²", "N1 = π (ID − d) / d", "MLT = 2(HT + (OD − ID) / 2) + 4d"],
+        "A toroid's winding closes the magnetic path inside the core, so little flux leaks out. The maker states a core by AL, the inductance in nH of one turn, measured on an evenly spaced single layer at 1 mT and 10 kHz; N turns give AL N², so the turns for a wanted L are the square root of L / AL. le is the core's magnetic path length and Ae its cross-section; the window is the hole, of area π ID² / 4. The wire with its insulation takes N times its cross-section of the window: that is the fill, 20 to 60 % in practice. One layer holds about π (ID − d) / d turns of wire of diameter d. A turn is as long as the perimeter of the core's section, 2 (HT + (OD − ID) / 2), plus 4 d for the wire's own thickness. A direct current I makes the field H = 0.4π N I / le oersteds; a powder core loses permeability as H rises, by the percentage the catalog's curve fit gives for its mix, and the flux density is B = L I / (N Ae)."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    const unit = { tl: ["ul", TW_UL], ib: ["ui", TW_UI], tod: ["uh", TW_UH], tid: ["uh", TW_UH], tht: ["uh", TW_UH] };
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value); state[key] = unit[key] ? v * unit[key][1][state[unit[key][0]]] : v; show(); };
+    });
+    const pick = (attr, name) => app.querySelectorAll(`select[${attr}]`).forEach((el) => { el.onchange = () => { state[name] = el.value; setPref(C, name, state[name]); paint(); }; });
+    pick("data-ul", "ul"); pick("data-ui", "ui"); pick("data-uh", "uh");
+    const sz = app.querySelector("select[data-size]");
+    sz.onchange = () => {
+      state.size = sz.value; setPref(C, "size", state.size);
+      if (state.size !== "typed") { const ms = TW_TOROIDS.find((t) => t[0] === state.size)[6].map((m) => m[0]); if (!ms.includes(state.mix)) { state.mix = ms.includes("2") ? "2" : ms[0]; setPref(C, "mix", state.mix); } }
+      paint();
+    };
+    const mx = app.querySelector("select[data-mix]");
+    if (mx) mx.onchange = () => { state.mix = mx.value; setPref(C, "mix", state.mix); paint(); };
+    const aw = app.querySelector("select[data-awg]");
+    if (aw) aw.onchange = () => { state.awg = parseInt(aw.value, 10); paint(); };
   }
 
   paint();

@@ -39,6 +39,7 @@ will key on, since that is the id the app already holds for each tool.
 - Inductors → [Inductor color code](#inductor-color-code)
 - Inductors → [Inductor SMD code](#inductor-smd-code)
 - Inductors → [Air-core coil (Wheeler)](#air-coil)
+- Inductors → [Toroid winding](#toroid-winding)
 - Inductors → [Series/parallel (L)](#ind-series-parallel)
 - Passive filters → [RC filter](#rc-filter)
 - Passive filters → [RL filter](#rl-filter)
@@ -2019,6 +2020,112 @@ Published answers reproduced:
 | 400 turns, a = 10 cm, b = 40 cm, d / D = 0.5 | Circular 74 | Ls 12 919 µH, correction 9.99 µH, 12 909 µH | 12.9 mH (Ls 12.9 mH, correction 10 µH) |
 | Wheeler's formula for the same coil | derived, not printed | not in the source | 12.9 mH, 0.418 % below |
 | Multilayer, 1000 turns, a = b = 10 cm, c = 1 cm | Circular 74 | 195.2 mH (the Bureau's longer method) | 197 mH by Wheeler, 0.85 % above |
+
+[↑ Index](#index)
+
+---
+
+<a id="toroid-winding"></a>
+## Toroid winding
+
+`calc: toroid-winding` · Passive components › Inductors
+
+### What it computes
+
+The turns, the inductance, the wire and the DC bias of a wound toroid, from the maker's inductance factor AL. The **Core**
+heading holds two pickers: the size (101 Micrometals toroid sizes, T5 to T650, with their height variants A, B, C, D, or **typed**)
+and the mix (the material: −0, −1, −2, −3, −6, −7, −8/90, −10 … −70, as many as that size is made in). Typed asks for AL and the
+three dimensions, and works out le and Ae from them. Four pills:
+
+- **Turns:** the inductance wanted (nH, µH or mH). The big result is the turns, not rounded; cells: the whole turns, the
+  inductance they give and the AL tolerance of the mix; rows: that inductance with the tolerance, the inductance of one turn less and more, the core.
+- **Inductance:** the turns. The big result is L = AL N²; cells: the lowest and highest with the tolerance and AL; rows: one turn less and more, the core.
+- **Winding:** the turns and the wire gauge (AWG 6 to 49, Magnetics' heavy-build diameters). The big result is the window fill; cells: the wire
+  length, its DC resistance and the turns one layer holds; rows: where the fill falls (low, full, high, impossible), whether the turns fit in one layer, the window area and
+  the wire diameter, the mean length of a turn.
+- **Bias:** the turns and the DC current (mA or A), for the mixes whose curve fit agrees with the catalog (−1, −2, −3, −6, −7, −8, −10, −14, −15, −17, −30, −63). The big result is
+  the inductance with the current; cells: the field H in oersteds, the percentage of the initial permeability, the flux density B; rows: H in A·T/cm, the inductance without the current, the fit
+  at 200 Oe beside the catalog's own figure, the core.
+
+The drawing is the core with one continuous wire wound round it (up to 26 turns are drawn) and a lead at each end.
+
+- **Units:** nH, µH, mH for the inductance wanted; mA, A for the current; mm, in for the dimensions of a typed core (all three boxes change together); the diameters and the
+  window of a catalog core are in mm; AL in nH/N².
+- **Remembered:** the pill, the size, the mix and the three units.
+
+Examples: 10 µH on a T50-2 and 1 µH on a T37-6; 30 turns on a T68-2; 45 turns of 26 AWG on a T50-2 and 60 of 20 AWG on a T106-2; a current of 5 A through a T50-3 and 3 A through a T106-2.
+
+### Terms
+
+- **Toroid, core, mix:** a ring of magnetic material; the winding goes through the hole and round the outside, so the field stays inside the core. The mix is the maker's number for the material;
+  it sets the permeability (µ 4 to 100 for iron powder), the useful frequency range, the tolerance and the DC-bias behaviour.
+- **AL (inductance factor):** the inductance of one turn, in nH, so N turns give AL N². Micrometals and Magnetics give nH/N² (Amidon's older tables give µH per 100 turns, ten times the number: 49 µH/100 turns is 4.9 nH/N²).
+  The catalogs test it at a peak flux density of 1 mT (10 gauss) and 10 kHz on a full, evenly spaced single layer.
+- **le, Ae, Ve:** the core's effective magnetic path length (cm), cross-section (cm²) and volume (cm³). **Window:** the hole, of area π ID² / 4.
+- **Window fill (winding factor):** the wire's cross-section, N times that of one wire with its insulation, over the window area. 20 to 60 % is the range, 35 to 40 % usual; a single layer, low
+  fill (under 30 %), a full winding (30 to 45 %) and high fill (up to about 65 %, by hand only).
+- **AWG, heavy build:** the American wire gauge; heavy-build enamel is the thick insulation, its outside diameter is what takes room.
+- **Mean length of a turn (MLT):** the length of wire in one turn. **DC resistance:** MLT × turns × the wire's resistance per metre.
+- **H, oersted, A·T/cm:** the magnetizing force of the current, H = 0.4π N I / le in oersteds with le in cm (1 A·T/cm = 1.26 Oe). **% initial permeability:** the permeability left under the field, a fraction of
+  its value at low field; the inductance falls in the same proportion. **B:** the flux density in the core; 1 T = 10 000 gauss.
+
+### Sources
+
+- **Micrometals, "Iron Powder Cores" catalog (2023; the PDF from micrometals.com, 88 pages read as text; pages 18, 19 and 30 rendered):** the toroid table (PDF pages 48 onward), for each part the outside
+  and inside diameter and height in inches and mm, Ae, le, Ve, AL in nH/N², the reference permeability and the mix; the notes that AL is for 10 gauss and 10 kHz on an evenly spaced full single layer and that
+  a few turns not evenly distributed read higher than expected; the typical AL tolerance of each mix (PDF page 47); on each mix page H = 0.4π N I / Le (oersteds, Le in cm), %µi = 1 / (a + b H^c) + d with the coefficients of the table on PDF page 44, and
+  Bpk = Erms 10⁸ / (4.44 Ae N f); and the catalog's own "% perm at DC bias (200 Oe)" of each mix, which the fit is checked against. 616 parts in 101 sizes are in the tool.
+- **Magnetics, "Powder Core Catalog" (2017; the PDF from mag-inc.com, 112 pages read as text) and its "Powder Core Calculations" page (read):** LN = AL N² 10⁻³ (µH, AL in nH/T²) and the turns from it; H = N I / le in A·T/cm with the conversion
+  to oersteds; the winding factor N Aw / WA with WA = π ID² / 4 and its ranges; the wire table, AWG 6 to 49, resistance in Ω/m and heavy-build outside diameter; the single-layer winding tables (turns and DC resistance for each gauge and core size) and the table of the length of a turn against
+  the winding factor; and the worked example of a 600 µH inductor (minimum AL 74.6 nH/T², 90 turns, 127 turns of 17 AWG of 1.177 mm² in a window of 427 mm², 35 %).
+- **Fair-Rite data sheet 5943002721, a 43-mix toroid (the CERN copy; read):** AL as the inductance divided by N² for ferrite, tested at 10 kHz, AL 885 nH +20 / −25 %. Ferrite cores are therefore usable by typing AL and the dimensions.
+- **The Amidon iron powder table (the qsl.net copy, read; used only to cross-check):** 140 rows of T-xx cores with O.D., I.D., height, le, Ae, Ve and AL in µH per 100 turns; a few of its printed cells are wrong (for example the inside diameters of the mix-2 rows of T-106, T-130, T-184,
+  T-225 and T-300, and "0.183 cm" for le of the T-30). The Amidon copy at ibselectronics.biz refused the download (403) and was left alone.
+- **Not read:** Fair-Rite's and Ferroxcube's catalogs (ferrite AL tables, which belong to a core reference table), the coating thickness of Micrometals cores, AC core loss and temperature rise, Magnetics' leakage-flux formula for few turns (it is
+  for Magnetics' cores and scatters ±50 %). The catalog prints no AL for the T250-8A/90 row, and prints 4.8 nH/N² for the T400-2D (the same as for the T400-0D, probably a typing mistake for 48): both are left out. The row T90-66 has the dimensions of a different size and is its own entry, T90/66.
+
+### Why the formulas are these
+
+**AL and the turns.** AL is defined by L = AL N² (Micrometals, Magnetics, Fair-Rite); the turns for a wanted L are √(L / AL) (Magnetics' N = √(L 10³ / AL) for L in µH and AL in nH). The tool shows the whole turns and the inductance of the turns on each side, because the whole number
+is what gets wound; the tolerance of the mix gives the range. A typed core has no tolerance.
+
+**One layer and the length of a turn (derived, checked).** The wire's centre line runs round a circle of diameter ID − d (the hole less one wire), so one layer holds π (ID − d) / d turns. The length of a turn is the perimeter of the core's section, a rectangle HT by (OD − ID) / 2, with the wire's centre
+line d / 2 outside it all round: 2 (HT + (OD − ID) / 2) + 4 d with square corners. Magnetics' own single-layer tables agree with this (see the table below). The fill is the number of turns times (d / ID)², the wire's circle against the hole's.
+
+**DC bias.** H = 0.4π N I / le is the field of the current round a path of length le. A powder core's permeability falls as H rises; the catalog gives the curve of each mix and its fit, 1 / (a + b H^c) + d in percent of the initial value. The inductance with the current is AL N² times that
+percentage, and the flux density is the flux linkage over N Ae: B = L I / (N Ae), derived here.
+
+### Assumptions and limits
+
+- **AL is the nominal value at low level.** Frequency, the level of the AC signal and temperature move it (the mix pages in the catalog show how); none is modelled. A winding of few turns, or turns crowded on one side, reads higher than AL N² (Micrometals and Magnetics both say so).
+  The result is the inductance for an evenly spread winding.
+- **The dimensions are the catalog's, as printed,** for the bare core. A finished (coated) core has a slightly smaller hole; Magnetics' tables were made from the coated dimensions and the tool, which uses Micrometals' printed ones, reproduces them when given those. The fill and the length of wire follow from that.
+- **The DC-bias percentage is only for the mixes in the list above.** For the others (−18, −19, −26, −34, −35, −38, −40, −45, −52, −60, −61, −65, −66, −70) the catalog's coefficients give a figure far from the catalog's own value at 200 Oe (for example 10 % against 55 % for the −26),
+  so the tool says that it has no figure instead of printing one; mix −0 has no curve. The fit is for the field of a DC current only, and the catalog gives the curves a tolerance of +20 %, −10 %.
+- **No core loss, no temperature rise, no winding capacitance, no AC copper loss.** The DC resistance is at the wire table's temperature.
+- **Display.** Three figures; the inductance in nH, µH, mH or H as the size asks; the wire length in mm or m.
+
+### How it was checked
+
+122 cases, the expected values from a Python implementation written from the equations above (every figure and every label of the drawing; the core table built from the catalog text by a program, and the wire table):
+- Turns: the opening screen, 25 parts (sizes from T5 to T650, a dozen mixes, height variants, the T90/66 entry), 8 inductances in nH, µH and mH, a wanted inductance below one turn, two refusals, a typed core and its three refusals, a typed core in inches;
+- Inductance: the opening, 15 settings (from 1 turn to 1000, fractions of a turn, mix −0, the largest cores), three refusals;
+- Winding: the opening, 18 settings (gauges 6 to 40, from 1 turn to 120, a fill of 598 % and one under 1 %), Magnetics' wire-table and worked-example cases, two refusals and a wire too thick for the hole;
+- Bias: the opening, 14 settings (ten mixes, 0 to 20 A, 100 mA and 800 mA in mA), four mixes with no figure, a typed core and a negative current, each refused;
+- the pickers (the 101 sizes, the mixes of the T50, the mix falling back when the size has no such mix, the core remembered), the units, the pill remembered, and the seven examples.
+
+540 more cases (three batches of 180: random parts, inductances, turns, gauges, currents and units) compared every figure and label with the Python implementation; they were run and not kept.
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| Single-layer turns and DC resistance of a 24.4 × 13.7 × 9.66 mm core (coated dimensions), 20 gauges from 9 to 28 AWG | Magnetics 2017, winding tables (page 106) | turns 11 to 115, 0.00120 to 0.770 Ω | the same turns for 18 of the 20 gauges and one turn different for the other two; the resistance within 0.8 % (2.5 % for 21 AWG, where the turn count differs); checked by a script, not a case of the app's check |
+| 127 turns of 17 AWG (1.177 mm²) in a 427 mm² window | Magnetics 2017, core selection example | 35 % winding factor | 35 % |
+| 600 µH with the minimum AL of 74.6 nH/T² | Magnetics 2017, core selection example | 90 turns | 89.7 turns, 90 whole turns |
+| T50-2: 49 µH per 100 turns, 4.9 nH/N² | Amidon reprint, Micrometals 2023 | the same number in two units | 4.9 nH/N², 45.2 turns for 10 µH |
+| Percent permeability at 200 Oe, 12 mixes (−1 to −17, −30, −63) | Micrometals 2023 mix pages | 82.2, 95.9, 60.1, 98.1, 96.7, 60.1, 99.6, 91.8, 74.7, 99.5, 66.7, 51.7 % | within 0.6 points of each (81.8, 96.0, 59.5 …), shown in the Bias pill |
+| Core table, 96 parts that are in both | Micrometals 2023 against the Amidon reprint | AL within 2 % for 89, different for 7 (for example T-80-17: 3.2 and 2.2 nH/N²); the geometry the same except five mix-2 rows whose inside diameters Amidon prints wrongly | Micrometals' values |
 
 [↑ Index](#index)
 
