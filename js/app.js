@@ -20593,8 +20593,8 @@ function renderToroidWinding(domain, tool, favId) {
     const lossTxt = k.k === null ? why : k.dens === null ? "outside the curves" : `${n3(k.dens)} mW/cm³`;
     let rows = row("Loss density", lossTxt, "ld");
     if (k.k !== null) rows += row("Fit · catalog, 100 kHz 140 G", `${n3(k.fit100)} · ${n3(k.k[15])} mW/cm³`, "lf");
-    rows += row("Permeability at this flux", k.amp === null ? (k.k === null ? why : "outside 10 to 10 000 G") : `${pc(k.amp)} of the initial`, "ap")
-      + row("Permeability at this frequency", k.rel === null ? (k.k === null ? why : "outside 10 kHz to 100 MHz") : `${pc(k.rel * 100)} of the 10 kHz value`, "pf")
+    rows += row("µ at this flux", k.amp === null ? (k.k === null ? why : "outside 10 to 10 000 G") : `${pc(k.amp)} of the initial`, "ap")
+      + row("µ at this frequency", k.rel === null ? (k.k === null ? why : "outside 10 kHz to 100 MHz") : `${pc(k.rel * 100)} of the 10 kHz value`, "pf")
       + row("Inductance at this frequency", ind(k.lf), "il") + row("Current at no load", cur(k.im), "im");
     if (k.k !== null) rows += row("Bpk against Bsat", `${pc(k.bg / (k.k[16] * 10))} of ${n3(k.k[16])} kG${k.bg > k.k[16] * 1e3 ? ": saturated" : ""}`, "bs") + row("Permeability drift", `${k.k[14] > 0 ? "+" : ""}${n3(k.k[14])} ppm/°C`, "tc");
     rows += row("Volume · surface", `${n3(c.ve)} cm³ · ${n3(k.area)} cm²`, "vs");
