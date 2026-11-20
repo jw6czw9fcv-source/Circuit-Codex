@@ -70,8 +70,8 @@ const FORMULAS = [
   {
     tool: "Air-core coil (Wheeler)",
     domain: "passive",
-    formulas: ["L = 0.03948 a² n² K / b  (µH, cm)", "ΔL = 0.01257 n a (A + B)", "L = a² n² / (9a + 10b)  (µH, in)", "L = a² n² / (8a + 11c)  (µH, in)", "L = 0.8 a² n² / (6a + 9b + 10c)", "A = ln(d / D) + 0.557"],
-    note: "The inductance of a single-layer coil from Nagaoka's coefficient K with the round-wire correction, Wheeler's quick formulas for a solenoid, a multilayer coil and a flat spiral, and the turns that give a wanted inductance. From Wheeler's 1928 paper and the Bureau of Standards' Circular 74 (the formulas and tables read); the turns and the comparison with Wheeler are derived.",
+    formulas: ["L = 0.03948 a² n² K / b  (µH, cm)", "ΔL = 0.01257 n a (A + B)", "L = a² n² / (9a + 10b)  (µH, in)", "L = a² n² / (8a + 11c)  (µH, in)", "L = 0.8 a² n² / (6a + 9b + 10c)", "A = ln(d / D) + 0.557", "R = l / (58 A)  (Ω, m, mm²)"],
+    note: "The inductance of a single-layer coil from Nagaoka's coefficient K with the round-wire correction, Wheeler's quick formulas for a solenoid, a multilayer coil and a flat spiral, the turns that give a wanted inductance (single layer or in layers), and the wire: a gauge picker with the close-wound length or pitch, the wire's length and its DC resistance. From Wheeler's 1928 paper and the Bureau of Standards' Circular 74 (the formulas and tables read), NBS Handbook 100 for the wire; the turns, the layer depth and the comparison with Wheeler are derived.",
   },
   {
     tool: "Toroid winding",

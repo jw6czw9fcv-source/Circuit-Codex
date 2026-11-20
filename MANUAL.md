@@ -1907,31 +1907,36 @@ The inductance of a coil with no core, from its dimensions, and the turns that g
 inductance. Four pills; the length boxes (form diameter, wire diameter, winding length, pitch, inside
 diameter, depth) each have their own mm / cm / in picker, and changing one changes all the others.
 
+The **Your inputs** heading holds the wire picker: a typed diameter, or a gauge from 6 to 40 AWG. A gauge puts its bare diameter in the wire box (to four figures) and, until you type your own,
+proposes the close-wound value of the box that depends on the wire (marked **close-wound**): the solenoid's length (turns × the diameter over the insulation), the pitch of the Turns and Spiral pills
+(that diameter), and the depth of a layered winding (turns × d² / b). The proposal follows the turns and the length as you change them; typing a diameter puts the picker back to typed.
+
 - **Solenoid:** a single-layer coil. The form diameter, the wire diameter, the turns and the winding
   length. The big result is the Bureau of Standards' inductance: Nagaoka's sheet-of-current value from
   its exact coefficient K, less the round-wire correction. Cells: Wheeler's formula, how far Wheeler's is
   from the big result, and K. Rows: the sheet value and the correction, diameter over length and wire over
   pitch, which of Wheeler's two formulas applies (and whether the coil is outside its range), the length
-  of wire. The drawing is the coil with its diameter and length.
+  of wire and its DC resistance. The drawing is the coil with its diameter and length.
 - **Turns:** the inductance wanted (µH), the form diameter, the wire diameter and the pitch (the distance
   from one turn to the next). The big result is the turns, not rounded; cells: the whole turns, the
   winding length and how far Wheeler's answer is from it; rows: the inductance of the whole turns,
-  the turns Wheeler's formula would give, the length of wire. The turns are found by trying: the
+  the turns Wheeler's formula would give, the length of wire and its DC resistance. The turns are found by trying: the
   inductance rises a little faster than the square of the turns, because the coil lengthens.
-- **Multilayer:** a coil wound in layers with a rectangular cross-section: the inside diameter, the turns, the
-  length b and the depth c. The big result is Wheeler's formula; rows: how much each of 6a, 9b and 10c
-  takes of the denominator (about equal is the best case) and the accuracy. The drawing is the cross-section of
+- **Multilayer:** a coil wound in layers with a rectangular cross-section. The picker in the Output heading says what is given. **Turns:** the inside diameter, the turns, the wire diameter,
+  the length b and the depth c; the big result is Wheeler's formula. **Inductance:** the inductance wanted, the inside diameter, the length b and the wire; the big result is the turns, with the whole turns,
+  the depth they build and the layers in the cells, and the inductance of the whole turns in a row. Rows for both: how much each of 6a, 9b and 10c
+  takes of the denominator (about equal is the best case), the accuracy, the length of wire and its DC resistance. The drawing is the cross-section of
   Wheeler's figure.
 - **Spiral:** a flat coil of round wire: the inside diameter, the wire diameter, the turns and the pitch. The big result is
   the Bureau of Standards' formula for the equivalent coil, less the round-wire correction; cells: Wheeler's formula,
   how far it is, and the mean radius; rows: the width c = n D, c / a and wire over pitch, Wheeler's accuracy, the
-  sheet value and the correction.
+  sheet value and the correction, the length of wire and its DC resistance.
 
 - **Units:** mm, cm or in for every length (the formulas use cm or inches inside); µH for the inductance wanted.
-- **Remembered:** the pill and the length unit.
+- **Remembered:** the pill, the length unit, the wire and the way the multilayer coil is given.
 
 Examples: the Bureau's 400-turn coil, a 10-turn coil on a 20 mm form, a single loop (outside Wheeler's range),
-10 µH on a 20 mm form, 1 µH close-wound on 10 mm, the Bureau's 1000-turn multilayer coil, an IF coil, a flat spiral.
+10 µH on a 20 mm form, 1 µH close-wound on 10 mm, the Bureau's 1000-turn multilayer coil, an IF coil, a flat spiral, 20 turns of 22 AWG close-wound, and 330 µH in layers of 30 AWG.
 
 ### Terms
 
@@ -1946,6 +1951,10 @@ Examples: the Bureau's 400-turn coil, a 10-turn coil on a 20 mm form, a single l
 - **Round-wire correction:** Nagaoka's formula is for a sheet of current; wire has gaps and its current
   does not spread, which lowers the inductance a little. The correction is 0.01257 n a (A + B) µH (a in cm), A from d / D
   and B from the number of turns.
+- **AWG, bare and insulated diameter:** the American wire gauge, whose diameter is defined by a formula (NBS Handbook 100: 0.127 mm × 92^((36 − n) / 39)); the copper alone is the bare
+  diameter, which sets the resistance and the round-wire correction; enamelled magnet wire is thicker over its insulation (heavy build here), which sets how close the turns can sit. **Close-wound:**
+  each turn touching the last, the pitch equal to the insulated diameter.
+- **DC resistance:** the wire's length over its conductivity times its cross-section, for annealed copper (IACS) 1/58 Ω·mm²/m at 20 °C; it rises 0.393 % per °C.
 - **Self-resonance, skin effect:** the capacitance between turns resonates with L at a frequency above which the coil is a
   capacitor; at RF the current flows in the surface of the wire and raises its resistance. Neither is in these formulas.
 
@@ -1969,6 +1978,9 @@ Examples: the Bureau's 400-turn coil, a 10-turn coil on a 20 mm form, a single l
   integrals K and E. The tool computes them by the arithmetic-geometric mean; the formula reproduces 13 rows of Table 10 (z from 0.05 to 100) to its four figures.
 - **The Radio-Craft article of May 1932 (RF Cafe copy) and Jim Lux's page of Wheeler's formulas (read):** both repeat Wheeler's formulas; the 1932 text wrongly says "length greater
   than four-fifths of the diameter" where Wheeler says 0.8 of the radius (b > 0.8 a, so a length over 0.4 diameters).
+- **The wire:** the AWG formula and copper's resistivity are NBS Handbook 100's, as the Wire sizing tool uses them (that tool's manual section gives the source); the diameter over heavy-build insulation is
+  Magnetics' wire table (2017 Powder Core Catalog, page 28, the table the Toroid winding tool uses). The resistance per metre from the formula agrees with Magnetics' printed column within 0.5 % from 6 to 27 AWG;
+  from 28 to 40 AWG Magnetics' figures scatter on both sides of it, by up to 2.8 % (40 AWG: 3.44 against 3.54 Ω/m), checked by a script.
 - **Not read:** Wheeler's 1982 paper, Grover's book itself, Rosa's papers, the Bureau's multilayer formula (156) beyond the example, and the Radio Broadcast page of Wheeler's
   article (refused by its bot check; left alone); the IEEE copies are behind a paywall. Table 11 (A) is replaced by the fit A = ln(d / D) + 0.557, which agrees
   with the 45 printed rows to the 0.001 they give; Table 12 (B) is the printed table, interpolated straight in ln n. The Bureau's 38-turn ribbon spiral (324.2 µH calculated, 323.5 measured) is for rectangular
@@ -1988,31 +2000,41 @@ and says in the cell by how much they differ; for a single turn of a thin loop (
 turns 200 times between 1 and 10 million until it matches the wanted inductance. (Derived here; the same for Wheeler's formula.) The whole turns are the rounded
 result, and the row below tells what they give.
 
+**The wire.** With a gauge, the radius of a single layer and the inside radius of a spiral are to the centre of the wire, so they take the diameter over the insulation; the round-wire correction's d / D
+and the resistance take the bare copper. A typed diameter is used for both. The wire's length is the turns times the circumference at the centre of the wire (π × (form + wire) × n) for a single layer,
+and 2π a n for a layered winding and a spiral, a their mean radius; the resistance is that length × 1/58 over the bare cross-section. A layered winding of n turns of a wire of diameter d in a length b
+takes n d² of the cross-section, so its depth is n d² / b with the turns stacked in squares (derived here; the turns nest a little in practice, so the depth is a slight overestimate). Given an
+inductance, the tool tries turns in Wheeler's formula, with the depth and the mean radius growing with them, until it matches (the same halving as for a single layer).
+
 **Multilayer, spiral.** Wheeler's (1) and the Bureau's (160) as quoted. For the spiral the tool uses the equivalent coil of the Bureau and the same correction
 (A and B as for a single layer); the sheet value of (160) for a coil of zero length with width c.
 
 ### Assumptions and limits
 
-- **Round wire, no insulation thickness beyond the pitch,** a form with no core or shield nearby, and a coil far smaller than a wavelength. The inductance is at low
+- **Round copper wire,** the gauge's insulation the heavy-build enamel of Magnetics' table (other insulations are thinner or thicker), a form with no core or shield nearby, and a coil far smaller than a wavelength. The inductance is at low
   frequency (DC). Near the self-resonance, with skin effect or a core, a real coil differs.
 - **The correction table** is Circular 74's (A as a fit, B by interpolation); it is for a coil of several turns, B is 0 for one turn, and past 1000 turns B is held at 0.336.
 - **Single-layer coils** need diameter over length of at most 100 (the Bureau's table); the pitch cannot be less than the wire diameter.
 - **Wheeler's formulas** are within their stated accuracy only in their ranges; the tool shows both numbers so the difference is visible. The multilayer pill has no
-  second formula to compare. The turns of a multilayer coil are not computed.
+  second formula to compare. Its depth from the turns assumes square stacking and the length b given; a real winding is a little shallower when the turns nest.
+- **DC resistance at 20 °C,** for direct current: at radio frequencies the skin effect raises it, and it rises with temperature.
 - **Display.** Three figures; nH, µH or mH as the size asks; the wire length in the length unit, or in metres from 1 m.
 
 ### How it was checked
 
-109 cases, the expected values from a Python implementation (scipy's elliptic integrals; the tool uses the arithmetic-geometric mean), every figure and label of the drawings:
+158 cases, the expected values from a Python implementation (scipy's elliptic integrals; the tool uses the arithmetic-geometric mean) that replays each case's taps and typing with the screen's rules for the wire picker and the close-wound proposals, every figure and label of the drawings:
 - Solenoid: the opening screen, 24 other coils (long, short, a single loop, 2 to 1500 turns, the three length units, wire as thick as the pitch,
   very thin wire, diameter over length from 0.0005 to 50, Wheeler's two formulas and the range where it fails), the Bureau's 400-turn example, six refusals;
 - Units: cm and in on all four pills, the unit remembered and offered, carried from one pill to another;
 - Turns: the opening, 12 settings, seven refusals (an inductance one turn exceeds, one that needs 10 million turns, thick wire…) and the pill remembered;
-- Multilayer: the opening, 12 settings, four refusals; Spiral: the opening, 12 settings, five refusals;
-- the eight examples and the formula-search card.
+- Wire: the picker's options, eleven gauges on the Solenoid pill (the bare diameter in the box, the close-wound length and its hint), the length following the turns, a typed length kept, a typed diameter
+  putting the picker back, inches, the heaviest and the finest gauge, the gauge remembered, the close-wound pitch on the Turns and Spiral pills, the depth on the Multilayer pill and its following the turns;
+- Multilayer: the opening, 12 settings, six refusals; given the inductance: the opening, eight settings (typed wire and four gauges, from 1 µH to the Bureau's 195.2 mH), four refusals and the choice remembered;
+  Spiral: the opening, 12 settings, five refusals;
+- the ten examples and the formula-search card.
 
-540 more cases (three batches of 180: random coils, inductances, windings and spirals in the three length units) compared every figure and label with the Python
-implementation; they were run and not kept.
+1,080 more cases (six batches of 180: random coils, inductances, windings and spirals in the three length units, the later three with random gauges on every pill and layered windings given
+the inductance) compared every figure and label with the Python implementation; they were run and not kept.
 
 Published answers reproduced:
 
@@ -2022,6 +2044,7 @@ Published answers reproduced:
 | 400 turns, a = 10 cm, b = 40 cm, d / D = 0.5 | Circular 74 | Ls 12 919 µH, correction 9.99 µH, 12 909 µH | 12.9 mH (Ls 12.9 mH, correction 10 µH) |
 | Wheeler's formula for the same coil | derived, not printed | not in the source | 12.9 mH, 0.418 % below |
 | Multilayer, 1000 turns, a = b = 10 cm, c = 1 cm | Circular 74 | 195.2 mH (the Bureau's longer method) | 197 mH by Wheeler, 0.85 % above |
+| Copper resistance per metre, 6 to 40 AWG | Magnetics 2017 wire table | 0.00130 to 3.54 Ω/m | within 0.5 % from 6 to 27 AWG, up to 2.8 % for the finest (see Sources) |
 
 [↑ Index](#index)
 
