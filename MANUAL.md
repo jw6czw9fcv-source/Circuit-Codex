@@ -41,6 +41,7 @@ will key on, since that is the id the app already holds for each tool.
 - Inductors → [Air-core coil (Wheeler)](#air-coil)
 - Inductors → [Toroid winding](#toroid-winding)
 - Inductors → [Transformer (turns ratio)](#transformer)
+- Inductors → [Toroid/ferrite reference table](#toroid-table)
 - Inductors → [Series/parallel (L)](#ind-series-parallel)
 - Passive filters → [RC filter](#rc-filter)
 - Passive filters → [RL filter](#rl-filter)
@@ -2219,6 +2220,77 @@ Published relations reproduced:
 | 50 Ω to 200 Ω | the same | a = √(Zin / RL) | 0.5 : 1 (1 : 2) |
 | EMF equation, sine wave | Micrometals 2023, Wikipedia | Bpk = Erms 10⁸ / (4.44 Ae N f) | 1080 turns for 230 V, 50 Hz, 8 cm², 1.2 T, and B = 1200 mT back from the whole turns |
 | Square wave, 24 V, 100 kHz, 0.78 cm², 900 G | Magnetics 2013, Np = Vp 10⁸ / (4 B Ac f) | the formula and the flux level for 100 kHz (no worked example is printed) | 8.55 turns, 9 whole (85.5 mT) |
+
+[↑ Index](#index)
+
+---
+
+<a id="toroid-table"></a>
+## Toroid/ferrite reference table
+
+`calc: toroid-table` · Passive components › Inductors
+
+### What it shows
+
+741 toroidal cores from two makers' catalogs, with the numbers a winding needs. Two pills:
+
+- **Iron powder:** the 616 toroids of Micrometals' 2023 catalog (101 sizes, T5 to T650, with their height variants, in every mix the size is made in).
+- **Ferrite:** the 125 uncoated toroids of Fair-Rite's catalog (17th edition), in nine materials: the nickel-zinc 43, 52, 61, 67 and 68 and the manganese-zinc 75, 76, 77 and 78.
+
+Each card gives the part number with its material and permeability, the outside diameter × inside diameter × height in mm, AL in nH/N² with its tolerance,
+the magnetic path length le and cross-section Ae (and the volume Ve for the ferrites), and one line on what the material is for. The heading holds two pickers: the material (all, or one mix)
+and the order (by size, by AL from low to high or from high to low). The search box finds a part by its number, ignoring spaces and dashes (t50 2 finds T50-2). Thirty cards show at a time; the button under them adds thirty more.
+
+- **Remembered:** the pill, the material and the order. Changing the pill puts the material back to all.
+
+The iron powder parts are the same table as the Toroid winding tool's core picker, so a core found here can be picked there by size and mix.
+
+### Terms
+
+- **AL (inductance factor):** the inductance of one turn in nH; N turns give AL N² nH. Micrometals tests it at 10 gauss and 10 kHz on a full, evenly spaced single layer; Fair-Rite tests its toroids at 10 kHz.
+- **Tolerance:** Micrometals gives one tolerance per mix (±5 % for −2, −6, −7, −10 and −17, ±10 % for the others); Fair-Rite gives one per part (±20, ±25, ±30 or +35 / −25 %, or only a minimum: "min").
+- **Mix, material, µ, µi:** the maker's number for the magnetic material and its (initial) permeability. Micrometals numbers its mixes −0 to −70; Fair-Rite's two digits after the 59 of the part number are the material (5943… is 43 material).
+- **le, Ae, Ve:** the effective path length (cm), cross-section (cm²) and volume (cm³) of the core.
+- **Iron powder, ferrite; NiZn, MnZn:** iron powder is carbonyl iron or a powdered alloy pressed with a binder, a distributed air gap; ferrite is a ceramic of iron oxide. Fair-Rite's nickel-zinc ferrites are for higher frequencies (above about 1 MHz) and low flux density;
+  its manganese-zinc ferrites have the highest permeabilities and serve from the low kHz into the broadcast band (the catalog's own summary).
+
+### Sources
+
+- **Micrometals, "Iron Powder Cores" catalog (2023; the PDF from micrometals.com, read as text):** the toroid table (PDF pages 48 onward: part number, dimensions in inches and mm, Ae, le, Ve, AL, reference permeability, mix), the typical AL tolerance of each mix (PDF page 47),
+  the AL test conditions, and the description of every mix (the materials pages and the selection guide), which the one-line notes paraphrase. Read and built by a program (616 parts in 101 sizes); the T400-2D row (AL printed as 4.8, the same as the T400-0D's, almost certainly 48) and the
+  T250-8A/90 row (no AL) are left out, and the T90-66 row, whose dimensions are not the T90's, is its own entry. Cross-checked with an older Amidon table (the qsl.net copy): AL agrees within 2 % for 89 of the 96 parts in both.
+- **Fair-Rite Products, "Ferrite Cores" catalog, 17th edition (© 2013; the copy on a CERN web server, 164 pages read as text):** the toroid tables (PDF pages 104 to 112): part number, A, B and C dimensions with tolerances, weight, Σl/A, le, Ae, Ve and AL with its tolerance; the
+  notes that toroids are tested for AL at 10 kHz and that the 9th digit of the part number is 1 for a Parylene coating and 2 for a thermo-set plastic coating (whose rows, 73 of them, have the same magnetic figures and are not listed); the "Soft Ferrites" summary of the nickel-zinc and
+  manganese-zinc families; and the frequency ranges the catalog gives for its materials (43: 25–300 MHz suppression; 52: 250–1000 MHz; 61: 1–40 MHz broadband and inductive, above 250 MHz suppression; 67: 10–100 MHz; 75: 200 kHz–30 MHz). 125 parts, parsed by a program; one
+  row is odd as printed (5943017501: Ve 70.5 cm³ against Ae × le = 75.3).
+- **Fair-Rite data sheet 5943002721 (the CERN copy; read):** the coated version of 5943002701: AL 885 nH +20 / −25 %, Ae 0.78 cm², le 8.9 cm, Ve 7 cm³. The catalog gives the uncoated part 885 nH ±20 %, 0.79 cm², 8.9 cm and 7 cm³.
+- **Not read:** Fair-Rite's newer catalogs and its current web data (this edition has no toroids in 31, 33, 73 or 95 to 98 material, which Fair-Rite sells now), Ferroxcube's and TDK's toroids, the material curves (permeability against frequency, temperature and flux) of either maker.
+  The 77 and 78 notes give only the family and permeability: the catalog's toroid pages do not say what they are for.
+
+### Assumptions and limits
+
+- **The catalog figures, as printed.** Dimensions are the uncoated core's; a coated core is larger outside and smaller inside (Fair-Rite: up to 0.5 mm for thermo-set plastic, 0.038 mm for Parylene).
+- **AL is for low level and 10 kHz.** At higher frequencies, with a DC current or with a large AC flux the inductance changes (the Toroid winding tool's Bias pill gives the DC effect for the iron powder mixes whose curve fit agrees with the catalog).
+- **Editions.** Fair-Rite's 2013 edition, and Micrometals' 2023 catalog. Parts come and go: check the maker's current data before ordering.
+- **Display.** Three figures; part numbers as the makers print them.
+
+### How it was checked
+
+64 cases, the expected lists from a Python program that builds the same rows from the same data and filters, sorts and searches them the way the screen should:
+- Iron powder: the opening list (the count, the first three cards, the 30th, the Show more button and what it adds), each of the 24 mixes (the count and the first two cards), the material picker, both AL orders, ten searches (with spaces and dashes, a mix suffix,
+  a height variant, one that finds nothing), a search within a mix, and the T50-2 card against the catalog's own row;
+- Ferrite: the opening list, each of the nine materials, the picker, both orders, five searches, and the 5943002701 card against the catalog and the data sheet;
+- the pill, the material and the order remembered, and the material reset when the pill changes.
+
+Every card checked gives its title, size, AL line, le and Ae line and note.
+
+Published figures reproduced:
+
+| Part | Source | Source says | Tool shows |
+|---|---|---|---|
+| T50-2 | Micrometals 2023 | 12.70 × 7.70 × 4.83 mm, Ae 0.112 cm², le 3.19 cm, AL 4.9 nH/N², ±5 % for −2 | 12.7 × 7.7 × 4.83 mm, AL 4.9 nH/N² ±5 %, le 3.19 cm, Ae 0.112 cm² |
+| T50-2 | Amidon table | AL 49 µH per 100 turns | the same as 4.9 nH/N² |
+| 5943002701 | Fair-Rite catalog, data sheet 5943002721 | 885 nH, le 8.9 cm, Ae 0.79 / 0.78 cm², Ve 7 cm³ | 885 nH/N² ±20 %, le 8.9 cm, Ae 0.79 cm², Ve 7 cm³ |
 
 [↑ Index](#index)
 

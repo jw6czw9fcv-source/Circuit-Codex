@@ -685,6 +685,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "air-coil") return renderAirCoil(domain, tool, favId);
   if (calcId === "toroid-winding") return renderToroidWinding(domain, tool, favId);
   if (calcId === "transformer") return renderTransformer(domain, tool, favId);
+  if (calcId === "toroid-table") return renderToroidTable(domain, tool, favId);
   if (calcId === "velocity-factor") return renderVelocityFactor(domain, tool, favId);
   if (calcId === "skin-depth") return renderSkinDepth(domain, tool, favId);
   if (calcId === "heat-sink") return renderHeatSink(domain, tool, favId);
@@ -20845,6 +20846,278 @@ function renderTransformer(domain, tool, favId) {
     pick("data-known", "known"); pick("data-wave", "wave"); pick("data-uf", "uf"); pick("data-ua", "ua"); pick("data-ub", "ub");
   }
 
+  paint();
+}
+
+// ---------- Toroid and ferrite reference table ----------
+// The toroids of two makers side by side, with the numbers a winding needs: the dimensions, the inductance factor AL and its tolerance, the path length le, the cross-section Ae and the volume Ve.
+//  - Iron powder: the 616 parts of Micrometals' "Iron Powder Cores" catalog 2023 (the toroid table; the same data as the Toroid winding tool's TW_TOROIDS), AL in nH/N2, the tolerance of the mix from the same catalog, and one
+//    line for each mix paraphrased from its materials-performance page.
+//  - Ferrite: the 125 uncoated toroids of Fair-Rite's "Ferrite Cores" catalog, 17th edition (2013; the CERN copy of the PDF, 164 pages as text; the toroid tables on PDF pages 104 to 112), each with its A, B and C dimensions, le, Ae, Ve and AL
+//    and AL's tolerance as printed. The coated versions (9th digit 1 Parylene, 2 thermo-set plastic) share the magnetic figures and have larger outside and smaller inside dimensions: 73 more rows, not listed. Fair-Rite's own data sheet
+//    5943002721 (the CERN copy, the coated part) agrees with the catalog's 5943002701: AL 885 nH, le 8.9 cm, Ve 7 cm3; Ae is 0.79 in the catalog and 0.78 in the data sheet, and the tolerance +20 / -25 % against +/-20 %.
+//  Not read: the toroids of materials 31, 33, 73 and 95 to 98 (absent from this edition's toroid tables), Ferroxcube's and TDK's toroids, the material curves of either maker. Two catalog rows are as printed although odd: the Fair-Rite
+//  5943017501 gives Ve 70.5 against Ae x le 75.3, and Micrometals' T400-2D (AL 4.8) and T250-8A/90 (no AL) are left out.
+const TC_KINDS = [["iron", "Iron powder"], ["ferrite", "Ferrite"]];
+const TC_SORTS = [["size", "Size"], ["alup", "AL, low first"], ["aldown", "AL, high first"]];
+const TC_PAGE = 30;
+const TC_IRON_NOTE = {
+  0: "Non-magnetic (µ 1): a winding form for air coils with high Q to the highest frequencies; moderate-band transformers from 600 MHz to 1 GHz.",
+  1: "Annealed carbonyl iron, high permeability: high Q below 1 MHz, and the widest band transformers, about 50 to 500 MHz.",
+  2: "Popular carbonyl iron: high Q to 40 MHz; audio, high-frequency power conversion and amateur radio; transformers at 200 to 400 MHz.",
+  3: "The highest carbonyl permeability: high Q below 1 MHz; broadband transformers from 40 to 250 MHz.",
+  6: "Carbonyl iron: high Q to 40 MHz, popular in amateur radio; the lower-permeability alternative to −2.",
+  7: "Carbonyl iron: high Q to 40 MHz, very popular in amateur radio; a lower-cost alternative to −6.",
+  8: "Annealed carbonyl iron with good linearity under bias; high Q below 1 MHz; broadband transformers from 40 to 250 MHz.",
+  10: "High-frequency carbonyl iron: high Q to 150 MHz, cable television; transformers from 400 to 700 MHz.",
+  14: "Low permeability, so a lower AC flux: high-frequency power and resonant inductors with a good DC-bias behaviour.",
+  15: "Annealed carbonyl iron, µ 25: high Q below 1 MHz; between −1 and −3 in permeability.",
+  17: "The highest-frequency carbonyl iron: high Q to 150 MHz, cable television and resonant power conversion; can replace an air coil below 50 MHz.",
+  18: "Low core loss like −8 with a higher permeability and a lower cost; good DC saturation, differential-mode EMI filters.",
+  19: "A lower-cost alternative to −18 with somewhat higher core loss.",
+  26: "A popular general-purpose power material for power conversion and line filters.",
+  30: "Good linearity and low cost at a low permeability: high-power UPS inductors.",
+  34: "An inexpensive alternative to −8 where the high-frequency loss is not critical; good linearity under bias.",
+  35: "An inexpensive alternative to −8 where the high-frequency loss is not critical; good linearity under bias.",
+  38: "Like −26 with a higher permeability.",
+  40: "The least expensive iron powder; like −26 at a lower permeability, mostly in large sizes.",
+  45: "The highest-permeability iron powder; a high-permeability alternative to −52 with slightly higher core loss.",
+  52: "Lower high-frequency loss than −26 at the same permeability: high-frequency chokes.",
+  60: "A magnetic powder alloy that does not age thermally up to 200 °C; can replace −18.",
+  61: "A powder alloy of permeability 35, no thermal ageing.",
+  63: "A powder alloy of permeability 35 with good properties past 10 MHz; a high-temperature alternative to −8.",
+  65: "A powder alloy of permeability 42, popular in microcube shapes; better DC saturation than −66.",
+  66: "A powder alloy with low core loss: power conversion below 150 kHz and EMI filters below 30 MHz.",
+  70: "A nickel-containing powder alloy of higher permeability than the 60 series, with good loss up to 400 kHz.",
+};
+const TC_FERRITE_NOTE = {
+  43: "Nickel-zinc, µi 800: broadband EMI suppression, 25 to 300 MHz.",
+  52: "Nickel-zinc, µi 250, high saturation: suppression from 250 to 1000 MHz.",
+  61: "Nickel-zinc, µi 125: broadband and inductive designs, 1 to 40 MHz; suppression above 250 MHz.",
+  67: "Nickel-zinc, µi 40: broadband and inductive designs, 10 to 100 MHz.",
+  68: "Nickel-zinc, µi 16: the lowest permeability of the toroid materials.",
+  75: "Manganese-zinc, µi 5000: suppression at low frequencies, 200 kHz to 30 MHz.",
+  76: "Manganese-zinc, µi 10 000: the highest permeability of the toroid materials.",
+  77: "Manganese-zinc, µi 2000.",
+  78: "Manganese-zinc, µi 2300.",
+};
+// Fair-Rite toroids, uncoated: part number, material, A (OD), B (ID), C (HT) in mm, Ae (cm2), le (cm), Ve (cm3), AL (nH), the tolerance as printed
+const TC_FERRITE = [
+  ["5968020901", "68", 6.1, 3.12, 1.65, 0.021, 1.33, 0.027, 2.3, "min"],
+  ["5968000201", "68", 9.5, 4.75, 3.3, 0.073, 2.07, 0.15, 5.3, "min"],
+  ["5968000301", "68", 12.7, 7.15, 4.9, 0.129, 2.95, 0.38, 6.6, "min"],
+  ["5968001101", "68", 12.7, 7.9, 6.35, 0.15, 3.12, 0.47, 7.2, "min"],
+  ["5968001801", "68", 22.1, 13.7, 6.35, 0.262, 5.41, 1.42, 7.3, "min"],
+  ["5968021001", "68", 29.95, 19.45, 7.5, 0.388, 7.52, 2.917, 7.7, "min"],
+  ["5968002701", "68", 35.55, 23.0, 12.7, 0.78, 8.9, 7.0, 13, "min"],
+  ["5968003801", "68", 61.0, 35.55, 12.7, 1.58, 14.5, 22.8, 16, "min"],
+  ["5967000101", "67", 5.95, 3.05, 1.65, 0.02, 1.3, 0.027, 6, "min"],
+  ["5967000201", "67", 9.5, 4.75, 3.3, 0.072, 2.07, 0.15, 18, "+35 / −25 %"],
+  ["5967000301", "67", 12.7, 7.15, 4.9, 0.129, 2.95, 0.38, 22, "+35 / −25 %"],
+  ["5967001101", "67", 12.7, 7.9, 6.35, 0.15, 3.12, 0.47, 24, "+35 / −25 %"],
+  ["5967001901", "67", 12.7, 7.9, 12.7, 0.299, 3.12, 0.93, 48, "+35 / −25 %"],
+  ["5967000601", "67", 21.0, 13.2, 6.35, 0.243, 5.2, 1.26, 24, "+35 / −25 %"],
+  ["5967001801", "67", 22.1, 13.7, 6.35, 0.262, 5.4, 1.42, 24, "+35 / −25 %"],
+  ["5967001001", "67", 29.0, 19.0, 7.5, 0.37, 7.3, 2.7, 25, "+35 / −25 %"],
+  ["5967001201", "67", 29.0, 19.0, 13.85, 0.68, 7.3, 5.0, 47, "+35 / −25 %"],
+  ["5967001701", "67", 31.75, 19.05, 9.5, 0.59, 7.6, 4.5, 39, "+35 / −25 %"],
+  ["5967002701", "67", 35.55, 23.0, 12.7, 0.79, 8.9, 7.0, 45, "+35 / −25 %"],
+  ["5967003801", "67", 61.0, 35.55, 12.7, 1.58, 14.5, 22.8, 55, "+35 / −25 %"],
+  ["5961000801", "61", 3.95, 2.15, 1.4, 0.011, 0.92, 0.0097, 15, "min"],
+  ["5961000101", "61", 5.95, 3.05, 1.65, 0.02, 1.3, 0.027, 25, "±25 %"],
+  ["5961000201", "61", 9.5, 4.75, 3.3, 0.072, 2.07, 0.15, 55, "±25 %"],
+  ["5961000301", "61", 12.7, 7.15, 4.9, 0.129, 2.95, 0.38, 69, "±25 %"],
+  ["5961001101", "61", 12.7, 7.9, 6.35, 0.15, 3.12, 0.47, 75, "±25 %"],
+  ["5961001901", "61", 12.7, 7.9, 12.7, 0.299, 3.12, 0.93, 150, "±25 %"],
+  ["5961004901", "61", 16.0, 9.6, 6.35, 0.199, 3.85, 0.77, 80, "±25 %"],
+  ["5961000601", "61", 21.0, 13.2, 6.35, 0.243, 5.2, 1.26, 75, "±25 %"],
+  ["5961000501", "61", 21.0, 13.2, 11.9, 0.46, 5.2, 2.36, 135, "±25 %"],
+  ["5961001801", "61", 22.1, 13.7, 6.35, 0.262, 5.4, 1.42, 75, "±25 %"],
+  ["5961001001", "61", 29.0, 19.0, 7.5, 0.37, 7.3, 2.7, 80, "±25 %"],
+  ["5961001201", "61", 29.0, 19.0, 13.85, 0.68, 7.3, 5.0, 145, "±25 %"],
+  ["5961001701", "61", 31.75, 19.05, 9.5, 0.59, 7.6, 4.5, 120, "±25 %"],
+  ["5961002701", "61", 35.55, 23.0, 12.7, 0.79, 8.9, 7.0, 140, "±25 %"],
+  ["5961003801", "61", 61.0, 35.55, 12.7, 1.58, 14.5, 22.8, 170, "±25 %"],
+  ["5952020201", "52", 5.84, 3.0, 1.65, 0.02, 1.28, 0.0256, 49, "±25 %"],
+  ["5952020301", "52", 9.42, 4.72, 3.3, 0.072, 2.06, 0.147, 110, "±25 %"],
+  ["5952020401", "52", 12.6, 6.99, 4.9, 0.13, 2.9, 0.378, 141, "±25 %"],
+  ["5952020501", "52", 12.45, 7.8, 6.35, 0.144, 3.06, 0.442, 148, "±25 %"],
+  ["5952020601", "52", 21.7, 13.5, 6.35, 0.256, 5.33, 1.368, 151, "±25 %"],
+  ["5952020701", "52", 28.8, 18.7, 7.5, 0.374, 7.23, 2.702, 162, "±25 %"],
+  ["5952020801", "52", 35.25, 22.6, 12.7, 0.792, 8.79, 6.959, 283, "±25 %"],
+  ["5952003801", "52", 60.0, 35.35, 12.7, 1.58, 14.5, 22.8, 325, "±25 %"],
+  ["5943000801", "43", 3.95, 2.15, 1.4, 0.011, 0.92, 0.0097, 117, "±20 %"],
+  ["5943000101", "43", 5.95, 3.05, 1.65, 0.02, 1.3, 0.027, 158, "±20 %"],
+  ["5943000901", "43", 5.95, 3.05, 3.05, 0.041, 1.3, 0.053, 315, "±20 %"],
+  ["5943000201", "43", 9.5, 4.75, 3.3, 0.072, 2.07, 0.15, 350, "±20 %"],
+  ["5943000301", "43", 12.7, 7.15, 4.9, 0.129, 2.95, 0.38, 440, "±20 %"],
+  ["5943001101", "43", 12.7, 7.9, 6.35, 0.15, 3.12, 0.47, 480, "±20 %"],
+  ["5943001901", "43", 12.7, 7.9, 12.7, 0.299, 3.12, 0.93, 965, "±20 %"],
+  ["5943005101", "43", 16.0, 9.6, 4.75, 0.145, 3.85, 0.56, 375, "±20 %"],
+  ["5943004901", "43", 16.0, 9.6, 6.35, 0.199, 3.85, 0.77, 520, "±20 %"],
+  ["5943000601", "43", 21.0, 13.2, 6.35, 0.243, 5.2, 1.26, 470, "±20 %"],
+  ["5943000501", "43", 21.0, 13.2, 11.9, 0.46, 5.2, 2.36, 885, "±20 %"],
+  ["5943001801", "43", 22.1, 13.7, 6.35, 0.262, 5.4, 1.42, 485, "±20 %"],
+  ["5943007601", "43", 22.1, 13.7, 12.7, 0.52, 5.4, 2.83, 970, "±20 %"],
+  ["5943001301", "43", 25.4, 15.5, 6.35, 0.308, 6.2, 1.9, 500, "±20 %"],
+  ["5943001401", "43", 25.4, 15.5, 8.15, 0.41, 6.2, 2.52, 645, "±20 %"],
+  ["5943006401", "43", 25.4, 15.5, 12.7, 0.62, 6.2, 3.8, 1000, "±20 %"],
+  ["5943001001", "43", 29.0, 19.0, 7.5, 0.37, 7.3, 2.7, 510, "±20 %"],
+  ["5943001201", "43", 29.0, 19.0, 13.85, 0.68, 7.3, 5.0, 950, "±20 %"],
+  ["5943001601", "43", 31.1, 19.05, 7.9, 0.47, 7.6, 3.53, 620, "±20 %"],
+  ["5943001701", "43", 31.75, 19.05, 9.5, 0.59, 7.6, 4.5, 775, "±20 %"],
+  ["5943002701", "43", 35.55, 23.0, 12.7, 0.79, 8.9, 7.0, 885, "±20 %"],
+  ["5943018601", "43", 43.6, 23.1, 18.0, 1.78, 9.8, 17.5, 1850, "±25 %"],
+  ["5943017301", "43", 48.3, 31.8, 19.05, 1.55, 12.2, 18.9, 1275, "±25 %"],
+  ["5943003801", "43", 61.0, 35.55, 12.7, 1.58, 14.5, 22.8, 1075, "±20 %"],
+  ["5943011101", "43", 73.65, 38.85, 12.7, 2.15, 16.7, 35.9, 1300, "±25 %"],
+  ["5943015901", "43", 100.0, 55.0, 12.7, 2.77, 23.0, 63.7, 1215, "±25 %"],
+  ["5943017501", "43", 102.6, 63.5, 15.85, 3.0, 25.1, 70.5, 1225, "±25 %"],
+  ["5978002101", "78", 4.95, 2.2, 1.4, 0.015, 1.04, 0.0157, 440, "±25 %"],
+  ["5977000101", "77", 5.95, 3.05, 1.65, 0.02, 1.3, 0.027, 420, "±25 %"],
+  ["5977000201", "77", 9.5, 4.75, 3.3, 0.072, 2.07, 0.15, 945, "±25 %"],
+  ["5977000301", "77", 12.7, 7.15, 4.9, 0.129, 2.95, 0.38, 1180, "±25 %"],
+  ["5977001101", "77", 12.7, 7.9, 6.35, 0.15, 3.12, 0.47, 1300, "±25 %"],
+  ["5977001901", "77", 12.7, 7.9, 12.7, 0.299, 3.12, 0.93, 2595, "±25 %"],
+  ["5977005101", "77", 16.0, 9.6, 4.75, 0.145, 3.85, 0.56, 1015, "±25 %"],
+  ["5977004901", "77", 16.0, 9.6, 6.35, 0.199, 3.85, 0.77, 1400, "±25 %"],
+  ["5977000601", "77", 21.0, 13.2, 6.35, 0.243, 5.2, 1.26, 1270, "±25 %"],
+  ["5977000501", "77", 21.0, 13.2, 11.9, 0.46, 5.2, 2.36, 2375, "±25 %"],
+  ["5977001801", "77", 22.1, 13.7, 6.35, 0.262, 5.4, 1.42, 1305, "±25 %"],
+  ["5977007601", "77", 22.1, 13.7, 12.7, 0.52, 5.4, 2.83, 2615, "±25 %"],
+  ["5978007601", "78", 22.1, 13.7, 12.7, 0.52, 5.4, 2.83, 2795, "±25 %"],
+  ["5977001301", "77", 25.4, 15.5, 6.35, 0.308, 6.2, 1.9, 1350, "±25 %"],
+  ["5977001401", "77", 25.4, 15.5, 8.15, 0.41, 6.2, 2.52, 1730, "±25 %"],
+  ["5977006401", "77", 25.4, 15.5, 12.7, 0.62, 6.2, 3.8, 2700, "±25 %"],
+  ["5977001001", "77", 29.0, 19.0, 7.5, 0.37, 7.3, 2.7, 1365, "±25 %"],
+  ["5977001201", "77", 29.0, 19.0, 13.85, 0.68, 7.3, 5.0, 2520, "±25 %"],
+  ["5978001201", "78", 29.0, 19.0, 13.85, 0.68, 7.3, 5.0, 2695, "±25 %"],
+  ["5977001601", "77", 31.1, 19.05, 7.9, 0.47, 7.6, 3.53, 1665, "±25 %"],
+  ["5977001701", "77", 31.75, 19.05, 9.5, 0.59, 7.6, 4.5, 2090, "±25 %"],
+  ["5978001701", "78", 31.75, 19.05, 9.5, 0.59, 7.6, 4.5, 2230, "±25 %"],
+  ["5977002701", "77", 35.55, 23.0, 12.7, 0.79, 8.9, 7.0, 2400, "±25 %"],
+  ["5978002701", "78", 35.55, 23.0, 12.7, 0.79, 8.9, 7.0, 2545, "±25 %"],
+  ["5978018601", "78", 43.6, 23.1, 18.0, 1.78, 9.8, 17.5, 5260, "±25 %"],
+  ["5978017301", "78", 48.3, 31.8, 19.05, 1.55, 12.2, 18.9, 3670, "±25 %"],
+  ["5978018701", "78", 56.3, 32.7, 18.0, 2.07, 13.3, 27.6, 4500, "±25 %"],
+  ["5977003801", "77", 61.0, 35.55, 12.7, 1.58, 14.5, 22.8, 2950, "±25 %"],
+  ["5978003801", "78", 61.0, 35.55, 12.7, 1.58, 14.5, 22.8, 3155, "±25 %"],
+  ["5977011101", "77", 73.65, 38.85, 12.7, 2.15, 16.7, 35.9, 3500, "±25 %"],
+  ["5978011101", "78", 73.65, 38.85, 12.7, 2.15, 16.7, 35.9, 3740, "±25 %"],
+  ["5978015901", "78", 100.0, 55.0, 12.7, 2.77, 23.0, 63.7, 3500, "±25 %"],
+  ["5978008001", "78", 154.2, 69.4, 19.05, 7.6, 31.3, 237.0, 7000, "±25 %"],
+  ["5978014001", "78", 101.6, 75.2, 24.75, 3.24, 27.4, 88.7, 3425, "±25 %"],
+  ["5975000801", "75", 3.95, 2.15, 1.4, 0.011, 0.92, 0.0097, 585, "±20 %"],
+  ["5975002101", "75", 4.95, 2.2, 1.4, 0.015, 1.04, 0.0157, 770, "±20 %"],
+  ["5975000101", "75", 5.95, 3.05, 1.65, 0.02, 1.3, 0.027, 785, "±20 %"],
+  ["5975000201", "75", 9.5, 4.75, 3.3, 0.072, 2.07, 0.15, 2200, "±20 %"],
+  ["5975000301", "75", 12.7, 7.15, 4.9, 0.129, 2.95, 0.38, 2725, "±20 %"],
+  ["5975001101", "75", 12.7, 7.9, 6.35, 0.15, 3.12, 0.47, 3000, "±20 %"],
+  ["5975001901", "75", 12.7, 7.9, 12.7, 0.299, 3.12, 0.93, 6000, "±20 %"],
+  ["5975005101", "75", 16.0, 9.6, 4.75, 0.145, 3.85, 0.56, 2350, "±20 %"],
+  ["5975004901", "75", 16.0, 9.6, 6.35, 0.199, 3.85, 0.77, 3225, "±20 %"],
+  ["5975000601", "75", 21.0, 13.2, 6.35, 0.243, 5.2, 1.26, 2950, "±20 %"],
+  ["5975000501", "75", 21.0, 13.2, 11.9, 0.46, 5.2, 2.36, 5500, "±20 %"],
+  ["5975001801", "75", 22.1, 13.7, 6.35, 0.262, 5.4, 1.42, 3025, "±20 %"],
+  ["5975007601", "75", 22.1, 13.7, 12.7, 0.52, 5.4, 2.83, 6100, "±20 %"],
+  ["5975001401", "75", 25.4, 15.5, 8.15, 0.41, 6.2, 2.52, 4000, "±20 %"],
+  ["5975006401", "75", 25.4, 15.5, 12.7, 0.62, 6.2, 3.8, 6250, "±20 %"],
+  ["5975002701", "75", 35.55, 23.0, 12.7, 0.79, 8.9, 7.0, 5500, "±25 %"],
+  ["5975003801", "75", 61.0, 35.55, 12.7, 1.58, 14.5, 22.8, 6850, "±25 %"],
+  ["5975011101", "75", 73.65, 38.85, 12.7, 2.15, 16.7, 35.9, 8100, "±25 %"],
+  ["5976000801", "76", 3.95, 2.15, 1.4, 0.011, 0.92, 0.0097, 1430, "±30 %"],
+  ["5976000101", "76", 5.95, 3.05, 1.65, 0.02, 1.3, 0.027, 1950, "±30 %"],
+  ["5976000201", "76", 9.5, 4.75, 3.3, 0.072, 2.07, 0.15, 4400, "±30 %"],
+];
+
+function renderToroidTable(domain, tool, favId) {
+  const CALC = "toroid-table";
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const rowsOf = {};
+  // The iron powder rows, from the Toroid winding tool's table: T50B and mix 2 is the part T50-2B.
+  rowsOf.iron = TW_TOROIDS.flatMap((s) => {
+    const m = /^T(\d+)([A-Z]?)(?:\/\d+)?$/.exec(s[0]);
+    return s[6].map((x) => {
+      const [m0, m1] = x[0].split("/"), mn = parseInt(m0, 10);
+      return { name: `T${m[1]}-${m0}${m[2]}${m1 ? "/" + m1 : ""}`, mat: String(mn), matLabel: x[0], mu: x[2], od: s[1], id: s[2], ht: s[3], ae: s[4], le: s[5], ve: null, al: x[1], tol: TW_TOL[mn] === undefined ? "" : `±${TW_TOL[mn]} %`, note: TC_IRON_NOTE[mn] || "" };
+    });
+  });
+  const TOLTXT = { "±20%": "±20 %", "±25%": "±25 %", "Min": "min", "+20%, -25%": "+20 / −25 %", "+35%, -25%": "+35 / −25 %" };
+  rowsOf.ferrite = TC_FERRITE.map((r) => ({ name: r[0], mat: r[1], matLabel: r[1], mu: { 43: 800, 52: 250, 61: 125, 67: 40, 68: 16, 75: 5000, 76: 10000, 77: 2000, 78: 2300 }[r[1]], od: r[2], id: r[3], ht: r[4], ae: r[5], le: r[6], ve: r[7], al: r[8], tol: r[9], note: TC_FERRITE_NOTE[r[1]] || "" }));
+  const state = {
+    kind: pref(CALC, "kind", "iron", TC_KINDS.map((k) => k[0])),
+    mat: pref(CALC, "mat", "all", ["all"].concat(rowsOf.iron.map((r) => r.matLabel), rowsOf.ferrite.map((r) => r.matLabel))),
+    sort: pref(CALC, "sort", "size", TC_SORTS.map((s) => s[0])),
+    query: "", shown: TC_PAGE,
+  };
+  const mats = () => {
+    const seen = new Map();
+    rowsOf[state.kind].forEach((r) => { if (!seen.has(r.matLabel)) seen.set(r.matLabel, r); });
+    return [...seen.values()].sort((a, b) => parseFloat(a.matLabel) - parseFloat(b.matLabel) || (a.matLabel < b.matLabel ? -1 : 1));
+  };
+  const matName = (r) => (state.kind === "iron" ? `−${r.matLabel} · µ ${n3(r.mu)}` : `${r.matLabel} · µi ${n3(r.mu)}`);
+  const key = (s) => s.toLowerCase().replace(/[\s-]/g, "");
+  function list() {
+    let l = rowsOf[state.kind];
+    const mat = mats().some((r) => r.matLabel === state.mat) ? state.mat : "all";
+    if (mat !== "all") l = l.filter((r) => r.matLabel === mat);
+    if (state.query) l = l.filter((r) => key(r.name).includes(key(state.query)));
+    const by = { size: (a, b) => a.od - b.od || a.id - b.id || a.ht - b.ht || (a.name < b.name ? -1 : 1), alup: (a, b) => a.al - b.al || a.od - b.od, aldown: (a, b) => b.al - a.al || a.od - b.od }[state.sort];
+    return l.slice().sort(by);
+  }
+  function card(r) {
+   return `
+      <div class="formula-card formula-card--static">
+        <div class="formula-card-head"><span class="formula-card-title">${r.name}<span style="opacity:.55;font-weight:500">&nbsp;${state.kind === "iron" ? "−" : ""}${r.matLabel} · µ${state.kind === "iron" ? "" : "i"} ${n3(r.mu)}</span></span></div>
+        <div class="breadcrumb">${n3(r.od)} × ${n3(r.id)} × ${n3(r.ht)} mm</div>
+        <div class="formula-line">AL ${n3(r.al)} nH/N²${r.tol ? ` ${r.tol}` : ""}</div>
+        <div class="formula-line">le ${n3(r.le)} cm · Ae ${n3(r.ae)} cm²${r.ve === null ? "" : ` · Ve ${n3(r.ve)} cm³`}</div>
+        <div class="formula-card-note">${r.note}</div>
+      </div>`;
+  }
+  function refresh() {
+    const l = list(), shown = l.slice(0, state.shown);
+    document.getElementById("tt-count").textContent = `${l.length} part${l.length === 1 ? "" : "s"}`;
+    document.getElementById("tt-results").innerHTML = l.length
+      ? shown.map(card).join("") + (l.length > shown.length ? `<button class="filter-btn" id="tt-more" style="margin:4px 16px 12px;width:calc(100% - 32px)">Show ${Math.min(TC_PAGE, l.length - shown.length)} more of ${l.length - shown.length}</button>` : "")
+      : `<div class="placeholder">${ICONS.search}<div>No match${state.query ? ` for "${state.query}"` : ""}.</div></div>`;
+    const more = document.getElementById("tt-more");
+    if (more) more.onclick = () => { state.shown += TC_PAGE; refresh(); };
+  }
+  function paint() {
+    const sel = (attr, opts, cur) => `<select class="label-select" ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const matOpts = [["all", "All materials"]].concat(mats().map((r) => [r.matLabel, matName(r)]));
+    const mat = matOpts.some((o) => o[0] === state.mat) ? state.mat : "all";
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Iron powder and ferrite cores, 741 parts")}
+
+      ${pillRow(TC_KINDS, state.kind, domain.bg)}
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Show</span><span></span><span>${sel("data-mat", matOpts, mat)}${sel("data-sort", TC_SORTS, state.sort)}</span>
+      </div>
+
+      <div class="search-box">
+        ${ICONS.search}
+        <input id="tt-input" type="text" placeholder="Search a part, such as T50 or 5943" autocapitalize="off" spellcheck="false" value="${state.query}" />
+      </div>
+      <div class="color-row-note" style="margin:0 16px 6px" id="tt-count"></div>
+      <div id="tt-results"></div>
+      ${tabbarHTML("")}
+    `;
+    document.getElementById("fav-btn").onclick = () => { toggleFavorite(favId); paint(); };
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.kind = btn.dataset.pill; state.mat = "all"; state.shown = TC_PAGE; setPref(CALC, "kind", state.kind); setPref(CALC, "mat", "all"); paint(); };
+    });
+    app.querySelector("select[data-mat]").onchange = (e) => { state.mat = e.target.value; state.shown = TC_PAGE; setPref(CALC, "mat", state.mat); refresh(); };
+    app.querySelector("select[data-sort]").onchange = (e) => { state.sort = e.target.value; state.shown = TC_PAGE; setPref(CALC, "sort", state.sort); refresh(); };
+    document.getElementById("tt-input").oninput = (e) => { state.query = e.target.value.trim(); state.shown = TC_PAGE; refresh(); };
+    refresh();
+  }
   paint();
 }
 
