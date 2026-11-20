@@ -76,8 +76,8 @@ const FORMULAS = [
   {
     tool: "Toroid winding",
     domain: "passive",
-    formulas: ["L = AL N²  (AL in nH)", "N = √(L / AL)", "H = 0.4π N I / le  (Oe, cm)", "%µi = 1 / (a + b H^c) + d", "B = L I / (N Ae)", "fill = N (d / ID)²", "N1 = π (ID − d) / d", "MLT = 2(HT + (OD − ID) / 2) + 4d"],
-    note: "The turns for a wanted inductance on a toroid from its AL, the inductance of a number of turns, the wire (window fill, one-layer turns, length, DC resistance) and the fall of inductance with a direct current. From Micrometals' 2023 catalog (the core table, tolerances and equations), Magnetics' catalog (the wire table and winding factor) and Fair-Rite's definition of AL; the wire length and flux density are derived.",
+    formulas: ["L = AL N²  (AL in nH)", "N = √(L / AL)", "H = 0.4π N I / le  (Oe, cm)", "%µi = 1 / (a + b H^c) + d", "B = L I / (N Ae)", "Bpk = V 10⁸ / (4.44 Ae N f)  (G)", "ΔT = (P / A)^0.833  (mW, cm²)", "fill = N (d / ID)²", "N1 = π (ID − d) / d", "MLT = 2(HT + (OD − ID) / 2) + 4d"],
+    note: "The turns for a wanted inductance on an iron powder or ferrite toroid from its AL, the inductance of a number of turns, the wire (window fill, one-layer turns, length, DC resistance), the fall of inductance with a direct current, and the flux density, core loss and temperature rise from an AC voltage. From Micrometals' 2023 catalog (the core table, tolerances, equations and curve fits), Fair-Rite's catalog (the ferrite toroids), and Magnetics' catalog (the wire table, winding factor and temperature rise); the wire length and flux density are derived.",
   },
   {
     tool: "Transformer (turns ratio)",

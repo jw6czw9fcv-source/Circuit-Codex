@@ -2034,10 +2034,10 @@ Published answers reproduced:
 
 ### What it computes
 
-The turns, the inductance, the wire and the DC bias of a wound toroid, from the maker's inductance factor AL. The **Core**
-heading holds two pickers: the size (101 Micrometals toroid sizes, T5 to T650, with their height variants A, B, C, D, or **typed**)
-and the mix (the material: −0, −1, −2, −3, −6, −7, −8/90, −10 … −70, as many as that size is made in). Typed asks for AL and the
-three dimensions, and works out le and Ae from them. Four pills:
+The turns, the inductance, the wire, the DC bias and the AC flux, core loss and heating of a wound toroid, from the maker's inductance factor AL. The **Core**
+heading holds two pickers: the size (101 Micrometals iron powder sizes, T5 to T650, with their height variants A, B, C, D; the 125 Fair-Rite ferrite toroids,
+each a part number with its material; or **typed**) and, for iron powder, the mix (the material: −0, −1, −2, −3, −6, −7, −8/90, −10 … −70, as many as that size is made in).
+Typed asks for AL and the three dimensions, and works out le, Ae and Ve from them. Five pills:
 
 - **Turns:** the inductance wanted (nH, µH or mH). The big result is the turns, not rounded; cells: the whole turns, the
   inductance they give and the AL tolerance of the mix; rows: that inductance with the tolerance, the inductance of one turn less and more, the core.
@@ -2047,15 +2047,19 @@ three dimensions, and works out le and Ae from them. Four pills:
   the wire diameter, the mean length of a turn.
 - **Bias:** the turns and the DC current (mA or A), for the mixes whose curve fit agrees with the catalog (−1, −2, −3, −6, −7, −8, −10, −14, −15, −17, −30, −63). The big result is
   the inductance with the current; cells: the field H in oersteds, the percentage of the initial permeability, the flux density B; rows: H in A·T/cm, the inductance without the current, the fit
-  at 200 Oe beside the catalog's own figure, the core.
+  at 200 Oe beside the catalog's own figure, the core. A ferrite part or a typed core is refused: the tool has no DC-bias curve for them.
+- **AC:** the turns, an AC voltage (V rms) and its frequency (Hz, kHz or MHz). The big result is the peak flux density Bpk; cells: the core loss, the temperature rise in still air and the reactance of the winding;
+  rows: the loss per volume and the fit of the loss curve at 100 kHz and 140 G beside the catalog's own figure, the permeability at that flux and at that frequency, the inductance at that frequency,
+  the current the winding draws with no load, Bpk against the mix's saturation flux density, the drift of permeability with temperature, and the core's volume and surface. The loss, the heating and the two permeabilities
+  are for the Micrometals mixes, and only inside the frequency and flux the catalog's curves cover; outside them, and for ferrite and typed cores, the tool says so and gives Bpk, the reactance and the current only.
 
 The drawing is the core with one continuous wire wound round it (up to 26 turns are drawn) and a lead at each end.
 
-- **Units:** nH, µH, mH for the inductance wanted; mA, A for the current; mm, in for the dimensions of a typed core (all three boxes change together); the diameters and the
-  window of a catalog core are in mm; AL in nH/N².
-- **Remembered:** the pill, the size, the mix and the three units.
+- **Units:** nH, µH, mH for the inductance wanted; mA, A for the current; Hz, kHz, MHz for the AC frequency; mm, in for the dimensions of a typed core (all three boxes change together); the diameters and the
+  window of a catalog core are in mm; AL in nH/N²; the AC voltage in V.
+- **Remembered:** the pill, the size, the mix and the four units.
 
-Examples: 10 µH on a T50-2 and 1 µH on a T37-6; 30 turns on a T68-2; 45 turns of 26 AWG on a T50-2 and 60 of 20 AWG on a T106-2; a current of 5 A through a T50-3 and 3 A through a T106-2.
+Examples: 10 µH on a T50-2 and 1 µH on a T37-6; 30 turns on a T68-2; 45 turns of 26 AWG on a T50-2 and 60 of 20 AWG on a T106-2; a current of 5 A through a T50-3 and 3 A through a T106-2; 100 µH on the ferrite 5943002701; 50 V at 100 kHz on a T106-2 and a T50-26 overdriven at 50 kHz.
 
 ### Terms
 
@@ -2070,6 +2074,10 @@ Examples: 10 µH on a T50-2 and 1 µH on a T37-6; 30 turns on a T68-2; 45 turns 
 - **Mean length of a turn (MLT):** the length of wire in one turn. **DC resistance:** MLT × turns × the wire's resistance per metre.
 - **H, oersted, A·T/cm:** the magnetizing force of the current, H = 0.4π N I / le in oersteds with le in cm (1 A·T/cm = 1.26 Oe). **% initial permeability:** the permeability left under the field, a fraction of
   its value at low field; the inductance falls in the same proportion. **B:** the flux density in the core; 1 T = 10 000 gauss.
+- **Bpk, Bsat:** the peak flux density an AC voltage makes, and the flux density at which the material saturates. At radio frequencies the core loss limits Bpk long before saturation.
+- **Core loss:** the heat the alternating flux makes in the core (hysteresis and eddy currents), in mW per cm³ of core, which rises steeply with Bpk and with frequency; the total is that times Ve.
+- **Temperature rise in still air:** Magnetics' estimate (total loss in mW / surface in cm²)^0.833 °C. **Reactance, current at no load:** 2π f L, and the current the winding draws from the voltage with nothing on the other side.
+- **Tolerance, ferrite:** Fair-Rite gives each part's AL as ±20, ±25 or ±30 %, as +35 / −25 % (higher above than below), or as a minimum only; the ranges the tool gives follow that.
 
 ### Sources
 
@@ -2077,13 +2085,17 @@ Examples: 10 µH on a T50-2 and 1 µH on a T37-6; 30 turns on a T68-2; 45 turns 
   and inside diameter and height in inches and mm, Ae, le, Ve, AL in nH/N², the reference permeability and the mix; the notes that AL is for 10 gauss and 10 kHz on an evenly spaced full single layer and that
   a few turns not evenly distributed read higher than expected; the typical AL tolerance of each mix (PDF page 47); on each mix page H = 0.4π N I / Le (oersteds, Le in cm), %µi = 1 / (a + b H^c) + d with the coefficients of the table on PDF page 44, and
   Bpk = Erms 10⁸ / (4.44 Ae N f); and the catalog's own "% perm at DC bias (200 Oe)" of each mix, which the fit is checked against. 616 parts in 101 sizes are in the tool.
+  The AC curve fits of every mix (the equations rendered on pages 18 and 19, the coefficients read from the tables on PDF pages 44 to 46): core loss in mW/cm³ = f / (a / B³ + b / B^2.3 + c / B^1.65) + d B² f² (B in gauss, f in Hz),
+  over curves drawn from 60 Hz to 500 kHz and 10 to 10 000 G; the percentage of the initial permeability at Bpk, 1 / (1 / (a + b B^c) + 1 / (d B^e) + 1 / f), over 10 to 10 000 G; the permeability at a frequency, 1 / (a + b f^c) + d,
+  over 10 kHz to 100 MHz; the change with temperature, a (T − 20) ppm; Bsat; and each mix page's core loss at 100 kHz and 140 G, which the loss fit is checked against.
 - **Magnetics, "Powder Core Catalog" (2017; the PDF from mag-inc.com, 112 pages read as text) and its "Powder Core Calculations" page (read):** LN = AL N² 10⁻³ (µH, AL in nH/T²) and the turns from it; H = N I / le in A·T/cm with the conversion
   to oersteds; the winding factor N Aw / WA with WA = π ID² / 4 and its ranges; the wire table, AWG 6 to 49, resistance in Ω/m and heavy-build outside diameter; the single-layer winding tables (turns and DC resistance for each gauge and core size) and the table of the length of a turn against
   the winding factor; and the worked example of a 600 µH inductor (minimum AL 74.6 nH/T², 90 turns, 127 turns of 17 AWG of 1.177 mm² in a window of 427 mm², 35 %).
-- **Fair-Rite data sheet 5943002721, a 43-mix toroid (the CERN copy; read):** AL as the inductance divided by N² for ferrite, tested at 10 kHz, AL 885 nH +20 / −25 %. Ferrite cores are therefore usable by typing AL and the dimensions.
+- **Fair-Rite Products, "Ferrite Cores" catalog, 17th edition (2013; the CERN copy, read):** the 125 uncoated ferrite toroids of the picker, with their dimensions, le, Ae, Ve, AL and its tolerance (see the Toroid/ferrite reference table). **Data sheet 5943002721 (read):** AL as the inductance divided by N², tested at 10 kHz.
+- **Magnetics 2017 catalog, page 15 (rendered):** the still-air temperature rise ΔT (°C) = (total losses (mW) / component surface area (cm²))^0.833, which it gives as a useful approximation, its surface areas being those of cores wound to 40 % fill.
 - **The Amidon iron powder table (the qsl.net copy, read; used only to cross-check):** 140 rows of T-xx cores with O.D., I.D., height, le, Ae, Ve and AL in µH per 100 turns; a few of its printed cells are wrong (for example the inside diameters of the mix-2 rows of T-106, T-130, T-184,
   T-225 and T-300, and "0.183 cm" for le of the T-30). The Amidon copy at ibselectronics.biz refused the download (403) and was left alone.
-- **Not read:** Fair-Rite's and Ferroxcube's catalogs (ferrite AL tables, which belong to a core reference table), the coating thickness of Micrometals cores, AC core loss and temperature rise, Magnetics' leakage-flux formula for few turns (it is
+- **Not read:** Fair-Rite's material curves (permeability, loss and saturation of its ferrites), Ferroxcube's data, the coating thickness of Micrometals cores, Magnetics' leakage-flux formula for few turns (it is
   for Magnetics' cores and scatters ±50 %). The catalog prints no AL for the T250-8A/90 row, and prints 4.8 nH/N² for the T400-2D (the same as for the T400-0D, probably a typing mistake for 48): both are left out. The row T90-66 has the dimensions of a different size and is its own entry, T90/66.
 
 ### Why the formulas are these
@@ -2097,6 +2109,10 @@ line d / 2 outside it all round: 2 (HT + (OD − ID) / 2) + 4 d with square corn
 **DC bias.** H = 0.4π N I / le is the field of the current round a path of length le. A powder core's permeability falls as H rises; the catalog gives the curve of each mix and its fit, 1 / (a + b H^c) + d in percent of the initial value. The inductance with the current is AL N² times that
 percentage, and the flux density is the flux linkage over N Ae: B = L I / (N Ae), derived here.
 
+**AC.** A sine voltage across N turns makes a flux whose peak density is Bpk = Vrms 10⁸ / (4.44 Ae N f) (Micrometals' equation; 4.44 is 2π / √2). The catalog's loss curve of the mix at that Bpk and frequency gives the loss per cm³, times the volume Ve the core loss; the temperature rise is
+Magnetics' estimate with the bare core's surface, π (OD² − ID²) / 2 + π (OD + ID) HT (derived here; the wound part has more surface and runs a little cooler). The inductance at the frequency is AL N² times the frequency fit's value there over its value at 10 kHz, the frequency
+AL is measured at (derived); the reactance and the no-load current follow. The permeability at Bpk is shown as a percentage, not applied to the inductance: the two fits are separate curves.
+
 ### Assumptions and limits
 
 - **AL is the nominal value at low level.** Frequency, the level of the AC signal and temperature move it (the mix pages in the catalog show how); none is modelled. A winding of few turns, or turns crowded on one side, reads higher than AL N² (Micrometals and Magnetics both say so).
@@ -2104,19 +2120,24 @@ percentage, and the flux density is the flux linkage over N Ae: B = L I / (N Ae)
 - **The dimensions are the catalog's, as printed,** for the bare core. A finished (coated) core has a slightly smaller hole; Magnetics' tables were made from the coated dimensions and the tool, which uses Micrometals' printed ones, reproduces them when given those. The fill and the length of wire follow from that.
 - **The DC-bias percentage is only for the mixes in the list above.** For the others (−18, −19, −26, −34, −35, −38, −40, −45, −52, −60, −61, −65, −66, −70) the catalog's coefficients give a figure far from the catalog's own value at 200 Oe (for example 10 % against 55 % for the −26),
   so the tool says that it has no figure instead of printing one; mix −0 has no curve. The fit is for the field of a DC current only, and the catalog gives the curves a tolerance of +20 %, −10 %.
-- **No core loss, no temperature rise, no winding capacitance, no AC copper loss.** The DC resistance is at the wire table's temperature.
+- **AC: only inside the catalog's curves.** The loss and the heating are given from 60 Hz to 500 kHz and from 10 to 10 000 G; the permeability at a frequency from 10 kHz to 100 MHz; at Bpk from 10 to 10 000 G. Outside, the tool gives no figure rather than extending a curve.
+  The loss fit is for a sine voltage; a square wave or a DC current with ripple loses differently. The temperature rise is an estimate for still air (Magnetics), on the bare core's surface; a fan, a board or a box changes it.
+  Ferrite and typed cores get Bpk, the reactance and the current but no loss: the tool has no ferrite curves.
+- **No winding capacitance, no AC copper loss.** The DC resistance is at the wire table's temperature.
 - **Display.** Three figures; the inductance in nH, µH, mH or H as the size asks; the wire length in mm or m.
 
 ### How it was checked
 
-122 cases, the expected values from a Python implementation written from the equations above (every figure and every label of the drawing; the core table built from the catalog text by a program, and the wire table):
+169 cases, the expected values from a Python implementation written from the equations above (every figure and every label of the drawing; the core table built from the catalog text by a program, and the wire table):
 - Turns: the opening screen, 25 parts (sizes from T5 to T650, a dozen mixes, height variants, the T90/66 entry), 8 inductances in nH, µH and mH, a wanted inductance below one turn, two refusals, a typed core and its three refusals, a typed core in inches;
 - Inductance: the opening, 15 settings (from 1 turn to 1000, fractions of a turn, mix −0, the largest cores), three refusals;
 - Winding: the opening, 18 settings (gauges 6 to 40, from 1 turn to 120, a fill of 598 % and one under 1 %), Magnetics' wire-table and worked-example cases, two refusals and a wire too thick for the hole;
 - Bias: the opening, 14 settings (ten mixes, 0 to 20 A, 100 mA and 800 mA in mA), four mixes with no figure, a typed core and a negative current, each refused;
-- the pickers (the 101 sizes, the mixes of the T50, the mix falling back when the size has no such mix, the core remembered), the units, the pill remembered, and the seven examples.
+- Ferrite: ten parts in all nine materials for the turns, seven for the inductance (tolerances of ±20, ±25 and ±30 % and minimum-only; the +35 / −25 % one is among the turns cases), a winding, the Bias refusal, the picker's ferrite entries and the missing mix picker;
+- AC: the opening of the pill, 16 settings (ten mixes, 60 Hz to 100 MHz, the edges of the curves at 500 kHz and 100 MHz and just past them, a saturated core, mix −0, a tiny flux), a ferrite and a typed core, three refusals, the MHz unit;
+- the pickers (the iron powder sizes, the ferrite parts and typed, the mixes of the T50, the mix falling back when the size has no such mix, the core remembered), the units, the pill remembered, and the ten examples.
 
-540 more cases (three batches of 180: random parts, inductances, turns, gauges, currents and units) compared every figure and label with the Python implementation; they were run and not kept.
+1,080 more cases (six batches of 180: random parts and ferrites, inductances, turns, gauges, currents, AC voltages and frequencies, and units) compared every figure and label with the Python implementation; they were run and not kept.
 
 Published answers reproduced:
 
@@ -2127,6 +2148,8 @@ Published answers reproduced:
 | 600 µH with the minimum AL of 74.6 nH/T² | Magnetics 2017, core selection example | 90 turns | 89.7 turns, 90 whole turns |
 | T50-2: 49 µH per 100 turns, 4.9 nH/N² | Amidon reprint, Micrometals 2023 | the same number in two units | 4.9 nH/N², 45.2 turns for 10 µH |
 | Percent permeability at 200 Oe, 12 mixes (−1 to −17, −30, −63) | Micrometals 2023 mix pages | 82.2, 95.9, 60.1, 98.1, 96.7, 60.1, 99.6, 91.8, 74.7, 99.5, 66.7, 51.7 % | within 0.6 points of each (81.8, 96.0, 59.5 …), shown in the Bias pill |
+| Core loss at 100 kHz and 140 G, all 26 mixes | Micrometals 2023 mix pages | 13 to 129 mW/cm³ (for example −1 31, −2 18, −26 83, −30 129) | the loss fit within 2.2 % of every one (31.4, 17.7, 83.0, 129 …), shown in the AC pill |
+| Permeability at a low flux and at 1 kHz, all 26 mixes | Micrometals 2023 (the curves start at 100 %, and at the reference µ) | 100 % and µ 4 to 100 | 97.2 to 100.5 % at 1 G; the reference µ within 1 % at 1 kHz, except −61 (35.0 against 38) |
 | Core table, 96 parts that are in both | Micrometals 2023 against the Amidon reprint | AL within 2 % for 89, different for 7 (for example T-80-17: 3.2 and 2.2 nH/N²); the geometry the same except five mix-2 rows whose inside diameters Amidon prints wrongly | Micrometals' values |
 
 [↑ Index](#index)
@@ -2238,12 +2261,12 @@ Published relations reproduced:
 - **Ferrite:** the 125 uncoated toroids of Fair-Rite's catalog (17th edition), in nine materials: the nickel-zinc 43, 52, 61, 67 and 68 and the manganese-zinc 75, 76, 77 and 78.
 
 Each card gives the part number with its material and permeability, the outside diameter × inside diameter × height in mm, AL in nH/N² with its tolerance,
-the magnetic path length le and cross-section Ae (and the volume Ve for the ferrites), and one line on what the material is for. The heading holds two pickers: the material (all, or one mix)
+the magnetic path length le, the cross-section Ae and the volume Ve, and one line on what the material is for. The heading holds two pickers: the material (all, or one mix)
 and the order (by size, by AL from low to high or from high to low). The search box finds a part by its number, ignoring spaces and dashes (t50 2 finds T50-2). Thirty cards show at a time; the button under them adds thirty more.
 
 - **Remembered:** the pill, the material and the order. Changing the pill puts the material back to all.
 
-The iron powder parts are the same table as the Toroid winding tool's core picker, so a core found here can be picked there by size and mix.
+Both tables are the Toroid winding tool's core picker, so a core found here can be picked there: an iron powder core by size and mix, a ferrite by its part number.
 
 ### Terms
 
@@ -2288,7 +2311,7 @@ Published figures reproduced:
 
 | Part | Source | Source says | Tool shows |
 |---|---|---|---|
-| T50-2 | Micrometals 2023 | 12.70 × 7.70 × 4.83 mm, Ae 0.112 cm², le 3.19 cm, AL 4.9 nH/N², ±5 % for −2 | 12.7 × 7.7 × 4.83 mm, AL 4.9 nH/N² ±5 %, le 3.19 cm, Ae 0.112 cm² |
+| T50-2 | Micrometals 2023 | 12.70 × 7.70 × 4.83 mm, Ae 0.112 cm², le 3.19 cm, Ve 0.358 cm³, AL 4.9 nH/N², ±5 % for −2 | 12.7 × 7.7 × 4.83 mm, AL 4.9 nH/N² ±5 %, le 3.19 cm, Ae 0.112 cm², Ve 0.358 cm³ |
 | T50-2 | Amidon table | AL 49 µH per 100 turns | the same as 4.9 nH/N² |
 | 5943002701 | Fair-Rite catalog, data sheet 5943002721 | 885 nH, le 8.9 cm, Ae 0.79 / 0.78 cm², Ve 7 cm³ | 885 nH/N² ±20 %, le 8.9 cm, Ae 0.79 cm², Ve 7 cm³ |
 
