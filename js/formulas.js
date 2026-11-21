@@ -70,8 +70,9 @@ const FORMULAS = [
   {
     tool: "Air-core coil (Wheeler)",
     domain: "passive",
-    formulas: ["L = 0.03948 a² n² K / b  (µH, cm)", "ΔL = 0.01257 n a (A + B)", "L = a² n² / (9a + 10b)  (µH, in)", "L = a² n² / (8a + 11c)  (µH, in)", "L = 0.8 a² n² / (6a + 9b + 10c)", "A = ln(d / D) + 0.557", "R = l / (58 A)  (Ω, m, mm²)"],
-    note: "The inductance of a single-layer coil from Nagaoka's coefficient K with the round-wire correction, Wheeler's quick formulas for a solenoid, a multilayer coil and a flat spiral, the turns that give a wanted inductance (single layer or in layers), and the wire: a gauge picker with the close-wound length or pitch, the wire's length and its DC resistance. From Wheeler's 1928 paper and the Bureau of Standards' Circular 74 (the formulas and tables read), NBS Handbook 100 for the wire; the turns, the layer depth and the comparison with Wheeler are derived.",
+    formulas: ["L = 0.03948 a² n² K / b  (µH, cm)", "ΔL = 0.01257 n a (A + B)", "L = a² n² / (9a + 10b)  (µH, in)", "L = a² n² / (8a + 11c)  (µH, in)", "L = 0.8 a² n² / (6a + 9b + 10c)", "A = ln(d / D) + 0.557", "R = l / (58 A)  (Ω, m, mm²)",
+      "C = 4ε₀ b [1 + k (1 + εr) / 2] / (π cos²ψ)", "k = 0.717 D/b + 0.933 (D/b)^1.5 + 0.106 (D/b)²", "SRF = 1 / (2π √(L C))", "Q = 2π f L / R"],
+    note: "The inductance of a single-layer coil from Nagaoka's coefficient K with the round-wire correction, Wheeler's quick formulas for a solenoid, a multilayer coil and a flat spiral, the turns that give a wanted inductance (single layer or in layers), and the wire: a gauge picker with the close-wound length or pitch, the wire's length and its DC resistance. The coil at radio frequency: its self-capacitance and self-resonance (SRF) in a circuit and standing free, and its Q with the skin and proximity effects, on air, a tube or a rod. From Wheeler's 1928 paper and the Bureau of Standards' Circular 74 (the formulas and tables read), NBS Handbook 100 for the wire, Medhurst's 1947 measurements (his tables read as printed) and Knight's 2016 analysis of them; the turns, the layer depth, the comparison with Wheeler and the way the proximity factor joins the skin effect are derived.",
   },
   {
     tool: "Toroid winding",

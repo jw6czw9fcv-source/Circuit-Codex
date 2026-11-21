@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=39b4f5bebe" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=2dd4e8060f" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -1681,11 +1681,11 @@ it was removed.</p>
 <section class="tool" id="air-coil" style="--accent:#5B9BE0">
   <div class="crumb">Passive components › Inductors</div>
   <h2>Air-core coil (Wheeler)</h2>
-  <figure class="shot"><img src="manual/img/air-coil.jpg?h=27f99a3f6b" loading="lazy" alt="Air-core coil (Wheeler) as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/air-coil.jpg?h=f8a1568ce3" loading="lazy" alt="Air-core coil (Wheeler) as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
-<p>The inductance of a coil with no core, from its dimensions, and the turns that give a wanted
-inductance. Four pills; the length boxes (form diameter, wire diameter, winding length, pitch, inside
-diameter, depth) each have their own mm / cm / in picker, and changing one changes all the others.</p>
+<p>The inductance of a coil with no core, from its dimensions, the turns that give a wanted
+inductance, and what a single-layer coil does at radio frequency: its own capacitance, its self-resonance and its Q. Five pills; the length boxes (form diameter, wire diameter, winding length, pitch, inside
+diameter, depth, a tube's wall) each have their own mm / cm / in picker, and changing one changes all the others.</p>
 <p>The <strong>Your inputs</strong> heading holds the wire picker: a typed diameter, or a gauge from 6 to 40 AWG. A gauge puts its bare diameter in the wire box (to four figures) and, until you type your own,
 proposes the close-wound value of the box that depends on the wire (marked <strong>close-wound</strong>): the solenoid's length (turns × the diameter over the insulation), the pitch of the Turns and Spiral pills
 (that diameter), and the depth of a layered winding (turns × d² / b). The proposal follows the turns and the length as you change them; typing a diameter puts the picker back to typed.</p>
@@ -1706,19 +1706,26 @@ proposes the close-wound value of the box that depends on the wire (marked <stro
   the depth they build and the layers in the cells, and the inductance of the whole turns in a row. Rows for both: how much each of 6a, 9b and 10c
   takes of the denominator (about equal is the best case), the accuracy, the length of wire and its DC resistance. The drawing is the cross-section of
   Wheeler's figure.</li>
-<li>
-<p><strong>Spiral:</strong> a flat coil of round wire: the inside diameter, the wire diameter, the turns and the pitch. The big result is
+<li><strong>Spiral:</strong> a flat coil of round wire: the inside diameter, the wire diameter, the turns and the pitch. The big result is
   the Bureau of Standards' formula for the equivalent coil, less the round-wire correction; cells: Wheeler's formula,
   how far it is, and the mean radius; rows: the width c = n D, c / a and wire over pitch, Wheeler's accuracy, the
-  sheet value and the correction, the length of wire and its DC resistance.</p>
+  sheet value and the correction, the length of wire and its DC resistance.</li>
+<li>
+<p><strong>SRF &amp; Q:</strong> the Solenoid pill's coil (the same four boxes, shared: what is typed on one pill is on the other) at a working frequency, with its former: none (air), a
+  tube (its relative permittivity εr and its wall) or a solid rod (its εr). The big result is the self-resonant frequency in a circuit, from L and the coil's own capacitance C
+  (Knight's formula); the line under it gives both. Cells: C, the Q at the working frequency (or "above SRF") and the self-resonance of the coil standing free, connected to nothing
+  (Knight's helical-line model). Rows: the inductance seen at the coil's ends at the working frequency (raised by C) and by how much it differs from L; the AC resistance and how many
+  times the DC resistance it is; the skin depth and Medhurst's proximity factor; Medhurst's own quick Q (his Table IX) and his self-capacitance formula (for coils on polystyrene with
+  one end earthed), to compare; the frequency at which the wire is half a wavelength long. The drawing is the coil with C dashed across its ends, green as calculated.</p>
 </li>
 <li>
-<p><strong>Units:</strong> mm, cm or in for every length (the formulas use cm or inches inside); µH for the inductance wanted.</p>
+<p><strong>Units:</strong> mm, cm or in for every length (the formulas use cm or inches inside); µH for the inductance wanted; kHz or MHz for the working frequency.</p>
 </li>
-<li><strong>Remembered:</strong> the pill, the length unit, the wire and the way the multilayer coil is given.</li>
+<li><strong>Remembered:</strong> the pill, the length unit, the wire, the way the multilayer coil is given, the frequency unit and the former.</li>
 </ul>
 <p>Examples: the Bureau's 400-turn coil, a 10-turn coil on a 20 mm form, a single loop (outside Wheeler's range),
-10 µH on a 20 mm form, 1 µH close-wound on 10 mm, the Bureau's 1000-turn multilayer coil, an IF coil, a flat spiral, 20 turns of 22 AWG close-wound, and 330 µH in layers of 30 AWG.</p>
+10 µH on a 20 mm form, 1 µH close-wound on 10 mm, the Bureau's 1000-turn multilayer coil, an IF coil, a flat spiral, 20 turns of 22 AWG close-wound, 330 µH in layers of 30 AWG,
+and on the SRF &amp; Q pill Knight's PTFE-cored coil, his 18-turn air coil, Medhurst's coil No. 31 and a 7 MHz coil of 22 AWG.</p>
 <h3>Terms</h3>
 <ul>
 <li><strong>Inductance L:</strong> the flux a coil links per ampere of current. <strong>Air core:</strong> no magnetic material, so L depends on
@@ -1736,8 +1743,19 @@ proposes the close-wound value of the box that depends on the wire (marked <stro
   diameter, which sets the resistance and the round-wire correction; enamelled magnet wire is thicker over its insulation (heavy build here), which sets how close the turns can sit. <strong>Close-wound:</strong>
   each turn touching the last, the pitch equal to the insulated diameter.</li>
 <li><strong>DC resistance:</strong> the wire's length over its conductivity times its cross-section, for annealed copper (IACS) 1/58 Ω·mm²/m at 20 °C; it rises 0.393 % per °C.</li>
-<li><strong>Self-resonance, skin effect:</strong> the capacitance between turns resonates with L at a frequency above which the coil is a
-  capacitor; at RF the current flows in the surface of the wire and raises its resistance. Neither is in these formulas.</li>
+<li><strong>Self-capacitance C:</strong> a coil behaves as L with a small capacitance across its ends. It does not come from the turns facing each other (Medhurst and Knight showed that
+  theory fails) but from the wire being a transmission line: at the self-resonance the wire is about half a wavelength long. C hardly depends on the spacing of the turns and grows
+  with the coil's length and diameter; a former inside the coil (its relative permittivity <strong>εr</strong>, 1 for air) raises it, the more so for a short coil.</li>
+<li><strong>Self-resonant frequency (SRF):</strong> where L and C resonate, 1 / (2π √(L C)); above it the coil behaves as a capacitor. <strong>In a circuit</strong> (a network analyser, a datasheet's SRF)
+  the coil resonates there; a coil <strong>standing free</strong>, connected to nothing, resonates at another frequency, set by the speed of a wave along its helix (higher for a long coil,
+  lower for a short one).</li>
+<li><strong>Q:</strong> the coil's reactance over its resistance, 2πfL / R: how little energy it loses per cycle. The selectivity and the loss of a tuned circuit follow from it.</li>
+<li><strong>Skin depth δ:</strong> at radio frequency the current flows near the wire's surface, within about δ = √(ρ / (π f μ0)) (21 µm in copper at 10 MHz), so the AC resistance of a
+  wire much thicker than δ is its DC resistance × d / (4δ).</li>
+<li><strong>Proximity factor:</strong> the field of the neighbouring turns pushes the current further, to the inside of the coil and away from the next turns, raising the resistance again:
+  Medhurst's measured ratio of a coil's resistance to that of the same wire straight, from 1 for widely spaced turns to over 5 for touching turns of a short coil. <strong>d/s:</strong> the
+  bare wire's diameter over the pitch.</li>
+<li><strong>Pitch angle ψ:</strong> the slope of the turns, tan ψ = pitch / (π D); C is divided by cos²ψ, which matters only for widely spaced turns.</li>
 </ul>
 <h3>Sources</h3>
 <ul>
@@ -1762,7 +1780,27 @@ proposes the close-wound value of the box that depends on the wire (marked <stro
 <li><strong>The wire:</strong> the AWG formula and copper's resistivity are NBS Handbook 100's, as the Wire sizing tool uses them (that tool's manual section gives the source); the diameter over heavy-build insulation is
   Magnetics' wire table (2017 Powder Core Catalog, page 28, the table the Toroid winding tool uses). The resistance per metre from the formula agrees with Magnetics' printed column within 0.5 % from 6 to 27 AWG;
   from 28 to 40 AWG Magnetics' figures scatter on both sides of it, by up to 2.8 % (40 AWG: 3.44 against 3.54 Ω/m), checked by a script.</li>
-<li><strong>Not read:</strong> Wheeler's 1982 paper, Grover's book itself, Rosa's papers, the Bureau's multilayer formula (156) beyond the example, and the Radio Broadcast page of Wheeler's
+<li><strong>R. G. Medhurst, "H.F. Resistance and Self-Capacitance of Single-Layer Solenoids", Wireless Engineer 24, February 1947 pp. 35–43 and March 1947 pp. 80–92 (the PDFs of both
+  issues from worldradiohistory.com, read as text; Tables V, VIII and IX and the formula for H rendered and read as printed):</strong> about 40 coils of bare copper wire (silk-covered for the
+  closest spacings) on grooved Distrene (polystyrene) rods, 30 to 50 turns, measured with a twin-T bridge; the self-capacitance with one end earthed, C0 = H D pF (D the mean diameter in
+  cm), H = 0.1126 l/D + 0.08 + 0.27 / √(l/D) within 2 or 3 % of his Table V, the curve good to l/D = 0.05 even with two turns and falling off below; Table VIII, the coil's
+  high-frequency resistance over that of the same length of straight wire at the same frequency, against l/D (0 to ∞) and d/s (0.1 to 1), for many turns; Table IX, his ψ in
+  Q = 0.15 R ψ √f for copper (R the mean radius in cm, f in Hz); the worksheet of coil No. 31 (40 turns of 0.0910 cm wire, D 5.10 cm, 7.01 cm long: Q 228 to 236 at 0.78 to
+  0.86 MHz, 42.37 µH), which shows his ratio taken over the straight wire's high-frequency resistance, d / (4δ) × its DC resistance. The letters of June 1947 (p. 185, Callendar's
+  simpler Q formula) and September 1947 (p. 281, Medhurst's tentative curves for few turns) read.</li>
+<li><strong>David W. Knight, "The self-resonance and self-capacitance of solenoid coils: applicable theory, models and calculation methods", version 1.00, 4 May 2016 (his site, g3ynh.info,
+  now carries something else: the Internet Archive's copy of the PDF; the 105 pages read as text, pages 52 and 97 rendered):</strong> the DAE formula (5.3) for the self-capacitance of a
+  coil in a circuit, C = (4ε0 / π) b [1 + k (1 + εi / εx) / 2] / cos²ψ with k = 0.717439 (D/b) + 0.933048 (D/b)^1.5 + 0.106 (D/b)², ±2.1 %, Medhurst's data refitted with the
+  former's permittivity εi (εx outside, 1 for air); the permittivity inside a tube (8.2), εi = (ri / ro)² + εf (1 − (ri / ro)²), "a very crude correction"; section 10: C with L gives
+  the self-resonance a circuit sees, not that of a free coil; section 11: the free coil's first self-resonance from a helical transmission line terminated in its fringe-field and
+  axial-field capacitances, the procedure of p. 95 and his macro VFnom (p. 97), fitted to 62 measurements (Drude, Jackson, Pettit, his own) within 2.1 %; his PTFE-cored coil
+  predicted at 17.98 MHz (measured 17.939 MHz); the GKMR coil's C, 10.1 pF.</li>
+<li><strong>David W. Knight, "Solenoid Impedance and Q", part II of his solenoid article, version 0.01, 4 January 2016, a provisional draft (the Internet Archive's copy, read as text):</strong>
+  Medhurst's resistance table reprinted with p/d in place of d/s (a few entries differ from Medhurst's print, 1.20 for 1.26 at l/D = 0 and d/s = 0.4, 2.27 for 2.37 at l/D = 10
+  and d/s = 0.7: the tool uses the printed values), Rac = Rdc Ξ Ψ (N − 1) / N with the two end turns at half the proximity effect, and a doubly-asymptotic form
+  Rdc [1 + (Ξ − 1) Ψ (N − 1 + 1/Ψ) / N].</li>
+<li><strong>Not read:</strong> Butterworth's papers (Medhurst's Table VIII corrects his high-frequency table), Ollendorff's 1926 paper, Drude, Knight's paper on the internal impedance of wires and his
+  worksheets; Wheeler's 1982 paper, Grover's book itself, Rosa's papers, the Bureau's multilayer formula (156) beyond the example, and the Radio Broadcast page of Wheeler's
   article (refused by its bot check; left alone); the IEEE copies are behind a paywall. Table 11 (A) is replaced by the fit A = ln(d / D) + 0.557, which agrees
   with the 45 printed rows to the 0.001 they give; Table 12 (B) is the printed table, interpolated straight in ln n. The Bureau's 38-turn ribbon spiral (324.2 µH calculated, 323.5 measured) is for rectangular
   wire and is not reproduced here.</li>
@@ -1784,6 +1822,19 @@ takes n d² of the cross-section, so its depth is n d² / b with the turns stack
 inductance, the tool tries turns in Wheeler's formula, with the depth and the mean radius growing with them, until it matches (the same halving as for a single layer).</p>
 <p><strong>Multilayer, spiral.</strong> Wheeler's (1) and the Bureau's (160) as quoted. For the spiral the tool uses the equivalent coil of the Bureau and the same correction
 (A and B as for a single layer); the sheet value of (160) for a coil of zero length with width c.</p>
+<p><strong>SRF &amp; Q.</strong> The self-capacitance is Knight's DAE formula with the mean diameter D (form plus wire), the winding length b and the pitch angle; for a rod εi is its εr, for a tube
+Knight's area-weighted (8.2) with ro the form's radius and ri = ro − wall; outside is air. The SRF in a circuit is 1 / (2π √(L C)) with the Solenoid pill's L. The free coil follows
+Knight's VFnom line by line: the Bessel argument x = π D / (2b) + 0.117 exp(−22 exp(−0.75 b/D)), Nagaoka's K (the exact one; Knight's macro uses an approximation good to about
+20 ppm), the radial permittivity, Ollendorff's function √(I0K0 / I1K1), the two capacitances, R0 tan ψ, and the nominal velocity factor v found by iteration; the SRF is
+v c / (2 lw), lw = √((π D n)² + b²) the wire's length along the helix. The modified Bessel functions I0, I1, K0 and K1 come from their integrals by the trapezoid rule (within
+1e-14 of scipy's).</p>
+<p>The resistance (derived here): the isolated wire's skin effect Ξ is the exact Bessel solution (the Skin depth tool's), and the other turns add (Ψ − 1)(n − 1)/n times
+Ξ − ¼ − 3/(4Ξ), the high-frequency part of the wire's resistance. At high frequency that part tends to d / (4δ), so the coil's resistance tends to Ψ × d / (4δ) × Rdc, Medhurst's
+own definition; at low frequency it vanishes with the skin effect, leaving Rdc. Ψ is Medhurst's Table VIII, interpolated straight in l/D (in D/l between 10 and ∞) and in d/s, and
+straight to 1 below d/s = 0.1; the two end turns have half the effect (Medhurst's rough argument, Knight's (n − 1)/n). Against Medhurst's coil No. 31 this gives his measured
+resistance within 1.8 % at the nine frequencies of his worksheet; Knight's doubly-asymptotic form reads 5 to 8 % low there, and Rdc Ξ Ψ 6 to 9 % high.</p>
+<p>Q and the inductance at the coil's ends come from R + j2πfL in parallel with C: with u = 1 − (2πf)² L C, L' = (L u − R² C) / (u² + (2πf R C)²) and Q = 2πf (L u − R² C) / R.
+Medhurst's quick Q interpolates his Table IX the same way as Table VIII, and his C = H D uses his formula for H.</p>
 <h3>Assumptions and limits</h3>
 <ul>
 <li><strong>Round copper wire,</strong> the gauge's insulation the heavy-build enamel of Magnetics' table (other insulations are thinner or thicker), a form with no core or shield nearby, and a coil far smaller than a wavelength. The inductance is at low
@@ -1792,11 +1843,16 @@ inductance, the tool tries turns in Wheeler's formula, with the depth and the me
 <li><strong>Single-layer coils</strong> need diameter over length of at most 100 (the Bureau's table); the pitch cannot be less than the wire diameter.</li>
 <li><strong>Wheeler's formulas</strong> are within their stated accuracy only in their ranges; the tool shows both numbers so the difference is visible. The multilayer pill has no
   second formula to compare. Its depth from the turns assumes square stacking and the length b given; a real winding is a little shallower when the turns nest.</li>
-<li><strong>DC resistance at 20 °C,</strong> for direct current: at radio frequencies the skin effect raises it, and it rises with temperature.</li>
-<li><strong>Display.</strong> Three figures; nH, µH or mH as the size asks; the wire length in the length unit, or in metres from 1 m.</li>
+<li><strong>DC resistance at 20 °C,</strong> for direct current; it rises with temperature. The SRF &amp; Q pill adds the skin and proximity effects.</li>
+<li><strong>SRF &amp; Q:</strong> a single layer at least 0.05 diameters long (Medhurst found the self-capacitance formulas fail below); air outside the coil; copper at 20 °C; no loss in the former, the
+  leads or a nearby shield, and no leads' capacitance. C is for a coil across which the circuit puts a lower impedance than C's own (a tuned circuit); near the SRF the coil behaves
+  as a transmission line and the lumped L and C, and the Q, lose accuracy. Medhurst's table is for 30 turns or more at high frequency (a wire more than about ten skin depths thick);
+  the end correction for fewer turns is rough. L is the low-frequency inductance: at high frequency the current crowds to the inside of the turns and L falls a few per cent (3.5 %
+  for coil No. 31), so Q reads that much high. The tube correction is Knight's crude one, and using it in the free-coil model is an extension he did not test.</li>
+<li><strong>Display.</strong> Three figures; nH, µH or mH as the size asks; the wire length in the length unit, or in metres from 1 m; frequencies in Hz, kHz, MHz or GHz and capacitances in pF.</li>
 </ul>
 <h3>How it was checked</h3>
-<p>158 cases, the expected values from a Python implementation (scipy's elliptic integrals; the tool uses the arithmetic-geometric mean) that replays each case's taps and typing with the screen's rules for the wire picker and the close-wound proposals, every figure and label of the drawings:
+<p>216 cases, the expected values from a Python implementation (scipy's elliptic integrals and Bessel functions; the tool uses the arithmetic-geometric mean and the integrals) that replays each case's taps and typing with the screen's rules for the wire picker and the close-wound proposals, every figure and label of the drawings:
 - Solenoid: the opening screen, 24 other coils (long, short, a single loop, 2 to 1500 turns, the three length units, wire as thick as the pitch,
   very thin wire, diameter over length from 0.0005 to 50, Wheeler's two formulas and the range where it fails), the Bureau's 400-turn example, six refusals;
 - Units: cm and in on all four pills, the unit remembered and offered, carried from one pill to another;
@@ -1805,9 +1861,13 @@ inductance, the tool tries turns in Wheeler's formula, with the depth and the me
   putting the picker back, inches, the heaviest and the finest gauge, the gauge remembered, the close-wound pitch on the Turns and Spiral pills, the depth on the Multilayer pill and its following the turns;
 - Multilayer: the opening, 12 settings, six refusals; given the inductance: the opening, eight settings (typed wire and four gauges, from 1 µH to the Bureau's 195.2 mH), four refusals and the choice remembered;
   Spiral: the opening, 12 settings, five refusals;
-- the ten examples and the formula-search card.</p>
+- SRF &amp; Q: the opening and the pickers' options, 29 coils (from 1 kHz to 10 GHz, below and above the SRF; 1 to 600 turns; 0.051 to 60 diameters long; d/s under 0.1 and at 1;
+  tubes and rods of εr 1 to 10; the three length units and kHz), four gauges close-wound, eleven refusals, the tube's and the rod's boxes, inches in the wall, kHz, the choices
+  remembered, the coil shared with the Solenoid pill, Knight's PTFE-cored coil and the GKMR coil;
+- the fourteen examples and the formula-search cards (by name and by self-capacitance).</p>
 <p>1,080 more cases (six batches of 180: random coils, inductances, windings and spirals in the three length units, the later three with random gauges on every pill and layered windings given
-the inductance) compared every figure and label with the Python implementation; they were run and not kept.</p>
+the inductance), and 540 for the SRF &amp; Q pill (three batches of 180: random coils, frequencies, formers, units and gauges, a tenth of them refused), compared every figure and
+label with the Python implementation; they were run and not kept.</p>
 <p>Published answers reproduced:</p>
 <table>
 <thead>
@@ -1848,6 +1908,36 @@ the inductance) compared every figure and label with the Python implementation; 
 <td>Magnetics 2017 wire table</td>
 <td>0.00130 to 3.54 Ω/m</td>
 <td>within 0.5 % from 6 to 27 AWG, up to 2.8 % for the finest (see Sources)</td>
+</tr>
+<tr>
+<td>A PTFE-cored coil, 43.8 turns of 4 mm tube, 218.1 mm on 70.8 mm</td>
+<td>Knight 2016, p. 94</td>
+<td>free coil 17.98 MHz by his model, 17.939 MHz measured</td>
+<td>free coil 18 MHz (17.98)</td>
+</tr>
+<tr>
+<td>An air coil, 18.09 turns of 4.7 mm tube, 152 mm on 96 mm</td>
+<td>Knight 2016, p. 10</td>
+<td>free coil 26.69 MHz measured</td>
+<td>26.5 MHz (0.8 % low)</td>
+</tr>
+<tr>
+<td>The GKMR coil, 16 turns, 163.2 mm on 326 mm</td>
+<td>Knight 2016, p. 57</td>
+<td>10.1 pF by his formula (11.83 pF measured, with plastic spacers)</td>
+<td>10.1 pF</td>
+</tr>
+<tr>
+<td>Medhurst's coil No. 31 at 0.80 MHz, on polystyrene</td>
+<td>Medhurst 1947, Table III</td>
+<td>Q 230 measured; Table IX gives 236</td>
+<td>Q 238; the resistance within 1.8 % of his at all nine frequencies</td>
+</tr>
+<tr>
+<td>The same coil's self-capacitance</td>
+<td>Medhurst 1947, p. 84</td>
+<td>5.10 cm × 0.47 = 2.4 pF</td>
+<td>2.37 pF by his formula, 2.42 pF by Knight's with εr 2.56</td>
 </tr>
 </tbody>
 </table>

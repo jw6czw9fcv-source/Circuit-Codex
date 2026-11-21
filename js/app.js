@@ -19956,17 +19956,58 @@ function renderRfDiodes(domain, tool, favId) {
 //  The wire (added later): a gauge picker, AWG 6 to 40, with the bare diameter from NBS Handbook 100's formula and copper's 1/58 ohm mm2/m at 20 °C (the Wire sizing tool's awgDiameterMm and
 //  IACS_OHM_MM2_PER_M), and the diameter over heavy-build insulation from Magnetics' wire table (the Toroid winding tool's TW_AWG), which sets the close-wound length, pitch and layer depth and the radius
 //  to the wire's centre. The depth of a layered winding from its turns, n d^2 / b (square stacking), and the turns for a wanted inductance in layers are derived here.
-const ACL_MODES = { sol: "Solenoid", turns: "Turns", multi: "Multilayer", spiral: "Spiral" };
+//  The SRF & Q pill (added later): the self-capacitance, the self-resonance and the Q of a single-layer coil. Sources, as read this session:
+//  - R. G. Medhurst, "H.F. Resistance and Self-Capacitance of Single-Layer Solenoids", Wireless Engineer 24, February 1947 pp. 35-43 and March 1947 pp. 80-92 (the PDFs of both issues from
+//    worldradiohistory.com, read as text; Tables V, VIII and IX and the formula for H rendered and read as printed): measurements on about 40 coils of bare copper wire on grooved Distrene
+//    (polystyrene) rods; the self-capacitance with one end earthed C0 = H D pF, D the mean diameter in cm, H = 0.1126 l/D + 0.08 + 0.27 / sqrt(l/D) within 2 or 3 % of his Table V, and
+//    the curve good to l/D = 0.05 even with two turns but falling off below; Table VIII, the high-frequency resistance of a coil over that of the same length of straight wire at the same
+//    frequency, against l/D and d/s (wire over pitch), for 30 turns or more, his measurements within 1 or 2 % of the smoothed table; Table IX, his psi in Q = 0.15 R psi sqrt(f) for copper (R
+//    the mean radius in cm, f in c/s); his worksheet for coil No. 31 (40 turns of 0.0910 cm wire, D 5.10 cm, 7.01 cm long, Q 228 to 236 at 0.78 to 0.86 MHz, 42.37 uH), whose ratio is
+//    taken over the straight wire's high-frequency resistance d / (4 delta) times its DC resistance. The letters of June 1947 (p. 185) and September 1947 (p. 281, his reply on few turns) read.
+//  - David W. Knight, "The self-resonance and self-capacitance of solenoid coils: applicable theory, models and calculation methods", version 1.00, 4 May 2016 (his site g3ynh.info is gone:
+//    the Internet Archive's copy of zdocs/magnetics/appendix/self_res/self-res.pdf, 105 pages read as text, pages 52 and 97 rendered): the DAE formula (5.3) for a coil in a circuit,
+//    C = (4 e0 / pi) l [1 + kC (1 + ei) / 2] / cos^2 psi, kC = 0.717439 D/l + 0.933048 (D/l)^1.5 + 0.106 (D/l)^2, +-2.1 %, Medhurst's data refitted with the former's permittivity ei;
+//    a tube former's ei = (ri/ro)^2 + ef (1 - (ri/ro)^2) (8.2), "a very crude correction"; with L it gives the self-resonance a circuit sees (a network analyser, a datasheet: section 10);
+//    an unconnected coil resonates instead where his helical-line model of section 11 puts it (his macro VFnom, followed here line by line: Ollendorff's function, the fringe-field and axial-field
+//    capacitances, R0 tan psi, the velocity factor solved by iteration), 62 measurements within 2.1 %; checks: his PTFE-cored coil, 17.98 MHz (measured 17.939), the GKMR coil, 10.1 pF.
+//  - Knight, "Solenoid Impedance and Q", part II, version 0.01, 4 January 2016, a provisional draft (the archive's copy of zdocs/magnetics/SolenoidZ.pdf, read as text): Medhurst's table
+//    reprinted (a few entries differ from Medhurst's print, 1.20 for 1.26 and 2.27 for 2.37: the printed ones are used), Rac = Rdc Xi Psi (N - 1) / N with the end turns at half the effect.
+//  The resistance used (derived here): the wire's own, with the skin effect by the exact Bessel solution (the Skin depth tool's skinWireRatio), plus the extra loss from the other turns,
+//  (Psi - 1)(N - 1)/N times the high-frequency part of the wire's resistance, Xi - 1/4 - 3/(4 Xi): at high frequency that is Medhurst's Psi d / (4 delta), and it fades to nothing at low
+//  frequency with the skin effect. It reproduces his coil No. 31 within 1.8 % at the nine frequencies he lists, where Knight's doubly-asymptotic form reads 5 to 8 % low. The Bessel functions
+//  come from their integrals by the trapezoid rule (checked against scipy). Not read: Butterworth's papers, Ollendorff, Drude, Knight's paper on the wire's internal impedance.
+const ACL_MODES = { sol: "Solenoid", turns: "Turns", multi: "Multilayer", spiral: "Spiral", srf: "SRF &amp; Q" };
 const ACL_U = { mm: 1e-3, cm: 1e-2, in: 0.0254 };
 // Circular 74, Table 12: B against the number of turns
 const ACL_B = [[1, 0], [2, 0.114], [3, 0.166], [4, 0.197], [5, 0.218], [6, 0.233], [7, 0.244], [8, 0.253], [9, 0.26], [10, 0.266], [15, 0.286], [20, 0.297], [25, 0.304], [30, 0.308], [35, 0.312],
   [40, 0.315], [45, 0.317], [50, 0.319], [60, 0.322], [70, 0.324], [80, 0.326], [90, 0.327], [100, 0.328], [150, 0.331], [200, 0.333], [300, 0.334], [400, 0.335], [500, 0.336], [700, 0.336], [1000, 0.336]];
+// Medhurst 1947, Table VIII: a coil's high-frequency resistance over that of the same wire straight, rows d/s = 0.1 to 1.0 (bare wire over pitch), columns l/D = ACL_M_LD and then infinity.
+// Table IX: his psi in Q = 0.15 R psi sqrt(f), the same rows and columns.
+const ACL_M_LD = [0, 0.2, 0.4, 0.6, 0.8, 1, 2, 4, 6, 8, 10];
+const ACL_M8 = [
+  [1.02, 1.02, 1.03, 1.03, 1.03, 1.03, 1.04, 1.04, 1.04, 1.04, 1.04, 1.05], [1.07, 1.08, 1.08, 1.1, 1.1, 1.1, 1.13, 1.15, 1.16, 1.16, 1.17, 1.19],
+  [1.16, 1.19, 1.21, 1.22, 1.23, 1.24, 1.28, 1.32, 1.34, 1.34, 1.35, 1.4], [1.26, 1.29, 1.33, 1.38, 1.42, 1.45, 1.5, 1.54, 1.56, 1.57, 1.58, 1.65],
+  [1.44, 1.48, 1.54, 1.6, 1.64, 1.67, 1.74, 1.78, 1.8, 1.81, 1.83, 1.93], [1.74, 1.77, 1.83, 1.89, 1.92, 1.94, 1.98, 2.01, 2.03, 2.08, 2.1, 2.22],
+  [2.12, 2.2, 2.28, 2.38, 2.44, 2.47, 2.32, 2.27, 2.29, 2.34, 2.37, 2.51], [2.74, 2.83, 2.97, 3.1, 3.2, 3.17, 2.74, 2.6, 2.6, 2.62, 2.65, 2.81],
+  [3.73, 3.84, 3.99, 4.11, 4.17, 4.1, 3.36, 3.05, 2.92, 2.9, 2.93, 3.11], [5.31, 5.45, 5.65, 5.8, 5.8, 5.55, 4.1, 3.54, 3.31, 3.2, 3.23, 3.41],
+];
+const ACL_M9 = [
+  [0, 0.1, 0.14, 0.17, 0.19, 0.21, 0.25, 0.27, 0.28, 0.29, 0.29, 0.3], [0, 0.19, 0.27, 0.33, 0.36, 0.39, 0.45, 0.49, 0.51, 0.51, 0.51, 0.53],
+  [0, 0.25, 0.37, 0.44, 0.49, 0.52, 0.6, 0.64, 0.66, 0.67, 0.67, 0.68], [0, 0.31, 0.45, 0.52, 0.56, 0.6, 0.69, 0.74, 0.75, 0.76, 0.76, 0.76],
+  [0, 0.34, 0.48, 0.56, 0.61, 0.65, 0.74, 0.8, 0.81, 0.82, 0.82, 0.81], [0, 0.34, 0.49, 0.57, 0.63, 0.67, 0.78, 0.85, 0.87, 0.86, 0.86, 0.85],
+  [0, 0.32, 0.46, 0.53, 0.58, 0.61, 0.78, 0.87, 0.9, 0.89, 0.89, 0.87], [0, 0.28, 0.4, 0.46, 0.5, 0.55, 0.75, 0.87, 0.9, 0.91, 0.91, 0.89],
+  [0, 0.24, 0.33, 0.39, 0.43, 0.47, 0.69, 0.84, 0.9, 0.93, 0.93, 0.91], [0, 0.18, 0.26, 0.31, 0.35, 0.38, 0.63, 0.8, 0.89, 0.93, 0.93, 0.92],
+];
+const ACL_FU = { kHz: 1e3, MHz: 1e6 };
+const ACL_FORMERS = { air: "None (air)", tube: "Tube", rod: "Solid rod" };
+const ACL_EPS0 = 8.854187818e-12, ACL_C = 299792458;   // e0 as in Knight's macros; c
 const ACL_NOTE = {
   sol: "A single-layer coil's inductance is that of an equivalent sheet of current, 4π² a² n² K / b with Nagaoka's coefficient K (1 for a coil very long against its diameter, less as it shortens), less a small correction for the round wire, which is not a sheet. Wheeler's formula a² n² / (9a + 10b) is the same within 1 % for coils longer than 0.4 diameters. a is the radius to the centre of the wire, b the length, d / D the wire over the pitch.",
   turns: "The turns that give the inductance wanted on a given form, wire and pitch: the inductance grows a little faster than the square of the turns (the coil lengthens, K falls), so it is found by trying turns until the formula gives it. Wheeler's own answer is beside it.",
   multi: "Wheeler's formula for a coil wound in layers, with a rectangular cross-section: a the mean radius (to the middle of the winding), b its length, c its depth, all in inches in the formula. It is right to about 1 % when the three terms 6a, 9b and 10c are about equal, that is, for a winding that is neither long and thin nor flat and wide.",
   multiInd: "The turns that give the inductance wanted in a winding of length b on the form: each turn adds d² / b to the depth (the wire, of diameter d over its insulation, stacked in a square pattern), so the winding deepens and its mean radius grows as turns are added. The turns are found by trying them in Wheeler's formula until it gives the inductance; the depth and the layers follow.",
   spiral: "A flat spiral is a coil of zero length: the equivalent coil has the width c = n D of the winding and the mean radius a = a1 + (n − 1) D / 2, a1 the inside radius to the wire's centre. The Bureau of Standards formula, with the round-wire correction, is the big result; Wheeler's a² n² / (8a + 11c) is within 5 % of the truth for c > 0.2 a.",
+  srf: "A coil has a capacitance of its own across its ends, C: it is not between the turns but comes from the wire, a line half a wavelength long at the self-resonance. In a circuit, Knight's formula gives C (Medhurst's measurements refitted with the former's permittivity εr, ±2 %), and with L the self-resonant frequency, SRF, above which the coil is no longer an inductor; a coil connected to nothing resonates at the free-coil frequency instead. Q is 2πfL over the AC resistance: the skin effect crowds the current to the wire's surface, a skin depth deep, and the field of the neighbouring turns crowds it further, by Medhurst's proximity factor. L and Q are as seen at the coil's ends, with C across it.",
 };
 
 // The gauges the wire picker offers: AWG 6 to 40, the bare diameter from NBS Handbook 100's formula (awgDiameterMm, the Wire sizing tool's), the insulated one from Magnetics' heavy-build table (TW_AWG).
@@ -19981,7 +20022,10 @@ function renderAirCoil(domain, tool, favId) {
     unit: pref(C, "unit", "mm", Object.keys(ACL_U)),
     wire: pref(C, "wire", "typed", ["typed"].concat(ACL_GAUGES.map(String))),
     mknown: pref(C, "mknown", "turns", ["turns", "ind"]),
-    df: 0.02, dw: 0.0008, n: 10, len: 0.015,                // Solenoid: form diameter, wire diameter (m), turns, length (m)
+    fu: pref(C, "fu", "MHz", Object.keys(ACL_FU)),
+    former: pref(C, "former", "air", Object.keys(ACL_FORMERS)),
+    df: 0.02, dw: 0.0008, n: 10, len: 0.015,                // Solenoid and SRF & Q: form diameter, wire diameter (m), turns, length (m)
+    f: 10e6, fer: 2.56, fwall: 0.002,                        // SRF & Q: the working frequency (Hz), the former's relative permittivity and a tube's wall (m)
     tl: 10, tdf: 0.02, tdw: 0.0008, tp: 0.0015,              // Turns: wanted inductance (uH), form, wire, pitch (m)
     mid: 0.025, mb: 0.01, mc: 0.006, mn: 150, mdw: 0.0005, mtl: 100,  // Multilayer: inside diameter, length, depth (m), turns, wire diameter (m), wanted inductance (uH)
     sid: 0.01, sdw: 0.001, sp: 0.0015, sn: 10,               // Spiral: inside diameter, wire diameter, pitch (m), turns
@@ -19999,6 +20043,9 @@ function renderAirCoil(domain, tool, favId) {
   const lenU = (m) => `${n3(m / ACL_U[state.unit])} ${state.unit}`;
   const tn = (n) => `${n3(n)} turn${n === 1 ? "" : "s"}`;
   const ohm = (r) => (r >= 1e3 ? `${n3(r / 1e3)} kΩ` : r >= 1 ? `${n3(r)} Ω` : `${n3(r * 1e3)} mΩ`);
+  const hz = (v) => siFormat(Number(v.toPrecision(3)), "Hz", 3);
+  const pf = (c) => (c >= 1e-9 ? `${n3(c * 1e9)} nF` : `${n3(c * 1e12)} pF`);
+  const um = (v) => (v >= 1e-3 ? `${n3(v * 1e3)} mm` : `${n3(v * 1e6)} µm`);
   // The wire: a gauge from the picker, or the diameter typed. With a gauge, the insulated diameter (heavy build) sets the close-wound pitch and the radius to the wire's centre;
   // a typed diameter is used for both. The resistance is copper's at 20 °C (IACS, the Wire sizing tool's constant) on the bare diameter.
   const gauge = () => (state.wire === "typed" ? null : +state.wire);
@@ -20078,16 +20125,91 @@ function renderAirCoil(domain, tool, favId) {
     return { a, c, l: (ls - corr) * 1e-6, ls: ls * 1e-6, corr: corr * 1e-6, w: ((ai * ai * n * n) / (8 * ai + 11 * ci)) * 1e-6, outer: state.sid + 2 * ((n - 1) * D + di), dD: state.sdw / D, wl, r: rOf(state.sdw, wl) };
   }
 
+  // ---- the SRF & Q pill ----
+  // The modified Bessel functions I0, I1 (times e^-x) and K0, K1 (times e^x) of x > 0, from their integrals by the trapezoid rule, exact to the last digits for these smooth integrands:
+  // I_n(x) = (1/pi) integral 0..pi of e^(x cos t) cos(n t) dt, K_n(x) = integral 0..infinity of e^(-x cosh t) cosh(n t) dt.
+  function besselIK(x) {
+    const M = 128, h = 0.05;
+    let i0 = 0, i1 = 0, k0 = 0, k1 = 0;
+    for (let j = 0; j <= M; j++) {
+      const t = (j * PI) / M, e = (j === 0 || j === M ? 0.5 : 1) * Math.exp(x * (Math.cos(t) - 1));
+      i0 += e; i1 += e * Math.cos(t);
+    }
+    for (let j = 0; j < 10000; j++) {
+      const t = j * h, a = x * (Math.cosh(t) - 1);
+      if (a > 60) break;
+      const e = (j === 0 ? 0.5 : 1) * Math.exp(-a);
+      k0 += e; k1 += e * Math.cosh(t);
+    }
+    return [i0 / M, i1 / M, k0 * h, k1 * h];
+  }
+  // Knight's VFnom: the nominal velocity factor of a free coil at its first self-resonance, for a length over diameter lod and the permittivity inside ei (air outside).
+  function vfNom(lod, ei) {
+    const x = PI / (2 * lod) + 0.117 * Math.exp(-22 * Math.exp(-0.75 * lod));
+    const kL = nagaoka(1 / lod), erad = (1 + kL + ei * (1 - kL)) / 2, vf0 = 1 / Math.sqrt(erad);
+    const [i0, i1, k0, k1] = besselIK(x), ik0 = i0 * k0, ik1 = i1 * k1;
+    const vfh = vf0 * Math.sqrt(ik0 / ik1), arg = 1.015 + lod * lod;
+    const cff = (erad * 2 * 8.854187818) / (1 + Math.log(1 + lod)), caf = (8.854187818 * (ei + 1)) / Math.log(arg + Math.sqrt(arg * arg - 1));
+    const rotn = vf0 * 59.9584916 * Math.sqrt(2 * ik0 * ik1), b = (1e6 * lod) / (299.792458 * PI * (cff + caf) * rotn), a = PI / (2 * vfh);
+    let z = vfh, y = z;
+    for (let i = 0; i < 256; i++) {
+      y = Math.atan(b / z) / a;
+      const diff = z - y;
+      z += diff / (-(b / a) / (z * z + b * b) - 1);
+      if (Math.abs(diff) < 1e-12) break;
+    }
+    return y;
+  }
+  // Medhurst's Table VIII or IX at a length over diameter and a d/s: straight between columns (in D/l from 10 to infinity) and between rows; below d/s = 0.1, straight to lo at d/s = 0.
+  function medhurst(T, lod, ds, lo) {
+    const at = (v) => {
+      if (lod >= 10) return v[11] + (v[10] - v[11]) * (10 / lod);
+      let k = 1;
+      while (k < 10 && lod > ACL_M_LD[k]) k++;
+      return v[k - 1] + ((v[k] - v[k - 1]) * (lod - ACL_M_LD[k - 1])) / (ACL_M_LD[k] - ACL_M_LD[k - 1]);
+    };
+    if (ds <= 0.1) return lo + ((at(T[0]) - lo) * ds) / 0.1;
+    let j = 1;
+    while (j < 9 && ds > (j + 1) / 10) j++;
+    const a = at(T[j - 1]), b = at(T[j]);
+    return a + ((b - a) * (ds - j / 10)) / 0.1;
+  }
+  // The coil of the Solenoid pill at a working frequency: its self-capacitance in a circuit (Knight's DAE), the SRF that gives with L, the free coil's SRF (Knight's model), Medhurst's
+  // self-capacitance, and the Q at the frequency with the skin and proximity effects, as seen at the ends with C across the coil.
+  function srfCalc() {
+    const di = insOf(state.dw), D = state.df + di, n = state.n, len = state.len, p = len / n, tanpsi = p / (PI * D), lod = len / D;
+    let ei = 1;
+    if (state.former === "rod") ei = state.fer;
+    else if (state.former === "tube") { const q2 = (1 - (2 * state.fwall) / state.df) ** 2; ei = q2 + state.fer * (1 - q2); }
+    const r = D / len, kc = 0.717439 * r + 0.933048 * r ** 1.5 + 0.106 * r * r;
+    const cl = ((4 * ACL_EPS0) / PI) * len * (1 + (kc * (1 + ei)) / 2) * (1 + tanpsi * tanpsi);
+    const L = sol(state.df, state.dw, n, len).l, f0 = 1 / (2 * PI * Math.sqrt(L * cl));
+    const lw = Math.hypot(PI * D * n, len), vf = vfNom(lod, ei), ff = (vf * ACL_C) / (2 * lw);
+    const cm = (0.1126 * lod + 0.08 + 0.27 / Math.sqrt(lod)) * D * 100 * 1e-12;
+    const f = state.f, w = 2 * PI * f, rdc = rOf(state.dw, PI * D * n);
+    const delta = Math.sqrt((IACS_OHM_MM2_PER_M * 1e-6) / (PI * f * SKIN_MU0)), xi = skinWireRatio(state.dw / 2 / delta), ds = Math.min(1, state.dw / p);
+    const psi = medhurst(ACL_M8, lod, ds, 1), rac = rdc * (xi + (psi - 1) * ((n - 1) / n) * (xi - 0.25 - 0.75 / xi));
+    const u = 1 - w * w * L * cl, q = (w * (L * u - rac * rac * cl)) / rac, lapp = (L * u - rac * rac * cl) / (u * u + (w * rac * cl) ** 2);
+    const qm = 0.15 * (D / 2) * 100 * medhurst(ACL_M9, lod, ds, 0) * Math.sqrt(f);
+    return { lod, ei, cl, L, f0, lw, vf, ff, cm, f, rdc, rac, delta, xi, psi, ds, q, lapp, qm, above: !(f < f0 && q > 0) };
+  }
+
   function problem() {
     const fit = (dw, p) => (insOf(dw) > p * (1 + 1e-12) ? "The wire does not fit: its diameter is more than the pitch." : "");
-    if (state.mode === "sol") {
+    if (state.mode === "sol" || state.mode === "srf") {
       if (!(state.df > 0)) return "Enter the form diameter.";
       if (!(state.dw > 0)) return "Enter the wire diameter.";
       if (!(state.n >= 1)) return "Enter the turns, 1 or more.";
       if (!(state.len > 0)) return "Enter the winding length.";
       const f = fit(state.dw, state.len / state.n);
       if (f) return f;
-      return sol(state.df, state.dw, state.n, state.len).z > 100 ? "The coil is shorter than the tables allow: diameter over length is above 100." : "";
+      if (sol(state.df, state.dw, state.n, state.len).z > 100) return "The coil is shorter than the tables allow: diameter over length is above 100.";
+      if (state.mode === "sol") return "";
+      if (!(state.f > 0)) return "Enter the frequency.";
+      if (state.former !== "air" && !(state.fer >= 1)) return "Enter the former's εr, 1 or more.";
+      if (state.former === "tube" && !(state.fwall > 0)) return "Enter the tube's wall thickness.";
+      if (state.former === "tube" && 2 * state.fwall >= state.df) return "The wall is as thick as the tube's radius: choose Solid rod.";
+      return state.len / (state.df + insOf(state.dw)) < 0.05 ? "The coil is too short for the self-capacitance formulas: under 0.05 diameters long, Medhurst found them to fail." : "";
     }
     if (state.mode === "turns") {
       if (!(state.tl > 0)) return "Enter the inductance.";
@@ -20169,8 +20291,16 @@ function renderAirCoil(domain, tool, favId) {
     for (let i = 0; i <= 90; i++) { const t = (i / 90) * 5 * 2 * PI, r = 12 + (t / (10 * PI)) * 42; d += `${i ? "L" : "M"}${(150 + r * Math.cos(t)).toFixed(1)} ${(70 + r * Math.sin(t)).toFixed(1)} `; }
     return w(d, BLUE, 2) + lbl("pi", 150, 12, `outer ø ${lenU(k.outer)}`, BLUE, "middle") + lbl("pw", 212, 74, `a ${lenU(k.a)}`, GREEN) + lbl("pl", 150, 134, `L ${ind(k.l)}`, GREEN, "middle");
   }
+  // The coil with its self-capacitance across the ends: dashed, because it is the wire's own and not a part.
+  function srfDrawing() {
+    if (problem()) return "";
+    const r = srfCalc();
+    const branch = w("M40 70 V16 H134 M140 16 H223 V70", WIRE, 1.4).replace('fill="none"', 'fill="none" stroke-dasharray="4 3"');
+    return coilDrawing(branch + w("M134 6 V26 M140 6 V26", GREEN, 2.2) + lbl("ps", 86, 11, `SRF ${hz(r.f0)}`, GREEN, "middle") + lbl("pc", 182, 11, `C ${pf(r.cl)}`, GREEN, "middle")
+      + lbl("pd", 252, 116, `ø ${lenU(state.df)}`, BLUE, "middle") + lbl("pb", 137, 134, `b ${lenU(state.len)}`, BLUE, "middle"));
+  }
   function diagram() {
-    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${{ sol: solDrawing, turns: turnsDrawing, multi: multiDrawing, spiral: spiralDrawing }[state.mode]()}</svg>`;
+    return `<svg width="320" height="150" viewBox="0 0 300 140" fill="none">${{ sol: solDrawing, turns: turnsDrawing, multi: multiDrawing, spiral: spiralDrawing, srf: srfDrawing }[state.mode]()}</svg>`;
   }
 
   // ---------------- the answers ----------------
@@ -20199,6 +20329,14 @@ function renderAirCoil(domain, tool, favId) {
     const err = problem();
     if (err) return `<div class="error-text" data-res="err">${err}</div>`;
     if (state.mode === "sol") return solHTML(state.df, state.dw, state.n, state.len, "Inductance", ACL_NOTE.sol);
+    if (state.mode === "srf") {
+      const r = srfCalc(), at = hz(r.f);
+      const rows = row(`L at ${at}`, r.above ? "none: above the SRF" : `${ind(r.lapp)}, ${pct(r.lapp, r.L)}`, "la") + row(`AC resistance at ${at}`, `${ohm(r.rac)}, ${n3(r.rac / r.rdc)} × DC`, "ra")
+        + row("Skin depth, proximity factor", `${um(r.delta)}, ${n3(r.psi)}`, "sk") + row("Medhurst's Q, his Table IX", r.above ? "n/a" : n3(r.qm), "qm")
+        + row("Medhurst's C, on polystyrene", pf(r.cm), "cm") + row("Wire half a wavelength at", hz(ACL_C / (2 * r.lw)), "hw");
+      return head("Self-resonance", hz(r.f0), `${ind(r.L)} with ${pf(r.cl)} across it, in a circuit`)
+        + body([cell("Self-capacitance", pf(r.cl), "c1"), cell(`Q at ${at}`, r.above ? "above SRF" : n3(r.q), "c2"), cell("Free coil", hz(r.ff), "c3")], rows, ACL_NOTE.srf);
+    }
     if (state.mode === "turns") {
       const n = turnsFor(state.tl, state.tdf, state.tdw, state.tp), r = Math.round(n), k = sol(state.tdf, state.tdw, Math.max(r, 1), Math.max(r, 1) * state.tp), nw = turnsFor(state.tl, state.tdf, state.tdw, state.tp, true);
       const wl = PI * (state.tdf + insOf(state.tdw)) * n;
@@ -20230,7 +20368,7 @@ function renderAirCoil(domain, tool, favId) {
 
   // An example sets every input it uses; the wire and the close-wound proposals go back to typed values unless it says otherwise.
   const example = (st) => () => {
-    Object.assign(state, { wire: "typed", lenAuto: false, tpAuto: false, spAuto: false, mcAuto: false, mknown: "turns" }, st);
+    Object.assign(state, { wire: "typed", lenAuto: false, tpAuto: false, spAuto: false, mcAuto: false, mknown: "turns", fu: "MHz", former: "air" }, st);
     if (state.wire !== "typed") { const b = ACL_BARE(+state.wire); Object.assign(state, { dw: b, tdw: b, sdw: b, mdw: b, lenAuto: true, tpAuto: true, spAuto: true, mcAuto: true }); }
     applyAuto();
     paint();
@@ -20256,6 +20394,14 @@ function renderAirCoil(domain, tool, favId) {
       apply: example({ mode: "sol", unit: "mm", wire: "22", df: 0.02, n: 20 }) },
     { title: "330 µH in layers, 30 AWG", note: "In 10 mm on a 10 mm form: 208 turns, 6.13 layers 1.81 mm deep, 2.61 Ω of wire.",
       apply: example({ mode: "multi", unit: "mm", wire: "30", mknown: "ind", mtl: 330, mid: 0.01, mb: 0.01 }) },
+    { title: "Knight's PTFE-cored coil", note: "43.8 turns of 4 mm tube: free coil 18 MHz, as Knight's model gives; he measured 17.94 MHz.",
+      apply: example({ mode: "srf", unit: "mm", df: 0.0668, dw: 0.004, n: 43.8, len: 0.2181, former: "rod", fer: 2.1, f: 3.5e6 }) },
+    { title: "Knight's 18-turn air coil", note: "18.09 turns of 4.7 mm copper tube: free coil 26.5 MHz; Knight measured 26.69 MHz.",
+      apply: example({ mode: "srf", unit: "mm", df: 0.0913, dw: 0.0047, n: 18.09, len: 0.152, f: 7e6 }) },
+    { title: "Medhurst's coil No. 31", note: "40 turns on polystyrene at 0.8 MHz: Q 238; Medhurst measured 230, his Table IX says 236.",
+      apply: example({ mode: "srf", unit: "mm", df: 0.05009, dw: 0.00091, n: 40, len: 0.0701, former: "rod", fer: 2.56, f: 0.8e6 }) },
+    { title: "A 7 MHz coil in 22 AWG", note: "Close-wound, 14 mm long: 7.03 µH, Q 162 at 7 MHz, self-resonant at 75.8 MHz.",
+      apply: example({ mode: "srf", unit: "mm", wire: "22", df: 0.02, n: 20, f: 7e6 }) },
   ]);
 
   function paint() {
@@ -20272,11 +20418,17 @@ function renderAirCoil(domain, tool, favId) {
     else if (state.mode === "multi") fields = state.mknown === "ind"
       ? `<div class="field-pair">${fld("Inductance wanted", "mtl", state.mtl, fixed("µH"))}${len("Inside diameter", "mid")}</div><div class="field-pair">${len("Length b", "mb")}${len("Wire diameter", "mdw")}</div>`
       : `<div class="field-pair">${len("Inside diameter", "mid")}${fld("Turns", "mn", state.mn, "")}${len("Wire diameter", "mdw")}</div><div class="field-pair">${len("Length b", "mb")}${auto("Depth c", "mc", state.mcAuto)}</div>`;
-    else fields = `<div class="field-pair">${len("Inside diameter", "sid")}${len("Wire diameter", "sdw")}</div><div class="field-pair">${fld("Turns", "sn", state.sn, "")}${auto("Pitch", "sp", state.spAuto)}</div>`;
+    else if (state.mode === "spiral") fields = `<div class="field-pair">${len("Inside diameter", "sid")}${len("Wire diameter", "sdw")}</div><div class="field-pair">${fld("Turns", "sn", state.sn, "")}${auto("Pitch", "sp", state.spAuto)}</div>`;
+    else {
+      const fBox = fld("Frequency", "f", state.f / ACL_FU[state.fu], sel("data-fu", Object.keys(ACL_FU).map((u) => [u, u]), state.fu));
+      const formerBox = `<div class="field"><label><span class="field-name">Former</span></label>${sel("data-former", Object.entries(ACL_FORMERS), state.former)}</div>`;
+      fields = `<div class="field-pair">${len("Form diameter", "df")}${len("Wire diameter", "dw")}</div><div class="field-pair">${fld("Turns", "n", state.n, "")}${auto("Length", "len", state.lenAuto)}</div>`
+        + `<div class="field-pair">${fBox}${formerBox}</div>` + (state.former === "air" ? "" : `<div class="field-pair">${fld("Former εr", "fer", state.fer, "")}${state.former === "tube" ? len("Tube wall", "fwall") : ""}</div>`);
+    }
     const wireSel = `<select class="label-select" data-wire>${[["typed", "Wire: typed diameter"]].concat(ACL_GAUGES.map((g) => [String(g), `Wire: ${g} AWG`])).map(([k, t]) => `<option value="${k}" ${k === state.wire ? "selected" : ""}>${t}</option>`).join("")}</select>`;
     const outHead = state.mode === "multi" ? `<select class="label-select" data-mknown><option value="turns" ${state.mknown === "turns" ? "selected" : ""}>Given: turns</option><option value="ind" ${state.mknown === "ind" ? "selected" : ""}>Given: inductance</option></select>` : "";
     app.innerHTML = `
-      ${calcHeader(tool, favId, "Solenoid, turns, multilayer, spiral")}
+      ${calcHeader(tool, favId, "Solenoid, turns, multilayer, spiral, SRF, Q")}
 
       ${pillRow(Object.entries(ACL_MODES), state.mode, domain.bg)}
 
@@ -20293,8 +20445,9 @@ function renderAirCoil(domain, tool, favId) {
       <div data-res="result">${resultHTML()}</div>
 
       ${formulaSection(
-        ["L = 0.03948 a² n² K / b  (µH, cm)", "ΔL = 0.01257 n a (A + B)", "L = a² n² / (9a + 10b)  (µH, in)", "L = a² n² / (8a + 11c)  (µH, in)", "L = 0.8 a² n² / (6a + 9b + 10c)", "A = ln(d / D) + 0.557", "R = l / (58 A)  (Ω, m, mm²)"],
-        "The inductance of a coil is the magnetic flux it links per ampere. An air core has nothing to concentrate the flux, so L comes from the shape alone and grows as the square of the turns n. A very long thin solenoid has L = μ0 n² A / b; a shorter one has less, because the flux leaks out of its ends. Nagaoka's coefficient K is that loss exactly, for a sheet of current: K is 1 for a coil very long against its diameter, 0.818 when it is two diameters long and 0.083 for a ring 34 times wider than it is long. Real wire is not a sheet, so the Bureau of Standards subtracts a correction 0.01257 n a (A + B): A depends on the wire diameter d over the pitch D, the distance from one turn to the next, and B on the number of turns. The units of the printed formulas are centimetres, or inches for Wheeler's. Wheeler's 1928 formulas are simple fits to those results: a² n² / (9a + 10b) µH for a solenoid longer than its radius (right to 1 %), a² n² / (8a + 11b) for a shorter one, 0.8 a² n² / (6a + 9b + 10c) for a coil wound in layers of depth c, and a² n² / (8a + 11c) for a flat spiral. a is the mean radius of the winding, b its length. Pick a wire gauge and its bare diameter goes in the wire box (NBS Handbook 100), while the length or the pitch of a close-wound coil follows from its diameter over the insulation (heavy-build enamel) until you type your own; the DC resistance is the wire's length l over 58 times its copper cross-section A, copper's resistance at 20 °C. The formulas do not include the capacitance between turns, which makes the coil resonate; the skin effect, which raises its resistance at high frequency; or a core. Use the coil well below its self-resonance."
+        ["L = 0.03948 a² n² K / b  (µH, cm)", "ΔL = 0.01257 n a (A + B)", "L = a² n² / (9a + 10b)  (µH, in)", "L = a² n² / (8a + 11c)  (µH, in)", "L = 0.8 a² n² / (6a + 9b + 10c)", "A = ln(d / D) + 0.557", "R = l / (58 A)  (Ω, m, mm²)",
+          "C = 4ε₀ b [1 + k (1 + εr) / 2] / (π cos²ψ)", "k = 0.717 D/b + 0.933 (D/b)^1.5 + 0.106 (D/b)²", "SRF = 1 / (2π √(L C))", "Q = 2π f L / R"],
+        "The inductance of a coil is the magnetic flux it links per ampere. An air core has nothing to concentrate the flux, so L comes from the shape alone and grows as the square of the turns n. A very long thin solenoid has L = μ0 n² A / b; a shorter one has less, because the flux leaks out of its ends. Nagaoka's coefficient K is that loss exactly, for a sheet of current: K is 1 for a coil very long against its diameter, 0.818 when it is two diameters long and 0.083 for a ring 34 times wider than it is long. Real wire is not a sheet, so the Bureau of Standards subtracts a correction 0.01257 n a (A + B): A depends on the wire diameter d over the pitch D, the distance from one turn to the next, and B on the number of turns. The units of the printed formulas are centimetres, or inches for Wheeler's. Wheeler's 1928 formulas are simple fits to those results: a² n² / (9a + 10b) µH for a solenoid longer than its radius (right to 1 %), a² n² / (8a + 11b) for a shorter one, 0.8 a² n² / (6a + 9b + 10c) for a coil wound in layers of depth c, and a² n² / (8a + 11c) for a flat spiral. a is the mean radius of the winding, b its length. Pick a wire gauge and its bare diameter goes in the wire box (NBS Handbook 100), while the length or the pitch of a close-wound coil follows from its diameter over the insulation (heavy-build enamel) until you type your own; the DC resistance is the wire's length l over 58 times its copper cross-section A, copper's resistance at 20 °C. The SRF & Q pill adds what the coil does at radio frequency. Its own capacitance C, across its ends, comes from the wire being a line half a wavelength long at the self-resonance (Knight 2016, refitting Medhurst's 1947 measurements, εr the former's permittivity, ψ the pitch angle); with L it sets the self-resonant frequency, SRF, which a circuit sees, while a coil connected to nothing resonates where Knight's helical-line model puts it. Q is the reactance 2πfL over the resistance R at f: the skin effect and the neighbouring turns (Medhurst's proximity factor) raise R well above its DC value. Use the coil well below its SRF."
       )}
       ${calcFooter("")}
     `;
@@ -20302,13 +20455,13 @@ function renderAirCoil(domain, tool, favId) {
     app.querySelectorAll(".pill").forEach((btn) => {
       btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
     });
-    const lens = ["df", "dw", "len", "tdf", "tdw", "tp", "mid", "mb", "mc", "mdw", "sid", "sdw", "sp"];
+    const lens = ["df", "dw", "len", "tdf", "tdw", "tp", "mid", "mb", "mc", "mdw", "sid", "sdw", "sp", "fwall"];
     const owner = { len: "lenAuto", tp: "tpAuto", sp: "spAuto", mc: "mcAuto" };
     app.querySelectorAll("input[data-key]").forEach((el) => {
       const key = el.dataset.key;
       el.oninput = () => {
         const v = parseFloat(el.value);
-        state[key] = lens.includes(key) ? v * ACL_U[state.unit] : v;
+        state[key] = lens.includes(key) ? v * ACL_U[state.unit] : key === "f" ? v * ACL_FU[state.fu] : v;
         if (owner[key]) { state[owner[key]] = false; const h = app.querySelector(`[data-hint="${key}"]`); if (h) h.remove(); }
         if (["dw", "tdw", "sdw", "mdw"].includes(key) && state.wire !== "typed") { state.wire = "typed"; setPref(C, "wire", "typed"); const s = app.querySelector("select[data-wire]"); if (s) s.value = "typed"; }
         applyAuto();
@@ -20325,6 +20478,10 @@ function renderAirCoil(domain, tool, favId) {
     };
     const mk = app.querySelector("select[data-mknown]");
     if (mk) mk.onchange = () => { state.mknown = mk.value; setPref(C, "mknown", state.mknown); paint(); };
+    const fu = app.querySelector("select[data-fu]");
+    if (fu) fu.onchange = () => { state.fu = fu.value; setPref(C, "fu", state.fu); paint(); };
+    const fo = app.querySelector("select[data-former]");
+    if (fo) fo.onchange = () => { state.former = fo.value; setPref(C, "former", state.former); paint(); };
   }
 
   applyAuto();
