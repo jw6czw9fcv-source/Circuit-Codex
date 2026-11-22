@@ -68,6 +68,12 @@ const FORMULAS = [
     note: "The opposite of resistors. In series the smallest capacitor takes the largest share of the voltage.",
   },
   {
+    tool: "Sallen-Key filter",
+    domain: "active",
+    formulas: ["f0 = 1 / (2π √(R1 R2 C1 C2))", "Q = √b / a", "a = ωc [C1 (R1 + R2) + (1 − K) R1 C2]", "b = ωc² R1 R2 C1 C2", "C2 ≥ C1 · 4b / a²  (K = 1)", "Equal parts: K = 3 − 1 / Q", "K = 1 + R4 / R3"],
+    note: "Active low- and high-pass filters of order 2 to 8 from Sallen-Key stages, Butterworth, Bessel or Chebyshev: each stage's resistors (and C2) for a corner frequency and a capacitor, at unity gain or with equal parts and the gain setting the Q; or the f0, Q and response of one stage given by its parts. From TI's Op Amps for Everyone, chapter 16 (Kugelstadt), and TI's SLOA024 (Karki); the coefficients computed and checked against TI's tables.",
+  },
+  {
     tool: "RLC filter",
     domain: "passive",
     formulas: ["f0 = 1 / (2π √(L C))", "Q = √(L / C) / R = 1 / (2ζ)", "Low-pass: H = 1 / (1 − x² + j x / Q)", "x = f / f0;  BW = f0 / Q", "Peak = Q / √(1 − 1 / 4Q²)  (Q > 0.707)"],

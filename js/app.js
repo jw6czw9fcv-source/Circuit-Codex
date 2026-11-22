@@ -700,6 +700,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rl-filter") return renderRlFilter(domain, tool, favId);
   if (calcId === "lc-filter") return renderLcFilter(domain, tool, favId);
   if (calcId === "rlc-filter") return renderRlcFilter(domain, tool, favId);
+  if (calcId === "sallen-key") return renderSallenKey(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -28685,6 +28686,428 @@ function renderRlcFilter(domain, tool, favId) {
         else { state.f0 = r3(k.f0); state.q = r3(k.Q); if (e.target.value === "fql") state.l = r3(k.L); else state.c = r3(k.C); }
       }
       state.given = e.target.value; setPref(C, "given", state.given); follow(); paint();
+    };
+  }
+
+  follow();
+  paint();
+}
+
+// ---------- Sallen-Key filter ----------
+// Active low-pass and high-pass filters of order 2 to 8 from Sallen-Key stages (an op-amp, two resistors, two capacitors; positive feedback through one
+// of them), with a first-order RC stage and a follower for an odd order; or one stage given by its parts. Sources, as read this session: Thomas Kugelstadt,
+// "Active Filter Design Techniques", chapter 16 of TI's "Op Amps for Everyone" (SLOA088, the 2002 copy kept by the Internet Archive; its equations and
+// tables read on the rendered pages): the cascade A0 / prod(1 + a_i s + b_i s^2) with s normalised to the corner fc, Q_i = sqrt(b_i) / a_i; the
+// unity-gain low-pass (C1 to ground, C2 from between R1 and R2 to the output) a1 = wc C1 (R1 + R2), b1 = wc^2 R1 R2 C1 C2, solved as
+// R1,2 = (a1 C2 -/+ sqrt(a1^2 C2^2 - 4 b1 C1 C2)) / (4 pi fc C1 C2) with C2 >= C1 4 b1 / a1^2 (the next standard value up, as in his examples); the
+// general low-pass A0 / (1 + wc [C1 (R1 + R2) + (1 - A0) R1 C2] s + wc^2 R1 R2 C1 C2 s^2), A0 = 1 + R4 / R3; the equal-part design R = sqrt(b1) / (2 pi fc C),
+// A0 = 3 - 1 / Q; the high-pass (C1, C2 in the line, R1 to ground, R2 to the output) with C1 = C2 = C: R1 = 1 / (pi fc C a1), R2 = a1 / (4 pi fc C b1);
+// the first-order stages R = a1 / (2 pi fc C) (low-pass), 1 / (2 pi fc a1 C) (high-pass); the coefficient tables 16-4 to 16-9 (Bessel, Butterworth,
+// Chebyshev 0.5, 1, 2 and 3 dB), all normalised so the whole filter is 3 dB down at fc; the op-amp rule fT = 100 Gain fc ki (first order, and second order
+// with Q < 1) or 100 Gain (fc / a_i) sqrt((Q^2 - 0.5) / (Q^2 - 0.25)) (Q > 1). James Karki, "Analysis of the Sallen-Key Architecture" (TI SLOA024B, read as
+// text and the low- and high-pass transfer functions as printed): the same transfer functions with a gain K, Q infinite at K = 3 for equal parts, the
+// output impedance and the op-amp's bandwidth limiting the stop band and the pass band; the lab circuit 1 kOhm, 1 nF, 159 kHz, Q 1/2. The coefficients are
+// computed here, not copied: the poles of the Butterworth, Chebyshev and Bessel (the reverse Bessel polynomial, its roots by Durand-Kerner) prototypes,
+// rescaled to 3 dB down at 1 rad/s; they agree with TI's tables to the printed digits except four misprints (see the manual).
+const SK_MODES = { lp: "Low-pass", hp: "High-pass" };
+const SK_GIVEN = { unity: "Design: unity gain", equal: "Design: equal parts", parts: "Given: R, C and gain" };
+const SK_RESP = { butter: "Butterworth", bessel: "Bessel", c05: "Chebyshev 0.5 dB", c1: "Chebyshev 1 dB", c2: "Chebyshev 2 dB", c3: "Chebyshev 3 dB" };
+const SK_RIPPLE = { c05: 0.5, c1: 1, c2: 2, c3: 3 };
+const SK_U = {
+  f: { Hz: 1, kHz: 1e3, MHz: 1e6 },
+  r: { "Ω": 1, "kΩ": 1e3, "MΩ": 1e6 },
+  c: { pF: 1e-12, nF: 1e-9, "µF": 1e-6 },
+};
+const SK_NOTE = {
+  lp: "Each stage is an op-amp follower (or a small gain) fed through R1 and R2, with C1 to ground and C2 back from the output: the positive feedback through C2 lifts the response near the corner, so two resistors and two capacitors give any Q, which two plain RC sections cannot (their Q stays under 0.5). Higher orders are stages in a row, each with its own Q, the gentlest first; an odd order adds one RC and a follower. Together they are 3 dB down at fc and fall 20 dB per decade for every order beyond. Butterworth is flattest, Chebyshev steeper but rippling, Bessel the gentlest but with the cleanest steps (a nearly constant delay).",
+  hp: "The low-pass with resistors and capacitors swapped: C1 and C2 in the line, R1 to ground at the op-amp, R2 back from the output, the positive feedback through R2 lifting the response near the corner. Higher orders are stages in a row, each with its own Q, the gentlest first; an odd order adds one RC and a follower. Together they are 3 dB down at fc and rise 20 dB per decade for every order below it. Above fc the passband lasts only as far as the op-amp's own bandwidth: its gain-bandwidth over the stage's gain.",
+};
+// The Q of a second-order section of each response, the one the parts mode compares with.
+const SK_Q2 = [["Bessel", 0.5774], ["Butterworth", 0.7071], ["Chebyshev 0.5 dB", 0.8637], ["Chebyshev 1 dB", 0.9565], ["Chebyshev 2 dB", 1.1286], ["Chebyshev 3 dB", 1.3047]];
+
+// The roots of sum c[k] s^k (Durand-Kerner), complex numbers as [re, im].
+function skRoots(c) {
+  const n = c.length - 1, m = c.map((x) => x / c[n]);
+  const mul = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+  const div = (a, b) => { const d = b[0] * b[0] + b[1] * b[1]; return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d]; };
+  let z = [];
+  for (let k = 0, p = [1, 0]; k < n; k++, p = mul(p, [0.4, 0.9])) z.push(p);
+  for (let it = 0; it < 500; it++) {
+    let mx = 0;
+    const nz = z.map((zi, i) => {
+      let num = [0, 0];
+      for (let k = n; k >= 0; k--) num = [num[0] * zi[0] - num[1] * zi[1] + m[k], num[0] * zi[1] + num[1] * zi[0]];
+      let den = [1, 0];
+      z.forEach((zj, j) => { if (j !== i) den = mul(den, [zi[0] - zj[0], zi[1] - zj[1]]); });
+      const d = div(num, den);
+      mx = Math.max(mx, Math.hypot(d[0], d[1]));
+      return [zi[0] - d[0], zi[1] - d[1]];
+    });
+    z = nz;
+    if (mx < 1e-15) break;
+  }
+  return z;
+}
+// The normalised stages (a, b) of a low-pass of the response and order, 1 + a s + b s^2 each (b = 0 for the first-order one), gentlest Q first, scaled so
+// the whole filter is 3 dB down at s = j; with w3, the -3 dB frequency before the scaling (the Chebyshev ripple band ends at 1 / w3).
+function skCoeffs(resp, n) {
+  let poles;
+  if (resp === "butter") poles = Array.from({ length: n }, (_, i) => { const t = (Math.PI * (2 * (i + 1) + n - 1)) / (2 * n); return [Math.cos(t), Math.sin(t)]; });
+  else if (resp === "bessel") {
+    const fact = (k) => { let r = 1; for (let i = 2; i <= k; i++) r *= i; return r; };
+    poles = skRoots(Array.from({ length: n + 1 }, (_, k) => fact(2 * n - k) / (2 ** (n - k) * fact(k) * fact(n - k))));
+  } else {
+    const eps = Math.sqrt(10 ** (SK_RIPPLE[resp] / 10) - 1), v = Math.asinh(1 / eps) / n;
+    poles = Array.from({ length: n }, (_, i) => { const t = ((2 * i + 1) * Math.PI) / (2 * n); return [-Math.sinh(v) * Math.sin(t), Math.cosh(v) * Math.cos(t)]; });
+  }
+  let st = [];
+  poles.forEach(([re, im]) => {
+    const m = Math.hypot(re, im);
+    if (Math.abs(im) < 1e-9 * m) st.push([1 / -re, 0]);
+    else if (im > 0) st.push([(2 * -re) / (m * m), 1 / (m * m)]);
+  });
+  st.sort((x, y) => (x[1] > 0) - (y[1] > 0) || (x[1] ? Math.sqrt(x[1]) / x[0] : 0) - (y[1] ? Math.sqrt(y[1]) / y[0] : 0));
+  const mag2 = (w) => st.reduce((g, [a, b]) => g / ((1 - b * w * w) ** 2 + (a * w) ** 2), 1);
+  let lo = SK_RIPPLE[resp] ? 1 : 0.01, hi = SK_RIPPLE[resp] ? 10 : 100;
+  for (let i = 0; i < 200; i++) { const mid = Math.sqrt(lo * hi); if (mag2(mid) > 0.5) lo = mid; else hi = mid; }
+  const w3 = Math.sqrt(lo * hi);
+  return { st: st.map(([a, b]) => [a * w3, b * w3 * w3]), w3 };
+}
+// The smallest E6 value at or above v (TI's examples round C2 up to one).
+function skE6Up(v) {
+  const d = Math.floor(Math.log10(v) + 1e-12), m = v / 10 ** d;
+  const e = [1, 1.5, 2.2, 3.3, 4.7, 6.8, 10].find((x) => x >= m * (1 - 1e-9));
+  return Number((e * 10 ** d).toPrecision(2));
+}
+
+function renderSallenKey(domain, tool, favId) {
+  const C = "sallen-key";
+  const state = {
+    mode: pref(C, "mode", "lp", Object.keys(SK_MODES)),
+    given: pref(C, "given", "unity", Object.keys(SK_GIVEN)),
+    resp: pref(C, "resp", "butter", Object.keys(SK_RESP)),
+    order: pref(C, "order", 4, [2, 3, 4, 5, 6, 7, 8]),
+    u: { f: pref(C, "uf", "kHz", Object.keys(SK_U.f)), r: pref(C, "ur", "kΩ", Object.keys(SK_U.r)), c: pref(C, "uc", "nF", Object.keys(SK_U.c)) },
+    fc: 1e3, c: 10e-9, r3: 10e3, r1: 10e3, r2: 10e3, c1: 10e-9, c2: 22e-9, k: 1, chk: 2e3, chkAuto: true, sel: 0,
+  };
+  const KIND = { fc: "f", chk: "f", c: "c", c1: "c", c2: "c", r3: "r", r1: "r", r2: "r", k: "" };
+  const PI = Math.PI;
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const hz = (v) => si(v, "Hz");
+  const db = (v) => (v === -Infinity ? "−∞ dB" : Math.abs(v) < 5e-5 ? "0 dB" : `${v > 0 ? "+" : ""}${n3(v)} dB`);
+  const parts = () => state.given === "parts";
+  const lp = () => state.mode === "lp";
+
+  // ---------------- the numbers ----------------
+  // Every stage with its parts: kind 1 (an RC and a follower) or 2 (Sallen-Key), its gain K, its own corner (first order) or natural frequency and Q.
+  function design() {
+    const fc = state.fc, Cc = state.c, { st, w3 } = skCoeffs(state.resp, state.order);
+    const stages = st.map(([a, b]) => {
+      if (b === 0) {
+        const R = lp() ? a / (2 * PI * fc * Cc) : 1 / (2 * PI * fc * a * Cc);
+        return { kind: 1, a, b, K: 1, R1: R, C1: Cc, f0: lp() ? fc / a : fc * a };
+      }
+      const s = { kind: 2, a, b, Q: Math.sqrt(b) / a, f0: lp() ? fc / Math.sqrt(b) : fc * Math.sqrt(b), K: 1 };
+      if (state.given === "equal") {
+        const R = lp() ? Math.sqrt(b) / (2 * PI * fc * Cc) : 1 / (2 * PI * fc * Cc * Math.sqrt(b));
+        Object.assign(s, { R1: R, R2: R, C1: Cc, C2: Cc, K: 3 - a / Math.sqrt(b) });
+        s.R3 = state.r3; s.R4 = (s.K - 1) * state.r3;
+      } else if (lp()) {
+        const C2 = skE6Up((Cc * 4 * b) / (a * a)), root = Math.sqrt(Math.max(0, a * a * C2 * C2 - 4 * b * Cc * C2)), den = 4 * PI * fc * Cc * C2;
+        Object.assign(s, { R1: (a * C2 - root) / den, R2: (a * C2 + root) / den, C1: Cc, C2 });
+      } else Object.assign(s, { R1: 1 / (PI * fc * Cc * a), R2: a / (4 * PI * fc * Cc * b), C1: Cc, C2: Cc });
+      return s;
+    });
+    return { stages, w3, fc, gain: stages.reduce((g, s) => g * s.K, 1) };
+  }
+  // One stage from its parts (the parts mode): f0, Q, and what the transfer function needs.
+  function given() {
+    const { r1: R1, r2: R2, c1: C1, c2: C2, k: K } = state;
+    const s = { kind: 2, R1, R2, C1, C2, K, f0: 1 / (2 * PI * Math.sqrt(R1 * R2 * C1 * C2)) };
+    const D = lp() ? (R1 + R2) * C1 + R1 * C2 * (1 - K) : R2 * (C1 + C2) + R1 * C2 * (1 - K);
+    s.Q = Math.sqrt(R1 * R2 * C1 * C2) / D;
+    s.kmax = lp() ? 1 + ((R1 + R2) * C1) / (R1 * C2) : 1 + (R2 * (C1 + C2)) / (R1 * C2);
+    s.a = 1 / s.Q; s.b = 1;
+    return { stages: [s], fc: s.f0, gain: K };
+  }
+  const calc = () => (parts() ? given() : design());
+
+  // A stage's transfer function at w, from its parts, as [re, im].
+  function stageH(s, w) {
+    if (s.kind === 1) { const x = w * s.R1 * s.C1, d = 1 + x * x; return lp() ? [1 / d, -x / d] : [(x * x) / d, x / d]; }
+    const re = 1 - w * w * s.R1 * s.R2 * s.C1 * s.C2;
+    const im = w * (lp() ? (s.R1 + s.R2) * s.C1 + s.R1 * s.C2 * (1 - s.K) : s.R2 * (s.C1 + s.C2) + s.R1 * s.C2 * (1 - s.K));
+    const num = lp() ? s.K : -s.K * w * w * s.R1 * s.R2 * s.C1 * s.C2, d = re * re + im * im;
+    return [(num * re) / d, (-num * im) / d];
+  }
+  const stageDb = (s, f) => { const [re, im] = stageH(s, 2 * PI * f); return 10 * Math.log10(re * re + im * im); };
+  const gainDb = (k, f) => k.stages.reduce((g, s) => g + stageDb(s, f), 0);
+  // TI's rule of thumb for an op-amp's unity-gain bandwidth, per stage; ki the stage's own -3 dB corner over fc.
+  function gbw(k) {
+    return Math.max(...k.stages.map((s) => {
+      if (s.kind === 1) return 100 * s.K * s.f0;
+      const { a, b, Q } = s, fc = parts() ? s.f0 : k.fc;
+      if (Q > 1) return 100 * s.K * (fc / a) * Math.sqrt((Q * Q - 0.5) / (Q * Q - 0.25));
+      const u = (-(a * a - 2 * b) + Math.sqrt((a * a - 2 * b) ** 2 + 4 * b * b)) / (2 * b * b);
+      return 100 * s.K * fc * Math.sqrt(u);
+    }));
+  }
+  // The delay at low frequencies of a low-pass: the s coefficient of each stage's denominator, summed.
+  const delay = (k) => k.stages.reduce((t, s) => t + (s.kind === 1 ? s.R1 * s.C1 : (s.R1 + s.R2) * s.C1 + s.R1 * s.C2 * (1 - s.K)), 0);
+
+  function problem() {
+    if (parts()) {
+      if (!(state.r1 > 0)) return "Enter R1.";
+      if (!(state.r2 > 0)) return "Enter R2.";
+      if (!(state.c1 > 0)) return "Enter C1.";
+      if (!(state.c2 > 0)) return "Enter C2.";
+      if (!(state.k >= 1)) return "Enter the gain, 1 or more (1 + R4 / R3; 1 for a follower).";
+      const s = given().stages[0];
+      if (!(s.Q > 0 && isFinite(s.Q))) return `A gain of ${n3(state.k)} makes this stage oscillate: keep it under ${n3(s.kmax)}.`;
+    } else {
+      if (!(state.fc > 0)) return "Enter the corner frequency fc.";
+      if (!(state.c > 0)) return "Enter the capacitor value C.";
+      if (state.given === "equal" && !(state.r3 > 0)) return "Enter R3, the resistor that sets the gain with R4.";
+    }
+    return state.chk > 0 ? "" : "Enter a frequency to check.";
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", WIRE = "#5A6169", GREY = "#8A9099";
+  const ln = (d, c = WIRE, sw = 1.6) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const hRes = (x, y) => `M${x} ${y} L${x + 3} ${y - 6} L${x + 9} ${y + 6} L${x + 15} ${y - 6} L${x + 21} ${y + 6} L${x + 27} ${y - 6} L${x + 33} ${y + 6} L${x + 36} ${y}`;
+  const vRes = (x, y) => `M${x} ${y} L${x + 6} ${y + 3} L${x - 6} ${y + 9} L${x + 6} ${y + 15} L${x - 6} ${y + 21} L${x + 6} ${y + 27} L${x - 6} ${y + 33} L${x} ${y + 36}`;
+  const hCap = (x, y) => `M${x} ${y - 9} V${y + 9} M${x + 6} ${y - 9} V${y + 9}`;
+  const vCap = (x, y) => `M${x - 9} ${y} H${x + 9} M${x - 9} ${y + 6} H${x + 9}`;
+  const gnd = (x, y) => ln(`M${x - 12} ${y} H${x + 12} M${x - 8} ${y + 4} H${x + 8} M${x - 4} ${y + 8} H${x + 4}`);
+  const dot = (x, y) => `<circle cx="${x}" cy="${y}" r="2.6" fill="${WIRE}"/>`;
+  const port = (x, y) => `<circle cx="${x}" cy="${y}" r="3" stroke="${BLUE}" stroke-width="1.6"/>`;
+  // One stage, the one picked in the list: the signal on the line y 70 into the + input of the op-amp (x 190 to 240), the follower's loop (or the gain
+  // resistors R3 and R4, as the non-inverting amplifier draws them) under it, the feedback part over the top from node X to the output.
+  function diagram() {
+    const err = problem(), k = err ? null : calc(), i = k ? Math.min(state.sel, k.stages.length - 1) : 0;
+    const s = k ? k.stages[i] : { kind: parts() || state.order % 2 === 0 ? 2 : 1, K: state.given === "equal" || (parts() && state.k !== 1) ? 2 : 1 };
+    const Y = 70, X = 92, P = 156, OUT = 262, isL = lp();
+    // the colours: given parts blue, the tool's green
+    const g = (p) => (parts() || p === "C1" || p === "R3" || (p === "C2" && !(isL && state.given === "unity")) ? BLUE : GREEN);
+    const v = (p, name = p) => (k && s[p] !== undefined ? `${name} ${si(s[p], p[0] === "R" ? "Ω" : "F")}` : name);
+    let o = `<path d="M190 57 L190 107 L240 82 Z" stroke="${BLUE}" stroke-width="1.8" stroke-linejoin="round"/>`
+      + `<text x="196" y="74" fill="${BLUE}" font-size="12" font-weight="700">+</text><text x="196" y="98" fill="${BLUE}" font-size="12" font-weight="700">−</text>`;
+    o += port(22, Y) + lbl("", 22, 90, "Vin", BLUE) + ln(`M240 82 H284`) + dot(OUT, 82) + port(287, 82) + lbl("", 287, 70, "Vout", BLUE);
+    if (s.kind === 1) {
+      // an RC into a follower: R in the line and C to ground (low-pass), or C in the line and R to ground (high-pass)
+      if (isL) o += ln(`M25 ${Y} H100`) + ln(hRes(100, Y), g("R1"), 1.8) + lbl("sr1", 118, 56, v("R1", "R"), g("R1")) + ln(`M136 ${Y} H190 M${P} ${Y} V92 M${P} 98 V112`) + ln(vCap(P, 92), g("C1"), 2) + lbl("sc1", P - 14, 99, v("C1", "C"), g("C1"), "end") + gnd(P, 112);
+      else o += ln(`M25 ${Y} H117 M123 ${Y} H190`) + ln(hCap(117, Y), g("C1"), 2) + lbl("sc1", 120, 52, v("C1", "C"), g("C1")) + ln(`M${P} ${Y} V84 M${P} 120 V126`) + ln(vRes(P, 84), g("R1"), 1.8) + lbl("sr1", P - 12, 106, v("R1", "R"), g("R1"), "end") + gnd(P, 126);
+      o += dot(P, Y);
+    } else {
+      // the series pair to node X and node P, the feedback part from X over the top to the output, the part from P to ground
+      if (isL) {
+        o += ln(`M25 ${Y} H34 M70 ${Y} H104 M140 ${Y} H190`) + ln(hRes(34, Y), g("R1"), 1.8) + ln(hRes(104, Y), g("R2"), 1.8) + lbl("sr1", 52, 56, v("R1"), g("R1")) + lbl("sr2", 122, 56, v("R2"), g("R2"));
+        o += ln(`M${X} ${Y} V24 H174 M180 24 H${OUT} V82`) + ln(hCap(174, 24), g("C2"), 2) + lbl("sc2", 177, 10, v("C2"), g("C2"));
+        o += ln(`M${P} ${Y} V92 M${P} 98 V112`) + ln(vCap(P, 92), g("C1"), 2) + lbl("sc1", P - 14, 99, v("C1"), g("C1"), "end") + gnd(P, 112);
+      } else {
+        o += ln(`M25 ${Y} H49 M55 ${Y} H119 M125 ${Y} H190`) + ln(hCap(49, Y), g("C1"), 2) + ln(hCap(119, Y), g("C2"), 2) + lbl("sc1", 52, 52, v("C1"), g("C1")) + lbl("sc2", 122, 52, v("C2"), g("C2"));
+        o += ln(`M${X} ${Y} V24 H159 M195 24 H${OUT} V82`) + ln(hRes(159, 24), g("R2"), 1.8) + lbl("sr2", 177, 10, v("R2"), g("R2"));
+        o += ln(`M${P} ${Y} V84 M${P} 120 V126`) + ln(vRes(P, 84), g("R1"), 1.8) + lbl("sr1", P - 12, 106, v("R1"), g("R1"), "end") + gnd(P, 126);
+      }
+      o += dot(X, Y) + dot(P, Y);
+    }
+    let h = 132;
+    if (s.K !== 1) {
+      // the gain: the - input drops to node N, R4 under the op-amp back to the output, R3 straight down to ground
+      const rv = (p) => (k && !parts() ? v(p) : p);
+      o += ln(`M190 94 H178 V124 H196 M232 124 H${OUT} V82 M178 124 V136 M178 172 V180`) + dot(178, 124) + ln(hRes(196, 124), parts() ? BLUE : g("R4"), 1.8) + ln(vRes(178, 136), BLUE, 1.8) + gnd(178, 180)
+        + lbl("sr4", 214, 146, rv("R4"), parts() ? BLUE : g("R4")) + lbl("sr3", 166, 158, rv("R3"), BLUE, "end");
+      if (parts()) o += lbl("", 196, 168, `gain ${n3(state.k)}`, GREY, "start");
+      h = 194;
+    } else o += ln(`M190 94 H178 V124 H${OUT} V82`);
+    if (k && k.stages.length > 1) o += `<text x="4" y="12" fill="${GREY}" font-size="11" font-weight="600">Stage ${i + 1} of ${k.stages.length}</text>`;
+    return `<svg width="310" height="${h}" viewBox="0 0 310 ${h}" fill="none">${o}</svg>`;
+  }
+
+  // The response: a decade either side of fc (or f0), widened to take in the check frequency; the whole filter, and the drawn stage thin and dashed.
+  function chart() {
+    if (problem()) return "";
+    const k = calc(), f0 = k.fc, i = Math.min(state.sel, k.stages.length - 1);
+    const span = Math.min(100, Math.max(10, 1.05 * Math.max(state.chk / f0, f0 / state.chk)));
+    const lo = Math.log(f0 / span), hi = Math.log(f0 * span), N = 200;
+    const fs = Array.from({ length: N + 1 }, (_, j) => Math.exp(lo + ((hi - lo) * j) / N));
+    const all = fs.map((f) => gainDb(k, f)), one = k.stages.length > 1 ? fs.map((f) => stageDb(k.stages[i], f)) : null;
+    const top = Math.max(0, Math.ceil(Math.max(...all, ...(one || [])) / 10) * 10), bot = top - (state.order > 2 && !parts() ? 80 : 60);
+    const X0 = 34, X1 = 296, Y0 = 6, Y1 = 80, xf = (f) => X0 + ((Math.log(f) - lo) / (hi - lo)) * (X1 - X0), yd = (d) => Y0 + (top - Math.min(top, Math.max(bot, d))) * ((Y1 - Y0) / (top - bot));
+    let o = "";
+    const step = top - bot > 50 ? 20 : 10;
+    for (let d = Math.floor(top / step) * step; d >= bot; d -= step) o += ln(`M${X0} ${yd(d).toFixed(1)} H${X1}`, "#22262D", 1) + `<text x="${X0 - 4}" y="${(yd(d) + 3).toFixed(1)}" fill="${GREY}" font-size="9" text-anchor="end">${d > 0 ? "+" + d : d === 0 ? "0" : n3(d)}</text>`;
+    const g3 = 20 * Math.log10(k.gain) - 3;
+    o += ln(`M${X0} ${yd(g3).toFixed(1)} H${X1}`, WIRE, 1).replace('fill="none"', 'fill="none" stroke-dasharray="3 3"');
+    o += ln(`M${xf(f0).toFixed(1)} ${Y0} V${Y1}`, WIRE, 1).replace('fill="none"', 'fill="none" stroke-dasharray="3 3"') + `<text x="${xf(f0).toFixed(1)}" y="${Y1 + 11}" fill="${GREY}" font-size="9" text-anchor="middle">${parts() ? "f0" : "fc"}</text>`;
+    const path = (arr) => arr.map((d, j) => `${j ? "L" : "M"}${xf(fs[j]).toFixed(1)} ${yd(d).toFixed(1)}`).join(" ");
+    if (one) o += ln(path(one), GREY, 1.2).replace('fill="none"', 'fill="none" stroke-dasharray="4 3"');
+    o += ln(path(all), domain.color, 2);
+    if (state.chk > f0 / span && state.chk < f0 * span) o += `<circle cx="${xf(state.chk).toFixed(1)}" cy="${yd(gainDb(k, state.chk)).toFixed(1)}" r="4" fill="${GREEN}" stroke="var(--card)" stroke-width="1.5"/>`;
+    o += `<text x="${X1}" y="${Y1 + 11}" fill="${GREY}" font-size="9" text-anchor="end">${hz(f0 * span)}</text><text x="${X0}" y="${Y1 + 11}" fill="${GREY}" font-size="9" text-anchor="start">${hz(f0 / span)}</text>`;
+    return `<svg width="300" height="94" viewBox="0 0 300 94" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  // What a stage's calculated parts are, by name: the list line and the big result.
+  function stageParts(s) {
+    if (s.kind === 1) return [["R"], [si(s.R1, "Ω")]];
+    if (state.given === "equal") return [["R1 = R2", "R4"], [si(s.R1, "Ω"), si(s.R4, "Ω")]];
+    if (lp()) return [["R1", "R2", "C2"], [si(s.R1, "Ω"), si(s.R2, "Ω"), si(s.C2, "F")]];
+    return [["R1", "R2"], [si(s.R1, "Ω"), si(s.R2, "Ω")]];
+  }
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), gdb = 20 * Math.log10(k.gain), ck = row(`At ${hz(state.chk)}`, db(gainDb(k, state.chk)), "ck");
+    const gb = lp() ? row("Op-amp GBW, at least", hz(gbw(k)), "gb") : row("Op-amp", "its GBW over the gain ends the passband", "gb");
+    const dl = lp() ? row("Delay at low frequencies", si(delay(k), "s"), "dl") : "";
+    if (parts()) {
+      // the -3 dB point x^2 = a + sqrt(a^2 + 1), written without the cancellation that a low Q (a large negative a) would bring
+      const s = k.stages[0], Q = s.Q, a = 1 - 1 / (2 * Q * Q), xc = Math.sqrt(a >= 0 ? a + Math.sqrt(a * a + 1) : 1 / (Math.sqrt(a * a + 1) - a));
+      const peak = Q > Math.SQRT1_2 ? { x: Math.sqrt(a), g: 20 * Math.log10(Q / Math.sqrt(1 - 1 / (4 * Q * Q))) } : null;
+      const near = SK_Q2.reduce((m, x) => (Math.abs(Math.log(x[1] / Q)) < Math.abs(Math.log(m[1] / Q)) ? x : m));
+      const rows = row("Peak", peak ? `${db(peak.g)} at ${hz(lp() ? s.f0 * peak.x : s.f0 / peak.x)}` : "none: Q is 0.707 or less", "pk")
+        + row("Closest response", `${near[0]} (Q ${n3(near[1])})`, "rs") + row("Slope far from f0", `${lp() ? "−" : "+"}40 dB per decade`, "sl")
+        + row("Highest stable gain", n3(s.kmax), "km") + gb + dl + ck;
+      return `<div class="result-field">
+          <div class="result-head"><span class="label">Natural frequency f0</span></div>
+          <div class="result-value"><span class="num" data-res="big">${hz(s.f0)}</span></div>
+          <div class="result-sub" data-res="sub">Q ${n3(Q)}, a ${SK_MODES[state.mode].toLowerCase()} with a gain of ${n3(state.k)} (${db(gdb)})</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Q", n3(Q), "c1")}${cell("−3 dB at", hz(lp() ? s.f0 * xc : s.f0 / xc), "c2")}${cell("Gain", db(gdb), "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${SK_NOTE[state.mode]}</div></div>`;
+    }
+    const n = state.order, rip = SK_RIPPLE[state.resp], qmax = Math.max(...k.stages.map((s) => s.Q || 0));
+    const fr = lp() ? state.fc / k.w3 : state.fc * k.w3;
+    const band = rip ? `ripples ${rip} dB (0 to ${n % 2 ? "−" : "+"}${rip} dB) ${lp() ? "up to" : "above"} ${hz(fr)}` : state.resp === "bessel" ? "no ripple, a nearly constant delay" : "flat, no ripple";
+    let head;
+    if (k.stages.length === 1) {
+      const s = k.stages[0], [names, vals] = stageParts(s);
+      const sub = state.given === "equal" ? `with R3 ${si(s.R3, "Ω")} (gain ${n3(s.K)}) and C1 = C2 = ${si(s.C1, "F")}, Q ${n3(s.Q)}`
+        : lp() ? `with C1 ${si(s.C1, "F")} to ground and C2 the next E6 value over 4 Q² C1, Q ${n3(s.Q)}` : `with C1 = C2 = ${si(s.C1, "F")}, Q ${n3(s.Q)}`;
+      head = `<div class="result-head"><span class="label">${names.join(", ")}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${vals.join(" · ")}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>`;
+    } else {
+      // the parts, one tight line per stage; a tap draws that stage
+      head = `<div class="result-head"><span class="label">Stages, gentlest first · tap one to draw it</span></div>` + k.stages.map((s, j) => {
+        const [names, vals] = stageParts(s), on = j === Math.min(state.sel, k.stages.length - 1);
+        return `<div class="notation-row" data-stage="${j}" style="padding-top:0;padding-bottom:0;cursor:pointer;${on ? `color:${GREEN};font-weight:700` : ""}"><span>${j + 1}${s.kind === 1 ? ", RC" : `, Q ${n3(s.Q)}`}: ${names.join(", ")}</span><span data-res="${j ? `s${j + 1}` : "big"}">${vals.join(" · ")}</span></div>`;
+      }).join("");
+    }
+    const rows = row("Passband", band, "bd") + row("Slope far from fc", `${lp() ? "−" : "+"}${20 * n} dB per decade`, "sl") + gb + dl + ck;
+    return `<div class="result-field">${head}</div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Highest Q", n3(qmax), "c1")}${cell("Gain", db(gdb), "c2")}${cell("Stages", `${Math.floor(n / 2)}${n % 2 ? " + RC" : ""}`, "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${SK_NOTE[state.mode]}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram() + chart();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    wireStages();
+  }
+  function wireStages() {
+    app.querySelectorAll("[data-stage]").forEach((el) => { el.onclick = () => { state.sel = +el.dataset.stage; show(); }; });
+  }
+
+  // The check frequency follows twice fc (low-pass) or half of it (high-pass), to three figures, until it is typed over.
+  function follow() {
+    if (!state.chkAuto || problemNoChk()) return;
+    const f = calc().fc;
+    state.chk = Number((lp() ? 2 * f : f / 2).toPrecision(3));
+  }
+  function problemNoChk() { const c = state.chk; state.chk = 1; const p = problem(); state.chk = c; return p; }
+
+  const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, { chkAuto: true, sel: 0 }, st); state.u = u; follow(); paint(); };
+  useExamples([
+    { title: "TI's 3 kHz Chebyshev low-pass", note: "2nd order, 3 dB ripple, C1 22 nF: C2 150 nF, R1 1.24 kΩ, R2 1.33 kΩ (TI prints 1.26, 1.30).",
+      apply: example({ mode: "lp", given: "unity", resp: "c3", order: 2, fc: 3e3, c: 22e-9, u: { f: "kHz", c: "nF", r: "kΩ" } }) },
+    { title: "TI's 1 kHz Bessel high-pass", note: "3rd order, 100 nF: the RC 2.11 kΩ, then R1 3.18 kΩ and R2 1.67 kΩ, as TI's example 16-4.",
+      apply: example({ mode: "hp", given: "unity", resp: "bessel", order: 3, fc: 1e3, c: 100e-9, u: { f: "kHz", c: "nF", r: "kΩ" } }) },
+    { title: "Karki's 1 kΩ, 1 nF stage", note: "Equal parts as a follower: f0 159 kHz and Q 0.5, as TI's SLOA024 lab circuit.",
+      apply: example({ mode: "lp", given: "parts", r1: 1e3, r2: 1e3, c1: 1e-9, c2: 1e-9, k: 1, u: { f: "kHz", c: "nF", r: "kΩ" } }) },
+    { title: "A 20 kHz anti-alias filter", note: "8th-order Butterworth, 1 nF: four stages, Q up to 2.56; 40 kHz is 48.2 dB down.",
+      apply: example({ mode: "lp", given: "unity", resp: "butter", order: 8, fc: 20e3, c: 1e-9, u: { f: "kHz", c: "nF", r: "kΩ" } }) },
+    { title: "Butterworth set by the gain", note: "Equal parts, 1 kHz, 10 nF: R 15.9 kΩ, gain 1.59, so R4 = 0.586 R3 (TI's table prints 0.568).",
+      apply: example({ mode: "lp", given: "equal", resp: "butter", order: 2, fc: 1e3, c: 10e-9, r3: 10e3, u: { f: "kHz", c: "nF", r: "kΩ" } }) },
+    { title: "A 4th-order rumble filter", note: "High-pass, 1 dB Chebyshev at 20 Hz, 470 nF: 10 Hz is 35.7 dB down; the second stage's Q is 3.56.",
+      apply: example({ mode: "hp", given: "unity", resp: "c1", order: 4, fc: 20, c: 470e-9, u: { f: "Hz", c: "nF", r: "kΩ" } }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, hint = "") => {
+      const kind = KIND[key], u = kind ? sel(`data-u="${kind}"`, Object.keys(SK_U[kind]).map((x) => [x, x]), state.u[kind]) : "";
+      const v = kind ? state[key] / SK_U[kind][state.u[kind]] : state[key];
+      return `<div class="field"><label><span class="field-name">${name}</span>${hint}</label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${u}</div></div>`;
+    };
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const chkBox = box("Check at", "chk", state.chkAuto ? `<span class="field-hint" data-hint="chk">${lp() ? "2" : "½"} ${parts() ? "f0" : "fc"}</span>` : "");
+    const fields = parts() ? pair(box("R1", "r1"), box("R2", "r2")) + pair(box(lp() ? "C1, to ground" : "C1", "c1"), box(lp() ? "C2, feedback" : "C2", "c2")) + pair(box("Gain", "k", '<span class="field-hint">1: follower</span>'), chkBox)
+      : pair(box("Corner fc", "fc", '<span class="field-hint">−3 dB</span>'), box("Capacitor C", "c")) + (state.given === "equal" ? pair(box("R3, gain", "r3"), chkBox) : pair(chkBox, ""));
+    const heading = parts() ? "" : `${sel('class="label-select" data-resp', Object.entries(SK_RESP), state.resp)} ${sel('class="label-select" data-order', [2, 3, 4, 5, 6, 7, 8].map((n) => [n, `order ${n}`]), state.order)}`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Active low- and high-pass, order 2 to 8")}
+
+      ${pillRow(Object.entries(SK_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box" style="flex-direction:column;gap:2px">${diagram()}${chart()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${heading}</span>
+      </div>
+      ${fields}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${sel('class="label-select" data-given', Object.entries(SK_GIVEN), state.given)}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Stage: K / (1 + a s + b s²), s = j f / fc", "a = ωc [C1 (R1 + R2) + (1 − K) R1 C2]", "b = ωc² R1 R2 C1 C2;  Q = √b / a", "f0 = 1 / (2π √(R1 R2 C1 C2))", "K = 1: R1 + R2 = a / (2π fc C1)", "R1 R2 = b / ((2π fc)² C1 C2)", "C2 ≥ C1 · 4b / a²",
+          "High-pass: R1 = 1 / (π fc C a)", "R2 = a / (4π fc C b)", "Equal parts: R = √b / (2π fc C)", "K = 3 − 1 / Q = 1 + R4 / R3", "Op-amp: fT ≥ 100 · K · fc · ki"],
+        "A Sallen-Key stage is a second-order filter from two resistors, two capacitors and an op-amp wired as a follower (or with a small gain K = 1 + R4 / R3). For a low-pass, R1 and R2 are in the line, C1 goes from the op-amp's input to ground and C2 from the point between the resistors back to the output: near the corner that positive feedback lifts the response, so the stage can have any Q, which two plain RC sections cannot. A high-pass swaps the resistors and the capacitors. A filter of order n is n / 2 such stages in a row (and one RC with a follower when n is odd), each built for its own pair of coefficients a and b from TI's tables, which set the stage's Q = √b / a and its natural frequency fc / √b; together they give the chosen response, 3 dB down at fc: Butterworth (flattest), Chebyshev (steeper, with a ripple in the passband) or Bessel (gentlest, with the cleanest step response). Unity gain is the usual choice for a Q up to about 3; C1 is the value you give, C2 the next E6 value at or above 4b / a² times it, and the two resistors follow. Equal parts (R1 = R2, C1 = C2) make the gain set the Q, K = 3 − 1 / Q, sensitive to R3 and R4 as K nears 3 (3 or more oscillates). The op-amp needs a gain-bandwidth well above the filter's: TI's rule is 100 times the stage's gain times its corner, more for a Q over 1."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    wireStages();
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); follow(); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value), kind = KIND[key];
+        state[key] = kind ? v * SK_U[kind][state.u[kind]] : v;
+        if (key === "chk") { state.chkAuto = false; const h = app.querySelector('[data-hint="chk"]'); if (h) h.remove(); }
+        else if (state.chkAuto) { follow(); const b = app.querySelector('input[data-key="chk"]'); if (b) b.value = fmt(state.chk / SK_U.f[state.u.f]); }
+        show();
+      };
+    });
+    app.querySelectorAll("select[data-u]").forEach((el) => {
+      el.onchange = () => { const kind = el.getAttribute("data-u"); state.u[kind] = el.value; setPref(C, `u${kind}`, el.value); paint(); };
+    });
+    const resp = app.querySelector("select[data-resp]"), order = app.querySelector("select[data-order]");
+    if (resp) resp.onchange = (e) => { state.resp = e.target.value; setPref(C, "resp", state.resp); paint(); };
+    if (order) order.onchange = (e) => { state.order = +e.target.value; state.sel = 0; setPref(C, "order", state.order); paint(); };
+    // Switching to the parts mode carries the drawn stage over, to three figures (a first-order stage carries nothing).
+    app.querySelector("select[data-given]").onchange = (e) => {
+      if (e.target.value === "parts" && !parts() && !problem()) {
+        const st = design().stages, t = st[Math.min(state.sel, st.length - 1)], r3 = (v) => Number(v.toPrecision(3));
+        if (t.kind === 2) Object.assign(state, { r1: r3(t.R1), r2: r3(t.R2), c1: r3(t.C1), c2: r3(t.C2), k: r3(t.K) });
+      }
+      state.given = e.target.value; state.sel = 0; setPref(C, "given", state.given); follow(); paint();
     };
   }
 

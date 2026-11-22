@@ -71,6 +71,7 @@ will key on, since that is the id the app already holds for each tool.
 - Op-amps → [Differentiator](#differentiator)
 - Op-amps → [Summing](#summing)
 - Op-amps → [Differential](#differential)
+- Op-amps → [Sallen-Key filter](#sallen-key)
 - Optoelectronics → [Photocell / LDR](#photocell--ldr)
 - Optoelectronics → [Optocoupler](#optocoupler)
 - Optoelectronics → [Wavelength ↔ color](#wavelength--color)
@@ -5063,6 +5064,131 @@ The review made these changes:
 - It limited the units to real ones and remembers them.
 - It rewrote the note in plain words and added examples.
 - The tool was renamed Differential, on Pierre's request.
+
+[↑ Index](#index)
+
+---
+
+<a id="sallen-key"></a>
+## Sallen-Key filter
+
+`calc: sallen-key` · Active & semiconductor devices › Op-amps
+
+### What it computes
+
+Active low-pass and high-pass filters built from Sallen-Key stages: an op-amp, two resistors and two capacitors per stage, for an order of 2 to 8. Two pills,
+**Low-pass** and **High-pass**. The **Your inputs** heading picks the response (Butterworth, Bessel, or Chebyshev with 0.5, 1, 2 or 3 dB of ripple) and the order.
+The drawing shows one stage with its values; under it, the response of the whole filter in dB, with the drawn stage's own response dashed, the −3 dB line and a
+dot at the check frequency.
+
+- **Design: unity gain** (the Output heading's picker): give the corner frequency fc (where the whole filter is 3 dB down) and a capacitor value C. Every stage is an
+  op-amp follower. Low-pass: C1 (to ground) is C, C2 (the feedback capacitor) is the next E6 value at or above 4b / a² times C, and the tool gives R1 and R2.
+  High-pass: both capacitors are C and the tool gives R1 (to ground) and R2 (the feedback resistor).
+- **Design: equal parts:** R1 = R2 = R and C1 = C2 = C, the gain of each stage setting its Q; give R3 too, and the tool gives R1 = R2 and R4 (K = 1 + R4 / R3).
+- **Given: R, C and gain:** one stage from its four parts and its gain; the big result is the natural frequency f0, with Q, the −3 dB point, the peak, the closest
+  standard response and the highest gain before it oscillates.
+- **The result.** For order 2, the big result is the stage's calculated parts. From order 3, one line per stage, gentlest Q first (the RC stage of an odd order first);
+  a tap on a line draws that stage. Cells: the highest Q, the passband gain, the number of stages. Rows: the passband (flat, the ripple and where it ends, or Bessel's
+  nearly constant delay), the slope far from fc, the op-amp's gain-bandwidth needed (low-pass; for a high-pass the op-amp's own bandwidth ends the passband), the delay at
+  low frequencies (low-pass), the gain at the check frequency.
+- **Units:** Hz to MHz, pF to µF, Ω to MΩ (for R3 and the given resistors). **Proposed:** the check frequency follows 2 fc (low-pass) or fc / 2 (high-pass) until you
+  type it. Switching to *Given: R, C and gain* carries the drawn stage's parts and gain over, to three figures.
+- **Remembered:** the pill, what is given, the response, the order and the units.
+
+Examples: TI's 3 kHz Chebyshev low-pass and 1 kHz Bessel high-pass, Karki's 1 kΩ, 1 nF stage, a 20 kHz anti-alias filter, a Butterworth set by the gain and a
+4th-order rumble filter.
+
+### Terms
+
+- **Sallen-Key stage:** a second-order filter with an op-amp as a follower (or a small gain). In a low-pass, R1 and R2 are in the line, C1 goes from the op-amp's
+  input to ground and C2 from the point between the resistors back to the output. Near the corner that positive feedback lifts the response, so the stage can
+  have any Q; two plain RC sections cannot reach a Q of 0.5. A high-pass swaps the resistors and the capacitors.
+- **Order:** the number of poles; each adds 20 dB per decade to the slope far from fc. An order n is n / 2 stages, plus one RC with a follower when n is odd.
+- **Coefficients a and b:** each stage is K / (1 + a s + b s²) with s = j f / fc (low-pass; f and fc swap for a high-pass). They come from the response and the
+  order. The stage's **Q** is √b / a, and its **natural frequency** f0 = fc / √b (low-pass) or fc √b (high-pass).
+- **Butterworth:** the flattest passband. **Chebyshev:** a set ripple in the passband for steeper sides; an even order ripples above the gain at DC, an odd one below.
+  **Bessel:** the gentlest slope, but a nearly constant delay, so steps pass with almost no overshoot.
+- **Corner frequency fc:** where the whole filter is 3 dB down from its passband gain, for every response (TI's convention; a Chebyshev filter's ripple band ends a
+  little before it).
+- **Gain K:** 1 + R4 / R3, R3 from the op-amp's − input to ground and R4 from it to the output; 1 (no R3, R4 a wire) for a follower.
+- **GBW:** the op-amp's gain-bandwidth product, where its own gain falls to 1.
+
+### Sources
+
+- **Thomas Kugelstadt, "Active Filter Design Techniques", chapter 16 of Texas Instruments' "Op Amps for Everyone" (SLOA088; the 2002 copy kept by the Internet Archive,
+  ti.com no longer serves it).** Its text was read, and its equations and tables were read on the rendered pages (pages 15–18, 24–27, 53–62). Used: the cascade
+  A0 / Π(1 + a_i s + b_i s²) and Q = √b / a; the general Sallen-Key low-pass A0 / (1 + ωc [C1 (R1 + R2) + (1 − A0) R1 C2] s + ωc² R1 R2 C1 C2 s²) and its figure
+  (C1 to ground, C2 to the output, R3 and R4 setting A0 = 1 + R4 / R3); the unity-gain design R1,2 = (a C2 ∓ √(a² C2² − 4 b C1 C2)) / (4π fc C1 C2) with
+  C2 ≥ C1 · 4b / a²; the equal-part design R = √b / (2π fc C), A0 = 3 − 1 / Q; the high-pass and its figure (R1 to ground, R2 to the output) with
+  R1 = 1 / (π fc C a), R2 = a / (4π fc C b); the first-order stages R = a / (2π fc C) and 1 / (2π fc a C); Tables 16-4 to 16-9 (the coefficients, n = 1 to 10);
+  section 16.8.4, the op-amp rule fT = 100 · Gain · fc · ki for a first-order stage or a Q under 1, fT = 100 · Gain · (fc / a) · √((Q² − 0.5) / (Q² − 0.25))
+  above 1; examples 16-2, 16-3, 16-4.
+- **James Karki, "Analysis of the Sallen-Key Architecture" (TI SLOA024B, ti.com, read as text):** the general circuit and its transfer function with a gain K; the
+  low- and high-pass transfer functions; Q infinite at K = 3 for equal parts, and oscillation above; at high frequency the op-amp's output impedance limits a
+  low-pass's attenuation and its open-loop gain ends a high-pass's passband; the lab circuit (1 kΩ, 1 nF, fc 159 kHz, Q 1/2).
+- **The Wikipedia article "Sallen–Key topology" (read as its wiki source, so its formulas are as written):** the same low-pass with the opposite naming of the
+  capacitors, which the tool does not follow (it uses TI's).
+
+### Why the formulas are these
+
+**The coefficients are computed, not copied.** The poles of each prototype: Butterworth on the unit circle; Chebyshev, sinh v sin θ and cosh v cos θ with
+v = asinh(1 / ε) / n and ε² = 10^(ripple / 10) − 1; Bessel, the roots of the reverse Bessel polynomial (found by the Durand–Kerner iteration). Each pair of poles makes
+a stage 1 + a s + b s², a = 2σ / |p|², b = 1 / |p|²; a real pole makes a = 1 / σ. Then everything is rescaled so the whole filter is 3 dB down at s = j (the
+frequency found by bisection), which is how TI's tables are normalised. Compared with Tables 16-4 to 16-9 for n = 2 to 8 (about 200 entries), they agree to the printed
+digits except for four misprints, all confirmed on the rendered pages and by the other entries in the same row:
+
+| Table | Entry | Printed | Computed |
+|---|---|---|---|
+| 16-4 Bessel | n = 7, stage 1, k | 1.648 | 1.684 (= 1 / a, a = 0.5937 as printed) |
+| 16-6 Chebyshev 0.5 dB | n = 3, stage 2, a | 0.0640 | 0.6402 (the printed Q 1.71 needs it) |
+| 16-7 Chebyshev 1 dB | n = 7, stage 4, b | 1.0432 | 1.0423 |
+| 16-8 Chebyshev 2 dB | n = 8, stage 4, Q | 18.39 | 18.69 (= √b / a with a and b as printed) |
+
+Table 16-1's resistor ratios R4 / R3 for the equal-part design are 2 − 1 / Q: Bessel 0.268 as printed, but Butterworth 0.586 (printed 0.568) and 3 dB Chebyshev 1.234
+(printed 0.234).
+
+**Each stage** is designed with TI's equations as quoted. The response drawn and checked is computed from the parts themselves, with the transfer functions with a gain
+K: low-pass K / (1 + jω [(R1 + R2) C1 + R1 C2 (1 − K)] − ω² R1 R2 C1 C2), high-pass −K ω² R1 R2 C1 C2 / (1 + jω [R2 (C1 + C2) + R1 C2 (1 − K)] − ω² R1 R2 C1 C2). The
+stage is unstable when the middle term's bracket is zero or negative, which gives the highest stable gain 1 + (R1 + R2) C1 / (R1 C2) (low-pass) or
+1 + R2 (C1 + C2) / (R1 C2) (high-pass); 3 for equal parts. In the parts mode, the −3 dB point, the peak and its place are those of a second-order section (see the RLC
+filter). The delay at low frequencies is the sum of the stages' s coefficients (each stage delays by a / ωc at DC; derived). The op-amp row applies TI's rule to every stage
+and shows the largest; TI's two pieces do not join at Q = 1 (it is a rule of thumb), and the tool uses them as printed.
+
+### Assumptions and limits
+
+- **An ideal op-amp** in the response: infinite gain and bandwidth, no output impedance, no input current. A real one adds what Karki shows: the low-pass's stop band stops
+  falling (it leaks through the output impedance, at tens of MHz for fast op-amps), and the high-pass's passband ends near GBW / gain. Pick the op-amp with the GBW row.
+- **Exact parts.** The resistors are exact, not rounded to a series; with C2 at the next E6 value they come out unequal. **Sensitivity:** a high Q is hard to hit. TI
+  uses unity gain for a Q up to about 3; with equal parts, K = 2.9 gives Q 10, and 1 % resistors can make it 16 (Karki). High-order Chebyshev filters ask for this.
+- **The source drives the filter directly** and the next stage loads the op-amp only. Any source resistance adds to R1.
+- **Display.** Three figures; attenuations under 0.00005 dB show as 0 dB.
+
+### How it was checked
+
+161 cases, the expected values from a Python implementation that replays each case's taps and typing. For every case, every stage is also solved as a circuit by nodal
+analysis (an ideal op-amp, Vout = K V+) at five frequencies and compared with the transfer function the tool uses and with K / (1 + a s + b s²) from the coefficients
+(to 1 part in 10⁹). Every design's whole response is found to be 3 dB down at fc by bisection (to 1 part in 10⁷), and the parts mode's −3 dB point and peak by
+bisection and a golden-section search. The cases: the opening screen and the pickers; 108 designs over every response and orders 2 to 8, low- and high-pass, unity gain
+and equal parts; six other frequencies, capacitors and units; five stages tapped and drawn; 14 stages given by their parts; the carry-over into the parts mode; the check
+frequency; nine refusals and three unstable gains; the six examples and the formula-search card.
+
+540 more cases (three batches of 180: random filters, parts, gains and units over six decades of frequency, a tenth of them refused) compared every figure with the Python
+implementation; they were run and not kept. They found a loss of precision at very low Q in the −3 dB point (now written without the cancellation).
+
+Published answers reproduced (TI's, as printed on the rendered pages):
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| 5th-order Butterworth low-pass, 50 kHz: the RC stage with 1 nF | TI 16-3 | 3.18 kΩ | 3.18 kΩ |
+| its stages with 820 pF and 1.5 nF, 330 pF and 4.7 nF | TI 16-3 | C2 ≥ 1.26 nF, 3.46 nF; 1.87 kΩ, 4.42 kΩ; 1.45 kΩ, 4.51 kΩ | the same (Python check, TI's capacitors) |
+| 3rd-order Bessel high-pass, 1 kHz, 100 nF | TI 16-4 | 2.105 kΩ; 3.18 kΩ, 1.67 kΩ | 2.11 kΩ; 3.18 kΩ, 1.67 kΩ |
+| 2nd-order 3 dB Chebyshev low-pass, 3 kHz, 22 nF | TI 16-2 | C2 150 nF; 1.26 kΩ, 1.30 kΩ | 150 nF; 1.24 kΩ, 1.33 kΩ (see below) |
+| op-amp for a 5th-order 3 dB Chebyshev, 10 kHz, gain 2 | TI 16.8.4 | 17 MHz | 17 MHz (Python check) |
+| 1 kΩ, 1 kΩ, 1 nF, 1 nF, follower | Karki | 159 kHz, Q 1/2 | 159 kHz, Q 0.5 |
+
+Example 16-2 is the one disagreement. TI's resistors give the right sum and product (R1 + R2 and R1 R2, which set fc and Q) within 0.5 %, but not the right split.
+C2 = 150 nF is within 0.2 % of its minimum, so the square root in the formula is of a near-zero difference and magnifies any rounding in TI's working. The formula as
+printed gives 1.24 kΩ and 1.33 kΩ; both pairs make the same filter within a fraction of a percent.
 
 [↑ Index](#index)
 
