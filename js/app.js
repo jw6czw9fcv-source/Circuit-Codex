@@ -28196,7 +28196,7 @@ function renderLcFilter(domain, tool, favId) {
     let o = `<circle cx="22" cy="71" r="11" stroke="${BLUE}" stroke-width="1.6"/>` + ln("M16 71 q3 -7 6 0 q3 7 6 0", BLUE, 1.4);
     o += ln(`M22 60 V${Y} H34 M70 ${Y} H${x0}`) + ln(hRes(34, Y), BLUE, 1.8) + lbl("prs", 52, 16, `Rs ${si(state.rs, "Ω")}`, BLUE);
     const rlTone = k && k.load !== 1 ? GREEN : BLUE;
-    o += ln(`M22 82 V${G} H${xl}`) + ln(`M${x0 + 160} ${Y} H${xl} M${xl} ${Y} V52 M${xl} 88 V${G}`) + ln(vRes(xl, 52), rlTone, 1.8) + lbl("prl", xl, 20, `RL ${si(k ? k.rl : state.rs, "Ω")}`, rlTone, "end");
+    o += ln(`M22 82 V${G} H${xl}`) + ln(`M${x0 + 160} ${Y} H${xl} M${xl} ${Y} V52 M${xl} 88 V${G}`) + ln(vRes(xl, 52), rlTone, 1.8) + lbl("prl", xl, 4, `RL ${si(k ? k.rl : state.rs, "Ω")}`, rlTone, "end");   // above a tank in the line, whose coil reaches y 11
     o += ln(`M22 ${G} V${G + 6} M14 ${G + 6} H30 M17 ${G + 10} H27 M20 ${G + 14} H24`);
     const c3 = (x, y, v) => (v ? `M${x} ${y} a3.5 3.5 0 0 1 0 7 a3.5 3.5 0 0 1 0 7 a3.5 3.5 0 0 1 0 7` : `M${x} ${y} a3.5 3.5 0 0 1 7 0 a3.5 3.5 0 0 1 7 0 a3.5 3.5 0 0 1 7 0`);
     const secs = k ? k.secs : [];
