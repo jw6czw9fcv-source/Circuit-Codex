@@ -699,6 +699,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rc-filter") return renderRcFilter(domain, tool, favId);
   if (calcId === "rl-filter") return renderRlFilter(domain, tool, favId);
   if (calcId === "lc-filter") return renderLcFilter(domain, tool, favId);
+  if (calcId === "rlc-filter") return renderRlcFilter(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -28003,7 +28004,7 @@ function renderRlFilter(domain, tool, favId) {
   paint();
 }
 
-// ---------- LC filter (band-pass/notch) ----------
+// ---------- LC filter ----------
 // One inductor and one capacitor resonating between a source resistance and a load: a band-pass (series LC in the line, or a parallel LC "tank" across the
 // load) or a notch (series LC from the line to ground, a "trap", or a tank in the line). Given the centre frequency and the -3 dB bandwidth it designs L and
 // C; given L and C it finds the centre, the bandwidth and the edges. Sources, as read this session:
@@ -28408,6 +28409,280 @@ function renderLcFilter(domain, tool, favId) {
       if (!problem()) {
         const k = calc(), r3 = (v) => Number(v.toPrecision(3));
         if (e.target.value === "lc") { state.l = r3(k.L); state.c = r3(k.C); } else if (isFinite(k.bw)) { state.f0 = r3(k.f0); state.bw = r3(k.bw); }
+      }
+      state.given = e.target.value; setPref(C, "given", state.given); follow(); paint();
+    };
+  }
+
+  follow();
+  paint();
+}
+
+// ---------- RLC filter ----------
+// A series R, L and C driven by a voltage source, the output taken across one of them into a high-impedance load: across C a low-pass, across L a high-pass,
+// across R a band-pass, across L and C together a notch. All four share the natural frequency f0 = 1 / (2 pi sqrt(L C)), the Q = sqrt(L / C) / R and the
+// damping ratio zeta = 1 / (2 Q) = (R / 2) sqrt(C / L). Sources, as read this session: Tony R. Kuphaldt, "Lessons in Electric Circuits", vol. II, chapter 6
+// "Resonance" (ibiblio.org, read as text): series resonance, Q = X / R, the bandwidth between the half-power points BW = f0 / Q; the Wikipedia article
+// "RLC circuit" (read as text; its formulas did not come through the text extraction, only their words): the four filters by the element the output is
+// taken across, the damping factor (zeta = 1 critical, under 1 underdamped and ringing at the damped frequency, over 1 overdamped), Q the inverse of the
+// fractional bandwidth. Derived here from the voltage divider H = Z_out / (R + j w L + 1 / (j w C)), with x = f / f0: low-pass 1 / (1 - x^2 + j x / Q),
+// high-pass -x^2 / (...), band-pass (j x / Q) / (...), notch (1 - x^2) / (...); the low- and high-pass peak above Q = 1 / sqrt 2, by Q / sqrt(1 - 1 / 4Q^2)
+// at x = sqrt(1 - 1 / 2Q^2) (or its inverse); their -3 dB point at x^2 = 1 - 1 / 2Q^2 + sqrt((1 - 1 / 2Q^2)^2 + 1) (or its inverse); the band-pass and the
+// notch both have their -3 dB edges at f0 (sqrt(1 + 1 / 4Q^2) -/+ 1 / 2Q); the low-pass's step overshoot exp(-pi zeta / sqrt(1 - zeta^2)), the ringing at
+// f0 sqrt(1 - zeta^2), the decay time constant 2L / R. Checked against the circuit with complex impedances by the twin.
+const RLC_MODES = { lp: "Low-pass", hp: "High-pass", bp: "Band-pass", notch: "Notch" };
+const RLC_GIVEN = { rlc: "Given: R, L and C", fql: "Given: f0, Q and L", fqc: "Given: f0, Q and C" };
+const RLC_U = {
+  f: { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 },
+  r: { "Ω": 1, "kΩ": 1e3 },
+  l: { nH: 1e-9, "µH": 1e-6, mH: 1e-3, H: 1 },
+  c: { pF: 1e-12, nF: 1e-9, "µF": 1e-6 },
+};
+const RLC_NOTE = {
+  lp: "With the output across the capacitor, low frequencies pass (C is nearly an open circuit) and high ones are shorted, falling 40 dB for every tenfold step past f0, twice as steep as an RC filter. Q sets the shape around f0: above 0.707 the response peaks before it falls and a step makes it ring and overshoot; 0.707 is the flattest (Butterworth); below 0.5 it is overdamped and slow. Q = √(L / C) / R, the damping ratio ζ = 1 / (2Q).",
+  hp: "With the output across the inductor, high frequencies pass (L is nearly an open circuit) and low ones are shorted, rising 40 dB for every tenfold step up to f0. Q sets the shape around f0: above 0.707 the response peaks just above f0; 0.707 is the flattest (Butterworth); below 0.5 the circuit is overdamped. Q = √(L / C) / R, the damping ratio ζ = 1 / (2Q).",
+  bp: "With the output across the resistor, the current is what passes: largest at f0, where the reactances of L and C cancel and the whole input appears across R, smaller either side. The band between the −3 dB edges f1 and f2 (half the power) is f0 / Q wide, narrow for a small R; the edges are not symmetric about f0: f1 f2 = f0². Q = √(L / C) / R.",
+  notch: "With the output across L and C together, their reactances cancel at f0, so the output there falls to nothing: a notch, while other frequencies pass. Between the −3 dB edges the notch is f0 / Q wide, narrow for a small R. A real coil's resistance keeps it from going to zero. Q = √(L / C) / R.",
+};
+
+function renderRlcFilter(domain, tool, favId) {
+  const C = "rlc-filter";
+  const state = {
+    mode: pref(C, "mode", "lp", Object.keys(RLC_MODES)),
+    given: pref(C, "given", "rlc", Object.keys(RLC_GIVEN)),
+    u: { f: pref(C, "uf", "kHz", Object.keys(RLC_U.f)), r: pref(C, "ur", "Ω", Object.keys(RLC_U.r)), l: pref(C, "ul", "mH", Object.keys(RLC_U.l)), c: pref(C, "uc", "µF", Object.keys(RLC_U.c)) },
+    r: 100, l: 10e-3, c: 1e-6, f0: 1e3, q: 0.707, chk: 3.18e3, chkAuto: true,
+  };
+  const KIND = { r: "r", l: "l", c: "c", f0: "f", chk: "f", q: "" };
+  const PI = Math.PI;
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const hz = (v) => si(v, "Hz");
+  const db = (v) => (v === -Infinity ? "−∞ dB" : Math.abs(v) < 5e-5 ? "0 dB" : `${v > 0 ? "+" : ""}${n3(v)} dB`);
+  const pct = (v) => `${n3(v * 100)} %`;
+
+  // ---------------- the numbers ----------------
+  function calc() {
+    let R, L, Cc, f0, Q;
+    if (state.given === "rlc") { R = state.r; L = state.l; Cc = state.c; f0 = 1 / (2 * PI * Math.sqrt(L * Cc)); Q = Math.sqrt(L / Cc) / R; }
+    else {
+      f0 = state.f0; Q = state.q;
+      const w0 = 2 * PI * f0;
+      if (state.given === "fql") { L = state.l; Cc = 1 / (w0 * w0 * L); } else { Cc = state.c; L = 1 / (w0 * w0 * Cc); }
+      R = (w0 * L) / Q;
+    }
+    const z = 1 / (2 * Q), w0 = 2 * PI * f0, k = { R, L, C: Cc, f0, Q, z, x0: w0 * L };
+    const a = 1 - 1 / (2 * Q * Q);
+    k.peak = Q > Math.SQRT1_2 ? { x: Math.sqrt(a), g: 20 * Math.log10(Q / Math.sqrt(1 - 1 / (4 * Q * Q))) } : null;
+    k.xc = Math.sqrt(a + Math.sqrt(a * a + 1));                       // the low-pass's -3 dB point over f0
+    const h = Math.sqrt(1 + 1 / (4 * Q * Q)), e2 = h + 1 / (2 * Q);
+    k.f2 = f0 * e2; k.f1 = f0 / e2; k.bw = f0 / Q;                     // the band-pass and notch edges (f1 = f0^2 / f2)
+    k.fd = z < 1 ? f0 * Math.sqrt(1 - z * z) : NaN;
+    k.tau = (2 * L) / R;
+    k.over = z < 1 ? Math.exp((-PI * z) / Math.sqrt(1 - z * z)) : 0;
+    return k;
+  }
+  // The output over the input, in dB, at a frequency.
+  function gainDb(k, f) {
+    const x = f / k.f0, re = 1 - x * x, im = x / k.Q, den = Math.hypot(re, im);
+    const num = state.mode === "lp" ? 1 : state.mode === "hp" ? x * x : state.mode === "bp" ? x / k.Q : Math.abs(re);
+    return num > 0 ? 20 * Math.log10(num / den) : -Infinity;
+  }
+
+  function problem() {
+    if (state.given === "rlc") {
+      if (!(state.r > 0)) return "Enter the resistance.";
+      if (!(state.l > 0)) return "Enter the inductance.";
+      if (!(state.c > 0)) return "Enter the capacitance.";
+    } else {
+      if (!(state.f0 > 0)) return "Enter the natural frequency f0.";
+      if (!(state.q > 0)) return "Enter the Q.";
+      if (state.given === "fql" && !(state.l > 0)) return "Enter the inductance.";
+      if (state.given === "fqc" && !(state.c > 0)) return "Enter the capacitance.";
+    }
+    return state.chk > 0 ? "" : "Enter a frequency to check.";
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", WIRE = "#5A6169";
+  const ln = (d, c = WIRE, sw = 1.6) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const hRes = (x, y) => `M${x} ${y} L${x + 3} ${y - 6} L${x + 9} ${y + 6} L${x + 15} ${y - 6} L${x + 21} ${y + 6} L${x + 27} ${y - 6} L${x + 33} ${y + 6} L${x + 36} ${y}`;
+  const vRes = (x, y) => `M${x} ${y} L${x + 6} ${y + 3} L${x - 6} ${y + 9} L${x + 6} ${y + 15} L${x - 6} ${y + 21} L${x + 6} ${y + 27} L${x - 6} ${y + 33} L${x} ${y + 36}`;
+  const hCoil = (x, y) => `M${x} ${y} a5 5 0 0 1 10 0 a5 5 0 0 1 10 0 a5 5 0 0 1 10 0 a5 5 0 0 1 10 0`;
+  const vCoil = (x, y) => `M${x} ${y} a5 5 0 0 1 0 10 a5 5 0 0 1 0 10 a5 5 0 0 1 0 10 a5 5 0 0 1 0 10`;
+  const hCap = (x, y) => `M${x} ${y - 9} V${y + 9} M${x + 6} ${y - 9} V${y + 9}`;
+  const vCap = (x, y) => `M${x - 9} ${y} H${x + 9} M${x - 9} ${y + 6} H${x + 9}`;
+  // The source, two parts in the line and the output part (or L and C) from the line to ground, the output terminals on the right.
+  function diagram() {
+    const k = problem() ? null : calc(), given = state.given;
+    const tone = (p) => (given === "rlc" || (given === "fql" && p === "l") || (given === "fqc" && p === "c") ? BLUE : GREEN);
+    const val = { r: k ? `R ${si(k.R, "Ω")}` : "R", l: k ? `L ${si(k.L, "H")}` : "L", c: k ? `C ${si(k.C, "F")}` : "C" };
+    const Y = 30, G = 112, xs = 204;
+    let o = `<circle cx="22" cy="71" r="11" stroke="${BLUE}" stroke-width="1.6"/>` + ln("M16 71 q3 -7 6 0 q3 7 6 0", BLUE, 1.4) + ln(`M22 60 V${Y} H44 M22 82 V${G} H248`);
+    o += ln(`M22 ${G} V${G + 6} M14 ${G + 6} H30 M17 ${G + 10} H27 M20 ${G + 14} H24`);
+    const series = { lp: ["r", "l"], hp: ["r", "c"], bp: ["l", "c"], notch: ["r"] }[state.mode];
+    const draw = (p, x) => (p === "r" ? ln(hRes(x, Y), tone("r"), 1.8) : p === "l" ? ln(hCoil(x, Y), tone("l"), 1.8) : ln(hCap(x + 17, Y), tone("c"), 2));
+    // the parts in the line, in 40-unit slots at x 50 and 120, joined by wires from the source to the output node
+    const span = (p, x) => (p === "r" ? [x, x + 36] : p === "l" ? [x, x + 40] : [x + 17, x + 23]);
+    let at = 44;
+    series.forEach((p, i) => {
+      const x = [50, 120][i], [s, e] = span(p, x);
+      o += ln(`M${at} ${Y} H${s}`) + draw(p, x) + lbl(`p${p}`, x + 20, 16, val[p], tone(p));
+      at = e;
+    });
+    o += ln(`M${at} ${Y} H${xs}`);
+    // the output part(s) to ground
+    if (state.mode === "lp") o += ln(`M${xs} ${Y} V69 M${xs} 75 V${G}`) + ln(vCap(xs, 69), tone("c"), 2) + lbl("pc", xs - 14, 76, val.c, tone("c"), "end");
+    else if (state.mode === "hp") o += ln(`M${xs} ${Y} V51 M${xs} 91 V${G}`) + ln(vCoil(xs, 51), tone("l"), 1.8) + lbl("pl", xs - 12, 75, val.l, tone("l"), "end");
+    else if (state.mode === "bp") o += ln(`M${xs} ${Y} V53 M${xs} 89 V${G}`) + ln(vRes(xs, 53), tone("r"), 1.8) + lbl("pr", xs - 12, 75, val.r, tone("r"), "end");
+    else o += ln(`M${xs} ${Y} V40 M${xs} 80 V87 M${xs} 93 V${G}`) + ln(vCoil(xs, 40), tone("l"), 1.8) + ln(vCap(xs, 87), tone("c"), 2)
+      + lbl("pl", xs - 12, 64, val.l, tone("l"), "end") + lbl("pc", xs - 14, 96, val.c, tone("c"), "end");
+    // the output terminals
+    o += ln(`M${xs} ${Y} H248`) + `<circle cx="252" cy="${Y}" r="3.5" stroke="${GREEN}" stroke-width="1.6"/><circle cx="252" cy="${G}" r="3.5" stroke="${GREEN}" stroke-width="1.6"/>`
+      + ln(`M252 ${Y + 8} V${(Y + G) / 2 - 8} M248 ${Y + 12} L252 ${Y + 8} L256 ${Y + 12} M252 ${G - 8} V${(Y + G) / 2 + 8} M248 ${G - 12} L252 ${G - 8} L256 ${G - 12}`, GREEN, 1.2)
+      + lbl("", 252, (Y + G) / 2 + 4, "Vout", GREEN);
+    return `<svg width="310" height="136" viewBox="0 -8 310 136" fill="none">${o}</svg>`;
+  }
+
+  // The response around f0: a decade either side for the low- and high-pass, about three bandwidths for the others; widened to take in the check frequency.
+  function chart() {
+    if (problem()) return "";
+    const k = calc(), bpn = state.mode === "bp" || state.mode === "notch";
+    const span = Math.min(10, Math.max(bpn ? Math.max(1.5, 1 + 3 / k.Q) : 10, 1.05 * Math.max(state.chk / k.f0, k.f0 / state.chk)));
+    const top = k.peak && !bpn ? Math.min(30, Math.ceil(k.peak.g / 10) * 10) : 0, bot = -40;
+    const X0 = 34, X1 = 296, Y0 = 6, Y1 = 80, lo = Math.log(k.f0 / span), hi = Math.log(k.f0 * span);
+    const xf = (f) => X0 + ((Math.log(f) - lo) / (hi - lo)) * (X1 - X0), yd = (d) => Y0 + (top - Math.min(top, Math.max(bot, d))) * ((Y1 - Y0) / (top - bot));
+    let o = "";
+    const step = top - bot > 50 ? 20 : 10;                    // 20 dB steps when a peak widens the range, so the labels do not crowd
+    for (let d = Math.floor(top / step) * step; d >= bot; d -= step) o += ln(`M${X0} ${yd(d).toFixed(1)} H${X1}`, "#22262D", 1) + `<text x="${X0 - 4}" y="${(yd(d) + 3).toFixed(1)}" fill="#8A9099" font-size="9" text-anchor="end">${d > 0 ? "+" + d : d === 0 ? "0" : n3(d)}</text>`;
+    o += ln(`M${X0} ${yd(-3).toFixed(1)} H${X1}`, WIRE, 1).replace('fill="none"', 'fill="none" stroke-dasharray="3 3"');
+    o += ln(`M${xf(k.f0).toFixed(1)} ${Y0} V${Y1}`, WIRE, 1).replace('fill="none"', 'fill="none" stroke-dasharray="3 3"') + `<text x="${xf(k.f0).toFixed(1)}" y="${Y1 + 11}" fill="#8A9099" font-size="9" text-anchor="middle">f0</text>`;
+    let d = "";
+    for (let i = 0; i <= 160; i++) { const f = Math.exp(lo + ((hi - lo) * i) / 160); d += `${i ? "L" : "M"}${xf(f).toFixed(1)} ${yd(gainDb(k, f)).toFixed(1)} `; }
+    o += ln(d, domain.color, 2);
+    if (state.chk > k.f0 / span && state.chk < k.f0 * span) o += `<circle cx="${xf(state.chk).toFixed(1)}" cy="${yd(gainDb(k, state.chk)).toFixed(1)}" r="4" fill="${GREEN}" stroke="var(--card)" stroke-width="1.5"/>`;
+    o += `<text x="${X1}" y="${Y1 + 11}" fill="#8A9099" font-size="9" text-anchor="end">${hz(k.f0 * span)}</text><text x="${X0}" y="${Y1 + 11}" fill="#8A9099" font-size="9" text-anchor="start">${hz(k.f0 / span)}</text>`;
+    return `<svg width="300" height="94" viewBox="0 0 300 94" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), m = state.mode, bpn = m === "bp" || m === "notch";
+    const damping = k.z < 1 - 1e-9 ? `underdamped: rings at ${hz(k.fd)}` : k.z <= 1 + 1e-9 ? "critically damped" : "overdamped: no ringing";
+    let big, label, sub;
+    if (state.given === "rlc") { label = "Natural frequency f0"; big = hz(k.f0); sub = `Q ${n3(k.Q)}, ${RLC_MODES[m].toLowerCase()} from ${si(k.R, "Ω")}, ${si(k.L, "H")} and ${si(k.C, "F")}`; }
+    else {
+      const part = state.given === "fql" ? ["Resistor and capacitor", `${si(k.R, "Ω")} · ${si(k.C, "F")}`] : ["Resistor and inductor", `${si(k.R, "Ω")} · ${si(k.L, "H")}`];
+      [label, big] = part; sub = `for ${hz(k.f0)} and a Q of ${n3(k.Q)}, with ${state.given === "fql" ? si(k.L, "H") : si(k.C, "F")}`;
+    }
+    const third = bpn ? cell("Bandwidth", hz(k.bw), "c3") : cell("−3 dB at", hz(m === "lp" ? k.f0 * k.xc : k.f0 / k.xc), "c3");
+    let rows = row("Damping", damping, "dm");
+    if (m === "lp" || m === "hp") rows += row("Peak", k.peak ? `${db(k.peak.g)} at ${hz(m === "lp" ? k.f0 * k.peak.x : k.f0 / k.peak.x)}` : "none: Q is 0.707 or less", "pk") + row("Slope far from f0", `${m === "lp" ? "−" : "+"}40 dB per decade`, "sl");
+    else rows += row("Edges at −3 dB", `${hz(k.f1)} · ${hz(k.f2)}`, "ed") + row(m === "bp" ? "At f0" : "Depth at f0", m === "bp" ? "0 dB" : "−∞ dB", "d0");
+    rows += row("Reactance of L and C at f0", si(k.x0, "Ω"), "x0");
+    rows += m === "lp" ? row("A step at the input", k.z < 1 - 1e-9 ? `overshoots ${pct(k.over)}` : "no overshoot", "st") : row("Decay time constant 2L / R", si(k.tau, "s"), "st");
+    rows += row(`At ${hz(state.chk)}`, db(gainDb(k, state.chk)), "ck");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Q", n3(k.Q), "c1")}${cell("Damping ζ", n3(k.z), "c2")}${third}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${RLC_NOTE[m]}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram() + chart();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  // The check frequency follows a frequency worth looking at, to three figures, until it is typed over: twice f0, or the low-pass's and high-pass's
+  // tenfold step beyond f0 where the slope shows.
+  function follow() {
+    if (!state.chkAuto || problemNoChk()) return;
+    const f0 = calc().f0;
+    state.chk = Number((state.mode === "lp" ? 10 * f0 : state.mode === "hp" ? f0 / 10 : 2 * f0).toPrecision(3));
+  }
+  function problemNoChk() { const c = state.chk; state.chk = 1; const p = problem(); state.chk = c; return p; }
+
+  const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, { chkAuto: true }, st); state.u = u; follow(); paint(); };
+  useExamples([
+    { title: "A flat (Butterworth) low-pass", note: "1 kHz, Q 0.707 with 10 mH: 88.9 Ω and 2.53 µF; −3 dB right at 1 kHz, a step overshoots 4.32 %.",
+      apply: example({ mode: "lp", given: "fql", f0: 1e3, q: 0.707, l: 10e-3, u: { f: "kHz", l: "mH", c: "µF", r: "Ω" } }) },
+    { title: "A ringing low-pass, Q 10", note: "1 Ω, 100 µH and 1 µF: f0 15.9 kHz, Q 10, a +20 dB peak and an 85.4 % overshoot.",
+      apply: example({ mode: "lp", given: "rlc", r: 1, l: 100e-6, c: 1e-6, u: { f: "kHz", l: "µH", c: "µF", r: "Ω" } }) },
+    { title: "A 50 Hz hum notch", note: "50 Hz, Q 5 with 10 µF: 63.7 Ω and 1.01 H; the notch is 10 Hz wide, 45.2 to 55.2 Hz.",
+      apply: example({ mode: "notch", given: "fqc", f0: 50, q: 5, c: 10e-6, u: { f: "Hz", l: "H", c: "µF", r: "Ω" } }) },
+    { title: "A 455 kHz band-pass", note: "10 Ω, 100 µH and 1.22 nF: 456 kHz, Q 28.6, 15.9 kHz wide; 912 kHz is 32.7 dB down.",
+      apply: example({ mode: "bp", given: "rlc", r: 10, l: 100e-6, c: 1.22e-9, u: { f: "kHz", l: "µH", c: "nF", r: "Ω" } }) },
+    { title: "A critically damped high-pass", note: "100 Hz, Q 0.5 with 1 µF: 3.18 kΩ and 2.53 H; −3 dB at 155 Hz, and no ringing.",
+      apply: example({ mode: "hp", given: "fqc", f0: 100, q: 0.5, c: 1e-6, u: { f: "Hz", l: "H", c: "µF", r: "Ω" } }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, hint = "") => {
+      const kind = KIND[key], u = kind ? sel(`data-u="${kind}"`, Object.keys(RLC_U[kind]).map((x) => [x, x]), state.u[kind]) : "";
+      const v = kind ? state[key] / RLC_U[kind][state.u[kind]] : state[key];
+      return `<div class="field"><label><span class="field-name">${name}</span>${hint}</label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${u}</div></div>`;
+    };
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const chkBox = box("Check at", "chk", state.chkAuto ? `<span class="field-hint" data-hint="chk">${state.mode === "lp" ? "10 f0" : state.mode === "hp" ? "f0 / 10" : "2 f0"}</span>` : "");
+    const fields = state.given === "rlc" ? pair(box("Resistance", "r"), box("Inductance", "l")) + pair(box("Capacitance", "c"), chkBox)
+      : pair(box("Natural frequency f0", "f0"), box("Q", "q", '<span class="field-hint">0.707: flat</span>')) + pair(state.given === "fql" ? box("Inductance", "l") : box("Capacitance", "c"), chkBox);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Low-pass, high-pass, band-pass, notch")}
+
+      ${pillRow(Object.entries(RLC_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box" style="flex-direction:column;gap:2px">${diagram()}${chart()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${fields}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${sel('class="label-select" data-given', Object.entries(RLC_GIVEN), state.given)}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["f0 = 1 / (2π √(L C))", "Q = √(L / C) / R = 1 / (2ζ)", "Low-pass: H = 1 / (1 − x² + j x / Q)", "High-pass: H = −x² / (1 − x² + j x / Q)", "Band-pass: H = (j x / Q) / (1 − x² + j x / Q)", "Notch: H = (1 − x²) / (1 − x² + j x / Q)", "x = f / f0;  BW = f0 / Q", "Peak = Q / √(1 − 1 / 4Q²)  (Q > 0.707)"],
+        "A resistor, an inductor and a capacitor in series make a second-order filter: which one the output is taken across decides what it does. Across C it is a low-pass, across L a high-pass, across R a band-pass, across L and C a notch. All four turn at the natural frequency f0, where the reactances of L and C are equal, and their shape there is set by Q, the reactance of L or C at f0 over R (the damping ratio ζ is 1 / 2Q). A high Q means a sharp band-pass or notch, f0 / Q wide between the −3 dB edges, and for a low- or high-pass a peak at the corner and ringing after a step; Q = 0.707 is the flattest low- or high-pass (Butterworth), 0.5 is critically damped, the fastest without ringing. Past f0 the low- and high-pass fall 40 dB for every tenfold step, twice as fast as an RC filter. The output is assumed unloaded (a high-impedance input) and the source ideal: put any source resistance into R."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); follow(); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value), kind = KIND[key];
+        state[key] = kind ? v * RLC_U[kind][state.u[kind]] : v;
+        if (key === "chk") { state.chkAuto = false; const h = app.querySelector('[data-hint="chk"]'); if (h) h.remove(); }
+        else if (state.chkAuto) { follow(); const b = app.querySelector('input[data-key="chk"]'); if (b) b.value = fmt(state.chk / RLC_U.f[state.u.f]); }
+        show();
+      };
+    });
+    app.querySelectorAll("select[data-u]").forEach((el) => {
+      el.onchange = () => { const kind = el.getAttribute("data-u"); state.u[kind] = el.value; setPref(C, `u${kind}`, el.value); paint(); };
+    });
+    // Switching what is given carries the circuit over, to three figures.
+    app.querySelector("select[data-given]").onchange = (e) => {
+      if (!problem()) {
+        const k = calc(), r3 = (v) => Number(v.toPrecision(3));
+        if (e.target.value === "rlc") { state.r = r3(k.R); state.l = r3(k.L); state.c = r3(k.C); }
+        else { state.f0 = r3(k.f0); state.q = r3(k.Q); if (e.target.value === "fql") state.l = r3(k.L); else state.c = r3(k.C); }
       }
       state.given = e.target.value; setPref(C, "given", state.given); follow(); paint();
     };

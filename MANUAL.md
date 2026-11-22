@@ -45,7 +45,8 @@ will key on, since that is the id the app already holds for each tool.
 - Inductors → [Series/parallel (L)](#ind-series-parallel)
 - Passive filters → [RC filter](#rc-filter)
 - Passive filters → [RL filter](#rl-filter)
-- Passive filters → [LC filter (band-pass/notch)](#lc-filter)
+- Passive filters → [LC filter](#lc-filter)
+- Passive filters → [RLC filter](#rlc-filter)
 - Reference → [SMD package sizes](#smd-package-sizes)
 
 ### Active & semiconductor devices
@@ -2588,7 +2589,7 @@ to GHz, which RF inductors and supply chokes really reach.
 ---
 
 <a id="lc-filter"></a>
-## LC filter (band-pass/notch)
+## LC filter
 
 `calc: lc-filter` · Passive components › Passive filters
 
@@ -2692,6 +2693,77 @@ Published answers reproduced:
 | Butterworth g, n = 4 and 5 | Steer, Table 1 | 0.7654 1.8478 …; 0.6180 1.6180 2 … | the same (formula) |
 | Chebyshev g, n = 3 and 5 at 0.01, 0.1 and 1 dB | Steer, tables | e.g. 0.1 dB, n = 5: 1.14681 1.37121 1.97500 | the same to 5 figures |
 | 5 poles at 20 MHz, 2 MHz wide, 50 Ω, its g | CERN tutorial | 3.886 µH, 2.682 nF, 8.103 µH; 16.3 pF, 23.61 nH, 7.815 pF | the same with its g values (Python check) |
+
+[↑ Index](#index)
+
+---
+
+<a id="rlc-filter"></a>
+## RLC filter
+
+`calc: rlc-filter` · Passive components › Passive filters
+
+### What it computes
+
+A resistor, an inductor and a capacitor in series, driven by a voltage source, with the output taken across one of them into a high-impedance load. Four pills: **Low-pass**
+(the output across C), **High-pass** (across L), **Band-pass** (across R) and **Notch** (across L and C together). The drawing shows the circuit with the output terminals,
+and under it the response in dB around f0 with the −3 dB line and a dot at the check frequency.
+
+- **Given: R, L and C** (the Output heading's picker): the big result is the natural frequency f0, the line under it Q and the parts. **Given: f0, Q and L** or **f0, Q and C**:
+  the big result is the two other parts, R and C (or R and L).
+- **Cells:** Q, the damping ratio ζ, and the −3 dB point (low- and high-pass) or the bandwidth (band-pass and notch).
+- **Rows:** the damping (underdamped with its ringing frequency, critically damped, overdamped); for the low- and high-pass the peak and where it is (or none for Q ≤ 0.707) and the
+  slope far from f0; for the band-pass and the notch the two −3 dB edges and the gain or depth at f0; the reactance of L and C at f0; for the low-pass the overshoot of a step, for
+  the others the decay time constant 2L / R; the attenuation at a check frequency, which follows 10 f0 (low-pass), f0 / 10 (high-pass) or 2 f0 until you type it.
+- **Units:** Hz to GHz, Ω or kΩ, nH to H, pF to µF, each box with its own picker. Switching what is given carries the circuit over, to three figures.
+- **Remembered:** the pill, what is given and the units.
+
+Examples: a flat (Butterworth) low-pass at 1 kHz, a ringing low-pass of Q 10, a 50 Hz hum notch, a 455 kHz band-pass and a critically damped high-pass.
+
+### Terms
+
+- **Natural frequency f0:** 1 / (2π √(L C)), where the reactances of L and C are equal (X); there the two cancel and the current is limited by R alone.
+- **Q:** X / R = √(L / C) / R, how sharply the circuit responds around f0. **Damping ratio ζ:** 1 / (2Q). ζ = 1 (Q = 0.5) is **critical damping**, the fastest settling without
+  ringing; below it the circuit is **underdamped** and rings at f0 √(1 − ζ²) after a step; above it, **overdamped**.
+- **Butterworth:** Q = 0.707, the flattest low- or high-pass: no peak, −3 dB exactly at f0. Above it the response **peaks** near f0 and a step **overshoots**.
+- **Band-pass and notch edges:** the frequencies where the output is 3 dB from its passband (half the power); between them the band is f0 / Q wide, and f1 f2 = f0².
+- **Second order:** the low- and high-pass fall or rise 40 dB for every tenfold step in frequency far from f0, twice an RC filter's slope.
+
+### Sources
+
+- **Tony R. Kuphaldt, "Lessons in Electric Circuits", volume II (AC), chapter 6 "Resonance" (ibiblio.org, read as text):** series resonance, Q = X / R, the bandwidth between the
+  half-power points BW = f0 / Q.
+- **The Wikipedia article "RLC circuit" (read as text; its formulas did not survive the text extraction, only their words):** the four filters by the element the output is taken
+  across, the damping factor and its three regimes, the damped natural frequency, Q as the inverse of the fractional bandwidth.
+- **Not used:** Texas Instruments' "Active Filter Design Techniques" (SLOA088): ti.com returned "page not found" at both its addresses and a university copy did not download; the
+  general second-order results it gives are derived here instead.
+
+### Why the formulas are these
+
+All derived here from the voltage divider H = Z_out / (R + jωL + 1 / (jωC)). With x = f / f0 and Q = √(L / C) / R, the denominator divided by Z_C becomes 1 − x² + jx / Q, and the
+outputs are: across C, 1 / (1 − x² + jx / Q); across L, −x² / (…); across R, (jx / Q) / (…); across L and C, (1 − x²) / (…). Setting the derivative of |H|² to zero gives the
+low-pass peak at x = √(1 − 1 / 2Q²), height Q / √(1 − 1 / 4Q²), which exists only above Q = 1 / √2; the high-pass peaks at the inverse frequency with the same height. Setting
+|H|² = ½ gives the low-pass −3 dB point at x² = 1 − 1 / 2Q² + √((1 − 1 / 2Q²)² + 1) (the high-pass at its inverse), and for the band-pass and the notch the edges
+x = √(1 + 1 / 4Q²) ∓ 1 / 2Q. The low-pass step response is the standard second-order one: an overshoot of exp(−πζ / √(1 − ζ²)) for ζ < 1; the transients decay as exp(−R t / 2L),
+hence the time constant 2L / R. A design picks the missing part from f0 (C = 1 / (ω0² L), or L from C) and then R = ω0 L / Q.
+
+### Assumptions and limits
+
+- **An ideal source and an unloaded output:** put the source's resistance into R; a load across the output changes the response (and for a load across C, it is no longer this
+  circuit).
+- **Ideal parts:** the coil's resistance adds to R (and keeps a notch from going infinitely deep); the parts are far smaller than a wavelength and below their own self-resonance.
+- **Display.** Three figures; attenuations under 0.00005 dB show as 0 dB.
+
+### How it was checked
+
+79 cases, the expected values from a Python implementation that replays each case's taps and typing; every case is also checked against the circuit with complex impedances: the
+gains at four frequencies, the −3 dB points and band edges by bisection (to 1 part in 10⁷), the peak's height (and its place above Q 0.75) by a golden-section search, and the
+low-pass overshoot by integrating the step response (Runge-Kutta, to 10⁻⁴). The cases: the opening screen and the pickers; eight sets of R, L and C on each of the four pills
+(Q from 0.1 to 100, critical damping, small and large parts); six designs on each pill (given L or C, Q from 0.3 to 50); units; the check frequency typed and following; the
+carry-over between what is given; eight refusals; the five examples and the formula-search cards.
+
+540 more cases (three batches of 180: random filters, designs and units over nine decades of frequency, a tenth of them refused) compared every figure with the Python
+implementation; they were run and not kept.
 
 [↑ Index](#index)
 

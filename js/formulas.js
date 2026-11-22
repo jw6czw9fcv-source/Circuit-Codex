@@ -68,10 +68,22 @@ const FORMULAS = [
     note: "The opposite of resistors. In series the smallest capacitor takes the largest share of the voltage.",
   },
   {
-    tool: "LC filter (band-pass/notch)",
+    tool: "RLC filter",
+    domain: "passive",
+    formulas: ["f0 = 1 / (2π √(L C))", "Q = √(L / C) / R = 1 / (2ζ)", "Low-pass: H = 1 / (1 − x² + j x / Q)", "x = f / f0;  BW = f0 / Q", "Peak = Q / √(1 − 1 / 4Q²)  (Q > 0.707)"],
+    note: "A series R, L and C with the output across C (low-pass), L (high-pass), R (band-pass) or L and C (notch): the natural frequency, Q and damping ratio, the peak and the −3 dB point or the band edges, the ringing and overshoot of a step, the response; or R and C (or L) for a wanted f0 and Q. From Kuphaldt's Lessons in Electric Circuits (resonance, Q and bandwidth) and the definitions of the Wikipedia article on RLC circuits; the transfer functions and their peak and edges are derived.",
+  },
+  {
+    tool: "LC filter",
     domain: "passive",
     formulas: ["f0 = 1 / (2π √(L C))", "Q = f0 / BW = X / R", "f1, f2 = √(f0² + BW² / 4) ∓ BW / 2", "Series LC: BW = R / (2π L)", "Parallel LC: BW = 1 / (2π R C)", "Coil: r = X / Qc, or Rp = Qc X", "Butterworth: g = 2 sin((2k − 1) π / 2n)", "Pass, in the line: L = g R / (2π BW)", "Pass, to ground: C = g / (2π BW R)"],
     note: "A band-pass or a notch from one inductor and one capacitor, in series or in parallel, in the line or across it, between a source and a load resistance: L and C for a centre frequency and a bandwidth, or the centre, bandwidth, edges and loaded Q of given parts, with the coil's own Q, the loss or the notch depth at f0, and the response; or a ladder of 2 to 5 resonators, Butterworth or Chebyshev, with every part and the load it needs. From Kuphaldt's Lessons in Electric Circuits (the four resonant filters, Q and bandwidth) and Steer's Microwave and RF Design (the prototypes and the band-pass and band-stop transformations); the exact edges and the designs with the coil's loss are derived.",
+  },
+  {
+    tool: "LC filter (band-pass/notch)",
+    domain: "passive",
+    formulas: ["f0 = 1 / (2π √(L C))", "Q = f0 / BW = X / R", "f1, f2 = √(f0² + BW² / 4) ∓ BW / 2", "Series LC: BW = R / (2π L)", "Parallel LC: BW = 1 / (2π R C)", "Coil: r = X / Qc, or Rp = Qc X"],
+    note: "A band-pass or a notch from one inductor and one capacitor, in series or in parallel, in the line or across it, between a source and a load resistance: L and C for a centre frequency and a bandwidth, or the centre, bandwidth, edges and loaded Q of given parts, with the coil's own Q, the loss or the notch depth at f0, and the response. From Kuphaldt's Lessons in Electric Circuits (the four resonant filters, Q and bandwidth); the exact edges and the designs with the coil's loss are derived.",
   },
   {
     tool: "Air-core coil (Wheeler)",
