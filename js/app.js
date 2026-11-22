@@ -28202,8 +28202,11 @@ function renderLcFilter(domain, tool, favId) {
     const secs = k ? k.secs : [];
     secs.forEach((s, i) => {
       const xa = x0 + wd * i, xb = xa + wd, cx = (xa + xb) / 2;
-      if (s.inLine && s.res === "series") {          // L then C in the line
-        o += ln(`M${xa} ${Y} H${cx - 14} M${cx + 7} ${Y} H${cx + 9} M${cx + 13} ${Y} H${xb}`) + ln(c3(cx - 14, Y, false), pc, 1.6) + ln(`M${cx + 9} ${Y - 7} V${Y + 7} M${cx + 13} ${Y - 7} V${Y + 7}`, pc, 1.8);
+      if (s.inLine && s.res === "series") {          // L, a short wire, then C in the line
+        // a smaller coil when the sections are narrow, so that a wire up to 12 units long still shows between the coil and the capacitor
+        const ra = n >= 5 ? 2.5 : n === 4 ? 3 : 3.5, cw = 6 * ra, gap = Math.min(12, wd - 8 - cw), x1 = cx - (cw + gap + 4) / 2, xc = x1 + cw + gap;
+        const coil = `M${x1} ${Y} a${ra} ${ra} 0 0 1 ${2 * ra} 0 a${ra} ${ra} 0 0 1 ${2 * ra} 0 a${ra} ${ra} 0 0 1 ${2 * ra} 0`;
+        o += ln(`M${xa} ${Y} H${x1} M${x1 + cw} ${Y} H${xc} M${xc + 4} ${Y} H${xb}`) + ln(coil, pc, 1.6) + ln(`M${xc} ${Y - 7} V${Y + 7} M${xc + 4} ${Y - 7} V${Y + 7}`, pc, 1.8);
       } else if (s.inLine) {                         // a tank in the line
         o += ln(`M${xa} ${Y} H${cx - 13} M${cx - 13} 18 V42 M${cx + 13} 18 V42 M${cx - 13} 18 H${cx - 10.5} M${cx + 10.5} 18 H${cx + 13} M${cx - 13} 42 H${cx - 2} M${cx + 2} 42 H${cx + 13} M${cx + 13} ${Y} H${xb}`)
           + ln(c3(cx - 10.5, 18, false), pc, 1.6) + ln(`M${cx - 2} 35 V49 M${cx + 2} 35 V49`, pc, 1.8);
