@@ -68,6 +68,12 @@ const FORMULAS = [
     note: "The opposite of resistors. In series the smallest capacitor takes the largest share of the voltage.",
   },
   {
+    tool: "LC filter (band-pass/notch)",
+    domain: "passive",
+    formulas: ["f0 = 1 / (2π √(L C))", "Q = f0 / BW = X / R", "f1, f2 = √(f0² + BW² / 4) ∓ BW / 2", "Series LC: BW = R / (2π L)", "Parallel LC: BW = 1 / (2π R C)", "Coil: r = X / Qc, or Rp = Qc X", "Butterworth: g = 2 sin((2k − 1) π / 2n)", "Pass, in the line: L = g R / (2π BW)", "Pass, to ground: C = g / (2π BW R)"],
+    note: "A band-pass or a notch from one inductor and one capacitor, in series or in parallel, in the line or across it, between a source and a load resistance: L and C for a centre frequency and a bandwidth, or the centre, bandwidth, edges and loaded Q of given parts, with the coil's own Q, the loss or the notch depth at f0, and the response; or a ladder of 2 to 5 resonators, Butterworth or Chebyshev, with every part and the load it needs. From Kuphaldt's Lessons in Electric Circuits (the four resonant filters, Q and bandwidth) and Steer's Microwave and RF Design (the prototypes and the band-pass and band-stop transformations); the exact edges and the designs with the coil's loss are derived.",
+  },
+  {
     tool: "Air-core coil (Wheeler)",
     domain: "passive",
     formulas: ["L = 0.03948 a² n² K / b  (µH, cm)", "ΔL = 0.01257 n a (A + B)", "L = a² n² / (9a + 10b)  (µH, in)", "L = a² n² / (8a + 11c)  (µH, in)", "L = 0.8 a² n² / (6a + 9b + 10c)", "A = ln(d / D) + 0.557", "R = l / (58 A)  (Ω, m, mm²)",

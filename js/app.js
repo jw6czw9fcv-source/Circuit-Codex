@@ -698,6 +698,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "cap-stored-energy") return renderCapStoredEnergy(domain, tool, favId);
   if (calcId === "rc-filter") return renderRcFilter(domain, tool, favId);
   if (calcId === "rl-filter") return renderRlFilter(domain, tool, favId);
+  if (calcId === "lc-filter") return renderLcFilter(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -27999,6 +28000,415 @@ function renderRlFilter(domain, tool, favId) {
   const fc0 = compute().fc;
   state.freqUnit = pickFreqUnit(fc0);
   state.freqVal = fc0 / FREQ_UNITS[state.freqUnit];
+  paint();
+}
+
+// ---------- LC filter (band-pass/notch) ----------
+// One inductor and one capacitor resonating between a source resistance and a load: a band-pass (series LC in the line, or a parallel LC "tank" across the
+// load) or a notch (series LC from the line to ground, a "trap", or a tank in the line). Given the centre frequency and the -3 dB bandwidth it designs L and
+// C; given L and C it finds the centre, the bandwidth and the edges. Sources, as read this session:
+//  - Tony R. Kuphaldt, "Lessons in Electric Circuits", vol. II (AC), chapter 8 "Filters", section "Resonant filters" (ibiblio.org, read as text): the four
+//    circuits, series LC to pass and a tank to short (band-pass), a series LC to short and a tank to block (band-stop, "notch"), with their SPICE decks (1 H
+//    and 1 uF into 1 kohm; 500 ohm, 100 mH, 10 uF and 1 kohm; 159.15 Hz) and the remark that the inductor's resistance limits the selectivity; chapter 6
+//    "Resonance", section "Q and bandwidth of a resonant circuit": Q = X / R, the bandwidth between the 70.7 % (half-power) points, BW = fc / Q.
+//  Derived here (circuit analysis of the same circuits): the source and the load make one resistance for the resonator, Rs + RL for a part in the line and
+//  Rs || RL for a part across it; a series LC has |X| = R at the -3 dB points, so f2 - f1 = R / (2 pi L) exactly and f1 f2 = f0^2, giving
+//  f1, f2 = sqrt(f0^2 + BW^2/4) -/+ BW/2 (Kuphaldt's f0 -/+ BW/2 is the approximation of this for a high Q); a tank has |B| = G there and f2 - f1 = G / (2 pi C).
+//  The coil's loss: its Q at f0 (Qc), as a resistance r = 2 pi f0 L / Qc in series with L in a series LC, and as Rp = Qc 2 pi f0 L across a tank (the usual
+//  narrow-band equivalents); the capacitor is taken as lossless. With them the bandwidth, the loss at f0 (band-pass), the depth (notch) and the designs stay
+//  in closed form (a quadratic for the notches); the response is |H / H0|, the load's voltage over what it gets with the filter taken out.
+//  More poles (added later): a ladder of 2 to 5 resonators, all tuned to f0, alternating in the line and to ground, from a low-pass prototype. Sources, as
+//  read this session: Michael Steer, "Microwave and RF Design IV: Modules" (NC State; the LibreTexts edition, read as LaTeX text), section 2.7
+//  "Butterworth and Chebyshev Filters": Butterworth g_r = 2 sin((2r - 1) pi / 2n), g0 = g(n+1) = 1; Chebyshev g1 = 2 a1 / gamma, g_k = 4 a(k-1) a_k /
+//  (b(k-1) g(k-1)), a_k = sin((2k - 1) pi / 2n), b_k = gamma^2 + sin^2(k pi / n), gamma = sinh(beta / 2n), beta = ln coth(R_dB / 17.3717793), g(n+1) = 1 for
+//  n odd and, for n even, tanh^2 (beta / 4) after a series element and coth^2 (beta / 4) after a shunt one (the load over the source), his tables (checked);
+//  section 2.9 "Filter Transformations": a series prototype element becomes L = g Z0 / w_BW in series with C = w_BW / (w0^2 g Z0), a shunt one C = g /
+//  (w_BW Z0) across L = w_BW Z0 / (w0^2 g) (band-pass); for the band-stop a series element becomes L = g w_BW Z0 / w0^2 across C = 1 / (w_BW g Z0) and a
+//  shunt one L = Z0 / (w_BW g) in series with C = g w_BW / (w0^2 Z0); w0 = sqrt(w1 w2), w_BW = 2 pi (f2 - f1), the band edges (the ripple band for a
+//  Chebyshev). The CERN Accelerator School tutorial "Analog electronics for beam instrumentation" (arXiv 2005.07422, section 3.2, read as text) gives the
+//  same recipe in words, a low-pass with the bandwidth as its cut-off and every element resonated at f0, and its 5-pole example at 20 MHz, 2 MHz wide, in
+//  50 ohm (3.886 uH, 2.682 nF, 8.103 uH; 16.3 pF, 23.61 nH, 7.815 pF), reproduced. The response of the ladder, with the coils' loss as for one section,
+//  is computed by chaining the sections' ABCD matrices, as the power the load gets over the most the source can give (derived; the usual network algebra).
+const LCF_MODES = { pass: "Band-pass", notch: "Notch" };
+const LCF_TOPOS = { series: "Series LC", parallel: "Parallel LC" };
+const LCF_POLES = [1, 2, 3, 4, 5];
+const LCF_RESP = { butter: ["Butterworth", 0], c001: ["Chebyshev 0.01 dB", 0.01], c01: ["Chebyshev 0.1 dB", 0.1], c05: ["Chebyshev 0.5 dB", 0.5], c1: ["Chebyshev 1 dB", 1] };
+const LCF_U = {
+  f: { Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9 },
+  l: { nH: 1e-9, "µH": 1e-6, mH: 1e-3, H: 1 },
+  c: { pF: 1e-12, nF: 1e-9, "µF": 1e-6 },
+  r: { "Ω": 1, "kΩ": 1e3 },
+};
+const LCF_NOTE = {
+  passseries: "A series LC is a short circuit at its resonant frequency f0, where the reactances of L and C cancel, and a growing reactance either side of it, so in the line it passes f0 and blocks the rest. The source and load resistances (and the coil's loss) set how sharp it is: Q = X / R, X the reactance of L or C at f0, and the bandwidth between the −3 dB edges (half the power) is f0 / Q. At f0, L and C each carry Q times the source voltage.",
+  passparallel: "A parallel LC (a tank) is an open circuit at f0, where its two currents cancel, and a short either side of it, so across the load it lets f0 through and shorts the rest to ground. It needs a source resistance to work against: Q = R / X with R the source and load in parallel (and the coil's loss), and the bandwidth between the −3 dB edges is f0 / Q. At f0 a current Q times the source's short-circuit current goes round the tank.",
+  notchseries: "A series LC from the line to ground (a trap) is a short circuit at f0 and shorts that frequency away from the load, while the rest passes. Its notch is as wide as R / (2π L), R the source and load in parallel, between the edges where the output is 3 dB down; how deep it goes depends on the coil's loss resistance against R.",
+  multipass: "Several resonators, every one tuned to f0, alternating in the line (a series LC) and to ground (a parallel LC), make a band-pass with steeper sides: far from the band each pole adds 20 dB per tenfold step. The values come from a low-pass prototype, g1 to gn, scaled to the bandwidth: a Butterworth response is as flat as it can be in the band and 3 dB down at the edges f1 and f2; a Chebyshev one ripples by the amount chosen inside the band, down by that much at the edges, and falls faster outside. An even number of Chebyshev poles needs a different load resistance, given below. The coils' Q is in the response and the loss, not in the design.",
+  multinotch: "Several resonators, every one tuned to f0, alternating in the line (a parallel LC) and to ground (a series LC), make a band-stop with a wider, deeper notch and steeper sides than one. The values come from a low-pass prototype, g1 to gn: a Butterworth response is 3 dB down at the edges f1 and f2 and as flat as it can be outside them; a Chebyshev one ripples by the amount chosen outside the stop band. An even number of Chebyshev poles needs a different load resistance, given below. The coils' Q is in the response and the depth, not in the design.",
+  notchparallel: "A parallel LC (a tank) in the line is an open circuit at f0 and blocks that frequency, while the rest passes. Its notch is as wide as 1 / (2π R C), R the source plus the load, between the edges where the output is 3 dB down; how deep it goes depends on the coil's loss, a resistance Q × X across the tank, against R.",
+};
+
+function renderLcFilter(domain, tool, favId) {
+  const C = "lc-filter";
+  const state = {
+    mode: pref(C, "mode", "pass", Object.keys(LCF_MODES)),
+    topo: pref(C, "topo", "series", Object.keys(LCF_TOPOS)),
+    given: pref(C, "given", "f", ["f", "lc"]),
+    poles: pref(C, "poles", 1, LCF_POLES),
+    resp: pref(C, "resp", "butter", Object.keys(LCF_RESP)),
+    u: { f: pref(C, "uf", "MHz", Object.keys(LCF_U.f)), l: pref(C, "ul", "µH", Object.keys(LCF_U.l)), c: pref(C, "uc", "pF", Object.keys(LCF_U.c)), r: pref(C, "ur", "Ω", Object.keys(LCF_U.r)) },
+    f0: 10e6, bw: 1e6, l: 1e-6, c: 253.3e-12, rs: 50, rl: 50, q: 100, chk: 20e6, chkAuto: true,
+  };
+  const KIND = { f0: "f", bw: "f", chk: "f", l: "l", c: "c", rs: "r", rl: "r", q: "" };
+  const PI = Math.PI;
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const hz = (v) => si(v, "Hz");
+  const db = (v) => (v === -Infinity ? "−∞ dB" : Math.abs(v) < 5e-5 ? "0 dB" : `${n3(v)} dB`);   // under 0.00005 dB is round-off
+  const isSeries = () => state.topo === "series", isPass = () => state.mode === "pass";
+  const shunt = () => isPass() !== isSeries();               // the tank across the load, or the trap to ground
+  const multi = () => state.poles > 1;
+
+  // ---------------- the numbers ----------------
+  function calc() {
+    const rs = state.rs, rl = state.rl, qc = state.q, rsum = rs + rl, rth = (rs * rl) / (rs + rl);
+    let f0, L, Cc;
+    if (state.given === "f") {
+      f0 = state.f0;
+      const w0 = 2 * PI * f0, a = qc > 0 ? w0 / qc : 0, B = 2 * PI * state.bw;
+      if (isPass() && isSeries()) { L = rsum / (B - a); Cc = 1 / (w0 * w0 * L); }
+      else if (isPass()) { Cc = 1 / rth / (B - a); L = 1 / (w0 * w0 * Cc); }
+      else if (isSeries()) { L = (rth * (a + Math.sqrt(2 * a * a + B * B))) / (B * B + a * a); Cc = 1 / (w0 * w0 * L); }
+      else { Cc = (a + Math.sqrt(2 * a * a + B * B)) / (rsum * (B * B + a * a)); L = 1 / (w0 * w0 * Cc); }
+    } else {
+      L = state.l; Cc = state.c; f0 = 1 / (2 * PI * Math.sqrt(L * Cc));
+    }
+    const w0 = 2 * PI * f0, a = qc > 0 ? w0 / qc : 0, r = a * L, gp = a * Cc;   // the coil's loss: r in series, or a conductance gp across the tank
+    let bw, g0;
+    if (isPass() && isSeries()) { bw = (rsum + r) / (2 * PI * L); g0 = rsum / (rsum + r); }
+    else if (isPass()) { bw = (1 / rth + gp) / (2 * PI * Cc); g0 = (rsum / rl) / (1 + rs / rl + rs * gp); }
+    else if (isSeries()) { const x2 = (rth + r) ** 2 - 2 * r * r; bw = x2 > 0 ? Math.sqrt(x2) / (2 * PI * L) : NaN; g0 = r / (r + rth); }
+    else { const b2 = ((rsum * gp + 1) ** 2 - 2 * (rsum * gp) ** 2) / (rsum * rsum); bw = b2 > 0 ? Math.sqrt(b2) / (2 * PI * Cc) : NaN; g0 = (rsum * gp) / (rsum * gp + 1); }
+    const half = Math.sqrt(f0 * f0 + (bw * bw) / 4);          // f1 from f1 f2 = f0^2: no cancellation for a very wide band
+    return { f0, L, C: Cc, r, rp: gp > 0 ? 1 / gp : Infinity, bw, ql: f0 / bw, f1: (f0 * f0) / (half + bw / 2), f2: half + bw / 2, x0: w0 * L, db0: g0 > 0 ? 20 * Math.log10(g0) : -Infinity, rsum, rth, gp };
+  }
+  // The load's voltage at a frequency over what it gets with the filter taken out, in dB.
+  function gainDb(k, f) {
+    const w = 2 * PI * f, X = w * k.L - 1 / (w * k.C), B = w * k.C - 1 / (w * k.L), rs = state.rs, rl = state.rl;
+    let g;
+    if (isPass() && isSeries()) g = k.rsum / Math.hypot(k.rsum + k.r, X);
+    else if (isPass()) g = k.rsum / rl / Math.hypot(1 + rs / rl + rs * k.gp, rs * B);
+    else if (isSeries()) g = Math.hypot(k.r, X) / Math.hypot(k.r + k.rth, X);
+    else g = (k.rsum * Math.hypot(k.gp, B)) / Math.hypot(k.rsum * k.gp + 1, k.rsum * B);
+    return g > 0 ? 20 * Math.log10(g) : -Infinity;
+  }
+
+  // The low-pass prototype g1..gn and the load over the source (Steer 2.7): for an even-order Chebyshev, coth^2 (beta / 4) when the ladder ends in a shunt
+  // element (it starts with a series one) and tanh^2 (beta / 4) when it ends in a series one, as his g(n+1); checked against the response, which they make exact.
+  function protoG(n, rdb, seriesFirst) {
+    const g = [];
+    if (!(rdb > 0)) { for (let r = 1; r <= n; r++) g.push(2 * Math.sin(((2 * r - 1) * PI) / (2 * n))); return { g, load: 1 }; }
+    const beta = Math.log(1 / Math.tanh(rdb / (40 / Math.LN10))), gam = Math.sinh(beta / (2 * n));
+    const ak = (k) => Math.sin(((2 * k - 1) * PI) / (2 * n)), bk = (k) => gam * gam + Math.sin((k * PI) / n) ** 2;
+    g.push((2 * ak(1)) / gam);
+    for (let k = 2; k <= n; k++) g.push((4 * ak(k - 1) * ak(k)) / (bk(k - 1) * g[k - 2]));
+    return { g, load: n % 2 ? 1 : seriesFirst ? 1 / Math.tanh(beta / 4) ** 2 : Math.tanh(beta / 4) ** 2 };
+  }
+  // The ladder of resonators (Steer 2.9): each section in the line or to ground, a series or a parallel LC, with its coil's loss as for one section.
+  function ladder() {
+    const n = state.poles, seriesFirst = isPass() === isSeries(), { g, load } = protoG(n, LCF_RESP[state.resp][1], seriesFirst), R0 = state.rs, f0 = state.f0, bw = state.bw;
+    const w0 = 2 * PI * f0, wb = 2 * PI * bw, a = state.q > 0 ? w0 / state.q : 0;
+    const secs = g.map((gk, i) => {
+      const inLine = (i % 2 === 0) === seriesFirst;
+      let L, Cc, res;
+      if (isPass()) {
+        if (inLine) { L = (gk * R0) / wb; Cc = wb / (w0 * w0 * gk * R0); res = "series"; } else { Cc = gk / (wb * R0); L = (wb * R0) / (w0 * w0 * gk); res = "parallel"; }
+      } else if (inLine) { L = (gk * wb * R0) / (w0 * w0); Cc = 1 / (wb * gk * R0); res = "parallel"; } else { L = R0 / (wb * gk); Cc = (gk * wb) / (w0 * w0 * R0); res = "series"; }
+      return { inLine, res, L, C: Cc, r: a * L, gp: a * Cc };
+    });
+    const half = Math.sqrt(f0 * f0 + (bw * bw) / 4);
+    const k = { secs, g, load, rl: R0 * load, f0, bw, f1: (f0 * f0) / (half + bw / 2), f2: half + bw / 2 };
+    k.db0 = ladderDb(k, f0);
+    return k;
+  }
+  // The power the load gets over the most the source can give, in dB, by chaining the sections' ABCD matrices (complex numbers as [re, im]).
+  function ladderDb(k, f) {
+    const w = 2 * PI * f, rs = state.rs, rl = k.rl;
+    const mul = (x, y) => [x[0] * y[0] - x[1] * y[1], x[0] * y[1] + x[1] * y[0]], add = (x, y) => [x[0] + y[0], x[1] + y[1]];
+    const inv = (x) => { const d = x[0] * x[0] + x[1] * x[1]; return [x[0] / d, -x[1] / d]; };
+    let A = [1, 0], B = [0, 0], Cm = [0, 0], D = [1, 0];
+    for (const s of k.secs) {
+      const imm = s.res === "series" ? [s.r, w * s.L - 1 / (w * s.C)] : [s.gp, w * s.C - 1 / (w * s.L)];   // a series LC's impedance, or a tank's admittance
+      if (s.inLine) {
+        if (s.res === "parallel" && imm[0] === 0 && imm[1] === 0) return -Infinity;
+        const z = s.res === "series" ? imm : inv(imm);
+        B = add(mul(A, z), B); D = add(mul(Cm, z), D);
+      } else {
+        if (s.res === "series" && imm[0] === 0 && imm[1] === 0) return -Infinity;
+        const y = s.res === "series" ? inv(imm) : imm;
+        A = add(A, mul(B, y)); Cm = add(Cm, mul(D, y));
+      }
+    }
+    const den = add(add(mul(A, [rl, 0]), B), mul([rs, 0], add(mul(Cm, [rl, 0]), D)));
+    const t = (4 * rs * rl) / (den[0] * den[0] + den[1] * den[1]), d = 10 * Math.log10(t);
+    return t > 0 && d > -200 ? d : -Infinity;
+  }
+
+  function problem() {
+    if (multi()) {
+      if (!(state.f0 > 0)) return "Enter the centre frequency.";
+      if (!(state.bw > 0)) return "Enter the bandwidth.";
+      if (!(state.rs > 0)) return "Enter the source resistance: the ladder is designed for it.";
+      if (!(state.q >= 0)) return "Enter the coil's Q, or 0 for an ideal coil.";
+      return state.chk > 0 ? "" : "Enter a frequency to check.";
+    }
+    const given = state.given === "f";
+    if (given && !(state.f0 > 0)) return "Enter the centre frequency.";
+    if (given && !(state.bw > 0)) return "Enter the bandwidth.";
+    if (!given && !(state.l > 0)) return "Enter the inductance.";
+    if (!given && !(state.c > 0)) return "Enter the capacitance.";
+    if (!(state.rs >= 0)) return "Enter the source resistance, 0 or more.";
+    if (!(state.rl > 0)) return "Enter the load resistance.";
+    if (shunt() && !(state.rs > 0)) return "A part across the line needs a source resistance above 0 Ω to work against.";
+    if (!(state.q >= 0)) return "Enter the coil's Q, or 0 for an ideal coil.";
+    if (!(state.chk > 0)) return "Enter a frequency to check.";
+    if (given && isPass() && state.q > 0 && state.bw <= state.f0 / state.q) return `The coil's own loss makes the band ${hz(state.f0 / state.q)} wide: ask for more, or use a coil of higher Q.`;
+    return "";
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", WIRE = "#5A6169";
+  const ln = (d, c = WIRE, sw = 1.6) => `<path d="${d}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  const hRes = (x, y) => `M${x} ${y} L${x + 3} ${y - 6} L${x + 9} ${y + 6} L${x + 15} ${y - 6} L${x + 21} ${y + 6} L${x + 27} ${y - 6} L${x + 33} ${y + 6} L${x + 36} ${y}`;
+  const vRes = (x, y) => `M${x} ${y} L${x + 6} ${y + 3} L${x - 6} ${y + 9} L${x + 6} ${y + 15} L${x - 6} ${y + 21} L${x + 6} ${y + 27} L${x - 6} ${y + 33} L${x} ${y + 36}`;
+  const hCoil = (x, y) => `M${x} ${y} a5 5 0 0 1 10 0 a5 5 0 0 1 10 0 a5 5 0 0 1 10 0 a5 5 0 0 1 10 0`;
+  const vCoil = (x, y) => `M${x} ${y} a5 5 0 0 1 0 10 a5 5 0 0 1 0 10 a5 5 0 0 1 0 10 a5 5 0 0 1 0 10`;
+  const hCap = (x, y) => `M${x} ${y - 9} V${y + 9} M${x + 6} ${y - 9} V${y + 9}`;
+  const vCap = (x, y) => `M${x - 9} ${y} H${x + 9} M${x - 9} ${y + 6} H${x + 9}`;
+  function ladderDrawing() {
+    const k = problem() ? null : ladder(), n = state.poles, Y = 30, G = 112, xl = 268, x0 = 92, wd = 160 / n, pc = GREEN, grey = "#8A9099";
+    let o = `<circle cx="22" cy="71" r="11" stroke="${BLUE}" stroke-width="1.6"/>` + ln("M16 71 q3 -7 6 0 q3 7 6 0", BLUE, 1.4);
+    o += ln(`M22 60 V${Y} H34 M70 ${Y} H${x0}`) + ln(hRes(34, Y), BLUE, 1.8) + lbl("prs", 52, 16, `Rs ${si(state.rs, "Ω")}`, BLUE);
+    const rlTone = k && k.load !== 1 ? GREEN : BLUE;
+    o += ln(`M22 82 V${G} H${xl}`) + ln(`M${x0 + 160} ${Y} H${xl} M${xl} ${Y} V52 M${xl} 88 V${G}`) + ln(vRes(xl, 52), rlTone, 1.8) + lbl("prl", xl, 20, `RL ${si(k ? k.rl : state.rs, "Ω")}`, rlTone, "end");
+    o += ln(`M22 ${G} V${G + 6} M14 ${G + 6} H30 M17 ${G + 10} H27 M20 ${G + 14} H24`);
+    const c3 = (x, y, v) => (v ? `M${x} ${y} a3.5 3.5 0 0 1 0 7 a3.5 3.5 0 0 1 0 7 a3.5 3.5 0 0 1 0 7` : `M${x} ${y} a3.5 3.5 0 0 1 7 0 a3.5 3.5 0 0 1 7 0 a3.5 3.5 0 0 1 7 0`);
+    const secs = k ? k.secs : [];
+    secs.forEach((s, i) => {
+      const xa = x0 + wd * i, xb = xa + wd, cx = (xa + xb) / 2;
+      if (s.inLine && s.res === "series") {          // L then C in the line
+        o += ln(`M${xa} ${Y} H${cx - 14} M${cx + 7} ${Y} H${cx + 9} M${cx + 13} ${Y} H${xb}`) + ln(c3(cx - 14, Y, false), pc, 1.6) + ln(`M${cx + 9} ${Y - 7} V${Y + 7} M${cx + 13} ${Y - 7} V${Y + 7}`, pc, 1.8);
+      } else if (s.inLine) {                         // a tank in the line
+        o += ln(`M${xa} ${Y} H${cx - 13} M${cx - 13} 18 V42 M${cx + 13} 18 V42 M${cx - 13} 18 H${cx - 10.5} M${cx + 10.5} 18 H${cx + 13} M${cx - 13} 42 H${cx - 2} M${cx + 2} 42 H${cx + 13} M${cx + 13} ${Y} H${xb}`)
+          + ln(c3(cx - 10.5, 18, false), pc, 1.6) + ln(`M${cx - 2} 35 V49 M${cx + 2} 35 V49`, pc, 1.8);
+      } else if (s.res === "parallel") {             // a tank to ground
+        o += ln(`M${xa} ${Y} H${xb} M${cx - 7} ${Y} V52 M${cx - 7} 73 V${G} M${cx + 7} ${Y} V60 M${cx + 7} 64 V${G} M${cx - 7} ${Y} H${cx + 7}`) + ln(c3(cx - 7, 52, true), pc, 1.6) + ln(`M${cx} 60 H${cx + 14} M${cx} 64 H${cx + 14}`, pc, 1.8);
+      } else {                                       // a series LC to ground
+        o += ln(`M${xa} ${Y} H${xb} M${cx} ${Y} V46 M${cx} 67 V76 M${cx} 80 V${G}`) + ln(c3(cx, 46, true), pc, 1.6) + ln(`M${cx - 7} 76 H${cx + 7} M${cx - 7} 80 H${cx + 7}`, pc, 1.8);
+      }
+      o += `<text x="${cx.toFixed(1)}" y="126" fill="${grey}" font-size="11" font-weight="600" text-anchor="middle">${i + 1}</text>`;
+    });
+    return `<svg width="290" height="136" viewBox="0 -8 290 136" fill="none">${o}</svg>`;
+  }
+  function diagram() {
+    if (multi()) return ladderDrawing();
+    const k = problem() ? null : calc();
+    const pc = state.given === "f" ? GREEN : BLUE;          // the parts are calculated when the frequency and the bandwidth are given
+    const lt = k ? `L1 ${si(k.L, "H")}` : "L1", ct = k ? `C1 ${si(k.C, "F")}` : "C1";
+    const Y = 30, G = 112, xl = 268;                       // the rail, the ground return, the load
+    let o = `<circle cx="22" cy="71" r="11" stroke="${BLUE}" stroke-width="1.6"/>` + ln("M16 71 q3 -7 6 0 q3 7 6 0", BLUE, 1.4);
+    o += ln(`M22 60 V${Y} H34 M70 ${Y} H96`) + ln(hRes(34, Y), BLUE, 1.8) + lbl("prs", 52, 16, `Rs ${si(state.rs, "Ω")}`, BLUE);
+    o += ln(`M22 82 V${G} H${xl}`) + ln(`M${xl} ${Y} V52 M${xl} 88 V${G}`) + ln(vRes(xl, 52), BLUE, 1.8) + lbl("prl", xl, 20, `RL ${si(state.rl, "Ω")}`, BLUE, "end");
+    o += ln(`M140 ${G} V${G + 6} M132 ${G + 6} H148 M135 ${G + 10} H145 M138 ${G + 14} H142`);
+    if (isPass() && isSeries()) {          // L and C in the line
+      o += ln(`M96 ${Y} H104 M144 ${Y} H174 M180 ${Y} H${xl}`) + ln(hCoil(104, Y), pc, 1.8) + ln(hCap(174, Y), pc, 2) + lbl("pl", 124, 18, lt, pc) + lbl("pc", 177, 52, ct, pc);
+    } else if (isPass()) {                 // L and C across the load
+      o += ln(`M96 ${Y} H${xl} M140 ${Y} V52 M140 92 V${G} M190 ${Y} V69 M190 75 V${G}`) + ln(vCoil(140, 52), pc, 1.8) + ln(vCap(190, 69), pc, 2)
+        + lbl("pl", 130, 76, lt, pc, "end") + lbl("pc", 202, 76, ct, pc, "start");
+    } else if (isSeries()) {               // the trap: L over C from the line to ground
+      o += ln(`M96 ${Y} H${xl} M170 ${Y} V42 M170 82 V87 M170 93 V${G}`) + ln(vCoil(170, 42), pc, 1.8) + ln(vCap(170, 87), pc, 2)
+        + lbl("pl", 182, 66, lt, pc, "start") + lbl("pc", 182, 100, ct, pc, "start");
+    } else {                               // the tank in the line
+      o += ln(`M96 ${Y} H112 M112 14 V46 M112 14 H130 M170 14 H188 M112 46 H147 M153 46 H188 M188 14 V46 M188 ${Y} H${xl}`) + ln(hCoil(130, 14), pc, 1.8) + ln(hCap(147, 46), pc, 2)
+        + lbl("pl", 150, 3, lt, pc) + lbl("pc", 150, 70, ct, pc);
+    }
+    return `<svg width="290" height="136" viewBox="0 -8 290 136" fill="none">${o}</svg>`;
+  }
+
+  // The response from f0 / k to k f0, k from the bandwidth (about three bandwidths either side), widened to take in the check frequency, up to ten times.
+  function chart() {
+    if (problem()) return "";
+    const k = multi() ? ladder() : calc(), gdb = (f) => (multi() ? ladderDb(k, f) : gainDb(k, f)), span = Math.min(10, Math.max(isFinite(k.bw) ? 1 + (3 * k.bw) / k.f0 : 2, 1.02, 1.05 * Math.max(state.chk / k.f0, k.f0 / state.chk)));
+    const X0 = 34, X1 = 296, Y0 = 6, Y1 = 80, lo = Math.log(k.f0 / span), hi = Math.log(k.f0 * span);
+    const xf = (f) => X0 + ((Math.log(f) - lo) / (hi - lo)) * (X1 - X0), yd = (d) => Y0 + Math.min(40, Math.max(0, -d)) * ((Y1 - Y0) / 40);
+    let o = [0, -10, -20, -30, -40].map((d) => ln(`M${X0} ${yd(d)} H${X1}`, "#22262D", 1) + `<text x="${X0 - 4}" y="${yd(d) + 3}" fill="#8A9099" font-size="9" text-anchor="end">${d === 0 ? "0" : n3(d)}</text>`).join("");
+    o += ln(`M${X0} ${yd(-3)} H${X1}`, WIRE, 1).replace('fill="none"', 'fill="none" stroke-dasharray="3 3"');
+    const marks = [[k.f0, "f0"]].concat(isFinite(k.bw) ? [[k.f1, "f1"], [k.f2, "f2"]] : []);
+    // The edges are named only where there is room beside f0's name.
+    marks.forEach(([f, t]) => { if (f > k.f0 / span && f < k.f0 * span) o += ln(`M${xf(f).toFixed(1)} ${Y0} V${Y1}`, WIRE, 1).replace('fill="none"', 'fill="none" stroke-dasharray="3 3"') + (t === "f0" || Math.abs(xf(f) - xf(k.f0)) >= 16 ? `<text x="${xf(f).toFixed(1)}" y="${Y1 + 11}" fill="#8A9099" font-size="9" text-anchor="middle">${t}</text>` : ""); });
+    let d = "";
+    for (let i = 0; i <= 160; i++) { const f = Math.exp(lo + ((hi - lo) * i) / 160); d += `${i ? "L" : "M"}${xf(f).toFixed(1)} ${yd(gdb(f)).toFixed(1)} `; }
+    o += ln(d, domain.color, 2);
+    if (state.chk > k.f0 / span && state.chk < k.f0 * span) o += `<circle cx="${xf(state.chk).toFixed(1)}" cy="${yd(gdb(state.chk)).toFixed(1)}" r="4" fill="${GREEN}" stroke="var(--card)" stroke-width="1.5"/>`;
+    o += `<text x="${X1}" y="${Y1 + 11}" fill="#8A9099" font-size="9" text-anchor="end">${hz(k.f0 * span)}</text><text x="${X0}" y="${Y1 + 11}" fill="#8A9099" font-size="9" text-anchor="start">${hz(k.f0 / span)}</text>`;
+    return `<svg width="300" height="94" viewBox="0 0 300 94" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    if (multi()) return ladderHTML();
+    const k = calc(), ok = isFinite(k.bw), ideal = !(state.q > 0);
+    const between = `between ${si(state.rs, "Ω")} and ${si(state.rl, "Ω")}`;
+    const big = state.given === "f" ? `${si(k.L, "H")} · ${si(k.C, "F")}` : hz(k.f0);
+    const sub = state.given === "f" ? `for ${hz(k.f0)}, ${hz(state.bw)} wide, ${between}` : ok ? `${hz(k.bw)} wide at −3 dB, ${between}` : `never 3 dB down: the coil loses too much, ${between}`;
+    let rows = row(isPass() ? "Loss at f0" : "Depth at f0", `${db(k.db0)}${ideal ? " (ideal coil)" : ""}`, "d0") + row("Reactance of L and C at f0", si(k.x0, "Ω"), "x0")
+      + row("The coil's loss", ideal ? "none (ideal coil)" : isSeries() ? `${si(k.r, "Ω")} in series with L` : `${si(k.rp, "Ω")} across the tank`, "rc");
+    if (isPass() && ok) rows += isSeries() ? row("Voltage on L and C at f0", `${n3(k.ql)} × the source's`, "vq") : row("Current in L and C at f0", `${n3(k.ql)} × Vs / Rs`, "vq");
+    rows += row(`At ${hz(state.chk)}`, db(gainDb(k, state.chk)), "ck");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">${state.given === "f" ? "Inductor and capacitor" : isPass() ? "Centre frequency" : "Notch frequency"}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Loaded Q", ok ? n3(k.ql) : "n/a", "c1")}${cell("Low edge", ok ? hz(k.f1) : "n/a", "c2")}${cell("High edge", ok ? hz(k.f2) : "n/a", "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${LCF_NOTE[state.mode + state.topo]}</div></div>`;
+  }
+  function ladderHTML() {
+    const k = ladder(), ideal = !(state.q > 0), [name, rdb] = LCF_RESP[state.resp];
+    // The parts, one tight line per section: the poles and the response are in the pickers above, the centre, the band and the load in the boxes and the rows below.
+    const parts = k.secs.map((s, i) => `<div class="notation-row" style="padding-top:0;padding-bottom:0"><span>L${i + 1}, C${i + 1}, ${s.res} ${s.inLine ? "in the line" : "to ground"}</span><span data-res="${i ? `s${i + 1}` : "big"}">${si(s.L, "H")} · ${si(s.C, "F")}</span></div>`).join("");
+    const rows = row(isPass() ? "In the band" : "Outside the notch", rdb > 0 ? `ripples ${rdb} dB, ${rdb} dB down at f1, f2` : "flat, 3 dB down at f1 and f2", "rp")
+      + row("Load resistance", `${si(k.rl, "Ω")}${k.load !== 1 ? ", for an even order" : ""}`, "rl") + row("Prototype g1 … gn", k.g.map((x) => n3(x)).join(" · "), "gv")
+      + row("The coils' loss", ideal ? "none (ideal coils)" : `Q ${n3(state.q)} in every coil`, "rc") + row(`At ${hz(state.chk)}`, db(ladderDb(k, state.chk)), "ck");
+    return `<div class="result-field">
+          <div class="lcf-parts">${parts}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell(isPass() ? "Loss at f0" : "Depth at f0", db(k.db0), "c1")}${cell("Low edge", hz(k.f1), "c2")}${cell("High edge", hz(k.f2), "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${LCF_NOTE["multi" + state.mode]}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram() + chart();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  // An example sets the circuit and every value it uses (one pole unless it says otherwise); the check frequency follows twice f0.
+  const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, { chkAuto: true, q: 0, poles: 1, resp: "butter" }, st); state.u = u; follow(); paint(); };
+  useExamples([
+    { title: "Kuphaldt's series band-pass", note: "1 H and 1 µF into 1 kΩ: centre 159 Hz, as his SPICE run, 159 Hz wide, a Q of 1.",
+      apply: example({ mode: "pass", topo: "series", given: "lc", l: 1, c: 1e-6, rs: 0, rl: 1000, u: { l: "H", c: "µF", f: "Hz", r: "Ω" } }) },
+    { title: "Kuphaldt's tank band-pass", note: "100 mH and 10 µF across 1 kΩ, fed through 500 Ω: 159 Hz, 47.7 Hz wide.",
+      apply: example({ mode: "pass", topo: "parallel", given: "lc", l: 0.1, c: 10e-6, rs: 500, rl: 1000, u: { l: "mH", c: "µF", f: "Hz", r: "Ω" } }) },
+    { title: "Kuphaldt's trap", note: "The same parts in series to ground: a notch at 159 Hz, but 531 Hz wide, a Q of 0.3.",
+      apply: example({ mode: "notch", topo: "series", given: "lc", l: 0.1, c: 10e-6, rs: 500, rl: 1000, u: { l: "mH", c: "µF", f: "Hz", r: "Ω" } }) },
+    { title: "Kuphaldt's tank notch", note: "100 mH and 10 µF in the line to 1 kΩ: a notch at 159 Hz, 15.9 Hz wide, a Q of 10.",
+      apply: example({ mode: "notch", topo: "parallel", given: "lc", l: 0.1, c: 10e-6, rs: 0, rl: 1000, u: { l: "mH", c: "µF", f: "Hz", r: "Ω" } }) },
+    { title: "A 7.1 MHz band-pass in 50 Ω", note: "Coil Q 150: 104 µH and 4.82 pF; the coil costs 2.35 dB at f0, and 14.2 MHz is 36.9 dB down.",
+      apply: example({ mode: "pass", topo: "series", given: "f", f0: 7.1e6, bw: 200e3, rs: 50, rl: 50, q: 150, u: { f: "MHz", l: "µH", c: "pF", r: "Ω" } }) },
+    { title: "A 1 MHz tank for AM", note: "Between 10 kΩ and 100 kΩ, coil Q 150: 4.82 µH, 5.25 nF; a loaded Q of 100 costs 9.54 dB.",
+      apply: example({ mode: "pass", topo: "parallel", given: "f", f0: 1e6, bw: 10e3, rs: 10e3, rl: 100e3, q: 150, u: { f: "kHz", l: "µH", c: "nF", r: "kΩ" } }) },
+    { title: "A trap for 27 MHz", note: "Coil Q 100 in 50 Ω: 4.97 µH and 6.99 pF, 1 MHz wide, but the notch is only 12 dB deep.",
+      apply: example({ mode: "notch", topo: "series", given: "f", f0: 27e6, bw: 1e6, rs: 50, rl: 50, q: 100, u: { f: "MHz", l: "nH", c: "pF", r: "Ω" } }) },
+    { title: "A 3-pole Butterworth for 7 MHz", note: "6.95 to 7.25 MHz in 50 Ω: 26.5 µH · 18.9 pF, 23.7 nH · 21.2 nF; coil Q 150 costs 2.73 dB.",
+      apply: example({ mode: "pass", topo: "series", given: "f", poles: 3, resp: "butter", f0: 7.1e6, bw: 300e3, rs: 50, q: 150, u: { f: "MHz", r: "Ω" } }) },
+    { title: "A 5-pole Chebyshev for 14 MHz", note: "0.1 dB ripple, 13.7 to 14.7 MHz: g 1.15, 1.37, 1.98 as in Steer's table; coil Q 200 costs 2.15 dB.",
+      apply: example({ mode: "pass", topo: "parallel", given: "f", poles: 5, resp: "c01", f0: 14.2e6, bw: 1e6, rs: 50, q: 200, u: { f: "MHz", r: "Ω" } }) },
+    { title: "A 3-pole stop for FM broadcast", note: "88 to 108 MHz out of 50 Ω: 79.6 dB deep at 97.5 MHz with coils of Q 100.",
+      apply: example({ mode: "notch", topo: "parallel", given: "f", poles: 3, resp: "butter", f0: 97.5e6, bw: 20e6, rs: 50, q: 100, u: { f: "MHz", r: "Ω" } }) },
+  ]);
+
+  // The check frequency follows twice f0, to three figures, until it is typed over.
+  function follow() { if (state.chkAuto && !problemNoChk()) state.chk = Number((2 * (multi() ? state.f0 : calc().f0)).toPrecision(3)); }
+  function problemNoChk() { const c = state.chk; state.chk = 1; const p = problem(); state.chk = c; return p; }
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, hint = "") => {
+      const kind = KIND[key], u = kind ? sel(`data-u="${kind}"`, Object.keys(LCF_U[kind]).map((x) => [x, x]), state.u[kind]) : "";
+      const v = kind ? state[key] / LCF_U[kind][state.u[kind]] : state[key];
+      return `<div class="field"><label><span class="field-name">${name}</span>${hint}</label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${u}</div></div>`;
+    };
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const first = state.given === "f" || multi() ? pair(box(isPass() ? "Centre frequency" : "Notch frequency", "f0"), box("Bandwidth", "bw")) : pair(box("Inductance", "l"), box("Capacitance", "c"));
+    const qBox = box("Coil Q", "q", '<span class="field-hint">0: ideal</span>'), chkBox = box("Check at", "chk", state.chkAuto ? '<span class="field-hint" data-hint="chk">2 f0</span>' : "");
+    const fields = multi() ? first + pair(box("Source R", "rs"), qBox) + pair(chkBox, "") : first + pair(box("Source R", "rs"), box("Load R", "rl")) + pair(qBox, chkBox);
+    const topoSel = sel('class="label-select" data-topo', Object.entries(LCF_TOPOS), state.topo);
+    const givenSel = multi() ? sel('class="label-select" data-resp', Object.entries(LCF_RESP).map(([k, v]) => [k, v[0]]), state.resp)
+      : sel('class="label-select" data-given', [["f", "Given: f0 and bandwidth"], ["lc", "Given: L and C"]], state.given);
+    const polesSel = sel('class="label-select" data-poles', LCF_POLES.map((n) => [String(n), `${n} pole${n > 1 ? "s" : ""}`]), String(state.poles));
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Band-pass and notch, one to five resonators")}
+
+      ${pillRow(Object.entries(LCF_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box" style="flex-direction:column;gap:2px">${diagram()}${chart()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${topoSel} ${polesSel}</span>
+      </div>
+      ${fields}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${givenSel}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["f0 = 1 / (2π √(L C))", "Q = f0 / BW = X / R", "f1, f2 = √(f0² + BW² / 4) ∓ BW / 2", "In the line: R = Rs + RL", "Across it: R = Rs RL / (Rs + RL)", "Series LC: BW = R / (2π L)", "Parallel LC: BW = 1 / (2π R C)", "Coil: r = X / Qc, or Rp = Qc X",
+          "n poles, Butterworth: g = 2 sin((2k − 1) π / 2n)", "Pass, in the line: L = g R / (2π BW)", "Pass, to ground: C = g / (2π BW R)", "Each with its partner: L C = 1 / (2π f0)²"],
+        "An inductor and a capacitor resonate at f0, where their reactances are equal (X, the same for both) and cancel. A series LC is then a short circuit and a parallel LC, a tank, an open circuit; on either side they turn into a reactance that grows with the distance from f0. Put one in the line or across it and it passes f0 and blocks the rest (band-pass), or blocks f0 and passes the rest (notch, also called band-stop or trap). How narrow the band is depends on the resistance the resonator works against, the source and the load together, and on the loss of the coil: the loaded Q = f0 / BW, BW the bandwidth between the −3 dB edges f1 and f2, the frequencies where the output has half its power. For a series LC, Q = X / R; for a tank, Q = R / X. The edges are not quite symmetric about f0: f1 f2 = f0². A real coil has a Q of its own, Qc, typically 50 to 300: as a resistance it widens the band, costs some loss at f0 in a band-pass and keeps a notch from going infinitely deep. Type 0 for an ideal coil. More poles make a ladder of resonators, every one tuned to f0, alternating in the line and to ground, with steeper sides: the values come from a low-pass prototype g1 to gn (Butterworth, flat; Chebyshev, rippling by the amount chosen) scaled to the bandwidth, each L paired with the C that resonates it at f0; for a notch the roles of the series and parallel LCs swap. The response is the load's voltage over what it gets with the filter taken out (for a ladder, the power it gets over the most the source can give)."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); follow(); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value), kind = KIND[key];
+        state[key] = kind ? v * LCF_U[kind][state.u[kind]] : v;
+        if (key === "chk") { state.chkAuto = false; const h = app.querySelector('[data-hint="chk"]'); if (h) h.remove(); }
+        else if (state.chkAuto) { follow(); const b = app.querySelector('input[data-key="chk"]'); if (b) b.value = fmt(state.chk / LCF_U.f[state.u.f]); }
+        show();
+      };
+    });
+    app.querySelectorAll("select[data-u]").forEach((el) => {
+      el.onchange = () => { const kind = el.getAttribute("data-u"); state.u[kind] = el.value; setPref(C, `u${kind}`, el.value); paint(); };
+    });
+    app.querySelector("select[data-topo]").onchange = (e) => { state.topo = e.target.value; setPref(C, "topo", state.topo); follow(); paint(); };
+    // More poles are designed from f0 and the bandwidth: one section given by L and C hands over the centre and the bandwidth it has.
+    app.querySelector("select[data-poles]").onchange = (e) => {
+      if (!multi() && state.given === "lc") {
+        if (!problem()) { const k = calc(); if (isFinite(k.bw)) { state.f0 = Number(k.f0.toPrecision(3)); state.bw = Number(k.bw.toPrecision(3)); } }
+        state.given = "f"; setPref(C, "given", "f");
+      }
+      state.poles = +e.target.value; setPref(C, "poles", state.poles); follow(); paint();
+    };
+    const rsp = app.querySelector("select[data-resp]");
+    if (rsp) rsp.onchange = () => { state.resp = rsp.value; setPref(C, "resp", state.resp); paint(); };
+    // Switching what is given carries the answer over, to three figures as a part or a frequency is written: the designed L and C, or the centre and the bandwidth found.
+    const gsel = app.querySelector("select[data-given]");
+    if (gsel) gsel.onchange = (e) => {
+      if (!problem()) {
+        const k = calc(), r3 = (v) => Number(v.toPrecision(3));
+        if (e.target.value === "lc") { state.l = r3(k.L); state.c = r3(k.C); } else if (isFinite(k.bw)) { state.f0 = r3(k.f0); state.bw = r3(k.bw); }
+      }
+      state.given = e.target.value; setPref(C, "given", state.given); follow(); paint();
+    };
+  }
+
+  follow();
   paint();
 }
 

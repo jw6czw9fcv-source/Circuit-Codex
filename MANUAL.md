@@ -45,6 +45,7 @@ will key on, since that is the id the app already holds for each tool.
 - Inductors → [Series/parallel (L)](#ind-series-parallel)
 - Passive filters → [RC filter](#rc-filter)
 - Passive filters → [RL filter](#rl-filter)
+- Passive filters → [LC filter (band-pass/notch)](#lc-filter)
 - Reference → [SMD package sizes](#smd-package-sizes)
 
 ### Active & semiconductor devices
@@ -2581,6 +2582,116 @@ The review made the same corrections as on the RC filter: the frequency to
 explore opens at fc exactly, Low-/High-pass take the mode pills, and the
 resistor units are ohms to megohms. Inductors keep nH to H and frequencies up
 to GHz, which RF inductors and supply chokes really reach.
+
+[↑ Index](#index)
+
+---
+
+<a id="lc-filter"></a>
+## LC filter (band-pass/notch)
+
+`calc: lc-filter` · Passive components › Passive filters
+
+### What it computes
+
+A band-pass or a notch made of inductors and capacitors between a source resistance and a load: one resonator (an L and a C), or a ladder of 2 to 5 resonators.
+Two pills, **Band-pass** and **Notch**. The **Your inputs** heading holds the circuit, **Series LC** or **Parallel LC** (for a ladder, the kind of the first section), and the
+number of poles. Under the drawing of the circuit, the response is plotted in dB around f0, with the −3 dB line, the edges f1 and f2 and a dot at the check frequency.
+
+- **One pole.** Band-pass: a series LC in the line, or a parallel LC (a tank) across the load. Notch: a series LC from the line to ground (a trap), or a tank in the line. The Output
+  heading says what is given. **f0 and bandwidth:** the centre (or notch) frequency, the −3 dB bandwidth, the source and load resistances, the coil's Q (0 for an ideal coil) and a
+  frequency to check; the big result is the inductor and the capacitor. **L and C:** the two parts instead of f0 and the bandwidth; the big result is the centre frequency, the
+  bandwidth under it. Cells: the loaded Q and the low and high edges. Rows: the loss at f0 (band-pass) or the depth (notch); the reactance of L and C at f0; the coil's loss as a
+  resistance; for a band-pass, the voltage on L and C (series) or the current in them (tank) at f0, in units of the source's; the attenuation at the check frequency.
+- **2 to 5 poles.** Designed from f0, the bandwidth and the source resistance; the Output heading picks the response: Butterworth, or Chebyshev with 0.01, 0.1, 0.5 or 1 dB of
+  ripple. The result lists every section, its L and C, and whether it sits in the line or goes to ground; cells: the loss (band-pass) or depth (notch) at f0 with the coils' Q, and
+  the band edges; rows: the ripple or flatness in the band, the load resistance the ladder needs (equal to the source except for an even number of Chebyshev poles), the
+  prototype values g1 to gn, the coils' Q, the attenuation at the check frequency.
+- **Units:** Hz to GHz for the frequencies (the centre, the bandwidth and the check frequency share one unit), nH to H, pF to µF, Ω or kΩ for the resistances.
+- **Proposed:** the check frequency follows twice f0, to three figures, until you type it. Switching what is given carries the answer over (the designed L and C, or the centre and
+  bandwidth found, to three figures); asking for more poles after a section given by L and C hands its centre and bandwidth to the ladder.
+- **Remembered:** the pill, the circuit, what is given, the poles, the response and the units.
+
+Examples: Kuphaldt's four resonant filters (series band-pass, tank band-pass, trap, tank notch), a 7.1 MHz band-pass in 50 Ω, a 1 MHz tank for AM, a trap for 27 MHz,
+a 3-pole Butterworth for 7 MHz, a 5-pole 0.1 dB Chebyshev for 14 MHz and a 3-pole stop for the FM broadcast band.
+
+### Terms
+
+- **Resonance, f0:** the frequency where the reactance of L, 2πfL, equals that of C, 1 / (2πfC); f0 = 1 / (2π √(L C)). There a series LC is a short circuit and a parallel LC
+  (a **tank**) an open circuit; either side of f0 they become a reactance that grows with the distance from it.
+- **Band-pass, notch:** a filter that passes a band around f0 and blocks the rest, or blocks a band and passes the rest (also called band-stop, band-reject or, for one series LC to
+  ground, a **trap**).
+- **Bandwidth (BW), edges f1 and f2:** the band between the frequencies where the output is 3 dB down (half the power; 70.7 % of the voltage); for a Chebyshev ladder, the band
+  inside which the response ripples. The edges are not symmetric about f0: f1 f2 = f0².
+- **Loaded Q:** f0 / BW, how sharp a single resonator is with the circuit around it; Q = X / R for a series LC against a resistance R in series, Q = R / X for a tank across R, X the
+  reactance of L or C at f0. **Coil Q (Qc):** the coil's own reactance over its own loss resistance; typical coils have 50 to 300.
+- **Pole:** for these filters, one resonator; each adds 20 dB per tenfold step in frequency to the slopes far from the band. **Butterworth:** as flat as possible in the band;
+  **Chebyshev:** a set ripple in the band for steeper sides. **Prototype values g1 to gn:** the element values of a low-pass filter with a cut-off of 1 rad/s between 1 Ω resistances,
+  which the band-pass and band-stop designs scale.
+
+### Sources
+
+- **Tony R. Kuphaldt, "Lessons in Electric Circuits", volume II (AC), chapter 8 "Filters", section "Resonant filters" (ibiblio.org, read as text):** the four circuits, a series LC to pass a
+  signal and a tank to short it (band-pass), a series LC to short it and a tank to block it (band-stop, notch), with their SPICE decks: 1 H and 1 µF into 1 kΩ; 500 Ω, 100 mH, 10 µF
+  and 1 kΩ; resonance at 159.15 Hz; and the remark that the inductor's resistance limits the selectivity. **Chapter 6 "Resonance", section "Q and bandwidth of a resonant circuit":**
+  Q = X / R, the bandwidth between the 70.7 % (half-power) points, BW = fc / Q, fl = fc − Δf / 2 and fh = fc + Δf / 2 (approximations, see below).
+- **Michael Steer, "Microwave and RF Design IV: Modules" (North Carolina State University; the LibreTexts edition, read as its LaTeX text), section 2.7 "Butterworth and Chebyshev
+  Filters":** the Butterworth prototype g_r = 2 sin((2r − 1) π / 2n), g0 = g(n+1) = 1; the Chebyshev recursion g1 = 2 a1 / γ, g_k = 4 a(k−1) a_k / (b(k−1) g(k−1)),
+  a_k = sin((2k − 1) π / 2n), b_k = γ² + sin²(kπ / n), γ = sinh(β / 2n), β = ln coth(R_dB / 17.3717793); g(n+1) = 1 for an odd order and, for an even order, tanh²(β / 4) after a
+  series element or coth²(β / 4) after a shunt one; his tables of g for n = 3, 5 and 7. **Section 2.9 "Filter Transformations":** for a band-pass, a shunt prototype element becomes
+  C = g / (ωBW Z0) across L = ωBW Z0 / (ω0² g) and a series one L = g Z0 / ωBW in series with C = ωBW / (ω0² g Z0); for a band-stop, a shunt element becomes L = Z0 / (ωBW g) in series
+  with C = g ωBW / (ω0² Z0) and a series one L = g ωBW Z0 / ω0² across C = 1 / (ωBW g Z0); ω0 = √(ω1 ω2), ωBW = 2π (f2 − f1).
+- **"Analog electronics for beam instrumentation", CERN Accelerator School (arXiv 2005.07422; section 3.2 read as text):** the same band-pass recipe in words (a low-pass with the
+  bandwidth as its cut-off, every element resonated at f0) and a 5-pole example at 20 MHz, 2 MHz wide, in 50 Ω.
+- **Not used:** the 1963 SRI report of Matthaei, Young and Jones (DTIC refused the download, "the request is blocked"; left alone) and Keysight's filter chapter (behind a form). A
+  University of Utah lecture (ECE 5180, L27) was read and not used: it says odd-order Chebyshev filters are unmatched, the reverse of Steer and of the response this tool computes.
+
+### Why the formulas are these
+
+**One resonator (derived here by circuit analysis).** The source and the load make one resistance for the resonator: Rs + RL for a part in the line, Rs RL / (Rs + RL) for a part across
+it. A series LC has |X| = R at the −3 dB points, X = 2πfL − 1 / (2πfC), so f2 − f1 = R / (2πL) exactly and f1 f2 = f0², which gives f1, f2 = √(f0² + BW² / 4) ∓ BW / 2;
+Kuphaldt's f0 ∓ BW / 2 is its high-Q approximation. A tank has |B| = G there and f2 − f1 = G / (2πC). The coil's loss is its Q at f0 as a resistance r = 2πf0 L / Qc in series with
+L in a series LC, and Rp = Qc 2πf0 L across a tank (the usual narrow-band equivalents); the capacitor is lossless. With them the bandwidth and the loss stay in closed form: for a
+series band-pass L = (Rs + RL) / (2π (BW − f0 / Qc)), so the band cannot be narrower than f0 / Qc, and its loss at f0 is −20 log(1 − QL / Qc), the familiar rule; for the notches the
+design solves a quadratic. The response is the load's voltage over what it gets with the filter taken out.
+
+**Ladders.** Steer's prototype and transformations as quoted, with the source resistance as Z0 and the load the prototype's g(n+1) times it. The response is computed by chaining the
+sections' ABCD matrices (the usual network algebra), as the power the load gets over the most the source can give, with every coil's loss as above; at f0 an ideal Butterworth or
+odd-order Chebyshev passes everything, an even-order Chebyshev loses its ripple. The tool's check runs compare the ladder with ideal parts against the prototype's own response,
+1 / (1 + Ω^2n) or 1 / (1 + ε² Tn(Ω)²) with Ω = (f / f0 − f0 / f) f0 / BW (or −1 / Ω for a band-stop), and they agree to a millionth of a dB.
+
+### Assumptions and limits
+
+- **Ideal capacitors,** coils with a loss set by one Q at f0 (as a series or a parallel resistance, a narrow-band model), no stray capacitance, no coupling between the coils, parts
+  far smaller than a wavelength; real coils also self-resonate (see the Air-core coil's SRF & Q pill).
+- **Ladders** are designed for ideal parts: the coils' Q is in the response and the loss but does not reshape the design (predistortion is not done); with a low Q a narrow Chebyshev
+  loses its ripple and much of its passband. Very narrow ladders give awkward values (a large series L, a small series C); coupled-resonator designs suit them better, and are not here.
+- **The load** of a ladder is the one it is designed for; for an even number of Chebyshev poles it differs from the source.
+- **Display.** Three figures; attenuations under 0.00005 dB show as 0 dB; −∞ dB for an ideal notch at f0.
+
+### How it was checked
+
+152 cases, the expected values from a Python implementation that replays each case's taps and typing; for every case the closed forms of one resonator are compared with the circuit
+solved with complex impedances (the edges found by bisection agree to 1 part in 10⁷), and every ladder with ideal parts with the prototype's response. The cases: the opening screen and
+the pickers; 32 designs (both pills, both circuits, eight settings, ideal and real coils, unequal source and load); 24 sets of L and C; two notches the coil keeps from 3 dB; the check
+frequency typed, kept and following; the carry-over between what is given; the units; twelve refusals; 40 ladders with ideal parts (2 to 5 poles, every response, both pills and both
+circuits) and six with real coils; the hand-over from one pole to many and back; the ten examples and the formula-search card.
+
+720 more cases (four batches of 180: random circuits, values, units, coils and ladders, a tenth of them refused) compared every figure with the Python implementation; they were run and
+not kept. They found that an even-order Chebyshev ladder starting with a shunt element needs the tanh² load, not coth² (the first version had coth² for both), and a lost-precision
+low edge for very wide bands (now f1 = f0² / f2).
+
+Published answers reproduced:
+
+| Example | Source | Source says | Tool gives |
+|---|---|---|---|
+| 1 H and 1 µF, series, into 1 kΩ | Kuphaldt ch. 8, SPICE | peak at 159.15 Hz | centre 159 Hz, 159 Hz wide, Q 1 |
+| 100 mH and 10 µF across 1 kΩ, through 500 Ω | Kuphaldt ch. 8, SPICE | peak at 159.15 Hz | 159 Hz, 47.7 Hz wide |
+| the same in series to ground | Kuphaldt ch. 8, SPICE | notch at 159.15 Hz | 159 Hz, −∞ dB with ideal parts, 531 Hz wide |
+| 100 mH and 10 µF in the line to 1 kΩ | Kuphaldt ch. 8, SPICE | notch at 159.15 Hz | 159 Hz, 15.9 Hz wide |
+| Butterworth g, n = 4 and 5 | Steer, Table 1 | 0.7654 1.8478 …; 0.6180 1.6180 2 … | the same (formula) |
+| Chebyshev g, n = 3 and 5 at 0.01, 0.1 and 1 dB | Steer, tables | e.g. 0.1 dB, n = 5: 1.14681 1.37121 1.97500 | the same to 5 figures |
+| 5 poles at 20 MHz, 2 MHz wide, 50 Ω, its g | CERN tutorial | 3.886 µH, 2.682 nF, 8.103 µH; 16.3 pF, 23.61 nH, 7.815 pF | the same with its g values (Python check) |
 
 [↑ Index](#index)
 
