@@ -710,6 +710,12 @@ const FORMULAS = [
     note: "IPC-2152's area rule; Brooks & Adam (2015) found it very cautious: the trace sets the via's temperature.",
   },
   {
+    tool: "Planar (PCB) inductor",
+    domain: "pcb",
+    formulas: ["din = dout − 2n w − 2(n − 1) s", "davg = (dout + din) / 2", "ρ = (dout − din) / (dout + din)", "L = μ0 n² davg c1 / 2 · (ln(c2 / ρ)", "      + c3 ρ + c4 ρ²)", "Square: c = 1.27, 2.07, 0.18, 0.13"],
+    note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
+  },
+  {
     tool: "Thermal vias",
     domain: "pcb",
     formulas: ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N", "Vias per side = ⌊(side − drill) / 1.2 mm⌋ + 1"],

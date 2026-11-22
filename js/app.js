@@ -701,6 +701,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "lc-filter") return renderLcFilter(domain, tool, favId);
   if (calcId === "rlc-filter") return renderRlcFilter(domain, tool, favId);
   if (calcId === "sallen-key") return renderSallenKey(domain, tool, favId);
+  if (calcId === "planar-inductor") return renderPlanarInductor(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -29112,6 +29113,337 @@ function renderSallenKey(domain, tool, favId) {
   }
 
   follow();
+  paint();
+}
+
+// ---------- Planar (PCB) inductor ----------
+// A flat spiral of copper: square, hexagonal, octagonal or circular, n turns of a trace w wide with gaps s, dout across (flat to flat). Sources, as read
+// this session: S. S. Mohan, M. del Mar Hershenson, S. P. Boyd, T. H. Lee, "Simple Accurate Expressions for Planar Spiral Inductances", IEEE JSSC 34 (10),
+// Oct. 1999, pp. 1419-1424 (the Stanford copy; its equations, Tables I-III and Table IV read on the rendered pages): din = dout - 2nw - 2(n - 1)s (implied by
+// its figure and checked against its Table IV), davg = (dout + din) / 2, the fill ratio rho = (dout - din) / (dout + din); (1) the modified Wheeler
+// expression L = K1 mu0 n^2 davg / (1 + K2 rho), K1, K2 = 2.34, 2.75 (square), 2.33, 3.82 (hexagonal), 2.25, 3.55 (octagonal); (2) the current-sheet
+// expression L = mu0 n^2 davg c1 / 2 (ln(c2 / rho) + c3 rho + c4 rho^2), c = 1.27, 2.07, 0.18, 0.13 (square), 1.09, 2.23, 0, 0.17 (hexagonal), 1.07, 2.29, 0,
+// 0.19 (octagonal), 1.00, 2.46, 0, 0.20 (circle), up to 8 % off when s > 3w; (3) the monomial L = beta dout^a1 w^a2 davg^a3 n^a4 s^a5 (um, nH), beta = 1.62e-3,
+// -1.21, -0.147, 2.40, 1.78, -0.030 (square), 1.28e-3, -1.24, -0.174, 2.47, 1.77, -0.049 (hexagonal), 1.33e-3, -1.21, -0.163, 2.43, 1.75, -0.049 (octagonal),
+// fitted to 19 000 on-chip spirals 100-480 um across. A. Faria et al., "A Fast and Precise Tool for Multi-Layer Planar Coil Self-Inductance Calculation",
+// Sensors 21 (2021) 4864 (PMC copy, read as text): at PCB sizes (traces of 0.10-0.15 mm) against FEM the current-sheet expression was 0.04-6.7 % off, the
+// modified Wheeler up to 36 %, the monomial up to 11 %; the segment method, the coil as straight segments, L = the segments' self-inductances
+// 0.002 l (ln(2l / (w + t)) + 0.50049 + (w + t) / 3l) uH (l in cm, Grover) plus the mutual inductances of every pair. The big result is the current-sheet
+// expression: against the ASITIC field solver on Mohan's 61 inductors (his Table IV) it is 1.35 % off on average (4.8 % at worst), the segment sum here
+// 1.45 % (6.1 %), the modified Wheeler 1.63 %, the monomial 2.53 % (a check script, not kept). The segment sum here: three filaments across the width, the
+// mutual inductances by Neumann's integral (the inner integral in closed form, asinh, the outer by tanh-sinh quadrature near and 8-point Gauss far), the
+// spiral built with each turn's sides on its own polygon and one step inward per turn (Mohan's figure; a circle as the 16-gon of equal area) - derived.
+// DC resistance with copper at 1.7241 uOhm cm (IACS, as in Wire sizing).
+const PI_SHAPES = { square: "Square", hex: "Hexagonal", oct: "Octagonal", circle: "Circular" };
+const PI_SIDES = { square: 4, hex: 6, oct: 8, circle: 16 };
+const PI_K = { square: [2.34, 2.75], hex: [2.33, 3.82], oct: [2.25, 3.55] };
+const PI_C = { square: [1.27, 2.07, 0.18, 0.13], hex: [1.09, 2.23, 0, 0.17], oct: [1.07, 2.29, 0, 0.19], circle: [1.0, 2.46, 0, 0.2] };
+const PI_MON = { square: [1.62e-3, -1.21, -0.147, 2.4, 1.78, -0.03], hex: [1.28e-3, -1.24, -0.174, 2.47, 1.77, -0.049], oct: [1.33e-3, -1.21, -0.163, 2.43, 1.75, -0.049] };
+const PI_U = {
+  d: { mm: 1e-3, mil: 25.4e-6, "µm": 1e-6 },
+  t: { mm: 1e-3, mil: 25.4e-6, "µm": 1e-6, oz: TRACE_OZ_MIL * 25.4e-6 },
+  l: { nH: 1e-9, "µH": 1e-6 },
+};
+const PI_MU0 = 4e-7 * Math.PI, PI_RHO = 1.7241e-8, PI_MAXSEG = 400;
+// tanh-sinh nodes and weights on [0, 1] (nodes closer to an end than 1e-10 carry nothing, and one on a shared corner would diverge); 8-point Gauss-Legendre
+const PI_TS = (() => { const r = []; for (let i = -52; i <= 52; i++) { const t = i * 0.06, u = (Math.PI / 2) * Math.sinh(t), x = 0.5 * (1 + Math.tanh(u)); if (x > 1e-10 && x < 1 - 1e-10) r.push([x, 0.5 * 0.06 * (Math.PI / 2) * Math.cosh(t) / Math.cosh(u) ** 2]); } return r; })();
+const PI_GL = [[0.0198550717512319, 0.0506142681451881], [0.1016667612931866, 0.1111905172266872], [0.2372337950418355, 0.1568533229389436], [0.4082826787521751, 0.1813418916891810],
+  [0.5917173212478249, 0.1813418916891810], [0.7627662049581645, 0.1568533229389436], [0.8983332387068134, 0.1111905172266872], [0.9801449282487681, 0.0506142681451881]];
+const PI_GL4 = [[0.0694318442029737, 0.1739274225687269], [0.3300094782075719, 0.3260725774312731], [0.6699905217924281, 0.3260725774312731], [0.9305681557970263, 0.1739274225687269]];
+
+// The spiral's centreline from the outer end inward: side k on the line of turn floor(k / N) (its apothem a0 - p floor(k / N), the normal turning clockwise from
+// the top), each corner where two consecutive side lines meet. A circle is the 16-gon of the same area.
+function piCentreline(shape, nSeg, dout, w, s) {
+  const N = PI_SIDES[shape], p = w + s, a0 = (dout - w) / 2, f = shape === "circle" ? Math.sqrt(Math.PI / (N * Math.tan(Math.PI / N))) : 1;
+  const line = (k) => { const th = Math.PI / 2 - (2 * Math.PI * k) / N; return [Math.cos(th), Math.sin(th), f * (a0 - p * (k >= 0 ? Math.floor(k / N) : 0))]; };
+  const meet = (k1, k2) => { const [ax, ay, c1] = line(k1), [bx, by, c2] = line(k2), det = ax * by - ay * bx; return [(c1 * by - c2 * ay) / det, (ax * c2 - bx * c1) / det]; };
+  const pts = [];
+  for (let k = 0; k <= nSeg; k++) pts.push(meet(k - 1, k));
+  return pts;
+}
+// The polyline moved sideways by d, its corners mitred.
+function piOffset(pts, d) {
+  const nrm = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy); return [-dy / L, dx / L]; };
+  return pts.map((p, i) => {
+    if (i === 0) { const n = nrm(pts[0], pts[1]); return [p[0] + d * n[0], p[1] + d * n[1]]; }
+    if (i === pts.length - 1) { const n = nrm(pts[i - 1], p); return [p[0] + d * n[0], p[1] + d * n[1]]; }
+    const n1 = nrm(pts[i - 1], p), n2 = nrm(p, pts[i + 1]), f = d / (1 + n1[0] * n2[0] + n1[1] * n2[1]);
+    return [p[0] + f * (n1[0] + n2[0]), p[1] + f * (n1[1] + n2[1])];
+  });
+}
+// The closest two straight segments come (they do not cross): the least of the four end-to-segment distances.
+function piGap(A, B, C, D) {
+  const ps = (P, Q, R) => { const dx = R[0] - Q[0], dy = R[1] - Q[1], t = Math.max(0, Math.min(1, ((P[0] - Q[0]) * dx + (P[1] - Q[1]) * dy) / (dx * dx + dy * dy))); return Math.hypot(P[0] - Q[0] - t * dx, P[1] - Q[1] - t * dy); };
+  return Math.min(ps(A, C, D), ps(B, C, D), ps(C, A, B), ps(D, A, B));
+}
+// A straight piece from A to B with what the integrals need: its direction, length and midpoint.
+function piSeg(A, B) {
+  const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
+  return { A, B, L, ux: (B[0] - A[0]) / L, uy: (B[1] - A[1]) / L, mx: (A[0] + B[0]) / 2, my: (A[1] + B[1]) / 2 };
+}
+// The quadrature rules as flat arrays: tanh-sinh for close pieces, 8- and 4-point Gauss farther off.
+const PI_Q = [PI_TS, PI_GL, PI_GL4].map((r) => [Float64Array.from(r, (p) => p[0]), Float64Array.from(r, (p) => p[1])]);
+// The mutual inductance of two straight filaments (Neumann): mu0 / 4pi cos(angle) of the double integral of 1 / r, the inner one in closed form. The rule
+// goes by the gap between the pieces; the gap is only worked out when their midpoints do not already show it to be 4 lengths or more.
+function piMutual(s1, s2) {
+  const cs = s1.ux * s2.ux + s1.uy * s2.uy;
+  if (Math.abs(cs) < 1e-12) return 0;
+  const L1 = s1.L, L2 = s2.L, Lm = Math.max(L1, L2), bound = Math.hypot(s1.mx - s2.mx, s1.my - s2.my) - (L1 + L2) / 2;
+  const g = bound >= 4 * Lm ? bound : piGap(s1.A, s1.B, s2.A, s2.B);
+  const [xs, ws] = PI_Q[g < 0.5 * Lm ? 0 : g < 4 * Lm ? 1 : 2];
+  const ax0 = s1.A[0] - s2.A[0], ay0 = s1.A[1] - s2.A[1], u1x = s1.ux * L1, u1y = s1.uy * L1, u2x = s2.ux, u2y = s2.uy;
+  let tot = 0;
+  for (let q = 0; q < xs.length; q++) {
+    const ax = ax0 + u1x * xs[q], ay = ay0 + u1y * xs[q], a = ax * u2x + ay * u2y, d2 = ax * ax + ay * ay - a * a;
+    if (d2 > 1e-30 * L2 * L2) { const d = Math.sqrt(d2); tot += ws[q] * (Math.asinh((L2 - a) / d) + Math.asinh(a / d)); }
+    else tot += ws[q] * (a < 0 ? Math.log((L2 - a) / -a) : Math.log(a / (a - L2)));
+  }
+  return (PI_MU0 / (4 * Math.PI)) * cs * L1 * tot;
+}
+// The segment sum: three filaments across the width, each filament segment's own inductance (Grover's bar, w / 3 by t) and every pair's mutual
+// inductance; for two pieces of trace more than 3 pitches and 8 widths apart the three filaments of each act as their centreline (the difference is of
+// order (w / distance)^2, under 0.1 % of the sum in the check runs).
+function piSegmentL(shape, nSeg, dout, w, s, t) {
+  const c = piCentreline(shape, nSeg, dout, w, s), K = 3, wf = w / K, far = Math.max(3 * (w + s), 8 * w);
+  const fil = Array.from({ length: K }, (_, j) => { const ln = piOffset(c, ((j - (K - 1) / 2) * w) / K); return Array.from({ length: nSeg }, (_, i) => piSeg(ln[i], ln[i + 1])); });
+  const cen = Array.from({ length: nSeg }, (_, i) => piSeg(c[i], c[i + 1]));
+  let L = 0;
+  for (let i = 0; i < nSeg; i++) {
+    for (let a = 0; a < K; a++) {
+      const l = fil[a][i].L;
+      L += ((PI_MU0 / (2 * Math.PI)) * l * (Math.log((2 * l) / (wf + t)) + 0.50049 + (wf + t) / (3 * l))) / (K * K);
+      for (let b = a + 1; b < K; b++) L += (2 * piMutual(fil[a][i], fil[b][i])) / (K * K);
+    }
+    const ci = cen[i];
+    for (let j = i + 1; j < nSeg; j++) {
+      const cj = cen[j];
+      // far: the gap over 3 pitches and 8 widths (the midpoints settle it first when they can)
+      if (Math.hypot(ci.mx - cj.mx, ci.my - cj.my) - (ci.L + cj.L) / 2 > far || piGap(ci.A, ci.B, cj.A, cj.B) > far) { L += 2 * piMutual(ci, cj); continue; }
+      for (let a = 0; a < K; a++) for (let b = 0; b < K; b++) L += (2 * piMutual(fil[a][i], fil[b][j])) / (K * K);
+    }
+  }
+  return L;
+}
+
+function renderPlanarInductor(domain, tool, favId) {
+  const C = "planar-inductor";
+  const state = {
+    shape: pref(C, "shape", "square", Object.keys(PI_SHAPES)),
+    given: pref(C, "given", "n", ["n", "l"]),
+    u: { d: pref(C, "ud", "mm", Object.keys(PI_U.d)), t: pref(C, "ut", "µm", Object.keys(PI_U.t)), l: pref(C, "ul", "µH", Object.keys(PI_U.l)) },
+    n: 5, l: 1e-6, dout: 10e-3, w: 0.25e-3, s: 0.25e-3, t: 35e-6,
+  };
+  const KIND = { dout: "d", w: "d", s: "d", t: "t", l: "l", n: "" };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  // a length in the unit of the size boxes
+  const dim = (v) => `${n3(v / PI_U.d[state.u.d])} ${state.u.d}`;
+  const pct = (v) => (Math.abs(v) < 0.05 ? "0.0 %" : `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)} %`);
+  const N = () => PI_SIDES[state.shape];
+  const round = () => state.shape === "circle";            // a round spiral takes any fraction of a turn
+  const used = (n) => (round() ? n : Math.round(n * N()) / N());
+
+  // ---------------- the numbers ----------------
+  // The closed forms for n turns (any n), and the geometry.
+  function forms(n) {
+    const { dout, w, s } = state, din = dout - 2 * n * w - 2 * (n - 1) * s, davg = (dout + din) / 2, rho = (dout - din) / (dout + din);
+    const [c1, c2, c3, c4] = PI_C[state.shape];
+    const k = { n, din, davg, rho, gmd: ((PI_MU0 * n * n * davg * c1) / 2) * (Math.log(c2 / rho) + c3 * rho + c4 * rho * rho) };
+    if (PI_K[state.shape]) { const [k1, k2] = PI_K[state.shape]; k.whe = (k1 * PI_MU0 * n * n * davg) / (1 + k2 * rho); }
+    if (PI_MON[state.shape]) { const [b, a1, a2, a3, a4, a5] = PI_MON[state.shape]; k.mon = b * (dout * 1e6) ** a1 * (w * 1e6) ** a2 * (davg * 1e6) ** a3 * n ** a4 * (s * 1e6) ** a5 * 1e-9; }
+    return k;
+  }
+  // The most turns that fit (din = 0).
+  const nMax = () => (state.dout + 2 * state.s) / (2 * (state.w + state.s));
+  // Turns for an inductance (the current-sheet expression rises with n from 1 turn up to nMax): bisection.
+  function solveN(L) {
+    let lo = 1, hi = nMax() * (1 - 1e-12);
+    for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (forms(mid).gmd < L) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  }
+  // Everything: the turns asked for (or found), the spiral built (n to a whole number of sides), its inductance by each method, length and resistance.
+  function calc() {
+    const k = { want: state.given === "n" ? state.n : solveN(state.l) };
+    k.nSeg = Math.max(1, Math.round(k.want * N()));
+    k.nb = round() ? k.want : k.nSeg / N();
+    Object.assign(k, forms(state.given === "n" ? k.nb : k.want));
+    k.built = forms(k.nb);
+    k.seg = k.nSeg <= PI_MAXSEG ? piSegmentL(state.shape, k.nSeg, state.dout, state.w, state.s, state.t) : NaN;   // beyond, too slow on a phone
+    const c = piCentreline(state.shape, k.nSeg, state.dout, state.w, state.s);
+    k.length = c.reduce((a, p, i) => (i ? a + Math.hypot(p[0] - c[i - 1][0], p[1] - c[i - 1][1]) : 0), 0);
+    k.rdc = (PI_RHO * k.length) / (state.w * state.t);
+    k.pts = c;
+    return k;
+  }
+
+  function problem() {
+    const { dout, w, s, t } = state;
+    if (!(dout > 0)) return "Enter the outer size, dout.";
+    if (!(w > 0)) return "Enter the trace width w.";
+    if (!(s > 0)) return "Enter the spacing s between turns.";
+    if (!(t > 0)) return "Enter the copper thickness.";
+    const nm = nMax();
+    if (state.given === "n") {
+      if (!(state.n >= 1)) return "Enter the number of turns, 1 or more.";
+      if (used(state.n) >= nm) return `${n3(state.n)} turns do not fit: under ${n3(nm)} fit in ${dim(dout)} with this trace and gap.`;
+    } else {
+      if (!(state.l > 0)) return "Enter the inductance.";
+      const top = forms(nm * (1 - 1e-9)).gmd;
+      if (state.l >= top) return `At most ${si(top, "H")} fits in ${dim(dout)} with this trace and gap: make it larger, or the trace and gap narrower.`;
+      if (nm <= 1 || state.l <= forms(1).gmd) return "That is under one turn: make the coil smaller.";
+    }
+    return "";
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", GREEN = "#5DCAA5", WIRE = "#5A6169", GREY = "#8A9099";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  // The spiral to scale (dout over 150 units), the trace as wide as it is; its outer end runs right to a pad, the inner end drops through a via to the other
+  // layer and comes back out under the turns (dashed); the outer size and the trace and gap labelled.
+  function diagram() {
+    const err = problem(), k = err ? null : calc(), shape = state.shape;
+    const nSeg = k ? k.nSeg : Math.round(Math.min(state.n || 3, 3) * N()), dout = k ? state.dout : 1, w = k ? state.w : 0.05, s = k ? state.s : 0.05;
+    let pts = k ? k.pts : piCentreline(shape, nSeg, dout, w, s);
+    const S = 150 / dout, cx = 120, cy = 92;
+    if (shape === "circle") {
+      // drawn round: each turn a circle of its own radius, stepping in over the last 1/16 of the turn (as the 16-gon of the segment sum, without corners)
+      const n = k ? k.nb : nSeg / N(), a0c = (dout - w) / 2, p = w + s, f0 = Math.PI / 2 + Math.PI / N(), steps = Math.max(2, Math.ceil(n * 180));
+      pts = Array.from({ length: steps + 1 }, (_, i) => {
+        const u = (n * i) / steps, m = Math.min(Math.floor(u), Math.ceil(n) - 1), r = a0c - p * (m + Math.max(0, (u - m - (1 - 1 / N())) * N())), ph = f0 - 2 * Math.PI * u;
+        return [r * Math.cos(ph), r * Math.sin(ph)];
+      });
+    }
+    const tone = state.given === "n" ? BLUE : GREEN, sw = Math.max(0.8, w * S);
+    const P = (p) => `${(cx + p[0] * S).toFixed(2)} ${(cy - p[1] * S).toFixed(2)}`;
+    const end = pts[pts.length - 1], a0 = (dout - w) / 2;
+    let o = `<path d="M${P([pts[0][0] - 0.12 * dout, pts[0][1]])} L${pts.map(P).join(" L")}" stroke="${tone}" stroke-width="${sw.toFixed(2)}" stroke-linejoin="${shape === "circle" ? "round" : "miter"}" fill="none"/>`;
+    // the inner end: a via, and the return on the other layer out past the turns
+    const vx = cx + end[0] * S, vy = cy - end[1] * S;
+    o += `<circle cx="${vx.toFixed(2)}" cy="${vy.toFixed(2)}" r="${Math.max(2.5, sw * 0.9).toFixed(2)}" fill="var(--card)" stroke="${tone}" stroke-width="1.4"/>`;
+    o += `<path d="M${vx.toFixed(2)} ${vy.toFixed(2)} H${(cx - (dout / 2 + 0.12 * dout) * S).toFixed(2)}" stroke="${tone}" stroke-width="1.4" stroke-dasharray="4 3" fill="none" opacity="0.8"/>`;
+    // the outer size, under the coil
+    const yb = cy + 75 + 12, xl = cx - 75, xr = cx + 75;
+    o += `<path d="M${xl} ${yb - 5} V${yb + 5} M${xr} ${yb - 5} V${yb + 5} M${xl} ${yb} H${xr} M${xl + 5} ${yb - 3} L${xl} ${yb} L${xl + 5} ${yb + 3} M${xr - 5} ${yb - 3} L${xr} ${yb} L${xr - 5} ${yb + 3}" stroke="${GREY}" stroke-width="1" fill="none"/>`;
+    o += lbl("dd", cx, yb + 15, `dout ${k ? dim(dout) : "—"}`, BLUE);
+    // the labels on the right
+    const nt = k ? `${n3(k.nb)} turns` : "n turns";
+    o += lbl("dn", 222, 40, nt, tone, "start") + lbl("dw", 222, 60, `w ${k ? dim(w) : "—"}`, BLUE, "start") + lbl("ds", 222, 80, `s ${k ? dim(s) : "—"}`, BLUE, "start");
+    if (k) o += lbl("di", 222, 100, `din ${dim(Math.max(0, k.built.din))}`, GREEN, "start");
+    o += `<text x="222" y="126" fill="${GREY}" font-size="10">dashed: back side</text>`;
+    return `<svg width="310" height="200" viewBox="0 0 310 200" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), b = k.built, vs = (x) => `${si(x, "H")} (${pct((100 * (x - b.gmd)) / b.gmd)})`;
+    let label, big, sub;
+    if (state.given === "n") { label = "Inductance (current-sheet expression)"; big = si(b.gmd, "H"); sub = `${n3(k.nb)} turns, ${PI_SHAPES[state.shape].toLowerCase()}, ${dim(state.dout)} across`; }
+    else { label = "Turns needed"; big = n3(k.want); sub = round() ? `a round spiral takes any fraction: ${si(b.gmd, "H")}` : `build ${n3(k.nb)} turns (a whole number of sides): ${si(b.gmd, "H")}`; }
+    let rows = row("Segment sum (Grover)", isFinite(k.seg) ? vs(k.seg) : `not summed: over ${PI_MAXSEG} straight pieces`, "sg");
+    rows += row("Modified Wheeler", b.whe !== undefined ? vs(b.whe) : "no coefficients for a circle", "wh");
+    rows += row("Monomial (fitted on-chip)", b.mon !== undefined ? vs(b.mon) : "no coefficients for a circle", "mo");
+    rows += row("Trace length", dim(k.length), "tl") + row("DC resistance, 20 °C", si(k.rdc, "Ω"), "rd");
+    rows += row("Average diameter", dim(b.davg), "da");
+    const out = [];
+    if (state.s > 3 * state.w) out.push("the gap is over 3 trace widths, where the current-sheet expression can be 8 % off: trust the segment sum more");
+    const f = b.din / state.dout;
+    if (f < 0.1) out.push("the inside is nearly full (din under 0.1 dout): the inner turns add little");
+    if (f > 0.9) out.push("very hollow (din over 0.9 dout), past the range Mohan tested");
+    if (out.length) rows += `<div class="cx-note" data-res="warn" style="color:#E8A33D">Note: ${out.join("; ")}.</div>`;
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">${label}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Inner diameter", dim(Math.max(0, b.din)), "c1")}${cell("Fill ratio ρ", n3(b.rho), "c2")}${cell("Resistance", si(k.rdc, "Ω"), "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${PI_NOTE}</div></div>`;
+  }
+  const PI_NOTE = "A flat spiral's inductance grows with the square of the turns and with its size; filling the middle adds little, because the inner turns are small and their field partly opposes the outer ones. The big result is Mohan's current-sheet expression, the closest of the quick formulas to field solvers. The segment sum adds up every straight piece of trace and the pull of every pair, so it follows any geometry; the other two are Mohan's alternatives. The inner end needs a via and a return on another layer, which adds a little. Nearby copper planes lower the inductance.";
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, st); state.u = u; paint(); };
+  useExamples([
+    { title: "Mohan's measured square, #7", note: "9.5 turns, 153 µm across, 1.8 µm trace: measured 18.2 nH; the tool gives 17.8 nH.",
+      apply: example({ shape: "square", given: "n", n: 9.5, dout: 153e-6, w: 1.8e-6, s: 1.9e-6, t: 0.9e-6, u: { d: "µm", t: "µm", l: "nH" } }) },
+    { title: "Mohan's measured octagon, #56", note: "5 turns, 346 µm across, 18 µm trace, 2 µm gap: measured 7.50 nH; the tool gives 7.45 nH.",
+      apply: example({ shape: "oct", given: "n", n: 5, dout: 346e-6, w: 18e-6, s: 2e-6, t: 1e-6, u: { d: "µm", t: "µm", l: "nH" } }) },
+    { title: "A 10 mm square on a PCB", note: "5 turns of 0.25 mm trace and gap, 1 oz: 313 nH, 154 mm of trace, 306 mΩ.",
+      apply: example({ shape: "square", given: "n", n: 5, dout: 10e-3, w: 0.25e-3, s: 0.25e-3, t: TRACE_OZ_MIL * 25.4e-6, u: { d: "mm", t: "oz", l: "µH" } }) },
+    { title: "1 µH in 15 mm", note: "Square, 0.2 mm trace and gap: 6.35 turns; built as 6¼, 979 nH.",
+      apply: example({ shape: "square", given: "l", l: 1e-6, dout: 15e-3, w: 0.2e-3, s: 0.2e-3, t: 35e-6, u: { d: "mm", t: "µm", l: "µH" } }) },
+    { title: "A round 30 mm coil", note: "6 turns of 0.5 mm trace and gap, 1 oz: 1.33 µH, the size of a wireless-charging coil.",
+      apply: example({ shape: "circle", given: "n", n: 6, dout: 30e-3, w: 0.5e-3, s: 0.5e-3, t: TRACE_OZ_MIL * 25.4e-6, u: { d: "mm", t: "oz", l: "µH" } }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, hint = "") => {
+      const kind = KIND[key], u = kind ? sel(`data-u="${kind}"`, Object.keys(PI_U[kind]).map((x) => [x, x]), state.u[kind]) : "";
+      const v = kind ? state[key] / PI_U[kind][state.u[kind]] : state[key];
+      return `<div class="field"><label><span class="field-name">${name}</span>${hint}</label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${u}</div></div>`;
+    };
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const step = { square: "in ¼ turns", hex: "in ⅙ turns", oct: "in ⅛ turns", circle: "any fraction" }[state.shape];
+    const first = state.given === "n" ? box("Turns n", "n", `<span class="field-hint">${step}</span>`) : box("Inductance", "l");
+    const fields = pair(first, box("Outer size dout", "dout")) + pair(box("Trace width w", "w"), box("Spacing s", "s")) + pair(box("Copper thickness", "t"), "");
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Square, hexagonal, octagonal or round spiral")}
+
+      ${pillRow(Object.entries(PI_SHAPES), state.shape, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${fields}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${sel('class="label-select" data-given', [["n", "Given: turns"], ["l", "Given: inductance"]], state.given)}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["din = dout − 2n w − 2(n − 1) s", "davg = (dout + din) / 2", "ρ = (dout − din) / (dout + din)", "L = μ0 n² davg c1 / 2 · (ln(c2 / ρ)", "      + c3 ρ + c4 ρ²)", "Wheeler: L = K1 μ0 n² davg / (1 + K2 ρ)", "R = ρCu · length / (w t)"],
+        "A planar spiral inductor is a trace wound flat on one layer, its inner end brought out through a via. Mohan, Hershenson, Boyd and Lee (IEEE JSSC, 1999) gave three short formulas for square, hexagonal, octagonal and circular spirals, all in terms of the turns n, the average diameter davg and the fill ratio ρ, which says how hollow the coil is: near 0 for a hollow one (din close to dout), near 1 for a full one. The current-sheet expression, used for the big result, treats each side of the spiral as a sheet of current; the coefficients c1 to c4 depend on the shape. The modified Wheeler expression is Wheeler's 1928 coil formula with new coefficients, and the monomial was fitted to 19 000 on-chip spirals. Against field solvers they are typically 1 to 3 % apart; at PCB sizes the current-sheet expression held best (Faria et al., 2021). The segment sum is a separate check from first principles: every straight piece of trace has its own inductance and every pair pulls on each other, positively when their currents run the same way and negatively when opposite. Copper planes under or over the coil, and the via and return, change the result a little; a ferrite sheet raises it."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, paint);
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.shape = btn.dataset.pill; setPref(C, "shape", state.shape); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value), kind = KIND[key]; state[key] = kind ? v * PI_U[kind][state.u[kind]] : v; show(); };
+    });
+    // One length unit for the whole tool: mm, mil or µm picked on any size or thickness box changes them all (ounces are the thickness's alone);
+    // the boxes then show three figures in the new unit.
+    app.querySelectorAll("select[data-u]").forEach((el) => {
+      el.onchange = () => {
+        const kind = el.getAttribute("data-u"), v = el.value, kinds = kind === "l" ? ["l"] : v in PI_U.d ? ["d", "t"] : ["t"];
+        kinds.forEach((k) => { state.u[k] = v; setPref(C, `u${k}`, v); });
+        Object.keys(KIND).filter((key) => kinds.includes(KIND[key])).forEach((key) => { const f = PI_U[KIND[key]][state.u[KIND[key]]]; if (isFinite(state[key])) state[key] = Number((state[key] / f).toPrecision(3)) * f; });
+        paint();
+      };
+    });
+    // Switching what is given carries the coil over: the built turns, or its inductance, to three figures.
+    app.querySelector("select[data-given]").onchange = (e) => {
+      if (!problem()) { const k = calc(); if (e.target.value === "n") state.n = k.nb; else state.l = Number(k.built.gmd.toPrecision(3)); }
+      state.given = e.target.value; setPref(C, "given", state.given); paint();
+    };
+  }
+
   paint();
 }
 

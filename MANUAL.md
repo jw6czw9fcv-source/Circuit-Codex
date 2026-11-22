@@ -160,6 +160,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Crosstalk](#crosstalk)
 - Impedance → [Laminate materials](#laminates)
 - Vias & layout → [Thermal vias](#thermal-vias)
+- Vias & layout → [Planar (PCB) inductor](#planar-inductor)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
 - Cabling → [Wire & cable colors](#cable-colors)
@@ -12218,6 +12219,97 @@ drops as heat.
 - an LM1086 at 1450 mA picks 910 mΩ (1.37 A), not the nearer 820 mΩ
   (1.52 A), which is flagged when typed;
 - the remembered regulator.
+
+[↑ Index](#index)
+
+---
+
+<a id="planar-inductor"></a>
+## Planar (PCB) inductor
+
+`calc: planar-inductor` · PCB & interconnect › Vias & layout
+
+### What it computes
+
+The inductance of a flat spiral of copper on a PCB (or a chip): four pills, **Square**, **Hexagonal**, **Octagonal** and **Circular**. The drawing shows the spiral to scale
+with the via at its inner end and the return on the other layer (dashed), the outer size, the trace, the gap and the inner diameter.
+
+- **Given: turns** (the Output heading's picker): the turns n, the outer size dout (flat to flat), the trace width w, the spacing s and the copper thickness; the big result
+  is the inductance by Mohan's current-sheet expression. **Given: inductance:** the big result is the turns needed, with the inductance of the spiral as built.
+- **Turns** are built in whole sides (¼ turn for a square, ⅙ for a hexagon, ⅛ for an octagon); a round spiral takes any fraction.
+- **Cells:** the inner diameter, the fill ratio ρ and the DC resistance. **Rows:** the segment sum, the modified Wheeler and the monomial expressions, each with its
+  difference from the big result; the trace length, the DC resistance at 20 °C and the average diameter; a note when the gap is over 3 trace widths (where the current-sheet
+  expression can be 8 % off) or the spiral is nearly full or very hollow.
+- **Units:** one length unit for the whole tool, mm, mil or µm, picked on any size or thickness box (the thickness also takes ounces of copper, 1 oz = 1.37 mil); the
+  inductance in nH or µH. A box changed to a new unit shows three figures. Switching what is given carries the coil over.
+- **Remembered:** the shape, what is given and the units.
+
+Examples: two of Mohan's measured on-chip spirals, a 10 mm square on a PCB, 1 µH in 15 mm, a round 30 mm coil.
+
+### Terms
+
+- **dout, din:** the outer and inner sizes across the spiral (flat to flat for a polygon). din = dout − 2n w − 2(n − 1) s.
+- **davg:** the average diameter, (dout + din) / 2. **Fill ratio ρ:** (dout − din) / (dout + din): near 0 for a hollow coil, near 1 for a full one. A full coil has
+  less inductance for its davg: its inner turns are small and their field partly opposes the outer ones.
+- **Current-sheet expression:** treats each side of the spiral as a sheet of current. **Modified Wheeler:** Wheeler's 1928 coil formula with new coefficients.
+  **Monomial:** a power law fitted to 19 000 on-chip spirals. **Segment sum:** every straight piece of trace with its own inductance, plus the mutual inductance of every
+  pair (positive when their currents run the same way, negative when opposite).
+- **Via and return:** the inner end has to come out on another layer; that piece is not in the formulas (it adds a little).
+
+### Sources
+
+- **S. S. Mohan, M. del Mar Hershenson, S. P. Boyd and T. H. Lee, "Simple Accurate Expressions for Planar Spiral Inductances", IEEE Journal of Solid-State Circuits 34 (10),
+  October 1999, pp. 1419–1424 (the Stanford copy).** Its text was read, and its equations (1) to (3), Tables I to III (the coefficients) and Table IV (61 measured inductors,
+  with the field solver ASITIC's error and each expression's error) on the rendered pages 2 to 4. Used: the three expressions and their coefficients, the definitions of
+  din, davg and ρ, the 8 % limit of the current-sheet expression when s > 3w, and Table IV for the checks. Its Fig. 1 caption swaps the hexagon and the octagon (the drawing
+  labelled hexagonal has eight sides).
+- **A. Faria et al., "A Fast and Precise Tool for Multi-Layer Planar Coil Self-Inductance Calculation", Sensors 21 (2021) 4864 (the PubMed Central copy, read as text):** at PCB
+  sizes (traces of 0.10–0.15 mm) the current-sheet expression was 0.04–6.7 % from a finite-element model, the modified Wheeler up to 36 %, the monomial up to 11 %; the
+  segment method, the coil as straight conductors with Grover's self-inductance of a rectangular bar 0.002 l (ln(2l / (w + t)) + 0.50049 + (w + t) / 3l) µH (l, w, t in cm)
+  and the mutual inductances of every pair.
+- **Not used:** a review in MDPI's Bioengineering (the server answered "Access Denied"; left alone).
+
+### Why the formulas are these
+
+**The big result.** Against ASITIC's values for Mohan's 61 inductors (Table IV), the current-sheet expression is 1.35 % off on average (4.8 % at worst), the segment sum
+here 1.45 % (6.1 %), the modified Wheeler 1.63 % (5.7 %), the monomial 2.53 % (9.5 %); at PCB sizes Faria found the current-sheet expression the steadiest of the three. So it
+is the big result, and the segment sum, which follows any geometry, is the independent check: when the two disagree by more than a few percent the coil is outside what the
+expressions were fitted to.
+
+**The segment sum** (derived here from the sources' pieces). The spiral is built as Mohan draws it: each side lies on its own turn's polygon and the trace steps in once a turn
+(for a square this is the usual layout, sides d, d, d, d − p, d − p, d − 2p …); a round spiral is summed as the 16-sided polygon of the same area, and drawn round. The trace
+is three filaments across its width. Each filament piece has Grover's self-inductance (with a third of the width); every pair of pieces has the mutual inductance of two
+straight filaments, Neumann's double integral of cos(angle) / r, the inner integral in closed form (asinh) and the outer one by tanh-sinh quadrature for pieces closer than half
+a length, 8- or 4-point Gauss farther. Pieces more than 3 pitches and 8 trace widths apart are summed as their centrelines (the difference is of order (w / distance)², under
+0.2 % in the checks). The total is divided by 9 (three equal currents). A spiral of more than 400 straight pieces is not summed (too slow on a phone).
+
+**Resistance:** copper at 1.7241 µΩ·cm (IACS, as in Wire sizing) over the trace's centreline length, w wide and t thick, at DC.
+
+### Assumptions and limits
+
+- **Air around the coil.** Copper planes nearby lower the inductance; a ferrite sheet raises it. The board's dielectric does not change it.
+- **One layer,** no via or return piece in the formulas, DC (at high frequency the current crowds to the edges and the self-capacitance makes it resonate).
+- **The monomial** was fitted to on-chip spirals 100–480 µm across; its result at PCB sizes is shown for comparison only.
+- **Display.** Three figures; the differences to one decimal.
+
+### How it was checked
+
+72 cases, the expected values from a Python implementation that replays each case's taps and typing. In every case the turns found for an inductance give it back to 1 part
+in 10⁹, the square spiral matches the Manhattan construction, and (for up to 32 pieces) the segment sum matches the same sum done with every filament pair everywhere and a
+quadrature twice as fine, to 0.2 %. Mohan's own error columns in Table IV are reproduced from the inputs within 0.61 points (his coefficients are printed to three figures).
+The cases: the opening screen and the pickers; the unit linking; eight geometries on each shape; three designs on each; micrometres, mils and ounces, nanohenries; the rounding
+of the turns; the 400-piece limit; the carry-over; nine refusals; the five examples and the formula-search card.
+
+540 more cases (three batches of 180: random shapes, sizes from 100 µm to 50 mm, traces, gaps, copper and turns, a tenth of them refused) compared every figure with the
+Python implementation; they were run and not kept. Building them found that the quadrature for neighbouring filaments needed a finer step, and that the first way of summing
+distant pieces was too slow for a phone.
+
+Published answers reproduced (Mohan's Table IV, measured):
+
+| Inductor | Measured | ASITIC | Tool (current sheet) | Segment sum |
+|---|---|---|---|---|
+| #7, square, 9.5 turns, 153 µm, w 1.8 µm, s 1.9 µm | 18.2 nH | 17.7 nH | 17.8 nH | 17.6 nH |
+| #56, octagon, 5 turns, 346 µm, w 18 µm, s 2 µm | 7.50 nH | 7.30 nH | 7.45 nH | 7.26 nH |
 
 [↑ Index](#index)
 
