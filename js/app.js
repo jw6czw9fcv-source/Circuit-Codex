@@ -28192,11 +28192,11 @@ function renderLcFilter(domain, tool, favId) {
   const hCap = (x, y) => `M${x} ${y - 9} V${y + 9} M${x + 6} ${y - 9} V${y + 9}`;
   const vCap = (x, y) => `M${x - 9} ${y} H${x + 9} M${x - 9} ${y + 6} H${x + 9}`;
   function ladderDrawing() {
-    const k = problem() ? null : ladder(), n = state.poles, Y = 30, G = 112, xl = 268, x0 = 92, wd = 160 / n, pc = GREEN, grey = "#8A9099";
+    const k = problem() ? null : ladder(), n = state.poles, Y = 30, G = 112, xl = 262, x0 = 92, wd = 160 / n, pc = GREEN, grey = "#8A9099";
     let o = `<circle cx="22" cy="71" r="11" stroke="${BLUE}" stroke-width="1.6"/>` + ln("M16 71 q3 -7 6 0 q3 7 6 0", BLUE, 1.4);
     o += ln(`M22 60 V${Y} H34 M70 ${Y} H${x0}`) + ln(hRes(34, Y), BLUE, 1.8) + lbl("prs", 52, 16, `Rs ${si(state.rs, "Ω")}`, BLUE);
     const rlTone = k && k.load !== 1 ? GREEN : BLUE;
-    o += ln(`M22 82 V${G} H${xl}`) + ln(`M${x0 + 160} ${Y} H${xl} M${xl} ${Y} V52 M${xl} 88 V${G}`) + ln(vRes(xl, 52), rlTone, 1.8) + lbl("prl", xl, 4, `RL ${si(k ? k.rl : state.rs, "Ω")}`, rlTone, "end");   // above a tank in the line, whose coil reaches y 11
+    o += ln(`M22 82 V${G} H${xl}`) + ln(`M${x0 + 160} ${Y} H${xl} M${xl} ${Y} V52 M${xl} 88 V${G}`) + ln(vRes(xl, 52), rlTone, 1.8) + rlLabel(xl, si(k ? k.rl : state.rs, "Ω"), rlTone);
     o += ln(`M22 ${G} V${G + 6} M14 ${G + 6} H30 M17 ${G + 10} H27 M20 ${G + 14} H24`);
     const c3 = (x, y, v) => (v ? `M${x} ${y} a3.5 3.5 0 0 1 0 7 a3.5 3.5 0 0 1 0 7 a3.5 3.5 0 0 1 0 7` : `M${x} ${y} a3.5 3.5 0 0 1 7 0 a3.5 3.5 0 0 1 7 0 a3.5 3.5 0 0 1 7 0`);
     const secs = k ? k.secs : [];
@@ -28217,23 +28217,25 @@ function renderLcFilter(domain, tool, favId) {
       }
       o += `<text x="${cx.toFixed(1)}" y="126" fill="${grey}" font-size="11" font-weight="600" text-anchor="middle">${i + 1}</text>`;
     });
-    return `<svg width="290" height="136" viewBox="0 -8 290 136" fill="none">${o}</svg>`;
+    return `<svg width="310" height="136" viewBox="0 -8 310 136" fill="none">${o}</svg>`;
   }
+  // The load resistor's name and value, two lines to its right, centred on it (the resistor spans y 52 to 88).
+  const rlLabel = (xl, v, tone) => `<text data-res="prl" fill="${tone}" font-size="11" font-weight="600" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round"><tspan x="${xl + 10}" y="67">RL</tspan><tspan x="${xl + 10}" y="80">${v}</tspan></text>`;
   function diagram() {
     if (multi()) return ladderDrawing();
     const k = problem() ? null : calc();
     const pc = state.given === "f" ? GREEN : BLUE;          // the parts are calculated when the frequency and the bandwidth are given
     const lt = k ? `L1 ${si(k.L, "H")}` : "L1", ct = k ? `C1 ${si(k.C, "F")}` : "C1";
-    const Y = 30, G = 112, xl = 268;                       // the rail, the ground return, the load
+    const Y = 30, G = 112, xl = 262;                       // the rail, the ground return, the load
     let o = `<circle cx="22" cy="71" r="11" stroke="${BLUE}" stroke-width="1.6"/>` + ln("M16 71 q3 -7 6 0 q3 7 6 0", BLUE, 1.4);
     o += ln(`M22 60 V${Y} H34 M70 ${Y} H96`) + ln(hRes(34, Y), BLUE, 1.8) + lbl("prs", 52, 16, `Rs ${si(state.rs, "Ω")}`, BLUE);
-    o += ln(`M22 82 V${G} H${xl}`) + ln(`M${xl} ${Y} V52 M${xl} 88 V${G}`) + ln(vRes(xl, 52), BLUE, 1.8) + lbl("prl", xl, 20, `RL ${si(state.rl, "Ω")}`, BLUE, "end");
+    o += ln(`M22 82 V${G} H${xl}`) + ln(`M${xl} ${Y} V52 M${xl} 88 V${G}`) + ln(vRes(xl, 52), BLUE, 1.8) + rlLabel(xl, si(state.rl, "Ω"), BLUE);
     o += ln(`M140 ${G} V${G + 6} M132 ${G + 6} H148 M135 ${G + 10} H145 M138 ${G + 14} H142`);
     if (isPass() && isSeries()) {          // L and C in the line
       o += ln(`M96 ${Y} H104 M144 ${Y} H174 M180 ${Y} H${xl}`) + ln(hCoil(104, Y), pc, 1.8) + ln(hCap(174, Y), pc, 2) + lbl("pl", 124, 18, lt, pc) + lbl("pc", 177, 52, ct, pc);
     } else if (isPass()) {                 // L and C across the load
-      o += ln(`M96 ${Y} H${xl} M140 ${Y} V52 M140 92 V${G} M190 ${Y} V69 M190 75 V${G}`) + ln(vCoil(140, 52), pc, 1.8) + ln(vCap(190, 69), pc, 2)
-        + lbl("pl", 130, 76, lt, pc, "end") + lbl("pc", 202, 76, ct, pc, "start");
+      o += ln(`M96 ${Y} H${xl} M140 ${Y} V52 M140 92 V${G} M180 ${Y} V69 M180 75 V${G}`) + ln(vCoil(140, 52), pc, 1.8) + ln(vCap(180, 69), pc, 2)
+        + lbl("pl", 130, 76, lt, pc, "end") + lbl("pc", 192, 76, ct, pc, "start");
     } else if (isSeries()) {               // the trap: L over C from the line to ground
       o += ln(`M96 ${Y} H${xl} M170 ${Y} V42 M170 82 V87 M170 93 V${G}`) + ln(vCoil(170, 42), pc, 1.8) + ln(vCap(170, 87), pc, 2)
         + lbl("pl", 182, 66, lt, pc, "start") + lbl("pc", 182, 100, ct, pc, "start");
@@ -28241,7 +28243,7 @@ function renderLcFilter(domain, tool, favId) {
       o += ln(`M96 ${Y} H112 M112 14 V46 M112 14 H130 M170 14 H188 M112 46 H147 M153 46 H188 M188 14 V46 M188 ${Y} H${xl}`) + ln(hCoil(130, 14), pc, 1.8) + ln(hCap(147, 46), pc, 2)
         + lbl("pl", 150, 3, lt, pc) + lbl("pc", 150, 70, ct, pc);
     }
-    return `<svg width="290" height="136" viewBox="0 -8 290 136" fill="none">${o}</svg>`;
+    return `<svg width="310" height="136" viewBox="0 -8 310 136" fill="none">${o}</svg>`;
   }
 
   // The response from f0 / k to k f0, k from the bandwidth (about three bandwidths either side), widened to take in the check frequency, up to ten times.
