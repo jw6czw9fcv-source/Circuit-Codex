@@ -94,7 +94,7 @@ th { background: var(--card); }
 <header class="bar">
   <a class="btn" href="./#/home" aria-label="Back to the app">‹ App</a>
   <h1>Manual</h1>
-  <a class="btn" href="manual.pdf?h=60f22ab16a" download="Circuit Codex manual.pdf">PDF</a>
+  <a class="btn" href="manual.pdf?h=6fa94fb1f6" download="Circuit Codex manual.pdf">PDF</a>
 </header>
 <main>
 <div class="cover">
@@ -17493,19 +17493,18 @@ by side share the heat, so N of them in parallel divide θ by N.</p>
 <section class="tool" id="via-rlc" style="--accent:#5BC4E0">
   <div class="crumb">PCB &amp; interconnect › Vias &amp; layout</div>
   <h2>Via impedance (R, L, C)</h2>
-  <figure class="shot"><img src="manual/img/via-rlc.jpg?h=fee38c1dd5" loading="lazy" alt="Via impedance (R, L, C) as it appears in the app" width="430" height="932"></figure>
+  <figure class="shot"><img src="manual/img/via-rlc.jpg?h=7d11f34025" loading="lazy" alt="Via impedance (R, L, C) as it appears in the app" width="430" height="932"></figure>
   <h3>What it computes</h3>
 <p>The inductance, capacitance and resistance of a plated through via, and what they do to a signal. The drawing is a cross-section through the via: the board, the planes
 with their clearance holes, the plated barrel and its pads, to scale in height.</p>
 <ul>
 <li><strong>Inputs:</strong> the via's length T (the board's thickness), the drill, the pad and clearance diameters, the gap from the outer copper to the first plane, εr, a frequency and
-  the distance to a return via. The <strong>Your inputs</strong> heading picks the number of planes (with the copper layers they make), the copper weight and the plating thickness.</li>
-<li><strong>Big result:</strong> the inductance (Grover's tube) and the capacitance (the app's field solver), with a badge saying the solver answered (<strong>Solving…</strong> for a moment after
-  typing; <strong>Formula</strong> if the solver cannot run, Johnson's coaxial estimate then standing in).</li>
-<li><strong>Cells:</strong> the DC resistance of the plating, the via's impedance √(L / C) and its delay √(L C). <strong>Rows:</strong> the reactances of L and C at the frequency, the resistance there
+  the distance to a return via, centre to centre. The <strong>Your inputs</strong> heading picks the copper layers and planes (“4 layers · 2 planes”: the two outer layers plus the planes), the outer copper (the pads, as finished after plating), the inner copper (the planes) and the plating thickness.</li>
+<li><strong>Big result:</strong> the via's impedance √(L / C), with a line saying how it looks on a 50 Ω line (under 50 Ω a small capacitor, over it a small inductor, within 2 % nearly invisible) and a badge saying the solver answered (<strong>Solving…</strong> for a moment after typing; <strong>Formula</strong> if the solver cannot run, Johnson's coaxial estimate then standing in for C).</li>
+<li><strong>Cells:</strong> R (the plating's DC resistance), L (Grover's tube), C (the field solver) and the delay √(L C). <strong>Rows:</strong> the reactances of L and C at the frequency, the resistance there
   (with the skin effect), the loop inductance with a return via (two planes or more), how much the capacitance slows an edge on a 50 Ω line, the frequency up to which the
   lumped model holds, Johnson's coaxial estimate of C with its difference from the solver.</li>
-<li><strong>Units:</strong> one length unit for every length, the plating included: mm, mil or µm; MHz or GHz. <strong>Remembered:</strong> the planes, copper, plating and units.</li>
+<li><strong>Units:</strong> one length unit for every length, the plating included: mm, mil or µm; MHz or GHz. <strong>Remembered:</strong> the planes, the outer and inner copper, the plating and the units.</li>
 </ul>
 <p>Examples: Johnson's measured via, LaMeres's 18 mil blind via, a 1.6 mm 4-layer board.</p>
 <h3>Terms</h3>

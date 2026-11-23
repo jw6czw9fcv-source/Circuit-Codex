@@ -12236,13 +12236,12 @@ The inductance, capacitance and resistance of a plated through via, and what the
 with their clearance holes, the plated barrel and its pads, to scale in height.
 
 - **Inputs:** the via's length T (the board's thickness), the drill, the pad and clearance diameters, the gap from the outer copper to the first plane, εr, a frequency and
-  the distance to a return via. The **Your inputs** heading picks the number of planes (with the copper layers they make), the copper weight and the plating thickness.
-- **Big result:** the inductance (Grover's tube) and the capacitance (the app's field solver), with a badge saying the solver answered (**Solving…** for a moment after
-  typing; **Formula** if the solver cannot run, Johnson's coaxial estimate then standing in).
-- **Cells:** the DC resistance of the plating, the via's impedance √(L / C) and its delay √(L C). **Rows:** the reactances of L and C at the frequency, the resistance there
+  the distance to a return via, centre to centre. The **Your inputs** heading picks the copper layers and planes (“4 layers · 2 planes”: the two outer layers plus the planes), the outer copper (the pads, as finished after plating), the inner copper (the planes) and the plating thickness.
+- **Big result:** the via's impedance √(L / C), with a line saying how it looks on a 50 Ω line (under 50 Ω a small capacitor, over it a small inductor, within 2 % nearly invisible) and a badge saying the solver answered (**Solving…** for a moment after typing; **Formula** if the solver cannot run, Johnson's coaxial estimate then standing in for C).
+- **Cells:** R (the plating's DC resistance), L (Grover's tube), C (the field solver) and the delay √(L C). **Rows:** the reactances of L and C at the frequency, the resistance there
   (with the skin effect), the loop inductance with a return via (two planes or more), how much the capacitance slows an edge on a 50 Ω line, the frequency up to which the
   lumped model holds, Johnson's coaxial estimate of C with its difference from the solver.
-- **Units:** one length unit for every length, the plating included: mm, mil or µm; MHz or GHz. **Remembered:** the planes, copper, plating and units.
+- **Units:** one length unit for every length, the plating included: mm, mil or µm; MHz or GHz. **Remembered:** the planes, the outer and inner copper, the plating and the units.
 
 Examples: Johnson's measured via, LaMeres's 18 mil blind via, a 1.6 mm 4-layer board.
 

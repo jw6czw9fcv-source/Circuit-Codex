@@ -327,26 +327,27 @@
   }
 
   // A via's capacitance to its reference planes, as a body of revolution in
-  // (r, z): the barrel (radius rv, the whole length T) and its pads (rp) on
-  // the two outer layers at 1 V; P planes (copper tc thick, clearance holes
-  // ra) at 0 V, the first H under the top copper and the rest evenly down to
-  // H over the bottom copper (one plane: H under the top copper); the
-  // dielectric er between the outer copper, air above and below; the box's
-  // outer faces mirrors (no ground at infinity). Within 0.002 % of the exact
-  // coaxial value 2π ε / ln(ra / rv) per length; the two grids here, h²-
-  // extrapolated, within 0.2 % of three grids twice as fine (tools/fd_lines.py).
-  function via({ T, tc, H, P, rv, rp, ra, er }) {
+  // (r, z): the barrel (radius rv, the whole length T) and its pads (rp,
+  // copper to thick) on the two outer layers at 1 V; P planes (copper ti
+  // thick, clearance holes ra) at 0 V, the first H under the top copper and
+  // the rest evenly down to H over the bottom copper (one plane: H under the
+  // top copper); the dielectric er between the outer copper, air above and
+  // below; the box's outer faces mirrors (no ground at infinity). Within
+  // 0.002 % of the exact coaxial value 2π ε / ln(ra / rv) per length; the two
+  // grids here, h²-extrapolated, within 0.2 % of three grids twice as fine
+  // (tools/fd_lines.py).
+  function via({ T, to, ti, H, P, rv, rp, ra, er }) {
     const A = Math.max(T, 4 * ra), R = ra + Math.max(6 * ra, 2 * T), top = 2 * A + T;
-    const tops = P === 1 ? [T - tc - H] : Array.from({ length: P }, (_, k) => T - tc - H - (k * (T - 2 * tc - 2 * H - tc)) / (P - 1));
-    const planes = tops.map((y) => [A + y - tc, A + y]);
+    const tops = P === 1 ? [T - to - H] : Array.from({ length: P }, (_, k) => T - to - H - (k * (T - 2 * to - 2 * H - ti)) / (P - 1));
+    const planes = tops.map((y) => [A + y - ti, A + y]);
     // the smallest feature sets the first step: copper, gaps (the outer ones, between planes, under a single plane), the radii's differences
-    const gap = P === 1 ? T - 3 * tc - H : (T - 3 * tc - 2 * H) / (P - 1) - tc;
-    const feats = [tc, H, gap, rv, ra - rv].concat(rp > rv ? [rp - rv] : [], Math.abs(ra - rp) > 0 ? [Math.abs(ra - rp)] : []);
+    const gap = P === 1 ? T - 2 * to - H - ti : (T - 2 * to - 2 * H - ti) / (P - 1) - ti;
+    const feats = [to, ti, H, gap, rv, ra - rv].concat(rp > rv ? [rp - rv] : [], Math.abs(ra - rp) > 0 ? [Math.abs(ra - rp)] : []);
     const m = Math.max(Math.min(...feats), T / 400);
     return {
-      xb: [0, rv, rp, ra, R], yb: [0, A, A + tc, A + T - tc, A + T, top].concat(...planes), h0: m / 10, hmax: Math.max(T, ra), grow: 1.4,
-      grounds: planes.map(([a, b]) => [ra, R, a, b]), signals: [[0, rv, A, A + T], [0, rp, A + T - tc, A + T], [0, rp, A, A + tc]],
-      layers: [[A + tc, A + T - tc, er]], axisym: true,
+      xb: [0, rv, rp, ra, R], yb: [0, A, A + to, A + T - to, A + T, top].concat(...planes), h0: m / 10, hmax: Math.max(T, ra), grow: 1.4,
+      grounds: planes.map(([a, b]) => [ra, R, a, b]), signals: [[0, rv, A, A + T], [0, rp, A + T - to, A + T], [0, rp, A, A + to]],
+      layers: [[A + to, A + T - to, er]], axisym: true,
     };
   }
   // The capacitance in pF (lengths in mm): two grids, the second every cell

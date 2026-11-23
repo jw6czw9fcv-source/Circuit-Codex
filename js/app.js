@@ -29464,7 +29464,7 @@ function renderPlanarInductor(domain, tool, favId) {
 // time grows by 2.2 C Z0 / 2; the lumped model holds while the via is under a tenth of a wavelength in the board.
 const VIA_U = { d: { mm: 1e-3, mil: 25.4e-6, "µm": 1e-6 }, f: { MHz: 1e6, GHz: 1e9 } };
 const VIA_PLATING = [18, 20, 25, 30, 35];           // µm
-const VIA_OZ = [0.5, 1, 2];
+const VIA_OZ = [0.5, 1, 1.5, 2];
 const VIA_RHO = 1.7241e-8, VIA_MU0 = 4e-7 * Math.PI, VIA_C0 = 299792458;
 const VIA_NOTE = "A via is a short tube of copper: it has inductance like any wire, its pads and barrel have capacitance to the planes they pass, and its plating some resistance. At low frequencies all three are tiny; for fast edges the capacitance dents a line's impedance and slows the edge, the inductance adds to a decoupling capacitor's, and the return current needs a nearby path (a return via, or a capacitor between planes). The capacitance comes from a field solver; the inductance is Grover's for a tube, the via alone; with a return via s away, Johnson's loop inductance between the planes.";
 
@@ -29473,7 +29473,7 @@ function renderViaRlc(domain, tool, favId) {
   const state = {
     u: { d: pref(C, "ud", "mm", Object.keys(VIA_U.d)), f: pref(C, "uf", "GHz", Object.keys(VIA_U.f)) },
     planes: pref(C, "planes", 2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
-    oz: pref(C, "oz", 1, VIA_OZ),
+    ozo: pref(C, "ozo", 1, VIA_OZ), ozi: pref(C, "ozi", 1, VIA_OZ),            // outer copper (the pads, after plating) and inner (the planes)
     plating: pref(C, "plating", 25, VIA_PLATING),
     T: 1.6e-3, d: 0.3e-3, pad: 0.6e-3, clr: 0.8e-3, H: 0.2e-3, er: 4.3, f: 1e9, s: 1e-3,
   };
@@ -29487,11 +29487,11 @@ function renderViaRlc(domain, tool, favId) {
   const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
   const dim = (v) => `${n3(v / VIA_U.d[state.u.d])} ${state.u.d}`;
   const pct = (v) => (Math.abs(v) < 0.05 ? "0.0 %" : `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)} %`);
-  const tc = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
+  const to = () => state.ozo * TRACE_OZ_MIL * 25.4e-6, ti = () => state.ozi * TRACE_OZ_MIL * 25.4e-6;
 
   // ---------------- the numbers ----------------
   function problem() {
-    const { T, d, pad, clr, H, er, f, s } = state, t = tc(), tp = state.plating * 1e-6, P = state.planes;
+    const { T, d, pad, clr, H, er, f, s } = state, a = to(), b = ti(), tp = state.plating * 1e-6, P = state.planes;
     if (!(T > 0)) return "Enter the via's length, the board's thickness.";
     if (!(d > 0)) return "Enter the drill diameter.";
     if (!(tp < d / 2)) return "The plating is thicker than the hole's radius: make the drill larger.";
@@ -29499,8 +29499,8 @@ function renderViaRlc(domain, tool, favId) {
     if (!(clr > d)) return "The clearance hole in the planes must be wider than the drill.";
     if (!(H > 0)) return "Enter the gap from the outer copper to the first plane.";
     if (!(er >= 1)) return "Enter the board's dielectric constant, 1 or more.";
-    const room = P === 1 ? T - 3 * t - H : (T - 3 * t - 2 * H) / (P - 1) - t;
-    if (!(room > 0)) return `${P} plane${P > 1 ? "s" : ""} of ${state.oz} oz copper do not fit in ${dim(T)} with ${dim(H)} gaps.`;
+    const room = P === 1 ? T - 2 * a - H - b : (T - 2 * a - 2 * H - b) / (P - 1) - b;
+    if (!(room > 0)) return `${P} plane${P > 1 ? "s" : ""} of ${state.ozi} oz copper do not fit in ${dim(T)} with ${dim(H)} gaps.`;
     if (!(f > 0)) return "Enter a frequency.";
     if (!(s > d)) return "The return via must be farther than the drill's width.";
     return "";
@@ -29513,14 +29513,14 @@ function renderViaRlc(domain, tool, favId) {
     const rdc = (VIA_RHO * T) / (Math.PI * (r1 * r1 - (r1 - tp) ** 2)), delta = Math.sqrt(VIA_RHO / (Math.PI * f * VIA_MU0));
     const rf = Math.max(rdc, delta < tp ? (VIA_RHO * T) / (2 * Math.PI * r1 * delta) : rdc);
     // the cavity between the outermost planes (Johnson's h): from the first plane's lower face to the last plane's upper face
-    const t = tc(), P = state.planes;
-    const hcav = P >= 2 ? T - 4 * t - 2 * state.H : 0;
+    const P = state.planes;
+    const hcav = P >= 2 ? T - 2 * to() - 2 * state.H - 2 * ti() : 0;
     const Lloop = P >= 2 ? (VIA_MU0 / Math.PI) * hcav * Math.log(s / r1) : NaN;
     // Johnson and Graham's coaxial estimate, as quoted: 1.41 er T D1 / (D2 - D1) pF, lengths in inches
     const Cj = state.clr > state.pad ? 1.41 * state.er * (T / 0.0254) * (state.pad / 0.0254) / ((state.clr - state.pad) / 0.0254) * 1e-12 : NaN;
     return { L, rdc, rf, delta, Lloop, hcav, Cj, fmax: VIA_C0 / (10 * T * Math.sqrt(state.er)) };
   }
-  const params = () => ({ T: state.T * 1e3, tc: tc() * 1e3, H: state.H * 1e3, P: state.planes, rv: (state.d / 2) * 1e3, rp: (state.pad / 2) * 1e3, ra: (state.clr / 2) * 1e3, er: state.er });
+  const params = () => ({ T: state.T * 1e3, to: to() * 1e3, ti: ti() * 1e3, H: state.H * 1e3, P: state.planes, rv: (state.d / 2) * 1e3, rp: (state.pad / 2) * 1e3, ra: (state.clr / 2) * 1e3, er: state.er });
 
   // The field solver: the answer known for these inputs, or one asked for a moment after typing stops (at once for an example or a unit change).
   let solved = null, timer = null, gen = 0, failed = false;
@@ -29549,34 +29549,45 @@ function renderViaRlc(domain, tool, favId) {
   const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", BOARD = "rgba(143,193,245,0.08)";
   const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
   // A cross-section through the via's axis: the board, the planes with their clearance holes, the plated barrel, the pads; not to scale across (the
-  // widths keep their order), the layers to scale in height.
+  // widths keep their order), the layers to scale in height. Outside the board: each layer's number and what it is on the left (Pierre), the length on
+  // the right; the pad, clearance and drill on the axis.
   function diagram() {
-    const ok = !problem(), P = state.planes, t = tc();
-    const Y0 = 14, Hh = 130, cx = 130, S = Hh / (ok ? state.T : 1.6e-3);
+    const ok = !problem(), P = state.planes, t = ti(), tO = to();
     const T = ok ? state.T : 1.6e-3, H = ok ? state.H : 0.2e-3;
-    const tops = P === 1 ? [T - t - H] : Array.from({ length: P }, (_, k) => T - t - H - (k * (T - 3 * t - 2 * H)) / (P - 1));
+    const tops = P === 1 ? [T - tO - H] : Array.from({ length: P }, (_, k) => T - tO - H - (k * (T - 2 * tO - 2 * H - t)) / (P - 1));
+    // the layers' centres, top to bottom; the drawing is 130 high, taller (up to 220) when the layers would come closer than 13 apart for their labels
+    const rows = [T - tO / 2].concat(tops.map((zt) => zt - t / 2), [tO / 2]);
+    const minDz = Math.min(...rows.slice(1).map((z, i) => rows[i] - z));
+    const Y0 = 14, Hh = Math.min(220, Math.max(130, (13 * T) / minDz)), X0 = 72, X1 = 236, cx = 154, S = Hh / T;
     const y = (z) => Y0 + (T - z) * S;                 // z up from the bottom face
     // widths on screen: the drill 36, the pad and the clearance in proportion to the drill, kept apart
     const wd = 36, k = wd / (ok ? state.d : 0.3e-3), wp = Math.min(110, Math.max(wd + 6, (ok ? state.pad : 0.6e-3) * k)), wc = Math.min(130, Math.max(wd + 10, (ok ? state.clr : 0.8e-3) * k));
-    let o = `<rect x="20" y="${y(T)}" width="220" height="${T * S}" fill="${BOARD}" stroke="none"/>`;
+    let o = `<rect x="${X0}" y="${y(T)}" width="${X1 - X0}" height="${T * S}" fill="${BOARD}" stroke="none"/>`;
     // planes with the clearance hole
     for (const zt of tops) {
       const a = y(zt), h = Math.max(1.5, t * S);
-      o += `<rect x="20" y="${a}" width="${cx - wc / 2 - 20}" height="${h}" fill="${WIRE}"/><rect x="${cx + wc / 2}" y="${a}" width="${240 - cx - wc / 2}" height="${h}" fill="${WIRE}"/>`;
+      o += `<rect x="${X0}" y="${a}" width="${cx - wc / 2 - X0}" height="${h}" fill="${WIRE}"/><rect x="${cx + wc / 2}" y="${a}" width="${X1 - cx - wc / 2}" height="${h}" fill="${WIRE}"/>`;
     }
+    // the layers, numbered from the top, on the left: the two outer ones carry the signal, the others are planes (ground or supply)
+    const roomy = minDz * S >= 12.5;                    // too close even at the tallest: the numbers alone
+    rows.forEach((z, i) => {
+      const what = roomy ? (i === 0 || i === rows.length - 1 ? " signal" : " GND/VCC") : "";
+      o += `<text x="2" y="${(y(z) + 4).toFixed(1)}" fill="${GREY}" font-size="11" font-weight="600">${i + 1}${what}</text>`;
+    });
     // the barrel: two plated walls, and the pads on the outer layers
     const pw = Math.max(2, (state.plating * 1e-6) * k);
     o += `<rect x="${cx - wd / 2}" y="${y(T)}" width="${pw}" height="${T * S}" fill="${BLUE}"/><rect x="${cx + wd / 2 - pw}" y="${y(T)}" width="${pw}" height="${T * S}" fill="${BLUE}"/>`;
-    const ph = Math.max(2, t * S);
+    const ph = Math.max(2, tO * S);
     o += `<rect x="${cx - wp / 2}" y="${y(T)}" width="${wp}" height="${ph}" fill="${BLUE}"/><rect x="${cx - wp / 2}" y="${y(0) - ph}" width="${wp}" height="${ph}" fill="${BLUE}"/>`;
+    // the signal's traces: in on layer 1 from the left, out on the last layer to the right (thinner than the pads: they are drawn, not computed)
+    const th = Math.max(1.5, ph * 0.6);
+    o += `<rect x="${X0}" y="${y(T)}" width="${cx - wp / 2 - X0}" height="${th}" fill="${BLUE}" opacity="0.7"/><rect x="${cx + wp / 2}" y="${y(0) - th}" width="${X1 - cx - wp / 2}" height="${th}" fill="${BLUE}" opacity="0.7"/>`;
     // labels
     o += lbl("dd", cx, y(0) + 14, ok ? `drill ⌀ ${dim(state.d)}` : "drill", BLUE);
     o += lbl("dp", cx, y(T) - 4, ok ? `pad ⌀ ${dim(state.pad)}` : "pad", BLUE);
-    // the clearance on two lines, inside the board right of the hole
-    const xc = cx + wc / 2 + 5, yc = tops.length > 1 ? (y(tops[0]) + y(tops[tops.length - 1])) / 2 : y(tops[0]) + 18;
-    o += `<text data-res="dc" x="${xc}" y="${yc - 2}" fill="${GREY}" font-size="11" font-weight="600" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round"><tspan x="${xc}">clearance</tspan><tspan x="${xc}" dy="13">${ok ? `⌀ ${dim(state.clr)}` : ""}</tspan></text>`;
-    o += `<path d="M252 ${y(T)} V${y(0)} M248 ${y(T)} H256 M248 ${y(0)} H256" stroke="${GREY}" stroke-width="1"/>` + lbl("dt", 258, y(T / 2) + 4, ok ? dim(T) : "T", BLUE, "start");
-    o += lbl("dl", 24, y(tops[0]) - 4, `${P} plane${P > 1 ? "s" : ""}`, GREY, "start");
+    // the clearance on the axis, just under the first plane
+    o += lbl("dc", cx, y(tops[0]) + Math.max(1.5, t * S) + 11, ok ? `clearance ⌀ ${dim(state.clr)}` : "clearance", GREY);
+    o += `<path d="M246 ${y(T)} V${y(0)} M242 ${y(T)} H250 M242 ${y(0)} H250" stroke="${GREY}" stroke-width="1"/>` + lbl("dt", 254, y(T / 2) + 4, ok ? dim(T) : "T", BLUE, "start");
     return `<svg width="310" height="${Hh + 34}" viewBox="0 0 310 ${Hh + 34}" fill="none">${o}</svg>`;
   }
 
@@ -29596,12 +29607,15 @@ function renderViaRlc(domain, tool, favId) {
     rows += row("An edge on a 50 Ω line", have ? `slower by ${si(2.2 * Cv * 25, "s")} (10–90 %)` : "…", "ed");
     rows += row("Lumped model good to about", si(k.fmax, "Hz"), "fm");
     rows += row("Johnson's coaxial estimate of C", isFinite(k.Cj) ? `${si(k.Cj, "F")}${solved !== null ? ` (${pct((100 * (k.Cj - Cv)) / Cv)})` : ""}` : "none: the clearance is not wider than the pad", "cj");
+    // how the via looks on a 50 Ω line: under it a small capacitor, over it a small inductor, within 2 % nearly nothing
+    const look = !have ? "solving for the capacitance…" : Math.abs(z / 50 - 1) <= 0.02 ? "close to 50 Ω: nearly invisible on a 50 Ω line"
+      : z < 50 ? "under 50 Ω: on a 50 Ω line it acts as a small capacitor" : "over 50 Ω: on a 50 Ω line it acts as a small inductor";
     return `<div class="result-field">
-          <div class="result-head"><span class="label">Inductance and capacitance</span>${badge}</div>
-          <div class="result-value"><span class="num" data-res="big">${si(k.L, "H")} · ${have ? si(Cv, "F") : "…"}</span></div>
-          <div class="result-sub" data-res="sub">L of the barrel (Grover); C to the planes, pads included</div>
+          <div class="result-head"><span class="label">Via impedance √(L / C)</span>${badge}</div>
+          <div class="result-value"><span class="num" data-res="big">${have ? si(z, "Ω") : "…"}</span></div>
+          <div class="result-sub" data-res="sub">${look}</div>
         </div>
-        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Resistance", si(k.rdc, "Ω"), "c1")}${cell("Impedance", have ? si(z, "Ω") : "…", "c2")}${cell("Delay", have ? si(td, "s") : "…", "c3")}</div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(4,1fr);">${cell("R", si(k.rdc, "Ω"), "c1")}${cell("L", si(k.L, "H"), "c2")}${cell("C", have ? si(Cv, "F") : "…", "c3")}${cell("Delay", have ? si(td, "s") : "…", "c4")}</div>
         <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${VIA_NOTE}</div></div>`;
   }
   function show() {
@@ -29612,11 +29626,11 @@ function renderViaRlc(domain, tool, favId) {
   const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, st); state.u = u; paint(true); };
   useExamples([
     { title: "Johnson's measured via", note: "⌀ 10 mil, planes 40 mil apart: 360 fF (he measured 370), loop L 1.29 nH at 120 mil (measured 1.41).",
-      apply: example({ planes: 2, oz: 0.5, plating: 25, T: 0.05074 * 0.0254, d: 0.010 * 0.0254, pad: 0.024 * 0.0254, clr: 0.024 * 0.0254, H: 0.004 * 0.0254, er: 4.1, s: 0.12 * 0.0254, u: { d: "mil" } }) },
+      apply: example({ planes: 2, ozo: 0.5, ozi: 0.5, plating: 25, T: 0.05074 * 0.0254, d: 0.010 * 0.0254, pad: 0.024 * 0.0254, clr: 0.024 * 0.0254, H: 0.004 * 0.0254, er: 4.1, s: 0.12 * 0.0254, u: { d: "mil" } }) },
     { title: "LaMeres's 18 mil blind via", note: "44 mil long, 20 mil pad, 46 mil clearance: 299 pH and 225 fF; his 3D result 305 pH, 230 fF.",
-      apply: example({ planes: 1, oz: 2, plating: 25, T: 44.4 * 25.4e-6, d: 18 * 25.4e-6, pad: 20 * 25.4e-6, clr: 46 * 25.4e-6, H: 18.9 * 25.4e-6, er: 4.3, u: { d: "mil" } }) },
+      apply: example({ planes: 1, ozo: 2, ozi: 2, plating: 25, T: 44.4 * 25.4e-6, d: 18 * 25.4e-6, pad: 20 * 25.4e-6, clr: 46 * 25.4e-6, H: 18.9 * 25.4e-6, er: 4.3, u: { d: "mil" } }) },
     { title: "A 1.6 mm, 4-layer board", note: "0.3 mm drill, 0.6 mm pad, 0.8 mm clearance: 677 pH, 351 fF, 43.9 Ω, a small capacitor on 50 Ω.",
-      apply: example({ planes: 2, oz: 1, plating: 25, T: 1.6e-3, d: 0.3e-3, pad: 0.6e-3, clr: 0.8e-3, H: 0.2e-3, er: 4.3, s: 1e-3, u: { d: "mm" } }) },
+      apply: example({ planes: 2, ozo: 1, ozi: 1, plating: 25, T: 1.6e-3, d: 0.3e-3, pad: 0.6e-3, clr: 0.8e-3, H: 0.2e-3, er: 4.3, s: 1e-3, u: { d: "mm" } }) },
   ]);
 
   function paint(now) {
@@ -29628,7 +29642,7 @@ function renderViaRlc(domain, tool, favId) {
     };
     const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
     // the planes with the copper layers they make (the two outer layers added); the plating in the tool's length unit
-    const heading = `${sel('class="label-select" data-planes', Array.from({ length: 12 }, (_, i) => [i + 1, `${i + 1} plane${i ? "s" : ""} · ${i + 3} layers`]), state.planes)} ${sel('class="label-select" data-oz', VIA_OZ.map((o) => [o, `${o} oz`]), state.oz)} ${sel('class="label-select" data-plating', VIA_PLATING.map((p) => [p, `${dim(p * 1e-6)} plating`]), state.plating)}`;
+    const heading = `${sel('class="label-select" data-planes', Array.from({ length: 12 }, (_, i) => [i + 1, `${i + 3} layers · ${i + 1} plane${i ? "s" : ""}`]), state.planes)} ${sel('class="label-select" data-ozo', VIA_OZ.map((o) => [o, `${o} oz outer`]), state.ozo)} ${sel('class="label-select" data-ozi', VIA_OZ.map((o) => [o, `${o} oz inner`]), state.ozi)} ${sel('class="label-select" data-plating', VIA_PLATING.map((p) => [p, `${dim(p * 1e-6)} plating`]), state.plating)}`;
     ask(now);
     app.innerHTML = `
       ${calcHeader(tool, favId, "Through via: inductance, capacitance, resistance")}
@@ -29638,7 +29652,7 @@ function renderViaRlc(domain, tool, favId) {
       <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
         <span>Your inputs</span><span></span><span>${heading}</span>
       </div>
-      ${pair(box("Length T", "T"), box("Drill ⌀", "d"))}${pair(box("Pad ⌀", "pad"), box("Clearance ⌀", "clr"))}${pair(box("Gap to plane", "H"), box("εr", "er"))}${pair(box("Frequency", "f"), box("Return via at", "s"))}
+      ${pair(box("Length T", "T"), box("Drill ⌀", "d"))}${pair(box("Pad ⌀", "pad"), box("Clearance ⌀", "clr"))}${pair(box("Gap to plane", "H"), box("εr", "er"))}${pair(box("Frequency", "f"), box("Return via at", "s", '<span class="field-hint">centre to centre</span>'))}
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -29662,7 +29676,7 @@ function renderViaRlc(domain, tool, favId) {
         paint(true);
       };
     });
-    for (const [attr, key] of [["data-planes", "planes"], ["data-oz", "oz"], ["data-plating", "plating"]]) {
+    for (const [attr, key] of [["data-planes", "planes"], ["data-ozo", "ozo"], ["data-ozi", "ozi"], ["data-plating", "plating"]]) {
       app.querySelector(`select[${attr}]`).onchange = (e) => { state[key] = +e.target.value; setPref(C, key, state[key]); paint(true); };
     }
   }

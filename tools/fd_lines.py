@@ -192,35 +192,35 @@ def fit2(zs):
     return (4 * R2 - R1) / 3
 
 
-def via_planes(T, tc, H, P):
-    """The planes' copper, (bottom, top) heights above the via's bottom end: the first H under the top copper, the rest evenly down to H over the bottom
-    copper (one plane: H under the top copper)."""
-    tops = [T - tc - H] if P == 1 else [T - tc - H - k * (T - 2 * tc - 2 * H - tc) / (P - 1) for k in range(P)]
-    return [(y - tc, y) for y in tops]
+def via_planes(T, to, ti, H, P):
+    """The planes' copper (ti thick), (bottom, top) heights above the via's bottom end: the first H under the top copper (to thick), the rest evenly down
+    to H over the bottom copper (one plane: H under the top copper)."""
+    tops = [T - to - H] if P == 1 else [T - to - H - k * (T - 2 * to - 2 * H - ti) / (P - 1) for k in range(P)]
+    return [(y - ti, y) for y in tops]
 
 
-def via_spec(T, tc, H, P, rv, rp, ra, er):
-    """As fieldsolver.js via(): breaks, steps, boxes and layers (lengths in mm). The via's barrel and its pads on the two outer layers at 1 V, the planes
-    with their clearance holes at 0 V, the dielectric between the outer copper, air above and below; the box's outer faces are mirrors."""
+def via_spec(T, to, ti, H, P, rv, rp, ra, er):
+    """As fieldsolver.js via(): breaks, steps, boxes and layers (lengths in mm). The via's barrel and its pads (outer copper to) at 1 V, the planes (inner
+    copper ti) with their clearance holes at 0 V, the dielectric between the outer copper, air above and below; the box's outer faces are mirrors."""
     A = max(T, 4 * ra); R = ra + max(6 * ra, 2 * T); top = 2 * A + T
-    planes = [(A + a, A + b) for a, b in via_planes(T, tc, H, P)]
-    gap = T - 3 * tc - H if P == 1 else (T - 3 * tc - 2 * H) / (P - 1) - tc
-    feats = [tc, H, gap, rv, ra - rv] + ([rp - rv] if rp > rv else []) + ([abs(ra - rp)] if abs(ra - rp) > 0 else [])
+    planes = [(A + a, A + b) for a, b in via_planes(T, to, ti, H, P)]
+    gap = T - 2 * to - H - ti if P == 1 else (T - 2 * to - 2 * H - ti) / (P - 1) - ti
+    feats = [to, ti, H, gap, rv, ra - rv] + ([rp - rv] if rp > rv else []) + ([abs(ra - rp)] if abs(ra - rp) > 0 else [])
     m = max(min(feats), T / 400)
     xb = [0, rv, rp, ra, R]
-    yb = [0, A, A + tc, A + T - tc, A + T, top] + [y for p in planes for y in p]
-    signals = [(0, rv, A, A + T), (0, rp, A + T - tc, A + T), (0, rp, A, A + tc)]
+    yb = [0, A, A + to, A + T - to, A + T, top] + [y for p in planes for y in p]
+    signals = [(0, rv, A, A + T), (0, rp, A + T - to, A + T), (0, rp, A, A + to)]
     grounds = [(ra, R, a, b) for a, b in planes]
-    return dict(xb=sorted(set(xb)), yb=sorted(set(yb)), h0=m / 10, hmax=max(T, ra), grow=1.4, signals=signals, grounds=grounds, layer=(A + tc, A + T - tc, er))
+    return dict(xb=sorted(set(xb)), yb=sorted(set(yb)), h0=m / 10, hmax=max(T, ra), grow=1.4, signals=signals, grounds=grounds, layer=(A + to, A + T - to, er))
 
 
-def app_via(T, tc, H, P, rv, rp, ra, er, level=None):
+def app_via(T, to, ti, H, P, rv, rp, ra, er, level=None):
     """As fieldsolver.js via(): the capacitance in pF, from levels 0 and 1 extrapolated as h^2 (within 0.2 % of a three-level solve on a twice-finer grid)
     unless one level is asked for."""
     if level is None:
-        c0, c1 = (app_via(T, tc, H, P, rv, rp, ra, er, L) for L in (0, 1))
+        c0, c1 = (app_via(T, to, ti, H, P, rv, rp, ra, er, L) for L in (0, 1))
         return (4 * c1 - c0) / 3
-    sp_ = via_spec(T, tc, H, P, rv, rp, ra, er)
+    sp_ = via_spec(T, to, ti, H, P, rv, rp, ra, er)
     g = Grid(sp_["xb"], sp_["yb"], sp_["h0"], sp_["hmax"], level, sp_["grow"])
     g.layer(*sp_["layer"])
     for b in sp_["grounds"]: g.box(*b, volts=0.0)
