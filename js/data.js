@@ -175,7 +175,7 @@ const DOMAINS = [
       {
         title: "Vias & layout",
         tools: [
-          { name: "Thermal vias", calc: "thermal-vias" }, { name: "Via impedance (R, L, C)" }, { name: "Padstack calculator" }, { name: "BGA land pattern" },
+          { name: "Thermal vias", calc: "thermal-vias" }, { name: "Via impedance (R, L, C)", calc: "via-rlc" }, { name: "Padstack calculator" }, { name: "BGA land pattern" },
           { name: "Planar (PCB) inductor", calc: "planar-inductor" }, { name: "Decoupling capacitor", calc: "decoupling" },
         ],
       },
@@ -376,6 +376,7 @@ const TOOL_KEYWORDS = {
   "decoupling": "decoupling bypass capacitor mlcc target impedance pdn power distribution esr esl self resonant frequency srf bulk capacitance ripple current step 100 nf",
   "via-current": "via current capacity ampacity amps vias how many plating drill barrel wall cross section ipc-2152 ipc 2152 brooks adam trace resistance voltage drop",
   "planar-inductor": "planar inductor pcb inductor spiral inductor printed inductor pcb coil printed coil flat coil spiral coil square spiral octagonal hexagonal circular spiral on-chip inductor integrated inductor mohan wheeler current sheet inductance turns trace width spacing outer diameter inner diameter fill ratio nfc antenna coil wireless charging coil inductive sensor coil",
+  "via-rlc": "via impedance via inductance via capacitance via resistance plated through hole pth through via barrel pad antipad clearance hole return via stitching via signal via parasitic inductance parasitic capacitance discontinuity rise time edge field solver grover johnson",
   "thermal-vias": "thermal via vias array pcb heat conduction plating barrel sleeve hole filled unfilled solder copper fill thermal resistance pad qfn exposed pad °c/w k/w",
   "heat-sink": "heat sink heatsink thermal resistance theta θja θjc θcs θsa junction case ambient temperature tj tc power dissipation to-220 mica grease thermal pad interface cooling °c/w k/w",
   "internal-resistance": "battery internal resistance ir esr cell voltage drop sag load pulse short circuit current max power open circuit voc",
@@ -497,6 +498,7 @@ const RELATED = {
   "inrush-limiter": ["thermistor", "rectifier-halfwave", "decoupling"],
   "heat-sink": ["linear-regulator", "thermal-vias", "mosfet-switch"],
   "planar-inductor": ["air-coil", "toroid-winding", "trace-width", "skin-depth", "lc-filter"],
+  "via-rlc": ["via-current", "thermal-vias", "decoupling", "microstrip", "skin-depth"],
   "thermal-vias": ["heat-sink", "via-current", "trace-width"],
   "via-current": ["trace-width", "thermal-vias"],
   "decoupling": ["linear-regulator", "trace-width", "via-current"],

@@ -68,7 +68,8 @@ class Grid:
         my = (self.y[:-1] + self.y[1:]) / 2; mx = (self.x[:-1] + self.x[1:]) / 2
         self.eps[np.ix_((my > y0) & (my < y1), (mx > x0) & (mx < x1))] = er
 
-    def S(self, air=False):
+    def S(self, air=False, axisym=False):
+        """phi . L phi; with axisym, x is the radius and every weight takes the ring it sweeps (2 pi r), so S = C / eps0 of the whole body of revolution."""
         eps = np.ones_like(self.eps) if air else self.eps
         ny, nx = eps.shape; dx, dy = np.diff(self.x), np.diff(self.y)
         pad = np.zeros((ny + 2, nx + 2)); pad[1:-1, 1:-1] = eps
@@ -77,6 +78,12 @@ class Grid:
         wh = (pad[0:ny + 1, 1:nx + 1] * dyp[0:ny + 1, None] / 2 + pad[1:ny + 2, 1:nx + 1] * dyp[1:ny + 2, None] / 2) / dx[None, :]
         # Vertical edge (i,j)-(i,j+1): the cells left and right of it.
         wv = (pad[1:ny + 1, 0:nx + 1] * dxp[None, 0:nx + 1] / 2 + pad[1:ny + 1, 1:nx + 2] * dxp[None, 1:nx + 2] / 2) / dy[:, None]
+        if axisym:
+            # radial edge: 2 pi times its mid-radius; axial edge: the annuli of the half-cells left and right of the node, pi (r_out^2 - r_in^2)
+            wh = wh * (2 * math.pi * (self.x[:-1] + self.x[1:]) / 2)[None, :]
+            xl = np.concatenate([[0], dx]) / 2; xr = np.concatenate([dx, [0]]) / 2
+            aL = math.pi * (self.x ** 2 - np.maximum(self.x - xl, 0) ** 2); aR = math.pi * ((self.x + xr) ** 2 - self.x ** 2)
+            wv = (pad[1:ny + 1, 0:nx + 1] * aL[None, :] + pad[1:ny + 1, 1:nx + 2] * aR[None, :]) / dy[:, None]
         N = (ny + 1) * (nx + 1); idx = np.arange(N).reshape(ny + 1, nx + 1)
         a = np.concatenate([idx[:, :-1].ravel(), idx[:-1, :].ravel()])
         b = np.concatenate([idx[:, 1:].ravel(), idx[1:, :].ravel()])
@@ -183,6 +190,42 @@ def embedded_pair(w, t, s, h1, H2, er, mode, level):
 def fit2(zs):
     R1, R2 = 2 * zs[1] - zs[0], 2 * zs[2] - zs[1]
     return (4 * R2 - R1) / 3
+
+
+def via_planes(T, tc, H, P):
+    """The planes' copper, (bottom, top) heights above the via's bottom end: the first H under the top copper, the rest evenly down to H over the bottom
+    copper (one plane: H under the top copper)."""
+    tops = [T - tc - H] if P == 1 else [T - tc - H - k * (T - 2 * tc - 2 * H - tc) / (P - 1) for k in range(P)]
+    return [(y - tc, y) for y in tops]
+
+
+def via_spec(T, tc, H, P, rv, rp, ra, er):
+    """As fieldsolver.js via(): breaks, steps, boxes and layers (lengths in mm). The via's barrel and its pads on the two outer layers at 1 V, the planes
+    with their clearance holes at 0 V, the dielectric between the outer copper, air above and below; the box's outer faces are mirrors."""
+    A = max(T, 4 * ra); R = ra + max(6 * ra, 2 * T); top = 2 * A + T
+    planes = [(A + a, A + b) for a, b in via_planes(T, tc, H, P)]
+    gap = T - 3 * tc - H if P == 1 else (T - 3 * tc - 2 * H) / (P - 1) - tc
+    feats = [tc, H, gap, rv, ra - rv] + ([rp - rv] if rp > rv else []) + ([abs(ra - rp)] if abs(ra - rp) > 0 else [])
+    m = max(min(feats), T / 400)
+    xb = [0, rv, rp, ra, R]
+    yb = [0, A, A + tc, A + T - tc, A + T, top] + [y for p in planes for y in p]
+    signals = [(0, rv, A, A + T), (0, rp, A + T - tc, A + T), (0, rp, A, A + tc)]
+    grounds = [(ra, R, a, b) for a, b in planes]
+    return dict(xb=sorted(set(xb)), yb=sorted(set(yb)), h0=m / 10, hmax=max(T, ra), grow=1.4, signals=signals, grounds=grounds, layer=(A + tc, A + T - tc, er))
+
+
+def app_via(T, tc, H, P, rv, rp, ra, er, level=None):
+    """As fieldsolver.js via(): the capacitance in pF, from levels 0 and 1 extrapolated as h^2 (within 0.2 % of a three-level solve on a twice-finer grid)
+    unless one level is asked for."""
+    if level is None:
+        c0, c1 = (app_via(T, tc, H, P, rv, rp, ra, er, L) for L in (0, 1))
+        return (4 * c1 - c0) / 3
+    sp_ = via_spec(T, tc, H, P, rv, rp, ra, er)
+    g = Grid(sp_["xb"], sp_["yb"], sp_["h0"], sp_["hmax"], level, sp_["grow"])
+    g.layer(*sp_["layer"])
+    for b in sp_["grounds"]: g.box(*b, volts=0.0)
+    for b in sp_["signals"]: g.box(*b, volts=1.0)
+    return 8.8541878128e-12 * g.S(axisym=True) * 1e-3 * 1e12
 
 
 def app_microstrip(w, t, h, er, s=None, mode=None, H2=None, level=None, mask=None):

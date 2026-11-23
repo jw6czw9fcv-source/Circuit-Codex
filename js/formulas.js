@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Via impedance (R, L, C)",
+    domain: "pcb",
+    formulas: ["L = 0.002 l [ln(2l / ρ1) + ln ζ − 1] µH", "Loop: L = (μ0 h / π) ln(s / r)", "Z = √(L / C),  td = √(L C)", "R = ρCu T / (π (ρ1² − ρ2²))"],
+    note: "A plated through via's inductance (Grover's tube, from Wadell's handbook), its capacitance to the planes (the app's field solver, a body of revolution), its resistance, its impedance √(L / C) and delay, the loop inductance with a return via (Johnson), and what it does to an edge on a 50 Ω line.",
+  },
+  {
     tool: "Thermal vias",
     domain: "pcb",
     formulas: ["θ = l / (λCu × π × (d + b) × b)", "θfill = l / (λfill × π × (d/2)²)", "θN = (θ ∥ θfill) / N", "Vias per side = ⌊(side − drill) / 1.2 mm⌋ + 1"],

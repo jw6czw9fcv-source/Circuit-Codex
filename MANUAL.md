@@ -160,6 +160,7 @@ will key on, since that is the id the app already holds for each tool.
 - Impedance → [Crosstalk](#crosstalk)
 - Impedance → [Laminate materials](#laminates)
 - Vias & layout → [Thermal vias](#thermal-vias)
+- Vias & layout → [Via impedance (R, L, C)](#via-rlc)
 - Vias & layout → [Planar (PCB) inductor](#planar-inductor)
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
@@ -12219,6 +12220,86 @@ drops as heat.
 - an LM1086 at 1450 mA picks 910 mΩ (1.37 A), not the nearer 820 mΩ
   (1.52 A), which is flagged when typed;
 - the remembered regulator.
+
+[↑ Index](#index)
+
+---
+
+<a id="via-rlc"></a>
+## Via impedance (R, L, C)
+
+`calc: via-rlc` · PCB & interconnect › Vias & layout
+
+### What it computes
+
+The inductance, capacitance and resistance of a plated through via, and what they do to a signal. The drawing is a cross-section through the via: the board, the planes
+with their clearance holes, the plated barrel and its pads, to scale in height.
+
+- **Inputs:** the via's length T (the board's thickness), the drill, the pad and clearance diameters, the gap from the outer copper to the first plane, εr, a frequency and
+  the distance to a return via. The **Your inputs** heading picks the number of planes (with the copper layers they make), the copper weight and the plating thickness.
+- **Big result:** the inductance (Grover's tube) and the capacitance (the app's field solver), with a badge saying the solver answered (**Solving…** for a moment after
+  typing; **Formula** if the solver cannot run, Johnson's coaxial estimate then standing in).
+- **Cells:** the DC resistance of the plating, the via's impedance √(L / C) and its delay √(L C). **Rows:** the reactances of L and C at the frequency, the resistance there
+  (with the skin effect), the loop inductance with a return via (two planes or more), how much the capacitance slows an edge on a 50 Ω line, the frequency up to which the
+  lumped model holds, Johnson's coaxial estimate of C with its difference from the solver.
+- **Units:** one length unit for every length, the plating included: mm, mil or µm; MHz or GHz. **Remembered:** the planes, copper, plating and units.
+
+Examples: Johnson's measured via, LaMeres's 18 mil blind via, a 1.6 mm 4-layer board.
+
+### Terms
+
+- **Plane:** a solid copper layer the via passes through a clearance hole in: ground, power, or a pour around the via on an inner layer. Inner layers with traces only are
+  not planes (the via has no pad there, as non-functional pads are usually removed); 2 planes is the usual 4-layer board, and a 6-layer board with two inner signal layers is
+  still 2 planes. The planes are placed evenly between the two outer gaps.
+- **Pad, clearance (antipad):** the copper ring around the via on the outer layers; the hole cut in each plane around it.
+- **Via impedance √(L / C):** how the via looks to a line; under the line's impedance it acts as a small capacitor (the usual case), over it as a small inductor.
+- **Loop inductance:** the inductance of the whole path, the via and the return current's path; the via's own (partial) inductance is what Grover's formula gives.
+
+### Sources
+
+- **B. C. Wadell, "Transmission Line Design Handbook" (Artech House, 1991; Pierre's scanned copy, the pages read as images):** §5.9.1 (pp. 370–375), the via as a round
+  wire or tube (Chapter 6) and Kasten's measured via; §6.2.1 (p. 380), Grover's round wire; §6.2.3 (p. 384–385), Grover's tube L = 0.002 l [ln(2l / ρ1) + ln ζ − 1] µH
+  (l, ρ1 in cm) with the fit ln ζ = 0.25009128 − 0.0017049618 q − 0.51598981 q² + 0.37420782 q³ − 0.10669571 q⁴, q = ρ2 / ρ1, within 0.3 % of Grover's table.
+- **Howard Johnson's newsletters (sigcon.com, read as text):** vol. 6 issue 04 and 08, the loop inductance of a signal via between planes with a return via s away and his
+  measured values (scale model, 4 layers): 0.46 to 1.41 nH, and 0.37 to 0.40 pF; the formula itself is an image there, but his predicted column is reproduced by
+  L = (μ0 h / π) ln(s / r) to 0.01 nH; vol. 5 issue 09, his book's coaxial capacitance formula is "a crude approximation". The excerpt of "High-Speed Signal Propagation"
+  (sigcon.com PDF, read as text): LaMeres's blind vias (capacitance and inductance against drill, pad and clearance), Teradyne's back-drilled vias, √(L / C) as the via's
+  impedance, and "use a three-dimensional field solver".
+- **J. E. Rayas-Sánchez, ITESO lecture "Interconnect models 3" (read as text):** Johnson and Graham's C = 1.41 εr T D1 / (D2 − D1) pF (inches), as quoted from their book
+  (not read here), and the lumped model's limit.
+- **Z. Peterson, "Why Most Via Impedance Calculators Are Inaccurate" (Altium resources, read as text):** a lumped L-C model holds only while the via is electrically short.
+- **Not used:** Goldfarb and Pucel's via-inductance formula (the lecture's copy did not survive text extraction, the paper is paywalled); Johnson and Graham's "+1" inductance
+  formula (5.08 h [ln(4h/d) + 1] nH, as quoted), 2.4 times LaMeres's values.
+
+### Why the formulas are these
+
+**Inductance.** Grover's tube, the barrel's own inductance, with the plating's inner radius. Against LaMeres's simulated vias it is −2 %, +8 % and +12 % for drills of 18, 12
+and 8 mil (25 µm plating); his values include the return path through the clearance hole, which he enlarged with the drill, so they fall off more slowly than the barrel's own.
+
+**Capacitance** by an axisymmetric field solver (js/fieldsolver.js, `via`): the via as a body of revolution in (r, z), the barrel and its outer pads at 1 V, the planes with
+their clearance holes at 0 V, the dielectric between the outer copper and air above and below, the box's outer faces mirrors. Laplace's equation by finite volumes (the radial
+weights carry 2πr, the axial ones the annuli), C = ε0 times the field's energy sum; two grids, the second twice as fine, extrapolated as h². Checks: inside a solid grounded wall
+the capacitance per length is within 0.00002 % of the exact 2π ε / ln(ra / rv); against three grids twice as fine within 0.2 %; LaMeres's 20 mil pads −1.6 %, −2.4 %, +2.7 %;
+Johnson's measured via −3.2 % (his conductor thickness read as 0.00062 in, ½ oz: the page prints 0.0062, ten times ½ oz). LaMeres's larger pads (30 and 40 mil) come out 15–29 %
+low: they imply a plane closer to the pads than the 18.9 mil the excerpt gives, so his setup is not fully known. Johnson's coaxial formula is shown for comparison: +60 % to
++290 % against the same data.
+
+**Loop inductance** with a return via: Johnson's two parallel conductors across the cavity between the outermost planes, h from the first plane's lower face to the last plane's
+upper face. **Resistance** (derived): ρCu T / (π (ρ1² − ρ2²)) at DC; at a frequency, ρ T / (2π ρ1 δ) once the skin depth δ is under the plating. **Edge** (derived): a shunt C on
+a matched line sees Z0 / 2, a time constant C Z0 / 2, a 10–90 % time 2.2 times that. **Lumped limit:** a tenth of a wavelength in the board.
+
+### Assumptions and limits
+
+- **Short vias only:** the lumped model fails as the via nears a tenth of a wavelength; above that it resonates (stitching vias, stubs), a 3D solver's job.
+- **Through vias** with pads on the outer layers; no non-functional pads on inner layers, no outer-layer pour around the pad, planes evenly spaced between the outer gaps;
+  traces and their own capacitance are not included.
+- **Display.** Three figures.
+
+### How it was checked
+
+39 cases, the expected values from a Python implementation that replays each case's taps and typing, the capacitance from tools/fd_lines.py (direct sparse solves of the same
+grids; the app's iterative solve agrees to about 1 part in 10⁶). The cases: the opening screen and the pickers; 1 to 8 planes; drills, pads, clearances, boards, εr,
+frequencies and return vias; copper and plating; mils and MHz, the unit linking with the plating; remembered choices; ten refusals; the three examples.
 
 [↑ Index](#index)
 

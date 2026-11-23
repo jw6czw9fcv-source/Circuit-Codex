@@ -80,19 +80,26 @@
 
   // Edge weights of the grid Laplacian: ε times the dual length over the
   // edge's length, the cells on either side each contributing half.
-  function weights(lv, air) {
+  // With axisym, x is the radius of a body of revolution: a radial edge's
+  // weight takes the ring it sweeps (2π times its mid-radius), an axial
+  // edge's the annuli of the half-cells either side, π (r_out² − r_in²); the
+  // energy is then the whole body's, S = C / ε0.
+  function weights(lv, air, axisym) {
     const { xs, ys, nx1, ny1, nx, ny, N, eps } = lv;
     const wE = new Float64Array(N), wN = new Float64Array(N);
     const e = (j, i) => (j < 0 || j >= ny || i < 0 || i >= nx ? 0 : air ? 1 : eps[j * nx + i]);
     for (let j = 0; j < ny1; j++) {
       const dyB = j > 0 ? ys[j] - ys[j - 1] : 0, dyT = j < ny ? ys[j + 1] - ys[j] : 0;
-      for (let i = 0; i < nx; i++) wE[j * nx1 + i] = (e(j - 1, i) * dyB / 2 + e(j, i) * dyT / 2) / (xs[i + 1] - xs[i]);
+      for (let i = 0; i < nx; i++) wE[j * nx1 + i] = (e(j - 1, i) * dyB / 2 + e(j, i) * dyT / 2) / (xs[i + 1] - xs[i]) * (axisym ? Math.PI * (xs[i] + xs[i + 1]) : 1);
     }
     for (let j = 0; j < ny; j++) {
       const dy = ys[j + 1] - ys[j];
       for (let i = 0; i < nx1; i++) {
         const dxL = i > 0 ? xs[i] - xs[i - 1] : 0, dxR = i < nx ? xs[i + 1] - xs[i] : 0;
-        wN[j * nx1 + i] = (e(j, i - 1) * dxL / 2 + e(j, i) * dxR / 2) / dy;
+        if (axisym) {
+          const r = xs[i], rl = Math.max(r - dxL / 2, 0), rr = r + dxR / 2;
+          wN[j * nx1 + i] = (e(j, i - 1) * Math.PI * (r * r - rl * rl) + e(j, i) * Math.PI * (rr * rr - r * r)) / dy;
+        } else wN[j * nx1 + i] = (e(j, i - 1) * dxL / 2 + e(j, i) * dxR / 2) / dy;
       }
     }
     return { wE, wN };
@@ -319,8 +326,49 @@
     };
   }
 
-  const KINDS = { stripline, broadside, microstrip, coplanar };
-  function solve(kind, params) { return solveSpec(KINDS[kind](params)); }
+  // A via's capacitance to its reference planes, as a body of revolution in
+  // (r, z): the barrel (radius rv, the whole length T) and its pads (rp) on
+  // the two outer layers at 1 V; P planes (copper tc thick, clearance holes
+  // ra) at 0 V, the first H under the top copper and the rest evenly down to
+  // H over the bottom copper (one plane: H under the top copper); the
+  // dielectric er between the outer copper, air above and below; the box's
+  // outer faces mirrors (no ground at infinity). Within 0.002 % of the exact
+  // coaxial value 2π ε / ln(ra / rv) per length; the two grids here, h²-
+  // extrapolated, within 0.2 % of three grids twice as fine (tools/fd_lines.py).
+  function via({ T, tc, H, P, rv, rp, ra, er }) {
+    const A = Math.max(T, 4 * ra), R = ra + Math.max(6 * ra, 2 * T), top = 2 * A + T;
+    const tops = P === 1 ? [T - tc - H] : Array.from({ length: P }, (_, k) => T - tc - H - (k * (T - 2 * tc - 2 * H - tc)) / (P - 1));
+    const planes = tops.map((y) => [A + y - tc, A + y]);
+    // the smallest feature sets the first step: copper, gaps (the outer ones, between planes, under a single plane), the radii's differences
+    const gap = P === 1 ? T - 3 * tc - H : (T - 3 * tc - 2 * H) / (P - 1) - tc;
+    const feats = [tc, H, gap, rv, ra - rv].concat(rp > rv ? [rp - rv] : [], Math.abs(ra - rp) > 0 ? [Math.abs(ra - rp)] : []);
+    const m = Math.max(Math.min(...feats), T / 400);
+    return {
+      xb: [0, rv, rp, ra, R], yb: [0, A, A + tc, A + T - tc, A + T, top].concat(...planes), h0: m / 10, hmax: Math.max(T, ra), grow: 1.4,
+      grounds: planes.map(([a, b]) => [ra, R, a, b]), signals: [[0, rv, A, A + T], [0, rp, A + T - tc, A + T], [0, rp, A, A + tc]],
+      layers: [[A + tc, A + T - tc, er]], axisym: true,
+    };
+  }
+  // The capacitance in pF (lengths in mm): two grids, the second every cell
+  // halved, extrapolated as h².
+  function solveVia(spec) {
+    const t0 = (typeof performance !== "undefined" ? performance : Date).now();
+    const cs = [];
+    let iters = 0, nodes = 0, prev = null, phi = null;
+    for (let L = 0; L <= 1; L++) {
+      const lv = makeLevel(spec, L);
+      nodes = lv.N;
+      const w = weights(lv, false, true);
+      phi = prev ? prolong(prev, phi, lv) : start(lv);
+      iters += solvePotential(lv, w, phi, TOL);
+      cs.push(energy(lv, w, phi) * 8.8541878128e-3);
+      prev = lv;
+    }
+    return { c: (4 * cs[1] - cs[0]) / 3, cs, nodes, iters, ms: (typeof performance !== "undefined" ? performance : Date).now() - t0 };
+  }
+
+  const KINDS = { stripline, broadside, microstrip, coplanar, via };
+  function solve(kind, params) { const spec = KINDS[kind](params); return spec.axisym ? solveVia(spec) : solveSpec(spec); }
 
   const api = { solve, solveSpec, KINDS, axis, ETA0, _parts: { makeLevel, weights, solvePotential, energy, prolong, start } };
   root.FieldSolver = api;

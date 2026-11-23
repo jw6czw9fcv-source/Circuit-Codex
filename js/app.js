@@ -702,6 +702,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rlc-filter") return renderRlcFilter(domain, tool, favId);
   if (calcId === "sallen-key") return renderSallenKey(domain, tool, favId);
   if (calcId === "planar-inductor") return renderPlanarInductor(domain, tool, favId);
+  if (calcId === "via-rlc") return renderViaRlc(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -29445,6 +29446,228 @@ function renderPlanarInductor(domain, tool, favId) {
   }
 
   paint();
+}
+
+// ---------- Via impedance (R, L, C) ----------
+// A plated through via: its inductance, capacitance and resistance, and what they do to a signal. Sources, as read this session: B. C. Wadell,
+// "Transmission Line Design Handbook" (Artech House, 1991; Pierre's scanned copy, pages read as images): §5.9.1 (p370-375) a via modelled as a round wire
+// or tube, Kasten's measured via; §6.2.3 (p384-385) Grover's tubular conductor L = 0.002 l [ln(2l / rho1) + ln zeta - 1] uH (l, rho1 in cm), ln zeta =
+// 0.25009128 - 0.0017049618 q - 0.51598981 q^2 + 0.37420782 q^3 - 0.10669571 q^4, q = rho2 / rho1, within 0.3 % of Grover's table. H. Johnson, "High-Speed
+// Digital Design" newsletters (sigcon.com, read as text): vol. 6 issue 04 and 08, a signal via between planes h apart with a return via s away,
+// L = (mu0 h / pi) ln(s / r) (his predicted column reproduced from the formula, which the page shows as an image), and his measured 0.46-1.41 nH; vol. 5
+// issue 09, his book's coaxial via-capacitance formula [7.6] "a crude approximation"; the excerpt of "High-Speed Signal Propagation" §5 (sigcon.com PDF,
+// read as text): LaMeres's blind vias (C and L against drill, pad, clearance) and Teradyne's back-drilled vias, sqrt(L / C) as the via's impedance, "use a
+// three-dimensional field solver". The formula C = 1.41 er T D1 / (D2 - D1) pF (inches) as quoted from Johnson and Graham's book in J. E. Rayas-Sánchez's
+// ITESO lecture "Interconnect models 3" (the book itself not read). The capacitance is therefore the app's field solver (js/fieldsolver.js, via): the via as
+// a body of revolution, checked against the exact coaxial value and LaMeres's 20 mil pads. Derived here: R = rho_Cu T / (pi (rho1^2 - rho2^2)) at DC, at a
+// frequency rho T / (2 pi rho1 delta) once the skin depth delta is under the plating; a shunt C on a matched Z0 line sees Z0 / 2, so an edge's 10-90 %
+// time grows by 2.2 C Z0 / 2; the lumped model holds while the via is under a tenth of a wavelength in the board.
+const VIA_U = { d: { mm: 1e-3, mil: 25.4e-6, "µm": 1e-6 }, f: { MHz: 1e6, GHz: 1e9 } };
+const VIA_PLATING = [18, 20, 25, 30, 35];           // µm
+const VIA_OZ = [0.5, 1, 2];
+const VIA_RHO = 1.7241e-8, VIA_MU0 = 4e-7 * Math.PI, VIA_C0 = 299792458;
+const VIA_NOTE = "A via is a short tube of copper: it has inductance like any wire, its pads and barrel have capacitance to the planes they pass, and its plating some resistance. At low frequencies all three are tiny; for fast edges the capacitance dents a line's impedance and slows the edge, the inductance adds to a decoupling capacitor's, and the return current needs a nearby path (a return via, or a capacitor between planes). The capacitance comes from a field solver; the inductance is Grover's for a tube, the via alone; with a return via s away, Johnson's loop inductance between the planes.";
+
+function renderViaRlc(domain, tool, favId) {
+  const C = "via-rlc";
+  const state = {
+    u: { d: pref(C, "ud", "mm", Object.keys(VIA_U.d)), f: pref(C, "uf", "GHz", Object.keys(VIA_U.f)) },
+    planes: pref(C, "planes", 2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+    oz: pref(C, "oz", 1, VIA_OZ),
+    plating: pref(C, "plating", 25, VIA_PLATING),
+    T: 1.6e-3, d: 0.3e-3, pad: 0.6e-3, clr: 0.8e-3, H: 0.2e-3, er: 4.3, f: 1e9, s: 1e-3,
+  };
+  const KIND = { T: "d", d: "d", pad: "d", clr: "d", H: "d", s: "d", f: "f", er: "" };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const dim = (v) => `${n3(v / VIA_U.d[state.u.d])} ${state.u.d}`;
+  const pct = (v) => (Math.abs(v) < 0.05 ? "0.0 %" : `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)} %`);
+  const tc = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { T, d, pad, clr, H, er, f, s } = state, t = tc(), tp = state.plating * 1e-6, P = state.planes;
+    if (!(T > 0)) return "Enter the via's length, the board's thickness.";
+    if (!(d > 0)) return "Enter the drill diameter.";
+    if (!(tp < d / 2)) return "The plating is thicker than the hole's radius: make the drill larger.";
+    if (!(pad >= d)) return "The pad must be at least as wide as the drill.";
+    if (!(clr > d)) return "The clearance hole in the planes must be wider than the drill.";
+    if (!(H > 0)) return "Enter the gap from the outer copper to the first plane.";
+    if (!(er >= 1)) return "Enter the board's dielectric constant, 1 or more.";
+    const room = P === 1 ? T - 3 * t - H : (T - 3 * t - 2 * H) / (P - 1) - t;
+    if (!(room > 0)) return `${P} plane${P > 1 ? "s" : ""} of ${state.oz} oz copper do not fit in ${dim(T)} with ${dim(H)} gaps.`;
+    if (!(f > 0)) return "Enter a frequency.";
+    if (!(s > d)) return "The return via must be farther than the drill's width.";
+    return "";
+  }
+  // Everything but the capacitance, which is the solver's.
+  function calc() {
+    const { T, d, f, s } = state, r1 = d / 2, tp = state.plating * 1e-6, q = (r1 - tp) / r1;
+    const lnz = 0.25009128 - 0.0017049618 * q - 0.51598981 * q ** 2 + 0.37420782 * q ** 3 - 0.10669571 * q ** 4;
+    const lcm = T * 100, L = 0.002 * lcm * (Math.log((2 * lcm) / (r1 * 100)) + lnz - 1) * 1e-6;
+    const rdc = (VIA_RHO * T) / (Math.PI * (r1 * r1 - (r1 - tp) ** 2)), delta = Math.sqrt(VIA_RHO / (Math.PI * f * VIA_MU0));
+    const rf = Math.max(rdc, delta < tp ? (VIA_RHO * T) / (2 * Math.PI * r1 * delta) : rdc);
+    // the cavity between the outermost planes (Johnson's h): from the first plane's lower face to the last plane's upper face
+    const t = tc(), P = state.planes;
+    const hcav = P >= 2 ? T - 4 * t - 2 * state.H : 0;
+    const Lloop = P >= 2 ? (VIA_MU0 / Math.PI) * hcav * Math.log(s / r1) : NaN;
+    // Johnson and Graham's coaxial estimate, as quoted: 1.41 er T D1 / (D2 - D1) pF, lengths in inches
+    const Cj = state.clr > state.pad ? 1.41 * state.er * (T / 0.0254) * (state.pad / 0.0254) / ((state.clr - state.pad) / 0.0254) * 1e-12 : NaN;
+    return { L, rdc, rf, delta, Lloop, hcav, Cj, fmax: VIA_C0 / (10 * T * Math.sqrt(state.er)) };
+  }
+  const params = () => ({ T: state.T * 1e3, tc: tc() * 1e3, H: state.H * 1e3, P: state.planes, rv: (state.d / 2) * 1e3, rp: (state.pad / 2) * 1e3, ra: (state.clr / 2) * 1e3, er: state.er });
+
+  // The field solver: the answer known for these inputs, or one asked for a moment after typing stops (at once for an example or a unit change).
+  let solved = null, timer = null, gen = 0, failed = false;
+  const seq = SCREEN_SEQ;
+  function ask(now) {
+    gen++;
+    FS.supersede();
+    if (timer) { clearTimeout(timer); timer = null; FS.hold(false); }
+    failed = false;
+    if (problem()) { solved = null; return; }
+    const p = params(), known = FS.known("via", p);
+    if (known) { solved = known.c; return; }
+    solved = null;
+    const my = gen;
+    FS.hold(true);
+    timer = setTimeout(() => {
+      timer = null; FS.hold(false);
+      if (seq !== SCREEN_SEQ) return;
+      FS.solve("via", p).then((r) => { if (my === gen && seq === SCREEN_SEQ) { solved = r.c; show(); } })
+        .catch((e) => { if (my === gen && seq === SCREEN_SEQ && e.message !== "superseded") { failed = true; show(); } });
+    }, now ? 0 : 250);
+  }
+  const cap = () => (solved !== null ? solved * 1e-12 : failed || FS.unavailable ? calc().Cj : NaN);
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", BOARD = "rgba(143,193,245,0.08)";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  // A cross-section through the via's axis: the board, the planes with their clearance holes, the plated barrel, the pads; not to scale across (the
+  // widths keep their order), the layers to scale in height.
+  function diagram() {
+    const ok = !problem(), P = state.planes, t = tc();
+    const Y0 = 14, Hh = 130, cx = 130, S = Hh / (ok ? state.T : 1.6e-3);
+    const T = ok ? state.T : 1.6e-3, H = ok ? state.H : 0.2e-3;
+    const tops = P === 1 ? [T - t - H] : Array.from({ length: P }, (_, k) => T - t - H - (k * (T - 3 * t - 2 * H)) / (P - 1));
+    const y = (z) => Y0 + (T - z) * S;                 // z up from the bottom face
+    // widths on screen: the drill 36, the pad and the clearance in proportion to the drill, kept apart
+    const wd = 36, k = wd / (ok ? state.d : 0.3e-3), wp = Math.min(110, Math.max(wd + 6, (ok ? state.pad : 0.6e-3) * k)), wc = Math.min(130, Math.max(wd + 10, (ok ? state.clr : 0.8e-3) * k));
+    let o = `<rect x="20" y="${y(T)}" width="220" height="${T * S}" fill="${BOARD}" stroke="none"/>`;
+    // planes with the clearance hole
+    for (const zt of tops) {
+      const a = y(zt), h = Math.max(1.5, t * S);
+      o += `<rect x="20" y="${a}" width="${cx - wc / 2 - 20}" height="${h}" fill="${WIRE}"/><rect x="${cx + wc / 2}" y="${a}" width="${240 - cx - wc / 2}" height="${h}" fill="${WIRE}"/>`;
+    }
+    // the barrel: two plated walls, and the pads on the outer layers
+    const pw = Math.max(2, (state.plating * 1e-6) * k);
+    o += `<rect x="${cx - wd / 2}" y="${y(T)}" width="${pw}" height="${T * S}" fill="${BLUE}"/><rect x="${cx + wd / 2 - pw}" y="${y(T)}" width="${pw}" height="${T * S}" fill="${BLUE}"/>`;
+    const ph = Math.max(2, t * S);
+    o += `<rect x="${cx - wp / 2}" y="${y(T)}" width="${wp}" height="${ph}" fill="${BLUE}"/><rect x="${cx - wp / 2}" y="${y(0) - ph}" width="${wp}" height="${ph}" fill="${BLUE}"/>`;
+    // labels
+    o += lbl("dd", cx, y(0) + 14, ok ? `drill ⌀ ${dim(state.d)}` : "drill", BLUE);
+    o += lbl("dp", cx, y(T) - 4, ok ? `pad ⌀ ${dim(state.pad)}` : "pad", BLUE);
+    // the clearance on two lines, inside the board right of the hole
+    const xc = cx + wc / 2 + 5, yc = tops.length > 1 ? (y(tops[0]) + y(tops[tops.length - 1])) / 2 : y(tops[0]) + 18;
+    o += `<text data-res="dc" x="${xc}" y="${yc - 2}" fill="${GREY}" font-size="11" font-weight="600" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round"><tspan x="${xc}">clearance</tspan><tspan x="${xc}" dy="13">${ok ? `⌀ ${dim(state.clr)}` : ""}</tspan></text>`;
+    o += `<path d="M252 ${y(T)} V${y(0)} M248 ${y(T)} H256 M248 ${y(0)} H256" stroke="${GREY}" stroke-width="1"/>` + lbl("dt", 258, y(T / 2) + 4, ok ? dim(T) : "T", BLUE, "start");
+    o += lbl("dl", 24, y(tops[0]) - 4, `${P} plane${P > 1 ? "s" : ""}`, GREY, "start");
+    return `<svg width="310" height="${Hh + 34}" viewBox="0 0 310 ${Hh + 34}" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), Cv = cap(), have = isFinite(Cv), f = state.f, w = 2 * Math.PI * f;
+    const badge = solved !== null ? `<span class="badge-calc" data-res="by">${ICONS.bolt2}Field solver</span>`
+      : failed || FS.unavailable ? `<span class="badge-calc" data-res="by">${ICONS.bolt2}Formula</span>` : `<span class="badge-calc badge-wait" data-res="by">Solving…</span>`;
+    const z = have ? Math.sqrt(k.L / Cv) : NaN, td = have ? Math.sqrt(k.L * Cv) : NaN;
+    let rows = row(`At ${si(f, "Hz")}: X of L, X of C`, `${si(w * k.L, "Ω")} · ${have ? si(1 / (w * Cv), "Ω") : "…"}`, "xx");
+    rows += row(`Resistance at ${si(f, "Hz")}`, `${si(k.rf, "Ω")}${k.delta < state.plating * 1e-6 ? " (skin effect)" : ""}`, "rf");
+    rows += row(`Loop L, a return via ${dim(state.s)} away`, state.planes >= 2 ? si(k.Lloop, "H") : "needs two planes or more", "ll");
+    rows += row("An edge on a 50 Ω line", have ? `slower by ${si(2.2 * Cv * 25, "s")} (10–90 %)` : "…", "ed");
+    rows += row("Lumped model good to about", si(k.fmax, "Hz"), "fm");
+    rows += row("Johnson's coaxial estimate of C", isFinite(k.Cj) ? `${si(k.Cj, "F")}${solved !== null ? ` (${pct((100 * (k.Cj - Cv)) / Cv)})` : ""}` : "none: the clearance is not wider than the pad", "cj");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Inductance and capacitance</span>${badge}</div>
+          <div class="result-value"><span class="num" data-res="big">${si(k.L, "H")} · ${have ? si(Cv, "F") : "…"}</span></div>
+          <div class="result-sub" data-res="sub">L of the barrel (Grover); C to the planes, pads included</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Resistance", si(k.rdc, "Ω"), "c1")}${cell("Impedance", have ? si(z, "Ω") : "…", "c2")}${cell("Delay", have ? si(td, "s") : "…", "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${VIA_NOTE}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, st); state.u = u; paint(true); };
+  useExamples([
+    { title: "Johnson's measured via", note: "⌀ 10 mil, planes 40 mil apart: 360 fF (he measured 370), loop L 1.29 nH at 120 mil (measured 1.41).",
+      apply: example({ planes: 2, oz: 0.5, plating: 25, T: 0.05074 * 0.0254, d: 0.010 * 0.0254, pad: 0.024 * 0.0254, clr: 0.024 * 0.0254, H: 0.004 * 0.0254, er: 4.1, s: 0.12 * 0.0254, u: { d: "mil" } }) },
+    { title: "LaMeres's 18 mil blind via", note: "44 mil long, 20 mil pad, 46 mil clearance: 299 pH and 225 fF; his 3D result 305 pH, 230 fF.",
+      apply: example({ planes: 1, oz: 2, plating: 25, T: 44.4 * 25.4e-6, d: 18 * 25.4e-6, pad: 20 * 25.4e-6, clr: 46 * 25.4e-6, H: 18.9 * 25.4e-6, er: 4.3, u: { d: "mil" } }) },
+    { title: "A 1.6 mm, 4-layer board", note: "0.3 mm drill, 0.6 mm pad, 0.8 mm clearance: 677 pH, 351 fF, 43.9 Ω, a small capacitor on 50 Ω.",
+      apply: example({ planes: 2, oz: 1, plating: 25, T: 1.6e-3, d: 0.3e-3, pad: 0.6e-3, clr: 0.8e-3, H: 0.2e-3, er: 4.3, s: 1e-3, u: { d: "mm" } }) },
+  ]);
+
+  function paint(now) {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, hint = "") => {
+      const kind = KIND[key], u = kind ? sel(`data-u="${kind}"`, Object.keys(VIA_U[kind]).map((x) => [x, x]), state.u[kind]) : "";
+      const v = kind ? state[key] / VIA_U[kind][state.u[kind]] : state[key];
+      return `<div class="field"><label><span class="field-name">${name}</span>${hint}</label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${u}</div></div>`;
+    };
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    // the planes with the copper layers they make (the two outer layers added); the plating in the tool's length unit
+    const heading = `${sel('class="label-select" data-planes', Array.from({ length: 12 }, (_, i) => [i + 1, `${i + 1} plane${i ? "s" : ""} · ${i + 3} layers`]), state.planes)} ${sel('class="label-select" data-oz', VIA_OZ.map((o) => [o, `${o} oz`]), state.oz)} ${sel('class="label-select" data-plating', VIA_PLATING.map((p) => [p, `${dim(p * 1e-6)} plating`]), state.plating)}`;
+    ask(now);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Through via: inductance, capacitance, resistance")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${heading}</span>
+      </div>
+      ${pair(box("Length T", "T"), box("Drill ⌀", "d"))}${pair(box("Pad ⌀", "pad"), box("Clearance ⌀", "clr"))}${pair(box("Gap to plane", "H"), box("εr", "er"))}${pair(box("Frequency", "f"), box("Return via at", "s"))}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["L = 0.002 l [ln(2l / ρ1) + ln ζ − 1] µH", "ln ζ: Grover's tube, ρ2 / ρ1", "Loop: L = (μ0 h / π) ln(s / r)", "C: field solver", "Z = √(L / C),  td = √(L C)", "R = ρCu T / (π (ρ1² − ρ2²))", "Edge: + 2.2 C Z0 / 2"],
+        "A plated via is a short copper tube through the board, with a pad on each outer layer. The planes are the solid copper layers it passes through a clearance hole in: ground, power, or a pour around the via on an inner layer; inner layers with traces only do not count, so 2 planes is the usual 4-layer board (signal, ground, power, signal), and a 6-layer board with two inner signal layers is still 2 planes. Its inductance is that of a tube (Grover, in Wadell's handbook): it grows with the length and falls slowly as the hole gets wider. That is the via's own share; the loop a signal sees also depends on where the return current flows, so with planes on both sides of the via's path, Johnson's formula gives the loop through the via and a return via s away. The capacitance is from the via's barrel and pads to the planes it passes, across the clearance holes: there is no good formula for it (Johnson calls his own crude), so the app solves the electric field around the via. The via's impedance √(L / C) says how it looks to a line: under the line's impedance it acts as a small capacitor (the usual case), over it as a small inductor; its delay √(L C) is its electrical length. On a matched line the capacitance slows an edge, by 2.2 C Z0 / 2 between 10 % and 90 %. All this holds while the via is short against a wavelength; beyond, it is a resonating structure for a 3D solver."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint(true));
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value), kind = KIND[key]; state[key] = kind ? v * VIA_U[kind][state.u[kind]] : v; ask(false); show(); };
+    });
+    app.querySelectorAll("select[data-u]").forEach((el) => {
+      el.onchange = () => {
+        const kind = el.getAttribute("data-u");
+        state.u[kind] = el.value; setPref(C, `u${kind}`, el.value);
+        Object.keys(KIND).filter((key) => KIND[key] === kind).forEach((key) => { const f = VIA_U[kind][state.u[kind]]; if (isFinite(state[key])) state[key] = Number((state[key] / f).toPrecision(3)) * f; });
+        paint(true);
+      };
+    });
+    for (const [attr, key] of [["data-planes", "planes"], ["data-oz", "oz"], ["data-plating", "plating"]]) {
+      app.querySelector(`select[${attr}]`).onchange = (e) => { state[key] = +e.target.value; setPref(C, key, state[key]); paint(true); };
+    }
+  }
+
+  paint(true);
 }
 
 // ---------- PWM (duty cycle) ----------
