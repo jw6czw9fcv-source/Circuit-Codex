@@ -706,6 +706,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "trace-inductance") return renderTraceInductance(domain, tool, favId);
   if (calcId === "power-factor") return renderPowerFactor(domain, tool, favId);
   if (calcId === "poe-classes") return renderPoeClasses(domain, tool, favId);
+  if (calcId === "torque-power") return renderTorquePower(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -30361,6 +30362,174 @@ function renderPoeClasses(domain, tool, favId) {
       paint();
     };
     wireHeading();
+  }
+
+  paint();
+}
+
+// ---------- Torque & power conversion ----------
+// A shaft's power from its torque and speed, or the torque from the power, P = tau omega, in the usual units, and what the motor then draws from its
+// supply. Source, as read this session: NIST Special Publication 811 (2008 edition), "Guide for the Use of the International System of Units (SI)",
+// appendix B (PDF read as text): ounce (avoirdupois)-force inch 7.061 552 E-03 N m, pound-force inch 1.129 848 E-01, pound-force foot 1.355 818 E+00,
+// kilogram-force meter 9.806 65 E+00, horsepower (550 ft lbf / s) 7.456 999 E+02 W, horsepower (metric) 7.354 988 E+02 W, horsepower (electric) 7.46 E+02 W,
+// revolution per minute 1.047 198 E-01 rad / s. The factors here are computed from the definitions (lbf 4.448 221 615 260 5 N, in 0.0254 m, gn 9.806 65
+// m / s^2), which round to those. Derived: omega = 2 pi n / 60; the electrical input P / eta, the current P / (eta V).
+const TP_LBF = 4.4482216152605, TP_IN = 0.0254, TP_GN = 9.80665;
+const TP_U = {
+  tau: { "N·m": 1, "mN·m": 1e-3, "kgf·cm": TP_GN / 100, "oz·in": (TP_LBF / 16) * TP_IN, "lb·in": TP_LBF * TP_IN, "lb·ft": TP_LBF * 12 * TP_IN },
+  p: { W: 1, kW: 1e3, hp: 550 * TP_LBF * 12 * TP_IN, PS: 75 * TP_GN },
+  n: { rpm: (2 * Math.PI) / 60, "rad/s": 1, "rev/s": 2 * Math.PI },
+};
+const TP_NOTE = "A motor's mechanical power is its torque times its angular speed, P = τ ω, ω in radians per second (2π times the revolutions per second): the same power is a large torque at a low speed or a small torque at a high speed, which is what a gearbox trades. The motor draws more than it delivers: its efficiency η says how much, the rest heats it, and the current from the supply follows.";
+
+function renderTorquePower(domain, tool, favId) {
+  const C = "torque-power";
+  const state = {
+    u: { tau: pref(C, "utau", "N·m", Object.keys(TP_U.tau)), p: pref(C, "up", "W", Object.keys(TP_U.p)), n: pref(C, "un", "rpm", Object.keys(TP_U.n)) },
+    given: pref(C, "given", "tau", ["tau", "p"]),
+    n: 3000 * TP_U.n.rpm, tau: 0.5, p: 150, V: 24, eta: 80,
+  };
+  const KIND = { n: "n", tau: "tau", p: "p", V: "", eta: "" };
+  const wantP = () => state.given === "tau";            // the torque given, the power found
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const inU = (kind, v, u = state.u[kind]) => `${n3(v / TP_U[kind][u])} ${u}`;
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { n, tau, p, V, eta } = state;
+    if (!(n > 0)) return "Enter the shaft's speed.";
+    if (wantP() && !(tau > 0)) return "Enter the torque.";
+    if (!wantP() && !(p > 0)) return "Enter the power.";
+    if (!(V > 0)) return "Enter the supply voltage.";
+    if (!(eta > 0 && eta <= 100)) return "The efficiency is between 0 and 100 %.";
+    return "";
+  }
+  function calc() {
+    const w = state.n;                                    // rad/s
+    const P = wantP() ? state.tau * w : state.p, tau = wantP() ? state.tau : state.p / w;
+    const Pin = P / (state.eta / 100);
+    return { w, P, tau, Pin, I: Pin / state.V, heat: Pin - P };
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", GREEN = "#5DCAA5";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  // The supply and its current on the left, the motor, its shaft turning with the torque and speed on the right; what is found is green.
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null;
+    let o = `<path d="M24 40 H96 M24 84 H96" stroke="${WIRE}" stroke-width="1.5"/><path d="M24 40 V50 M24 74 V84" stroke="${WIRE}" stroke-width="1.5"/>`;
+    o += `<path d="M14 50 H34 M18 56 H30 M14 62 H34 M18 68 H30" stroke="${BLUE}" stroke-width="1.5"/>`;
+    o += lbl("dv", 40, 66, ok ? `${n3(state.V)} V` : "V", BLUE, "start");
+    o += `<circle cx="122" cy="62" r="26" stroke="${BLUE}" stroke-width="1.5"/>` + lbl("", 122, 66, "M", BLUE);
+    o += `<path d="M96 40 Q104 40 106 44 M96 84 Q104 84 106 80" stroke="${WIRE}" stroke-width="1.5"/>`;
+    o += lbl("di", 60, 32, k ? `${si(k.I, "A")}` : "I", GREEN);
+    o += lbl("de", 122, 104, ok ? `η ${n3(state.eta)} %` : "η", BLUE);
+    // the shaft and its turning
+    o += `<rect x="148" y="57" width="96" height="10" rx="2" stroke="${BLUE}" stroke-width="1.5"/>`;
+    o += `<path d="M206 42 A 22 20 0 0 1 206 82" stroke="${wantP() ? BLUE : GREEN}" stroke-width="1.5" fill="none"/><path d="M200 80 l6 2 l-2 -6" stroke="${wantP() ? BLUE : GREEN}" stroke-width="1.5" fill="none"/>`;
+    o += lbl("dt", 232, 34, k ? `τ ${inU("tau", k.tau)}` : "τ", wantP() ? BLUE : GREEN);
+    o += lbl("dn", 232, 98, ok ? `n ${inU("n", state.n)}` : "n", BLUE);
+    o += lbl("dpw", 196, 118, k ? `P ${inU("p", k.P)}` : "P", wantP() ? GREEN : BLUE);
+    return `<svg width="320" height="126" viewBox="0 0 320 126" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc();
+    const head = wantP() ? "Mechanical power P" : "Torque τ";
+    const big = wantP() ? inU("p", k.P) : inU("tau", k.tau);
+    // under it the shaft, and the current it takes from the supply (Pierre: the voltage must visibly do something)
+    const sub = `${wantP() ? inU("tau", k.tau) : inU("p", k.P)} at ${inU("n", k.w)} · ${si(k.I, "A")} from ${n3(state.V)} V`;
+    let rows = row("Torque, metric", ["N·m", "kgf·cm"].map((u) => inU("tau", k.tau, u)).join(" · "), "taum");
+    rows += row("Torque, imperial", ["oz·in", "lb·in", "lb·ft"].map((u) => inU("tau", k.tau, u)).join(" · "), "taui");
+    rows += row("Power", ["W", "hp", "PS"].map((u) => inU("p", k.P, u)).join(" · "), "ps");
+    rows += row("Speed", ["rpm", "rad/s", "rev/s"].map((u) => inU("n", k.w, u)).join(" · "), "ns");
+    rows += row(`Heat in the motor at η ${n3(state.eta)} %`, si(k.heat, "W"), "heat");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">${head}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("ω", `${n3(k.w)} rad/s`, "c1")}${cell("Electrical in", si(k.Pin, "W"), "c2")}${cell(`Current at ${n3(state.V)} V`, si(k.I, "A"), "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${TP_NOTE}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, st); state.u = u; paint(); };
+  useExamples([
+    { title: "One horsepower at 1000 rpm", note: "746 W at 105 rad/s: 7.12 N·m, 63 lb·in; at 2000 rpm half that torque.",
+      apply: example({ given: "p", p: TP_U.p.hp, n: 1000 * TP_U.n.rpm, V: 230, eta: 85, u: { p: "hp", n: "rpm", tau: "N·m" } }) },
+    { title: "100 oz·in at 1000 rpm", note: "0.706 N·m turning 105 rad/s: 73.9 W at the shaft, 3.85 A from 24 V at 80 %.",
+      apply: example({ given: "tau", tau: 100 * TP_U.tau["oz·in"], n: 1000 * TP_U.n.rpm, V: 24, eta: 80, u: { tau: "oz·in", n: "rpm", p: "W" } }) },
+    { title: "A drill: 10 N·m at 400 rpm", note: "419 W at the chuck; from 18 V at 75 %, 31 A: why drill batteries are large.",
+      apply: example({ given: "tau", tau: 10, n: 400 * TP_U.n.rpm, V: 18, eta: 75, u: { tau: "N·m", n: "rpm", p: "W" } }) },
+    { title: "A small fan: 5 W at 3000 rpm", note: "15.9 mN·m of torque; from 12 V at 50 %, 833 mA.",
+      apply: example({ given: "p", p: 5, n: 3000 * TP_U.n.rpm, V: 12, eta: 50, u: { tau: "mN·m", n: "rpm", p: "W" } }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key) => {
+      const kd = KIND[key], u = kd ? sel(`data-u="${kd}"`, Object.keys(TP_U[kd]).map((x) => [x, x]), state.u[kd]) : `<span class="unit-fixed">${key === "V" ? "V" : "%"}</span>`;
+      const v = kd ? state[key] / TP_U[kd][state.u[kd]] : state[key];
+      return `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${u}</div></div>`;
+    };
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A shaft's power from its torque and speed")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${pair(box("Speed n", "n"), wantP() ? box("Torque τ", "tau") : box("Power P", "p"))}${pair(box("Supply voltage", "V"), box("Efficiency η", "eta"))}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${sel('class="label-select" data-given', [["tau", "Given: torque"], ["p", "Given: power"]], state.given)}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["P = τ ω,  ω = 2π n / 60", "τ = P / ω", "P_in = P / η,  I = P_in / V", "1 hp = 550 ft·lbf/s = 745.7 W"],
+        "Power is torque times angular speed: P (W) = τ (N·m) × ω (rad/s), and ω = 2π n / 60 with n in revolutions per minute. Torque is a force at a lever arm, so its units are a force times a length: N·m, kgf·cm (a kilogram's weight at a centimetre, 0.0981 N·m), oz·in and lb·in (common on small motors and steppers), lb·ft. Horsepower is 550 foot-pounds-force per second, 745.7 W; the metric horsepower (PS) is 75 kgf·m per second, 735.5 W (NIST SP 811). A motor's efficiency η is its mechanical power over its electrical input; the input is P / η, the current from a supply of voltage V is P / (η V), and the difference heats the motor."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value), kd = KIND[key]; state[key] = kd ? v * TP_U[kd][state.u[kd]] : v; show(); };
+    });
+    app.querySelectorAll("select[data-u]").forEach((el) => {
+      el.onchange = () => {
+        const kd = el.getAttribute("data-u");
+        state.u[kd] = el.value; setPref(C, `u${kd}`, el.value);
+        const key = kd === "n" ? "n" : kd === "tau" ? "tau" : "p", f = TP_U[kd][state.u[kd]];
+        if (isFinite(state[key])) state[key] = Number((state[key] / f).toPrecision(3)) * f;
+        paint();
+      };
+    });
+    // switching what is given carries the shaft over, to three figures: the power found becomes the one typed, or the torque
+    app.querySelector("select[data-given]").onchange = (e) => {
+      if (!problem()) {
+        const k = calc();
+        if (e.target.value === "p" && wantP()) { const f = TP_U.p[state.u.p]; state.p = Number((k.P / f).toPrecision(3)) * f; }
+        if (e.target.value === "tau" && !wantP()) { const f = TP_U.tau[state.u.tau]; state.tau = Number((k.tau / f).toPrecision(3)) * f; }
+      }
+      state.given = e.target.value; setPref(C, "given", state.given); paint();
+    };
   }
 
   paint();

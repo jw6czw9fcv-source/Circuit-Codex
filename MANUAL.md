@@ -141,6 +141,7 @@ will key on, since that is the id the app already holds for each tool.
 - Battery → [Battery types & sizes](#battery-types--sizes)
 - Battery → [Button cell sizes](#button-cell-sizes)
 - Thermal management → [Heat sink sizing](#heat-sink)
+- Motors → [Torque & power conversion](#torque-power)
 
 ### PCB & interconnect
 
@@ -11600,6 +11601,62 @@ bigger heatsink.
 - a unit change keeps the power (3.6 W reads 3600 mW);
 - a junction limit under the ambient is refused;
 - the remembered pill.
+
+[↑ Index](#index)
+
+---
+
+<a id="torque-power"></a>
+## Torque & power conversion
+
+`calc: torque-power` · Power electronics › Motors
+
+### What it computes
+
+A shaft's mechanical power from its torque and speed, or the torque from the power, in the usual units, and what the motor then draws from its supply. The drawing
+shows the supply and its current, the motor and its shaft turning, the torque and speed; what the tool finds is green.
+
+- **Inputs:** the speed (rpm, rad/s or rev/s), the torque (N·m, mN·m, kgf·cm, oz·in, lb·in, lb·ft) or the power (W, kW, hp, PS), the supply voltage and the motor's
+  efficiency. The **Output** heading picks **Given: torque** (the power found) or **Given: power** (the torque found); switching carries the shaft over, to three figures.
+- **Big result:** the power or the torque, in its box's unit; under it the shaft it describes and the current it takes from the supply (the supply voltage
+  changes only the current: the shaft's power and torque do not depend on it).
+- **Cells:** ω, the electrical input power and the current from the supply. **Rows:** the torque in metric and imperial units, the power in W, hp and PS, the speed in
+  rpm, rad/s and rev/s, and the heat in the motor.
+- **Remembered:** what is given and the three units.
+
+Examples: one horsepower at 1000 rpm (7.12 N·m), 100 oz·in at 1000 rpm (73.9 W), a drill at 10 N·m and 400 rpm (419 W, 31 A from 18 V), a small fan at 5 W and 3000 rpm
+(15.9 mN·m).
+
+### Terms
+
+- **Torque τ:** a turning force, a force at a lever arm: N·m (newton metres), or a weight at a distance, kgf·cm (a kilogram's weight at a centimetre), oz·in, lb·in, lb·ft.
+- **Angular speed ω:** radians per second; one turn is 2π radians, so ω = 2π n / 60 with n in rpm.
+- **Horsepower:** 550 foot-pounds-force per second, 745.7 W; the metric horsepower (PS, CV, ch) is 75 kilogram-force metres per second, 735.5 W.
+- **Efficiency η:** the mechanical power out over the electrical power in; the rest heats the motor.
+
+### Sources
+
+- **NIST Special Publication 811 (2008 edition), "Guide for the Use of the International System of Units (SI)", appendix B (PDF read as text):** ounce (avoirdupois)-force
+  inch 7.061 552 × 10⁻³ N·m, pound-force inch 1.129 848 × 10⁻¹ N·m, pound-force foot 1.355 818 N·m, kilogram-force meter 9.806 65 N·m, horsepower (550 ft·lbf/s) 745.699 9 W,
+  horsepower (metric) 735.498 8 W, revolution per minute 1.047 198 × 10⁻¹ rad/s.
+
+### Why the formulas are these
+
+**P = τ ω** is the definition of mechanical power for a rotating shaft (derived: the work of a torque through an angle). **The units** are computed from their definitions
+(the pound-force 4.448 221 615 260 5 N, the inch 0.0254 m, standard gravity 9.806 65 m/s²); each rounds to SP 811's seven figures (the metric horsepower is 735.498 75 W
+exactly, which SP 811 prints 735.498 8). **The supply:** the electrical input is P / η, the current P / (η V) for a DC supply (derived).
+
+### Assumptions and limits
+
+- **A DC supply:** for an AC motor the current also depends on its power factor (see Power factor).
+- **One operating point:** a motor's torque, speed and efficiency vary together along its curve; the tool converts the point given, it does not model the motor.
+- **Display.** Three figures.
+
+### How it was checked
+
+35 cases, the expected values from a Python implementation that replays each case's typing and picks, its factors checked against SP 811. The cases: the opening screen
+and the pickers; torques, speeds, efficiencies and voltages; every torque, power and speed unit; the unit linking; power given, the carry-over both ways; remembered
+choices; six refusals; the four examples.
 
 [↑ Index](#index)
 

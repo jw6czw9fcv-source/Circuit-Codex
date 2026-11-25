@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Torque & power conversion",
+    domain: "power",
+    formulas: ["P = τ ω,  ω = 2π n / 60", "τ = P / ω", "P_in = P / η,  I = P_in / V", "1 hp = 550 ft·lbf/s = 745.7 W"],
+    note: "A shaft's power from its torque and speed or the torque from the power, in N·m, mN·m, kgf·cm, oz·in, lb·in, lb·ft, W, kW, hp and PS (NIST SP 811's factors), and what the motor draws from its supply at an efficiency.",
+  },
+  {
     tool: "PoE classes",
     domain: "power",
     formulas: ["I = (V − √(V² − 4 R P)) / 2R", "P_PSE = V I,  loss = I² R", "V_device = V − I R", "R = ρ L (2 pairs),  ρ L / 2 (4 pairs)"],
