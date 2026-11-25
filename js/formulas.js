@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "PoE classes",
+    domain: "power",
+    formulas: ["I = (V − √(V² − 4 R P)) / 2R", "P_PSE = V I,  loss = I² R", "V_device = V − I R", "R = ρ L (2 pairs),  ρ L / 2 (4 pairs)"],
+    note: "The Power over Ethernet class a device needs (802.3af, at, bt; Classes 1 to 8, from the Ethernet Alliance's overview and TI's TPS2372 data sheet), then the real cable: the current, the power the PSE sources, the cable's loss and the voltage left at the device (the Ethernet Alliance's equation for PClass).",
+  },
+  {
     tool: "Power factor",
     domain: "power",
     formulas: ["Qc = P (tan φ − tan φ′)", "C = Qc / (2π f V²)   single phase", "C = Qc / (3 · 2π f U²)   delta", "C = Qc / (2π f U²)   star", "λ = P / S ≈ cos φ / √(1 + THDi²)"],

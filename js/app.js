@@ -705,6 +705,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "via-rlc") return renderViaRlc(domain, tool, favId);
   if (calcId === "trace-inductance") return renderTraceInductance(domain, tool, favId);
   if (calcId === "power-factor") return renderPowerFactor(domain, tool, favId);
+  if (calcId === "poe-classes") return renderPoeClasses(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -29944,7 +29945,7 @@ function renderTraceInductance(domain, tool, favId) {
       <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
         <span>Your inputs</span><span></span><span>${sel('class="label-select" data-oz', TI_OZ.map((o) => [o, `${o} oz copper`]), state.oz)}</span>
       </div>
-      ${pair(box("Length l", "l"), box("Width w", "w"))}${third ? pair(third, box("Frequency", "f")) : pair(box("Frequency", "f"), "<div></div>")}
+      ${pair(box("Length l", "l"), box("Width w", "w"))}${third ? pair(third, box("Frequency", "f")) : box("Frequency", "f")}
 
       <div class="section-label" style="color:#5DCAA5">Output</div>
       <div data-res="result">${resultHTML()}</div>
@@ -30174,6 +30175,192 @@ function renderPowerFactor(domain, tool, favId) {
     };
     const conn = app.querySelector("select[data-conn]");
     if (conn) conn.onchange = (e) => { state.conn = e.target.value; setPref(C, "conn", state.conn); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- PoE classes ----------
+// Power over Ethernet: the class a device needs, and what the cable does to it. Sources, as read this session: L. Yseboodt (Philips Lighting) and D.
+// Abramson (TI), "Overview of 802.3bt - Power over Ethernet standard" (Ethernet Alliance white paper, April 2018, based on P802.3bt Draft 3.3; PDF read
+// as text): the eight Classes, PSE output 4 / 7 / 15.4 / 30 / 45 / 60 / 75 / 90 W and PD power 3.84 / 6.49 / 13 / 25.5 / 40 / 51 / 62 / 71.3 W (p2);
+// Types 1-4 and their pairs (p10-11); RCh, the maximum pairset DC loop resistance, 12.5 ohm, and 6.25 ohm for 4-pair powering, RChan = RPair1 + RPair2
+// (p12); eq. (5), the power the PSE must source to deliver PClass_PD at the PD over RChan from VPSE, PClass = VPSE (VPSE - sqrt(VPSE^2 - 4 RChan PClass_PD))
+// / (2 RChan) (p37); the Autoclass example, a 65 W Class 8 PD on 25 m of AWG 23 from 55 V, 66.5 W sourced (p29). TI TPS2372 data sheet (SLVSDN9, table 6,
+// "Comparison of Operational Limits"): Type 1 20 ohm, 15.4 W, 44 V, 13 W, PD 37-57 V; Type 2 / Type 3 2-pair 12.5 ohm, 30 W, 50 V, 25.5 W; Type 3 4-pair
+// 6.25 ohm, 60 W, 50 V, 51 W; Type 4 6.25 ohm, 90 W, 52 V, 71.3 W; static PD input voltage 37-57 V up to 13 W, 42.5-57 V above (41.2-57 V Type 4). The
+// class table follows from PD = PSE - (PSE / Vmin)^2 RCh for all eight classes. The wire: the Wire sizing tool's AWG diameter and copper's 1/58 ohm mm2/m.
+const POE_CLASSES = [
+  null,
+  { pse: 4, pd: 3.84, v: 44, std: "802.3af, Type 1" },
+  { pse: 7, pd: 6.49, v: 44, std: "802.3af, Type 1" },
+  { pse: 15.4, pd: 13, v: 44, std: "802.3af, Type 1" },
+  { pse: 30, pd: 25.5, v: 50, std: "802.3at, Type 2" },
+  { pse: 45, pd: 40, v: 50, std: "802.3bt, Type 3" },
+  { pse: 60, pd: 51, v: 50, std: "802.3bt, Type 3" },
+  { pse: 75, pd: 62, v: 52, std: "802.3bt, Type 4" },
+  { pse: 90, pd: 71.3, v: 52, std: "802.3bt, Type 4" },
+];
+const POE_AWG = [22, 23, 24, 26];
+const POE_LEN = { m: 1, ft: 0.3048 };
+const POE_NOTE = "Power over Ethernet sends DC down the network cable, on two of its four pairs or on all four. The device asks for a class at start-up; the class sets how much the PSE (the switch or injector) must be able to source, and how much the device may draw. The standard sizes each class for the worst case, 100 m of cable (a loop of 12.5 Ω on two pairs) and the lowest PSE voltage: the difference is what the cable burns. Over a real cable the PSE sources the device's power plus the cable's I²R, and the device sees the PSE voltage less I R.";
+
+function renderPoeClasses(domain, tool, favId) {
+  const C = "poe-classes";
+  const state = {
+    uL: pref(C, "uL", "m", Object.keys(POE_LEN)),
+    awg: pref(C, "awg", 24, POE_AWG),
+    pairs: pref(C, "pairs", 2, [2, 4]),
+    P: 20, L: 80, V: NaN, vTyped: false,
+  };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  // the smallest class whose device power covers P
+  const cls = () => { const P = state.P; for (let c = 1; c <= 8; c++) if (P <= POE_CLASSES[c].pd) return c; return 0; };
+  const pairs = () => (cls() >= 5 ? 4 : state.pairs);
+  // the PSE voltage: the class's minimum until typed (it follows the class)
+  const volts = () => (state.vTyped ? state.V : cls() ? POE_CLASSES[cls()].v : NaN);
+  // copper at 20 °C, 1/58 Ω mm²/m; a pair is two wires in parallel, the loop a pair out and a pair back: one wire's length on 2 pairs, half on 4
+  const ohmPerM = () => (1 / 58) / (Math.PI * awgDiameterMm(state.awg) ** 2 / 4);
+  const loop = () => (ohmPerM() * state.L) / (pairs() === 4 ? 2 : 1);
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { P, L } = state, V = volts();
+    if (!(P > 0)) return "Enter the device's power.";
+    if (!cls()) return `Over ${POE_CLASSES[8].pd} W: beyond PoE (802.3bt Class 8, the highest).`;
+    if (!(L > 0)) return "Enter the cable's length.";
+    if (!(V > 0)) return "Enter the PSE voltage.";
+    if (V > 57) return "PoE allows at most 57 V at the PSE.";
+    const R = loop();
+    if (V * V < 4 * R * P) return `Too much for this cable: from ${n3(V)} V, at most ${si((V * V) / (4 * R), "W")} can reach the device over ${si(R, "Ω")}.`;
+    return "";
+  }
+  function calc() {
+    const P = state.P, V = volts(), R = loop(), c = cls(), k = POE_CLASSES[c];
+    // the Ethernet Alliance's eq. (5): the current that leaves P at the device after R
+    const I = (V - Math.sqrt(V * V - 4 * R * P)) / (2 * R);
+    const vpd = V - I * R;
+    const vmin = P <= 13 ? 37 : c >= 7 ? 41.2 : 42.5;     // the static PD input voltage (TPS2372 table 6)
+    return { c, k, R, I, pse: V * I, loss: I * I * R, vpd, vmin, V };
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", GREEN = "#5DCAA5";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  // The PSE (switch or injector) on the left, the cable, the device on the right; the answers (current, voltage at the device) green.
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null;
+    let o = `<rect x="14" y="34" width="70" height="56" rx="6" stroke="${BLUE}" stroke-width="1.5"/><rect x="236" y="34" width="70" height="56" rx="6" stroke="${BLUE}" stroke-width="1.5"/>`;
+    o += lbl("", 49, 56, "PSE", BLUE) + lbl("dv", 49, 72, ok ? `${n3(k.V)} V` : "V", BLUE);
+    o += lbl("", 271, 56, "Device", BLUE) + lbl("dp", 271, 72, state.P > 0 ? `${n3(state.P)} W` : "P", BLUE);
+    o += `<path d="M84 52 H236 M84 72 H236" stroke="${WIRE}" stroke-width="1.5"/>`;
+    o += lbl("dl", 160, 24, state.L > 0 ? `${n3(state.L / POE_LEN[state.uL])} ${state.uL} · AWG ${state.awg} · ${pairs()} pairs` : "cable", GREY);
+    if (k) {
+      o += `<path d="M150 46 l8 6 l-8 6" stroke="${GREEN}" stroke-width="1.5"/>` + lbl("di", 160, 106, `${si(k.I, "A")} · ${si(k.loss, "W")} lost`, GREEN);
+      o += lbl("dvd", 271, 106, `${n3(k.vpd)} V`, k.vpd >= k.vmin ? GREEN : "#E24B4A");
+    }
+    return `<svg width="320" height="116" viewBox="0 0 320 116" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), over = k.pse > k.k.pse, low = k.vpd < k.vmin;
+    const sub = over ? `but the PSE would source ${si(k.pse, "W")}, over the class's ${si(k.k.pse, "W")}: the cable is too long`
+      : low ? `but only ${n3(k.vpd)} V reaches the device, under the ${n3(k.vmin)} V it may need`
+      : `${k.k.std}: the PSE sources ${si(k.pse, "W")}`;
+    let rows = row(`Class ${k.c}: the PSE sources at least`, `${si(k.k.pse, "W")} from ${k.k.v} V`, "cp");
+    rows += row(`Class ${k.c}: the device may draw`, `${si(k.k.pd, "W")}, even at 100 m`, "cd");
+    rows += row(`Cable loop, ${pairs()} pairs`, `${si(k.R, "Ω")} (max ${pairs() === 4 ? "6.25" : k.c <= 3 ? "20" : "12.5"} Ω)`, "r");
+    rows += row("Voltage the device may need", `${n3(k.vmin)} to 57 V`, "vr");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">PoE class needed</span></div>
+          <div class="result-value"><span class="num" data-res="big">Class ${k.c}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("At the device", `${n3(k.vpd)} V`, "c1")}${cell("Current", si(k.I, "A"), "c2")}${cell("Cable loss", si(k.loss, "W"), "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${POE_NOTE}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+    const v = app.querySelector('input[data-key="V"]');
+    if (v && !state.vTyped && document.activeElement !== v) v.value = fmt(volts());
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "A 25.5 W device at 100 m", note: "Class 4 over AWG 24, 2 pairs, from 50 V: 8.42 Ω, 2.67 W lost, 45.3 V at the device.",
+      apply: example({ P: 25.5, L: 100, uL: "m", awg: 24, pairs: 2, vTyped: false }) },
+    { title: "The white paper's 65 W PD", note: "Class 8 on 25 m of AWG 23 from 55 V: the PSE sources 66.2 W (the paper: 66.5 W measured).",
+      apply: example({ P: 65, L: 25, uL: "m", awg: 23, pairs: 4, V: 55, vTyped: true }) },
+    { title: "A 13 W camera at 100 m", note: "Class 3, the original 802.3af, from 44 V: 41.4 V reaches the camera.",
+      apply: example({ P: 13, L: 100, uL: "m", awg: 24, pairs: 2, vTyped: false }) },
+    { title: "Too far: 200 m", note: "25 W over 200 m of AWG 24: 39.3 V at the device, and the PSE over its 30 W.",
+      apply: example({ P: 25, L: 200, uL: "m", awg: 24, pairs: 2, vTyped: false }) },
+  ]);
+
+  const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+  // the heading: the wire gauge and the pairs (Classes 5 to 8 always use all four)
+  const headingHTML = () => `${sel('class="label-select" data-awg', POE_AWG.map((a) => [a, `AWG ${a}`]), state.awg)} ${cls() >= 5 ? '<span class="label-select" style="cursor:default" data-res="pairs4">4 pairs</span>' : sel('class="label-select" data-pairs', [[2, "2 pairs"], [4, "4 pairs"]], state.pairs)}`;
+  function wireHeading() {
+    app.querySelector("select[data-awg]").onchange = (e) => { state.awg = +e.target.value; setPref(C, "awg", state.awg); paint(); };
+    const pp = app.querySelector("select[data-pairs]");
+    if (pp) pp.onchange = (e) => { state.pairs = +e.target.value; setPref(C, "pairs", state.pairs); paint(); };
+  }
+
+  function paint() {
+    const box = (name, key, unit, v) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const heading = headingHTML();
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The class a device needs, and the cable's loss")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span data-res="heading">${heading}</span>
+      </div>
+      ${pair(box("Device power", "P", fixed("W"), state.P), box("Cable length", "L", sel("data-ul", Object.keys(POE_LEN).map((x) => [x, x]), state.uL), state.L / POE_LEN[state.uL]))}${box("PSE voltage", "V", fixed("V"), volts())}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["I = (V − √(V² − 4 R P)) / 2R", "P_PSE = V I,  loss = I² R", "V_device = V − I R", "R = ρ L (2 pairs),  ρ L / 2 (4 pairs)"],
+        "Power over Ethernet sends DC along the network cable: on two pairs (one pair out, the other back, the two wires of a pair in parallel) or on all four, which halves the loop resistance. A device announces a class; each class guarantees the device a power at the far end of the worst cable the standard allows (a 12.5 Ω loop, 100 m of Cat 5; 20 Ω for the original 802.3af) from the lowest PSE voltage (44, 50 or 52 V), and the PSE must be able to source that power plus what the cable burns. The tool takes the smallest class that covers the device's power, then solves the real cable: the current I that leaves P at the device after the loop resistance R is the root of R I² − V I + P = 0 (the Ethernet Alliance's equation for PClass), the PSE sources V I, the cable burns I² R and the device sees V − I R, which must stay within its input range (37 to 57 V up to 13 W, 42.5 V and up above, 41.2 V for Type 4). The wire's resistance is copper at 20 °C; a warm cable, patch cords and connectors add to it."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "L") state.L = v * POE_LEN[state.uL];
+        else if (key === "V") { state.V = v; state.vTyped = true; }
+        else state.P = v;
+        // the power sets the class, which may fix the pairs at four: the heading follows, the box being typed in stays as it is
+        if (key === "P") { app.querySelector('[data-res="heading"]').innerHTML = headingHTML(); wireHeading(); }
+        show();
+      };
+    });
+    app.querySelector("select[data-ul]").onchange = (e) => {
+      state.uL = e.target.value; setPref(C, "uL", state.uL);
+      const f = POE_LEN[state.uL]; if (isFinite(state.L)) state.L = Number((state.L / f).toPrecision(3)) * f;
+      paint();
+    };
+    wireHeading();
   }
 
   paint();

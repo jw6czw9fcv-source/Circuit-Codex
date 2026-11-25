@@ -131,6 +131,7 @@ will key on, since that is the id the app already holds for each tool.
 - Regulators → [DC/DC boost converter](#boost)
 - Regulators → [SMPS flyback basics](#flyback)
 - Regulators → [Power factor](#power-factor)
+- Regulators → [PoE classes](#poe-classes)
 - Regulators → [Zener + transistor](#zener-transistor)
 - Regulators → [Constant current](#constant-current)
 - Regulators → [Inrush limiter (NTC)](#inrush-limiter)
@@ -17161,6 +17162,77 @@ are by the capacitor, so the current after is √(I1′² + Ih²) and λ after i
 35 cases, the expected values from a Python implementation that replays each case's taps and typing, itself checked against the guide's three examples. The cases: the
 opening screen and the picker; three phase in delta and star, the voltage carried over and kept when typed; targets, starting factors, frequencies, voltages, powers and
 THDi single phase and three phase; the target under cos φ now; W and kW; remembered choices; eight refusals; the four examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="poe-classes"></a>
+## PoE classes
+
+`calc: poe-classes` · Power electronics › Supply & regulation
+
+### What it computes
+
+The Power over Ethernet class a device needs, and what a real cable does to it: the current, the power the PSE (the switch or injector) must source, the cable's
+loss and the voltage left at the device. The drawing shows the PSE, the cable and the device, the answers (current, loss, voltage at the device) in green, the
+voltage red when it falls under what the device may need.
+
+- **Inputs:** the device's power, the cable's length (m or ft) and the PSE voltage, which follows the class's minimum (44, 50 or 52 V) until typed. The **Your inputs**
+  heading picks the wire gauge (AWG 22, 23, 24 or 26) and the pairs (2 or 4; Classes 5 to 8 always use 4).
+- **Big result:** the class, the smallest whose device power covers the one entered, with its standard and Type and the power the PSE sources; or, in its place, why
+  it fails: the PSE over its class's power, or the device's voltage under its minimum.
+- **Cells:** the voltage at the device, the current, the cable's loss. **Rows:** the class's PSE power and minimum voltage, the power the device may draw at 100 m, the
+  cable's loop resistance against the standard's maximum, the voltage the device may need.
+- **Remembered:** the length unit, the gauge and the pairs.
+
+Examples: a 25.5 W device at 100 m (Class 4, 45.3 V at the device), the white paper's 65 W Class 8 device (66.2 W sourced; 66.5 W measured), a 13 W camera at 100 m
+(Class 3, 41.4 V), 25 W over 200 m (too far).
+
+### Terms
+
+- **PSE, PD:** the power sourcing equipment (a PoE switch or injector) and the powered device (a camera, an access point).
+- **Class:** the power level a device asks for at start-up, 1 to 8; **Type:** the generation (Type 1 802.3af, Type 2 802.3at, Types 3 and 4 802.3bt).
+- **Pairs:** an Ethernet cable has four twisted pairs; PoE sends the current out on one pair and back on another (2 pairs), or on all four, which halves the loop resistance.
+- **Loop resistance:** the resistance the current meets going to the device and back.
+
+### Sources
+
+- **L. Yseboodt (Philips Lighting) and D. Abramson (Texas Instruments), "Overview of 802.3bt – Power over Ethernet standard" (Ethernet Alliance white paper, April 2018,
+  based on P802.3bt Draft 3.3; PDF read as text):** the classes' PSE output 4, 7, 15.4, 30, 45, 60, 75 and 90 W and device power 3.84, 6.49, 13, 25.5, 40, 51, 62 and 71.3 W
+  (p. 2); the Types and their pairs (pp. 10–11); the maximum pairset loop resistance RCh 12.5 Ω, 6.25 Ω on four pairs, RChan = RPair1 + RPair2 (p. 12); equation (5), the PSE
+  power that delivers PClass_PD at the device over RChan from VPSE, PClass = VPSE (VPSE − √(VPSE² − 4 RChan PClass_PD)) / (2 RChan) (p. 37); the Autoclass example, a 65 W
+  Class 8 device on a 25 m AWG 23 patch cord from 55 V, 66.5 W measured at the PSE (p. 29).
+- **Texas Instruments, TPS2372 data sheet, table 6 "Comparison of Operational Limits" (PDF read as text):** Type 1 20 Ω, 15.4 W, 44 V, 13 W, device 37–57 V; Type 2 and
+  Type 3 on two pairs 12.5 Ω, 30 W, 50 V, 25.5 W; Type 3 on four pairs 6.25 Ω, 60 W, 50 V, 51 W; Type 4 6.25 Ω, 90 W, 52 V, 71.3 W; the device's static input voltage
+  37–57 V up to 13 W, 42.5–57 V above, 41.2–57 V for Type 4.
+- **Not read:** IEEE 802.3 itself (paywalled); Microchip's PoE pages (down for maintenance) and Analog Devices' article (the site refuses access).
+
+### Why the formulas are these
+
+**The class table** follows from the two sources together: each class's PSE power, at its Type's lowest voltage, over its maximum loop, leaves the device power,
+P_device = P_PSE − (P_PSE / Vmin)² R; all eight classes within 0.4 % (the tables round: 12.95 W is printed 13 W).
+
+**The real cable.** Equation (5) is the root of R I² − V I + P = 0: the current that leaves P at the device after a loop resistance R. The PSE sources V I, the cable burns
+I² R, the device sees V − I R. When V² < 4 R P no current can deliver P: the most that can reach the device is V² / 4R. The white paper's example comes out 66.2 W against its
+66.5 W measured (−0.4 %), as the copper alone should (connectors and a warm cable add a little).
+
+**The wire.** Copper at 20 °C, 1/58 Ω·mm²/m, on the AWG diameter (as in Wire sizing); a pair is two wires in parallel, so the loop of one wire's length on two pairs, half
+that on four. 100 m of AWG 24 is 8.42 Ω, inside the 12.5 Ω the standard allows for 100 m with patch cords, connectors and heat.
+
+### Assumptions and limits
+
+- **Single-signature devices,** powered on 2 or 4 pairs as a whole; dual-signature devices (each pairset its own class) are not covered.
+- **The cable at 20 °C:** a warm bundle has more resistance (copper +0.39 %/°C); patch cords and connectors add to the loop.
+- **Class 0** (an alias of Class 3 in 802.3af, deprecated in 802.3bt) is shown as Class 3. Autoclass and power demotion are not modelled.
+- **Display.** Three figures.
+
+### How it was checked
+
+43 cases, the expected values from a Python implementation that replays each case's typing and picks, itself checked against the class table and the white paper's example.
+The cases: the opening screen and the pickers; fifteen powers across the class edges (3.84 / 3.85 W, 13 / 13.1 W, 71.3 W); lengths from 5 m to 400 m, two over the class
+and one that cannot deliver; three gauges; four pairs, and Class 5 fixing them; a typed PSE voltage kept when the class changes; 57 V; feet; remembered choices; five
+refusals; the four examples.
 
 [↑ Index](#index)
 
