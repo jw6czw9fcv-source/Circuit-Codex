@@ -12238,12 +12238,15 @@ with their clearance holes, the plated barrel and its pads, to scale in height.
 - **Inputs:** the via's length T (the board's thickness), the drill, the pad and clearance diameters, the gap from the outer copper to the first plane, εr, a frequency and
   the distance to a return via, centre to centre. The **Your inputs** heading picks the copper layers and planes (“4 layers · 2 planes”: the two outer layers plus the planes), the outer copper (the pads, as finished after plating), the inner copper (the planes) and the plating thickness.
 - **Big result:** the via's impedance √(L / C), with a line saying how it looks on a 50 Ω line (under 50 Ω a small capacitor, over it a small inductor, within 2 % nearly invisible) and a badge saying the solver answered (**Solving…** for a moment after typing; **Formula** if the solver cannot run, Johnson's coaxial estimate then standing in for C).
+- **Given: impedance** (the **Output** heading's picker): an impedance replaces the clearance among the inputs, and the big result becomes the clearance diameter that gives
+  it, with the drill, pad, board and planes as entered (the line under it repeats the impedance and how it looks on a 50 Ω line). Switching keeps the screen's state: going to
+  impedance takes the current impedance to three figures, going back takes the found clearance. An impedance out of reach says so, with the most (or least) this drill and pad can give.
 - **Cells:** R (the plating's DC resistance), L (Grover's tube), C (the field solver) and the delay √(L C). **Rows:** the reactances of L and C at the frequency, the resistance there
   (with the skin effect), the loop inductance with a return via (two planes or more), how much the capacitance slows an edge on a 50 Ω line, the frequency up to which the
   lumped model holds, Johnson's coaxial estimate of C with its difference from the solver.
-- **Units:** one length unit for every length, the plating included: mm, mil or µm; MHz or GHz. **Remembered:** the planes, the outer and inner copper, the plating and the units.
+- **Units:** one length unit for every length, the plating included: mm, mil or µm; MHz or GHz. **Remembered:** the planes, the outer and inner copper, the plating, what is given and the units.
 
-Examples: Johnson's measured via, LaMeres's 18 mil blind via, a 1.6 mm 4-layer board.
+Examples: Johnson's measured via, LaMeres's 18 mil blind via, a 1.6 mm 4-layer board, a 50 Ω via in 1.6 mm (the clearance found: 1.27 mm).
 
 ### Terms
 
@@ -12283,6 +12286,11 @@ Johnson's measured via −3.2 % (his conductor thickness read as 0.00062 in, ½ 
 low: they imply a plane closer to the pads than the 18.9 mil the excerpt gives, so his setup is not fully known. Johnson's coaxial formula is shown for comparison: +60 % to
 +290 % against the same data.
 
+**The clearance for an impedance.** L does not depend on the clearance, so the impedance wanted fixes the capacitance needed, C = L / Z². The clearance is found by solving
+for it: the unknown is u = ln(ra / rv) (ra the clearance's radius, rv the via's outer radius), the first guess the coaxial one (C ≈ 2π ε0 εr T / u), then secant steps on 1 / C,
+each step a full field solve, until the capacitance is within 0.002 % of the target (at most twelve steps). The clearance is kept between 1.02 times the via and the larger
+of ten pads or five board thicknesses; if the target lies beyond either end the tool says so, with the impedance at that end.
+
 **Loop inductance** with a return via: Johnson's two parallel conductors across the cavity between the outermost planes, h from the first plane's lower face to the last plane's
 upper face. **Resistance** (derived): ρCu T / (π (ρ1² − ρ2²)) at DC; at a frequency, ρ T / (2π ρ1 δ) once the skin depth δ is under the plating. **Edge** (derived): a shunt C on
 a matched line sees Z0 / 2, a time constant C Z0 / 2, a 10–90 % time 2.2 times that. **Lumped limit:** a tenth of a wavelength in the board.
@@ -12292,13 +12300,16 @@ a matched line sees Z0 / 2, a time constant C Z0 / 2, a 10–90 % time 2.2 times
 - **Short vias only:** the lumped model fails as the via nears a tenth of a wavelength; above that it resonates (stitching vias, stubs), a 3D solver's job.
 - **Through vias** with pads on the outer layers; no non-functional pads on inner layers, no outer-layer pour around the pad, planes evenly spaced between the outer gaps;
   traces and their own capacitance are not included.
+- **One via, not a pair:** a differential impedance (USB's 90 Ω, for example) is between the two vias of a pair; each via alone is roughly half of it (about 45 Ω for
+  USB, a little more when the pair is tightly coupled). The coupling between the two vias is not modelled.
 - **Display.** Three figures.
 
 ### How it was checked
 
-39 cases, the expected values from a Python implementation that replays each case's taps and typing, the capacitance from tools/fd_lines.py (direct sparse solves of the same
-grids; the app's iterative solve agrees to about 1 part in 10⁶). The cases: the opening screen and the pickers; 1 to 8 planes; drills, pads, clearances, boards, εr,
-frequencies and return vias; copper and plating; mils and MHz, the unit linking with the plating; remembered choices; ten refusals; the three examples.
+58 cases, the expected values from a Python implementation that replays each case's taps and typing, the capacitance from tools/fd_lines.py (direct sparse solves of the same
+grids; the app's iterative solve, stopped once the residual is 10⁻⁵ of its start, agrees within 0.2 parts per million) and the clearance search repeated there step for step. The cases: the opening screen and the pickers; 1 to 8
+planes; drills, pads, clearances, boards, εr, frequencies and return vias; copper and plating; mils and MHz, the unit linking with the plating; remembered choices; ten refusals;
+the given impedance (45 to 70 Ω, other drills, boards and εr, in mils, out of reach above and below, zero refused, the carry-over both ways, remembered); the four examples.
 
 [↑ Index](#index)
 

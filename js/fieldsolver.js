@@ -351,7 +351,10 @@
     };
   }
   // The capacitance in pF (lengths in mm): two grids, the second every cell
-  // halved, extrapolated as h².
+  // halved, extrapolated as h². The via's solves stop later than the lines'
+  // (TOL left the capacitance up to 0.03 % short of the direct solve: enough
+  // to move its third figure).
+  const VIA_TOL = 1e-5;
   function solveVia(spec) {
     const t0 = (typeof performance !== "undefined" ? performance : Date).now();
     const cs = [];
@@ -361,7 +364,7 @@
       nodes = lv.N;
       const w = weights(lv, false, true);
       phi = prev ? prolong(prev, phi, lv) : start(lv);
-      iters += solvePotential(lv, w, phi, TOL);
+      iters += solvePotential(lv, w, phi, VIA_TOL);
       cs.push(energy(lv, w, phi) * 8.8541878128e-3);
       prev = lv;
     }
