@@ -707,6 +707,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "power-factor") return renderPowerFactor(domain, tool, favId);
   if (calcId === "poe-classes") return renderPoeClasses(domain, tool, favId);
   if (calcId === "torque-power") return renderTorquePower(domain, tool, favId);
+  if (calcId === "rpm-frequency") return renderRpmFrequency(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -30527,6 +30528,208 @@ function renderTorquePower(domain, tool, favId) {
         const k = calc();
         if (e.target.value === "p" && wantP()) { const f = TP_U.p[state.u.p]; state.p = Number((k.P / f).toPrecision(3)) * f; }
         if (e.target.value === "tau" && !wantP()) { const f = TP_U.tau[state.u.tau]; state.tau = Number((k.tau / f).toPrecision(3)) * f; }
+      }
+      state.given = e.target.value; setPref(C, "given", state.given); paint();
+    };
+  }
+
+  paint();
+}
+
+// ---------- RPM ↔ frequency conversion ----------
+// A shaft's speed and a frequency: an AC motor's speed from its supply frequency and poles, less its slip, or the frequency for a wanted speed (a VFD
+// setting); and the pulse rate of a tachometer, an encoder or a stepper's steps. Source, as read this session: Wikipedia, "Induction motor" (wikitext read
+// as text), "Synchronous speed": n_s = 120 f / p rpm, p the poles per phase, a 4-pole motor 1500 rpm on 50 Hz and 1800 rpm on 60 Hz; "Slip": s = (n_s -
+// n_r) / n_s. Derived: f = n PPR k / 60 for pulses (k edges counted per line: x1, x2 or x4 quadrature decoding); counting for a gate time T resolves
+// 60 / (PPR k T) rpm.
+const RF_U = { n: { rpm: 1, "rad/s": 60 / (2 * Math.PI), "rev/s": 60 }, f: { Hz: 1, kHz: 1e3 } };
+const RF_MODES = { ac: "AC motor", pulse: "Pulses" };
+const RF_POLES = [2, 4, 6, 8, 10, 12];
+const RF_NOTE = {
+  ac: "An AC motor's stator makes a magnetic field that turns at the synchronous speed, 120 f / p rpm: one turn per cycle for a 2-pole motor, half that with 4 poles. A synchronous motor turns at exactly that speed; an induction motor's rotor slips a little behind it (a few percent at full load), since only the slip induces its rotor current. A variable-frequency drive sets the speed by setting f.",
+  pulse: "A tachometer, an encoder or a stepper driver turns speed into pulses: so many per revolution (an encoder's lines, a stepper's steps times its microsteps), so the pulse rate is the speed in revolutions per second times that number. An encoder's two channels in quadrature give two or four countable edges per line. A microcontroller that counts pulses for a time T sees the speed only to within one count: 60 / (pulses per turn × T) rpm.",
+};
+
+function renderRpmFrequency(domain, tool, favId) {
+  const C = "rpm-frequency";
+  const state = {
+    u: { n: pref(C, "un", "rpm", Object.keys(RF_U.n)), f: pref(C, "uf", "Hz", Object.keys(RF_U.f)) },
+    mode: pref(C, "mode", "ac", Object.keys(RF_MODES)),
+    given: pref(C, "given", "f", ["f", "n"]),
+    poles: pref(C, "poles", 4, RF_POLES), k: pref(C, "k", 1, [1, 2, 4]),
+    f: 50, n: 1500, slip: 0, ppr: 100,
+  };
+  // each mode keeps its own frequency and speed (50 Hz is a supply, not a pulse rate)
+  const memo = { ac: { f: 50, n: 1500 }, pulse: { f: 5000, n: 3000 } };
+  if (state.mode === "pulse") Object.assign(state, memo.pulse);
+  const KIND = { n: "n", f: "f", slip: "", ppr: "" };
+  const ac = () => state.mode === "ac", byF = () => state.given === "f";
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const inU = (kind, v, u = state.u[kind]) => `${n3(v / RF_U[kind][u])} ${u}`;
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { f, n, slip, ppr } = state;
+    if (byF() && !(f > 0)) return "Enter the frequency.";
+    if (!byF() && !(n > 0)) return "Enter the speed.";
+    if (ac() && !(slip >= 0 && slip < 100)) return "The slip is from 0 to under 100 %.";
+    if (!ac() && !(ppr > 0)) return "Enter the pulses per revolution.";
+    return "";
+  }
+  function calc() {
+    if (ac()) {
+      const p = state.poles, s = state.slip / 100;
+      const ns = byF() ? (120 * state.f) / p : state.n / (1 - s);
+      const f = byF() ? state.f : (ns * p) / 120, n = byF() ? ns * (1 - s) : state.n;
+      return { f, n, ns };
+    }
+    const per = state.ppr * state.k;                     // counted edges per revolution
+    const f = byF() ? state.f : (state.n * per) / 60, n = byF() ? (60 * state.f) / per : state.n;
+    return { f, n, per, gate: f * 0.1, res: 60 / (per * 0.1) };
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", GREEN = "#5DCAA5";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null, cf = byF() ? BLUE : GREEN, cn = byF() ? GREEN : BLUE;
+    let o = "";
+    if (ac()) {
+      // the supply, its frequency; the motor, its poles; the shaft turning at n
+      o += `<circle cx="48" cy="60" r="18" stroke="${BLUE}" stroke-width="1.5"/><path d="M39 60 q4.5 -9 9 0 t9 0" stroke="${BLUE}" stroke-width="1.5"/>`;
+      o += `<path d="M66 54 H112 M66 66 H112" stroke="${WIRE}" stroke-width="1.5"/>` + lbl("df", 48, 98, k ? inU("f", k.f) : "f", cf);
+      o += `<circle cx="138" cy="60" r="26" stroke="${BLUE}" stroke-width="1.5"/>` + lbl("", 138, 64, "M", BLUE) + lbl("dp", 138, 104, `${state.poles} poles`, BLUE);
+      o += `<rect x="164" y="55" width="80" height="10" rx="2" stroke="${BLUE}" stroke-width="1.5"/>`;
+    } else {
+      // a slotted disc on the shaft, the sensor, and the pulse train it makes
+      o += `<rect x="20" y="55" width="70" height="10" rx="2" stroke="${BLUE}" stroke-width="1.5"/><circle cx="90" cy="60" r="30" stroke="${BLUE}" stroke-width="1.5"/>`;
+      o += Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; return `<path d="M${(90 + 22 * Math.cos(a)).toFixed(1)} ${(60 + 22 * Math.sin(a)).toFixed(1)} L${(90 + 30 * Math.cos(a)).toFixed(1)} ${(60 + 30 * Math.sin(a)).toFixed(1)}" stroke="${BLUE}" stroke-width="1.5"/>`; }).join("");
+      o += lbl("dppr", 90, 108, ok ? `${n3(state.ppr)} per turn${state.k > 1 ? ` × ${state.k}` : ""}` : "PPR", BLUE);
+      o += `<path d="M150 72 h12 v-24 h12 v24 h12 v-24 h12 v24 h12 v-24 h12 v24 h12 v-24 h12 v24" stroke="${cf}" stroke-width="1.5" fill="none"/>`;
+      o += lbl("df", 210, 98, k ? inU("f", k.f) : "f", cf);
+    }
+    o += `<path d="M${ac() ? 222 : 52} 42 A 14 18 0 0 1 ${ac() ? 222 : 52} 78" stroke="${cn}" stroke-width="1.5" fill="none"/>`;
+    o += ac() ? lbl("dn", 252, 36, k ? inU("n", k.n) : "n", cn) : lbl("dn", 6, 34, k ? inU("n", k.n) : "n", cn, "start");
+    return `<svg width="320" height="116" viewBox="0 0 320 116" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), w = (k.n * 2 * Math.PI) / 60;
+    const head = byF() ? (ac() ? "Shaft speed" : "Speed") : ac() ? "Supply frequency" : "Pulse frequency";
+    const big = byF() ? inU("n", k.n) : inU("f", k.f);
+    let sub, cells, rows;
+    if (ac()) {
+      sub = state.slip > 0 ? `synchronous ${inU("n", k.ns)} with ${n3(state.slip)} % slip` : `synchronous speed of a ${state.poles}-pole motor`;
+      cells = cell("Synchronous", inU("n", k.ns), "c1") + cell("Slip", inU("n", k.ns - k.n), "c2") + cell("ω", `${n3(w)} rad/s`, "c3");
+      // the synchronous speed the same frequency gives with three other pole counts
+      rows = row("Other poles (rpm)", RF_POLES.filter((p) => p !== state.poles).slice(0, 3).map((p) => `${p} p ${n3((120 * k.f) / p)}`).join(" · "), "ps");
+    } else {
+      sub = byF() ? `${inU("f", k.f)} over ${n3(k.per)} edges a turn` : `${inU("n", k.n)} × ${n3(k.per)} edges a turn`;
+      cells = cell("Period", si(1 / k.f, "s"), "c1") + cell("Edges a turn", n3(k.per), "c2") + cell("ω", `${n3(w)} rad/s`, "c3");
+      rows = row("Counting for 100 ms", `${n3(k.gate)} counts, ± ${n3(k.res)} rpm`, "g");
+    }
+    rows += row("Speed", ["rpm", "rad/s", "rev/s"].map((u) => inU("n", k.n, u)).join(" · "), "ns");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">${head}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cells}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${RF_NOTE[state.mode]}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, st); state.u = u; paint(); };
+  useExamples([
+    { title: "A 4-pole motor on 50 Hz", note: "Synchronous 1500 rpm (1800 on 60 Hz); with 3 % slip it turns 45 rpm slower.",
+      apply: example({ mode: "ac", given: "f", f: 50, poles: 4, slip: 3, u: { n: "rpm", f: "Hz" } }) },
+    { title: "A VFD set for 1000 rpm", note: "A 4-pole motor slipping 3 %: the drive must give 34.4 Hz.",
+      apply: example({ mode: "ac", given: "n", n: 1000, poles: 4, slip: 3, u: { n: "rpm", f: "Hz" } }) },
+    { title: "A stepper at 600 rpm, 1/16 steps", note: "200 steps × 16 = 3200 a turn: the driver needs 32 kHz of step pulses.",
+      apply: example({ mode: "pulse", given: "n", n: 600, ppr: 3200, k: 1, u: { n: "rpm", f: "kHz" } }) },
+    { title: "A 1000-line encoder, ×4", note: "At 3000 rpm, 200 kHz of counted edges; a 100 ms count resolves 0.15 rpm.",
+      apply: example({ mode: "pulse", given: "n", n: 3000, ppr: 1000, k: 4, u: { n: "rpm", f: "kHz" } }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key) => {
+      const kd = KIND[key], u = kd ? sel(`data-u="${kd}"`, Object.keys(RF_U[kd]).map((x) => [x, x]), state.u[kd]) : key === "slip" ? '<span class="unit-fixed">%</span>' : "";
+      const v = kd ? state[key] / RF_U[kd][state.u[kd]] : state[key];
+      return `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${u}</div></div>`;
+    };
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const heading = ac() ? sel('class="label-select" data-poles', RF_POLES.map((p) => [p, `${p} poles`]), state.poles)
+      : sel('class="label-select" data-k', [[1, "× 1 (each pulse)"], [2, "× 2 (both edges)"], [4, "× 4 (quadrature)"]], state.k);
+    const first = byF() ? box(ac() ? "Supply frequency f" : "Pulse frequency f", "f") : box("Speed n", "n");
+    const second = ac() ? box("Slip", "slip") : box("Pulses a turn", "ppr");
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A shaft's speed and the frequency it goes with")}
+
+      ${pillRow(Object.entries(RF_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${heading}</span>
+      </div>
+      ${pair(first, second)}
+
+      <div class="section-label split" style="color:#5DCAA5;grid-template-columns:auto 1fr auto">
+        <span>Output</span><span></span><span>${sel('class="label-select" data-given', [["f", "Given: frequency"], ["n", "Given: speed"]], state.given)}</span>
+      </div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["n_s = 120 f / p", "n = n_s (1 − s)", "f_pulse = n × PPR × k / 60", "Resolution = 60 / (PPR k T) rpm"],
+        "An AC motor's stator field turns at the synchronous speed n_s = 120 f / p rpm, f the supply frequency and p the number of poles (per phase): 3000 rpm for 2 poles on 50 Hz, 1500 for 4 (Wikipedia, Induction motor). An induction motor's rotor turns slower by its slip s = (n_s − n) / n_s, a few percent at full load; a synchronous motor has none. A variable-frequency drive sets the speed by setting f. A shaft read by pulses, an encoder's lines, a tachometer's teeth, a stepper's steps (steps a turn times microsteps), gives f = n × PPR / 60 pulses a second, times k when both edges (2) or both channels in quadrature (4) are counted. Counting pulses for a gate time T measures the speed to one count: 60 / (PPR k T) rpm."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => {
+        if (btn.dataset.pill === state.mode) return;
+        memo[state.mode] = { f: state.f, n: state.n };
+        state.mode = btn.dataset.pill; Object.assign(state, memo[state.mode]); setPref(C, "mode", state.mode); paint();
+      };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value), kd = KIND[key]; state[key] = kd ? v * RF_U[kd][state.u[kd]] : v; show(); };
+    });
+    app.querySelectorAll("select[data-u]").forEach((el) => {
+      el.onchange = () => {
+        const kd = el.getAttribute("data-u");
+        state.u[kd] = el.value; setPref(C, `u${kd}`, el.value);
+        const f = RF_U[kd][state.u[kd]]; if (isFinite(state[kd])) state[kd] = Number((state[kd] / f).toPrecision(3)) * f;
+        paint();
+      };
+    });
+    const ps = app.querySelector("select[data-poles]");
+    if (ps) ps.onchange = (e) => { state.poles = +e.target.value; setPref(C, "poles", state.poles); paint(); };
+    const ks = app.querySelector("select[data-k]");
+    if (ks) ks.onchange = (e) => { state.k = +e.target.value; setPref(C, "k", state.k); paint(); };
+    // switching what is given carries the shaft over, to three figures: the speed found becomes the one typed, or the frequency
+    app.querySelector("select[data-given]").onchange = (e) => {
+      if (!problem()) {
+        const k = calc();
+        if (e.target.value === "n" && byF()) { const f = RF_U.n[state.u.n]; state.n = Number((k.n / f).toPrecision(3)) * f; }
+        if (e.target.value === "f" && !byF()) { const f = RF_U.f[state.u.f]; state.f = Number((k.f / f).toPrecision(3)) * f; }
       }
       state.given = e.target.value; setPref(C, "given", state.given); paint();
     };

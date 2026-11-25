@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "RPM ↔ frequency conversion",
+    domain: "power",
+    formulas: ["n_s = 120 f / p", "n = n_s (1 − s)", "f_pulse = n × PPR × k / 60", "Resolution = 60 / (PPR k T) rpm"],
+    note: "An AC motor's synchronous speed from its supply frequency and poles, less its slip, or the frequency a drive needs for a speed; and the pulse rate of an encoder, a tachometer or a stepper's steps, with the speed resolution of counting them for 100 ms.",
+  },
+  {
     tool: "Torque & power conversion",
     domain: "power",
     formulas: ["P = τ ω,  ω = 2π n / 60", "τ = P / ω", "P_in = P / η,  I = P_in / V", "1 hp = 550 ft·lbf/s = 745.7 W"],

@@ -142,6 +142,7 @@ will key on, since that is the id the app already holds for each tool.
 - Battery → [Button cell sizes](#button-cell-sizes)
 - Thermal management → [Heat sink sizing](#heat-sink)
 - Motors → [Torque & power conversion](#torque-power)
+- Motors → [RPM ↔ frequency conversion](#rpm-frequency)
 
 ### PCB & interconnect
 
@@ -11657,6 +11658,63 @@ exactly, which SP 811 prints 735.498 8). **The supply:** the electrical input is
 35 cases, the expected values from a Python implementation that replays each case's typing and picks, its factors checked against SP 811. The cases: the opening screen
 and the pickers; torques, speeds, efficiencies and voltages; every torque, power and speed unit; the unit linking; power given, the carry-over both ways; remembered
 choices; six refusals; the four examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="rpm-frequency"></a>
+## RPM ↔ frequency conversion
+
+`calc: rpm-frequency` · Power electronics › Motors
+
+### What it computes
+
+A shaft's speed and the frequency that goes with it, both ways. **AC motor:** the speed from the supply frequency and the poles, less an induction motor's slip, or
+the frequency a drive must give for a wanted speed. **Pulses:** the pulse rate of an encoder, a tachometer or a stepper's steps for a speed, or the speed for a pulse
+rate. The drawing shows the supply and motor, or the slotted disc and its pulse train; what is found is green.
+
+- **Pills:** **AC motor** and **Pulses**, each with its own frequency and speed (50 Hz is a supply, not a pulse rate).
+- **Inputs:** the frequency (Hz or kHz) or the speed (rpm, rad/s, rev/s), as the **Output** heading's **Given: frequency** or **Given: speed** picks; the slip (AC) or the
+  pulses a turn (Pulses). The **Your inputs** heading picks the poles (2 to 12) or the edges counted: × 1, × 2 (both edges) or × 4 (quadrature).
+- **Big result:** the speed or the frequency; under it the synchronous speed and slip, or the edges a turn.
+- **Cells:** AC, the synchronous speed, the slip in rpm and ω; Pulses, the period between edges, the edges a turn and ω. **Rows:** AC, the synchronous speed three other
+  pole counts give; Pulses, the counts in 100 ms and the speed resolution they give; both, the speed in rpm, rad/s and rev/s.
+- **Remembered:** the pill, what is given, the poles, the edges counted and the units.
+
+Examples: a 4-pole motor on 50 Hz with 3 % slip, a drive set for 1000 rpm (34.4 Hz), a stepper at 600 rpm in 1/16 steps (32 kHz), a 1000-line encoder × 4 at 3000 rpm
+(200 kHz).
+
+### Terms
+
+- **Poles:** the magnetic poles of the stator per phase; 2 poles turn the field once per cycle, 4 poles half as fast.
+- **Synchronous speed:** the speed of the stator's turning field; a synchronous motor turns at it, an induction motor a little slower.
+- **Slip:** how far an induction motor's rotor lags the field, as a fraction of the synchronous speed; a few percent at full load.
+- **Pulses a turn (PPR):** an encoder's lines, a tachometer's teeth or marks, a stepper's steps a turn times its microsteps (200 × 16 = 3200).
+- **Quadrature:** an encoder's two channels A and B, a quarter cycle apart; counting both edges of both gives four counts a line.
+
+### Sources
+
+- **Wikipedia, "Induction motor" (the article's wikitext, read as text):** "Synchronous speed", n_s = 120 f / p rpm, p the number of poles per phase; its example, a 4-pole
+  motor at 1500 rpm on 50 Hz and 1800 rpm on 60 Hz; "Slip", s = (n_s − n_r) / n_s.
+
+### Why the formulas are these
+
+**AC.** The synchronous speed and slip as the source gives them; the speed n = n_s (1 − s), and for a wanted speed f = n p / (120 (1 − s)). **Pulses** (derived): a shaft
+turning at n rpm passes n / 60 turns a second, each with PPR × k counted edges, so f = n PPR k / 60. **Resolution** (derived): a count over a gate time T is uncertain by
+one edge, so the speed is known to 60 / (PPR k T) rpm; the tool shows it for T = 100 ms.
+
+### Assumptions and limits
+
+- **Slip** is an input: it depends on the load, so the tool does not predict it.
+- **Steppers:** the step rate gives the speed only if no step is missed (the motor's torque must suffice at that rate).
+- **Display.** Three figures (1455 rpm shows as 1460 rpm).
+
+### How it was checked
+
+37 cases, the expected values from a Python implementation that replays each case's taps, typing and picks, itself checked against the source's 1500 and 1800 rpm. The
+cases: the opening screen and the pickers; 2 to 12 poles; 60 and 400 Hz, slip; the speed given; rad/s; the pulses with their own values, and back; 1 to 1024 pulses a turn,
+× 2 and × 4; the speed given; kHz; remembered choices; five refusals; the four examples.
 
 [↑ Index](#index)
 
