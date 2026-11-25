@@ -703,6 +703,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "sallen-key") return renderSallenKey(domain, tool, favId);
   if (calcId === "planar-inductor") return renderPlanarInductor(domain, tool, favId);
   if (calcId === "via-rlc") return renderViaRlc(domain, tool, favId);
+  if (calcId === "trace-inductance") return renderTraceInductance(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -29740,6 +29741,236 @@ function renderViaRlc(domain, tool, favId) {
       if (e.target.value === "sizes" && wantZ() && found) { const f = VIA_U.d[state.u.d]; state.clr = Number((found.ra * 2e-3 / f).toPrecision(3)) * f; }
       state.given = e.target.value; setPref(C, "given", state.given); paint(true);
     };
+  }
+
+  paint(true);
+}
+
+// ---------- Trace inductance ----------
+// The inductance of a PCB trace: over a plane, between two planes, or with no plane near it. Sources, as read this session: B. C. Wadell, "Transmission
+// Line Design Handbook" (Artech House, 1991; Pierre's scanned copy, pages read as images), §6.2.2 (p382-383) the flat wire: Greenhouse's form of Grover's
+// L = 0.002 l [ln(2l / (w + t)) + 0.25049 + (w + t) / (3l) + mu T(x) / 4] uH (l, w, t in cm), T = 1 at DC (0.50049 in all, Grover's flat bar), T -> 0 when
+// the current keeps to the surface; Terman's form 0.002 l [ln(2l / (w + t)) + 0.5 + 0.2235 (w + t) / l], which the page labels "(nH)" although with l in
+// cm it gives uH (a 1 cm trace, about 9.5 nH, only so); 0.2235 varies from 0.22313 (t = 0) to 0.22352 (t = w). Over a plane and between planes the
+// trace and its return are a transmission line, whose inductance per length is that of the same line in air, L' = Z0(air) / c (the dielectric changes the
+// capacitance, not the inductance): the app's field solver (js/fieldsolver.js microstrip and stripline, er = 1), with Wadell's microstrip and Wheeler's
+// stripline formulas (as in the impedance tools) beside it.
+const TI_U = { d: { mm: 1e-3, mil: 25.4e-6 }, f: { kHz: 1e3, MHz: 1e6, GHz: 1e9 } };
+const TI_OZ = [0.5, 1, 1.5, 2];
+const TI_MODES = { plane: "Over a plane", planes: "Between planes", none: "No plane" };
+const TI_RHO = 1.7241e-8, TI_MU0 = 4e-7 * Math.PI, TI_C0 = 299792458;
+const TI_NOTE = {
+  plane: "A trace's inductance belongs to a loop: the current goes out along the trace and comes back along its return. Over a plane, the return current flows in the plane just under the trace, so the loop is as small as it can be: its inductance grows with the height above the plane and falls as the trace widens. It is the inductance of the same line in air (the board's εr changes the capacitance, not the inductance), from a field solver; Wadell's formula beside it.",
+  planes: "A trace's inductance belongs to a loop: the current goes out along the trace and comes back along its return. Between two planes, the return current splits between the planes above and below, close under the trace, so the loop is small: its inductance grows with the planes' spacing and falls as the trace widens. It is the inductance of the same line in air (the board's εr changes the capacitance, not the inductance), from a field solver; Wheeler's formula beside it.",
+  none: "With no plane near it, a trace's inductance is its own share of a loop whose return is somewhere else (a wire, another trace): Grover's partial inductance of a flat bar, which grows a little faster than the length. The whole loop's inductance adds the return's own share and subtracts what the two share, so it depends on how far apart they are; a plane under the trace is what makes it small.",
+};
+
+function renderTraceInductance(domain, tool, favId) {
+  const C = "trace-inductance";
+  const state = {
+    u: { d: pref(C, "ud", "mm", Object.keys(TI_U.d)), f: pref(C, "uf", "MHz", Object.keys(TI_U.f)) },
+    mode: pref(C, "mode", "plane", Object.keys(TI_MODES)),
+    oz: pref(C, "oz", 1, TI_OZ),
+    l: 25e-3, w: 0.25e-3, h: 0.2e-3, b: 0.4e-3, f: 100e6,
+  };
+  const KIND = { l: "d", w: "d", h: "d", b: "d", f: "f" };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const dim = (v) => `${n3(v / TI_U.d[state.u.d])} ${state.u.d}`;
+  const pct = (v) => (Math.abs(v) < 0.05 ? "0.0 %" : `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)} %`);
+  const tc = () => state.oz * TRACE_OZ_MIL * 25.4e-6;
+  const perLen = () => (state.u.d === "mil" ? [25.4e-3, "inch"] : [1e-3, "mm"]);
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { l, w, h, b, f, mode } = state, t = tc();
+    if (!(l > 0)) return "Enter the trace's length.";
+    if (!(w > 0)) return "Enter the trace's width.";
+    if (mode === "plane" && !(h > 0)) return "Enter the height above the plane (the dielectric under the trace).";
+    if (mode === "planes" && !(b > 0)) return "Enter the distance between the planes.";
+    if (mode === "planes" && !(b > t)) return `The planes must be farther apart than the copper is thick (${dim(t)}).`;
+    if (!(f > 0)) return "Enter a frequency.";
+    return "";
+  }
+  // Grover's flat bar (Wadell 6.2.2.3): k = 0.50049 at DC, 0.25049 with the current on the surface; Terman's form (6.2.2.2) beside it.
+  const grover = (k) => { const { l, w } = state, s = w + tc(); return 2e-7 * l * (Math.log((2 * l) / s) + k + s / (3 * l)); };
+  function calc() {
+    const { w, h, b, f } = state, t = tc();
+    const wheeler = () => {
+      const hh = (b - t) / 2, m = 6 / (3 + t / hh);
+      const wp = t > 0 ? w + (t / Math.PI) * Math.log(Math.E / Math.sqrt((t / (4 * hh + t)) ** 2 + ((1 / (4 * Math.PI)) / (w / t + 1.1)) ** m)) : w;
+      const x = (16 * hh) / (Math.PI * wp);
+      return 30 * Math.log(1 + 0.5 * x * (x + Math.sqrt(x * x + 6.27)));
+    };
+    // the formula's inductance per length (H/m): the line's impedance in air over c
+    const Lf = state.mode === "plane" ? wadellMicrostripZ(w, h, t, 1) / TI_C0 : state.mode === "planes" ? wheeler() / TI_C0 : NaN;
+    const s = w + tc(), l = state.l;
+    return { Lf, dc: grover(0.50049), hf: grover(0.25049), terman: 2e-7 * l * (Math.log((2 * l) / s) + 0.5 + (0.2235 * s) / l), delta: Math.sqrt(TI_RHO / (Math.PI * f * TI_MU0)) };
+  }
+  const params = () => (state.mode === "plane" ? { w: state.w * 1e3, t: tc() * 1e3, h: state.h * 1e3, er: 1 } : { w: state.w * 1e3, t: tc() * 1e3, b: state.b * 1e3, er: 1 });
+  const kind = () => (state.mode === "plane" ? "microstrip" : "stripline");
+
+  // The field solver: asked a moment after typing stops (at once for a pill, a picker or an example); answers for an older screen are dropped.
+  let solved = null, timer = null, gen = 0, failed = false;
+  const seq = SCREEN_SEQ;
+  function ask(now) {
+    gen++;
+    FS.supersede();
+    if (timer) { clearTimeout(timer); timer = null; FS.hold(false); }
+    failed = false;
+    if (problem() || state.mode === "none") { solved = null; return; }
+    const p = params(), k = kind(), known = FS.known(k, p);
+    if (known) { solved = known.z / TI_C0; return; }
+    solved = null;
+    const my = gen;
+    FS.hold(true);
+    timer = setTimeout(() => {
+      timer = null; FS.hold(false);
+      if (seq !== SCREEN_SEQ) return;
+      FS.solve(k, p).then((r) => { if (my === gen && seq === SCREEN_SEQ) { solved = r.z / TI_C0; show(); } })
+        .catch((e) => { if (my === gen && seq === SCREEN_SEQ && e.message !== "superseded") { failed = true; show(); } });
+    }, now ? 0 : 250);
+  }
+  // the inductance per length (H/m): the solver's, the formula's if the solver cannot run, NaN while it solves
+  const perM = () => (solved !== null ? solved : failed || FS.unavailable ? calc().Lf : NaN);
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", BOARD = "rgba(143,193,245,0.08)";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  // A cross-section of the trace, with the plane(s) it returns through and the length above; the gap is drawn 40 high, the trace's width in proportion
+  // (kept between 14 and 150), the copper at least 4 thick.
+  function diagram() {
+    const ok = !problem(), m = state.mode, cx = 140, W = 190, X0 = cx - W / 2;
+    const gap = m === "plane" ? state.h : m === "planes" ? (state.b - tc()) / 2 : 0.2e-3;
+    const k = 40 / (ok && gap > 0 ? gap : 0.2e-3);
+    const wd = Math.min(130, Math.max(14, (ok ? state.w : 0.25e-3) * k)), th = Math.max(4, Math.min(12, tc() * k));
+    let o = lbl("dl", cx, 13, ok ? `${dim(state.l)} long` : "length", GREY);
+    if (m === "none") {
+      const yt = 58;
+      o += `<rect x="${cx - wd / 2}" y="${yt}" width="${wd}" height="${th}" fill="${BLUE}"/>`;
+      o += lbl("dw", cx, yt - 8, ok ? `w ${dim(state.w)}` : "w", BLUE);
+      o += lbl("", cx, yt + th + 26, "no plane under it", GREY);
+      return `<svg width="310" height="110" viewBox="0 0 310 110" fill="none">${o}</svg>`;
+    }
+    const pt = 5;
+    if (m === "plane") {
+      const yp = 96, yt = yp - 40 - th;
+      o += `<rect x="${X0}" y="${yp - 40}" width="${W}" height="40" fill="${BOARD}"/><rect x="${X0}" y="${yp}" width="${W}" height="${pt}" fill="${WIRE}"/>`;
+      o += `<rect x="${cx - wd / 2}" y="${yt}" width="${wd}" height="${th}" fill="${BLUE}"/>`;
+      o += lbl("dw", cx, yt - 8, ok ? `w ${dim(state.w)}` : "w", BLUE);
+      o += `<path d="M${X0 + W + 12} ${yp - 40} V${yp} M${X0 + W + 8} ${yp - 40} H${X0 + W + 16} M${X0 + W + 8} ${yp} H${X0 + W + 16}" stroke="${GREY}" stroke-width="1"/>` + lbl("dh", X0 + W + 20, yp - 16, ok ? `h ${dim(state.h)}` : "h", BLUE, "start");
+      o += lbl("", cx, yp + pt + 15, "plane (GND)", GREY);
+      return `<svg width="310" height="${yp + pt + 22}" viewBox="0 0 310 ${yp + pt + 22}" fill="none">${o}</svg>`;
+    }
+    const yA = 34, yB = yA + pt + 40 + th + 40;
+    o += `<rect x="${X0}" y="${yA}" width="${W}" height="${pt}" fill="${WIRE}"/><rect x="${X0}" y="${yA + pt}" width="${W}" height="${yB - yA - pt}" fill="${BOARD}"/><rect x="${X0}" y="${yB}" width="${W}" height="${pt}" fill="${WIRE}"/>`;
+    o += `<rect x="${cx - wd / 2}" y="${yA + pt + 40}" width="${wd}" height="${th}" fill="${BLUE}"/>`;
+    o += lbl("dw", cx, yA + pt + 32, ok ? `w ${dim(state.w)}` : "w", BLUE);
+    o += `<path d="M${X0 + W + 12} ${yA + pt} V${yB} M${X0 + W + 8} ${yA + pt} H${X0 + W + 16} M${X0 + W + 8} ${yB} H${X0 + W + 16}" stroke="${GREY}" stroke-width="1"/>` + lbl("db", X0 + W + 20, (yA + pt + yB) / 2 + 4, ok ? `b ${dim(state.b)}` : "b", BLUE, "start");
+    o += lbl("", X0, yA - 6, "plane", GREY, "start") + lbl("", X0, yB + pt + 15, "plane", GREY, "start");
+    return `<svg width="310" height="${yB + pt + 22}" viewBox="0 0 310 ${yB + pt + 22}" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), m = state.mode, l = state.l, f = state.f, w = 2 * Math.PI * f, [pl, pn] = perLen();
+    const Lp = m === "none" ? k.dc / l : perM(), L = Lp * l, have = isFinite(L);
+    const badge = m === "none" ? "" : solved !== null ? `<span class="badge-calc" data-res="by">${ICONS.bolt2}Field solver</span>`
+      : failed || FS.unavailable ? `<span class="badge-calc" data-res="by">${ICONS.bolt2}Formula</span>` : `<span class="badge-calc badge-wait" data-res="by">Solving…</span>`;
+    const sub = m === "plane" ? "the loop: along the trace, back in the plane under it"
+      : m === "planes" ? "the loop: along the trace, back in the planes above and below it"
+      : "the trace's own share of the loop (partial inductance), at DC";
+    let rows = "";
+    if (m !== "none") {
+      rows += row(m === "plane" ? "Wadell's microstrip formula, in air" : "Wheeler's stripline formula, in air", `${si(k.Lf * l, "H")}${solved !== null ? ` (${pct((100 * (k.Lf - solved)) / solved)})` : ""}`, "fo");
+      rows += row("The same trace with no plane (Grover)", `${si(k.dc, "H")}${have ? `, × ${n3(k.dc / L)}` : ""}`, "np");
+    } else {
+      rows += row("At high frequency (current on the surface)", si(k.hf, "H"), "hf");
+      rows += row("Terman's form", `${si(k.terman, "H")} (${pct((100 * (k.terman - k.dc)) / k.dc)})`, "te");
+    }
+    rows += row("A current step of 1 A in 1 ns gives", have ? `${si(L * 1e9, "V")} across it` : "…", "vs");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Inductance L</span>${badge}</div>
+          <div class="result-value"><span class="num" data-res="big">${have ? si(L, "H") : "…"}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell(`Per ${pn}`, have ? si(Lp * pl, "H") : "…", "c1")}${cell(`X at ${si(f, "Hz")}`, have ? si(w * L, "Ω") : "…", "c2")}${cell("Skin depth", dim(k.delta), "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${TI_NOTE[m]}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { const u = Object.assign({}, state.u, st.u || {}); Object.assign(state, st); state.u = u; paint(true); };
+  useExamples([
+    { title: "An inch of 10 mil trace", note: "10 mil wide, 10 mil over its plane, 1 oz: 9.89 nH, the 10 nH per inch of the rule of thumb.",
+      apply: example({ mode: "plane", oz: 1, l: 1000 * 25.4e-6, w: 10 * 25.4e-6, h: 10 * 25.4e-6, f: 100e6, u: { d: "mil", f: "MHz" } }) },
+    { title: "The same inch, no plane", note: "Grover's flat bar: 28.8 nH, nearly three times as much, before the return path is counted.",
+      apply: example({ mode: "none", oz: 1, l: 1000 * 25.4e-6, w: 10 * 25.4e-6, f: 100e6, u: { d: "mil", f: "MHz" } }) },
+    { title: "Inner layer, between planes", note: "0.15 mm wide, ½ oz, planes 0.4 mm apart, 20 mm long: 7 nH.",
+      apply: example({ mode: "planes", oz: 0.5, l: 20e-3, w: 0.15e-3, b: 0.4e-3, f: 100e6, u: { d: "mm", f: "MHz" } }) },
+    { title: "A 2 mm power trace", note: "50 mm long, 0.2 mm over its plane: 4.76 nH, against 44.1 nH with no plane.",
+      apply: example({ mode: "plane", oz: 1, l: 50e-3, w: 2e-3, h: 0.2e-3, f: 1e6, u: { d: "mm", f: "MHz" } }) },
+  ]);
+
+  function paint(now) {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key) => {
+      const kd = KIND[key], u = sel(`data-u="${kd}"`, Object.keys(TI_U[kd]).map((x) => [x, x]), state.u[kd]);
+      return `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(state[key] / TI_U[kd][state.u[kd]])}" />${u}</div></div>`;
+    };
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const m = state.mode;
+    const third = m === "plane" ? box("Height h", "h") : m === "planes" ? box("Planes apart b", "b") : "";
+    ask(now);
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A PCB trace's inductance, with its return path")}
+
+      ${pillRow(Object.entries(TI_MODES), m, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${sel('class="label-select" data-oz', TI_OZ.map((o) => [o, `${o} oz copper`]), state.oz)}</span>
+      </div>
+      ${pair(box("Length l", "l"), box("Width w", "w"))}${third ? pair(third, box("Frequency", "f")) : pair(box("Frequency", "f"), "<div></div>")}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["L = L′ l,  L′ = Z0(air) / c", "No plane: L = 0.002 l [ln(2l / (w + t))", "      + 0.50049 + (w + t) / 3l] µH", "X = 2π f L", "V = L di/dt"],
+        "Inductance belongs to a loop: a trace's current always comes back somewhere, and the farther its return, the larger the loop and its inductance. Over a solid plane the return current flows in the plane just under the trace (at high frequency it follows the trace closely), so the trace and plane form a transmission line: its inductance per length is that of the same line in air, L′ = Z0(air) / c, which the app's field solver gives for the cross-section (the board's εr changes only the capacitance). Between two planes the return splits between them. With no plane near, Grover's formula gives the trace's own share, its partial inductance, in µH with l, w and t in cm (Wadell's handbook): the loop's total adds the return conductor's share and subtracts the part they share. A current step di in dt across an inductance L gives a voltage L di/dt: 1 A in 1 ns across 10 nH is 10 V, which is why ground and supply connections are kept short and wide."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint(true));
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(true); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value), kd = KIND[key]; state[key] = v * TI_U[kd][state.u[kd]]; ask(false); show(); };
+    });
+    app.querySelectorAll("select[data-u]").forEach((el) => {
+      el.onchange = () => {
+        const kd = el.getAttribute("data-u");
+        state.u[kd] = el.value; setPref(C, `u${kd}`, el.value);
+        Object.keys(KIND).filter((key) => KIND[key] === kd).forEach((key) => { const f = TI_U[kd][state.u[kd]]; if (isFinite(state[key])) state[key] = Number((state[key] / f).toPrecision(3)) * f; });
+        paint(true);
+      };
+    });
+    app.querySelector("select[data-oz]").onchange = (e) => { state.oz = +e.target.value; setPref(C, "oz", state.oz); paint(true); };
   }
 
   paint(true);

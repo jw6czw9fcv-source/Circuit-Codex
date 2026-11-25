@@ -160,7 +160,7 @@ const DOMAINS = [
         title: "Trace current & resistance",
         tools: [
           { name: "Trace width", was: "PCB trace width / resistance", calc: "trace-width", mergedNames: ["Trace current capacity (ampacity)", "Trace current — IPC-2152 method"] },
-          { name: "Via current capacity", calc: "via-current" }, { name: "Trace inductance" },
+          { name: "Via current capacity", calc: "via-current" }, { name: "Trace inductance", calc: "trace-inductance" },
         ],
       },
       {
@@ -376,6 +376,7 @@ const TOOL_KEYWORDS = {
   "decoupling": "decoupling bypass capacitor mlcc target impedance pdn power distribution esr esl self resonant frequency srf bulk capacitance ripple current step 100 nf",
   "via-current": "via current capacity ampacity amps vias how many plating drill barrel wall cross section ipc-2152 ipc 2152 brooks adam trace resistance voltage drop",
   "planar-inductor": "planar inductor pcb inductor spiral inductor printed inductor pcb coil printed coil flat coil spiral coil square spiral octagonal hexagonal circular spiral on-chip inductor integrated inductor mohan wheeler current sheet inductance turns trace width spacing outer diameter inner diameter fill ratio nfc antenna coil wireless charging coil inductive sensor coil",
+  "trace-inductance": "trace inductance pcb trace inductance track inductance loop inductance partial inductance return path return current ground plane microstrip stripline flat wire ribbon bar grover wadell nh per inch nh per mm ground bounce l di/dt reactance power trace",
   "via-rlc": "via impedance via inductance via capacitance via resistance plated through hole pth through via barrel pad antipad clearance hole return via stitching via signal via parasitic inductance parasitic capacitance discontinuity rise time edge field solver grover johnson",
   "thermal-vias": "thermal via vias array pcb heat conduction plating barrel sleeve hole filled unfilled solder copper fill thermal resistance pad qfn exposed pad °c/w k/w",
   "heat-sink": "heat sink heatsink thermal resistance theta θja θjc θcs θsa junction case ambient temperature tj tc power dissipation to-220 mica grease thermal pad interface cooling °c/w k/w",
@@ -498,6 +499,7 @@ const RELATED = {
   "inrush-limiter": ["thermistor", "rectifier-halfwave", "decoupling"],
   "heat-sink": ["linear-regulator", "thermal-vias", "mosfet-switch"],
   "planar-inductor": ["air-coil", "toroid-winding", "trace-width", "skin-depth", "lc-filter"],
+  "trace-inductance": ["microstrip", "stripline", "via-rlc", "trace-width", "skin-depth"],
   "via-rlc": ["via-current", "thermal-vias", "decoupling", "microstrip", "skin-depth"],
   "thermal-vias": ["heat-sink", "via-current", "trace-width"],
   "via-current": ["trace-width", "thermal-vias"],

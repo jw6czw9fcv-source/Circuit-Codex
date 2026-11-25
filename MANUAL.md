@@ -144,6 +144,7 @@ will key on, since that is the id the app already holds for each tool.
 
 - Trace current & resistance → [Trace width](#trace-width)
 - Trace current & resistance → [Via current capacity](#via-current)
+- Trace current & resistance → [Trace inductance](#trace-inductance)
 - Impedance → [Microstrip](#microstrip)
 - Impedance → [Embedded microstrip](#embedded-microstrip)
 - Impedance → [Edge-coupled microstrip](#diff-microstrip)
@@ -11886,6 +11887,76 @@ that point; the nearest case is there to show how far.
 - every length's picker switches them all;
 - the remembered copper weight and rise;
 - the current in mA: 4 A reads 4000.
+
+[↑ Index](#index)
+
+---
+
+<a id="trace-inductance"></a>
+## Trace inductance
+
+`calc: trace-inductance` · PCB & interconnect › Trace current & resistance
+
+### What it computes
+
+The inductance of a PCB trace, with its return path: over a plane, between two planes, or with no plane near it. The drawing is a cross-section of the trace with
+the plane or planes it returns through, its length above.
+
+- **Pills:** **Over a plane** (a surface trace, or any trace with one solid plane under it), **Between planes** (an inner trace centred between two planes), **No plane**.
+- **Inputs:** the length l, the width w, the height h over the plane (the dielectric under the trace) or the distance b between the planes, and a frequency. The **Your
+  inputs** heading picks the copper: ½, 1, 1½ or 2 oz.
+- **Big result:** the inductance L, with a line saying what loop it is. Over and between planes, a badge says the field solver answered (**Solving…** for a moment after typing;
+  **Formula** if the solver cannot run, the formula then standing in).
+- **Cells:** the inductance per mm (per inch in mil), the reactance 2πfL at the frequency, the skin depth there. **Rows:** over and between planes, Wadell's or Wheeler's
+  formula with its difference from the solver, and the same trace with no plane; with no plane, the high-frequency value and Terman's form; for all, the voltage a current
+  step of 1 A in 1 ns makes across the trace.
+- **Units:** one length unit for every length, mm or mil; kHz, MHz or GHz. **Remembered:** the pill, the copper and the units.
+
+Examples: an inch of 10 mil trace over its plane (9.89 nH), the same inch with no plane (28.8 nH), an inner trace between planes (7 nH), a 2 mm power trace (4.76 nH).
+
+### Terms
+
+- **Loop inductance:** a current always comes back to where it started; the inductance belongs to the whole loop, and the closer the return runs to the trace, the smaller it is.
+  Over a plane, the return flows in the plane right under the trace.
+- **Partial inductance:** one conductor's own share of a loop's inductance (Grover's formula for a flat bar); the loop's total adds the return conductor's share and subtracts
+  what the two share, which grows as they come closer.
+- **Skin depth:** at high frequency the current keeps to the copper's surface, within about a skin depth; when it is under the copper's thickness, the inductance inside the
+  copper drops away (the trace's high-frequency value).
+
+### Sources
+
+- **B. C. Wadell, "Transmission Line Design Handbook" (Artech House, 1991; Pierre's scanned copy, the pages read as images):** §6.2.2 (pp. 382–383), the flat wire: Greenhouse's
+  form of Grover's L = 0.002 l [ln(2l / (w + t)) + 0.25049 + (w + t) / (3l) + μ T(x) / 4] µH (l, w, t in cm), T = 1 at DC, so 0.50049 in all (Grover's flat bar), T → 0 when the
+  current keeps to the surface; Terman's form 0.002 l [ln(2l / (w + t)) + 0.5 + 0.2235 (w + t) / l], whose 0.2235 varies from 0.22313 (t = 0) to 0.22352 (t = w). The page
+  labels Terman's form "(nH)": with l in cm it gives µH (a 1 cm trace comes to about 9.5 nH only so), read here as a misprint. §3.5.1 (Wadell's microstrip) as in the Microstrip tool.
+- **Wheeler's stripline formula** (IEEE MTT-26, 1978) as D. Hafner, M. Dressel and M. Scheffler give it (Rev. Sci. Instrum. 85, 014702, 2014, appendix A), as in the Stripline tool.
+
+### Why the formulas are these
+
+**Over and between planes.** The trace and the plane form a transmission line, whose inductance per length is that of the same line in air (derived: the dielectric changes the
+capacitance, not the inductance), L′ = Z0(air) / c. The app's field solver gives Z0 for the cross-section in air (js/fieldsolver.js, `microstrip` with εr = 1, the box 80 h out;
+`stripline`), the same solver as the impedance tools. Wadell's microstrip formula stays within 1 % of it (−0.3 % for the opening trace, +1.1 % for a strip 100 times wider
+than its height); Wheeler's stripline formula within 0.02 %. As a trace widens, L′ approaches the parallel-plate value μ0 h / w (0.77 of it at w / h = 10, 0.97 at 200: the
+fringing field keeps it under).
+
+**No plane.** Grover's partial inductance of a flat bar at DC, the current spread through the copper; at high frequency, the current on the surface, 0.25 less inside the
+brackets. Terman's form agrees with it within 0.2 % for traces long against their width; for a short square piece it reads 8 % low.
+
+**Voltage.** V = L di/dt (derived): 1 A in 1 ns across 10 nH is 10 V, the ground bounce a fast edge makes across a shared connection.
+
+### Assumptions and limits
+
+- **Long traces:** the length is taken as long against the height (over and between planes, the ends are not counted) and against the width (Grover's formula is for a long bar).
+- **A solid plane under the whole trace:** a gap or slot in the plane forces the return around it and adds inductance the tool does not see.
+- **High frequency over planes:** the solver gives the inductance outside the copper; at low frequencies (the skin depth over the copper's thickness) the current inside the
+  trace and plane adds a little. **Between planes:** the trace is centred.
+- **Display.** Three figures.
+
+### How it was checked
+
+38 cases, the expected values from a Python implementation that replays each case's taps and typing, the inductance per length from tools/fd_lines.py (direct sparse solves of
+the same grids). The cases: the opening screen and the pickers; the three pills; widths, heights, lengths and a wide strip over a plane; three traces between planes; three
+with no plane (a short square piece among them); ½ and 2 oz; mils and kHz to GHz, the unit linking; remembered choices; six refusals; the four examples.
 
 [↑ Index](#index)
 

@@ -212,9 +212,13 @@
   function start(lv) { const phi = new Float64Array(lv.N); for (let k = 0; k < lv.N; k++) if (lv.fixed[k]) phi[k] = lv.val[k]; return phi; }
 
   // Solve a cross-section on three grids and extrapolate. The energy is
-  // stationary in the potential, so its error is the square of the
-  // potential's: a residual 3e-4 of the starting one leaves it within 1e-9.
-  const TOL = 3e-4;
+  // stationary in the potential, so its error is about the square of the
+  // potential's: on the finer grids, started from the coarser answer, a
+  // residual 3e-4 of the starting one leaves it within 1e-9 of a direct
+  // solve. The coarsest starts from nothing, and there 3e-4 left it up to
+  // 16 ppm short (5 ppm after extrapolation, enough to move a third figure):
+  // it is solved to 1e-6, at little cost on so few nodes.
+  const TOL = 3e-4, TOL0 = 1e-6;
   function solveSpec(spec) {
     const t0 = (typeof performance !== "undefined" ? performance : Date).now();
     const zs = [], es = [];
@@ -224,13 +228,13 @@
       nodes = lv.N;
       const wa = weights(lv, true);
       phiA = prev ? prolong(prev, phiA, lv) : start(lv);
-      iters += solvePotential(lv, wa, phiA, TOL);
+      iters += solvePotential(lv, wa, phiA, L === 0 ? TOL0 : TOL);
       const Sa = energy(lv, wa, phiA);
       let S = Sa * (spec.er || 1);
       if (spec.layered) {
         const we = weights(lv, false);
         phiE = prev ? prolong(prev, phiE, lv) : start(lv);
-        iters += solvePotential(lv, we, phiE, TOL);
+        iters += solvePotential(lv, we, phiE, L === 0 ? TOL0 : TOL);
         S = energy(lv, we, phiE);
       }
       zs.push(ETA0 / (spec.factor * Math.sqrt(S * Sa)));

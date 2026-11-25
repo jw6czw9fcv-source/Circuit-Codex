@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Trace inductance",
+    domain: "pcb",
+    formulas: ["L = L′ l,  L′ = Z0(air) / c", "No plane: L = 0.002 l [ln(2l / (w + t))", "      + 0.50049 + (w + t) / 3l] µH", "X = 2π f L", "V = L di/dt"],
+    note: "A PCB trace's inductance with its return path: over a plane or between planes, the loop's inductance per length from the field solver (the line in air, L′ = Z0 / c), beside Wadell's and Wheeler's formulas; with no plane, Grover's partial inductance of a flat bar (Wadell's handbook), its high-frequency value and Terman's form.",
+  },
+  {
     tool: "Via impedance (R, L, C)",
     domain: "pcb",
     formulas: ["L = 0.002 l [ln(2l / ρ1) + ln ζ − 1] µH", "Loop: L = (μ0 h / π) ln(s / r)", "Z = √(L / C),  td = √(L C)", "R = ρCu T / (π (ρ1² − ρ2²))"],
