@@ -17107,8 +17107,10 @@ input, so with 4 : 1 it shows 3.11 A of peak current where he gives
 
 ### What it computes
 
-A load's power factor and the capacitor that raises it to a target: single phase, or three phase with the capacitors in delta or in star. The drawing is the
-circuit on one line: the supply, the capacitor (green, the answer) and the load (R and L) across it.
+A load's power factor and the capacitor that raises it to a target: single phase, or three phase with the capacitors in delta or in star. The drawing, single
+phase, is the supply, the capacitor (green, the answer) and the load (R and L) across it. Three phase, it shows how the bank is wired (Pierre): the lines L1, L2,
+L3 from the supply to the motor (M 3~), and the three capacitors tapped off them, in delta one between each pair of lines (L1–L2, L2–L3, L1–L3), in star one
+from each line to a common star point. A tap that crosses another line without joining it hops over it; a dot is a connection.
 
 - **Pills:** **Single phase**, **Three phase** (the voltage then the line voltage U between phases; 230 V becomes 400 V and back, unless typed). In three phase the **Your
   inputs** heading picks **Capacitors in delta** or **in star**.

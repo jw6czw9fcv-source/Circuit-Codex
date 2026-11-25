@@ -30035,18 +30035,54 @@ function renderPowerFactor(domain, tool, favId) {
   // ---------------- the drawing ----------------
   const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", GREEN = "#5DCAA5";
   const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  // Three phase (Pierre: show how the capacitors are wired to the motor): the lines L1, L2, L3 from the supply to the motor (M 3~), and the bank
+  // tapped off them below: in delta a capacitor between each pair of lines (L1-L2, L2-L3, L1-L3), in star one from each line to a common star point.
+  // A tap that crosses another line without joining it hops over it; a dot is a connection.
+  function diagram3(ok, k) {
+    const yL = [44, 70, 96], xL = [96, 136, 176], cx = 282, cy = 70, r = 28, cc = k && k.need ? GREEN : GREY, star = state.conn === "star";
+    const edge = (y) => cx - Math.sqrt(r * r - (y - cy) ** 2);
+    let o = yL.map((y, i) => `<path d="M28 ${y} H${edge(y).toFixed(1)}" stroke="${WIRE}" stroke-width="1.5"/>` + lbl("", 8, y + 4, `L${i + 1}`, GREY, "start")).join("");
+    o += lbl("dv", 28, 28, ok ? `${n3(state.V)} V` : "U", BLUE, "start") + lbl("df", 84, 28, ok ? `${n3(state.f)} Hz` : "f", BLUE, "start");
+    // the motor
+    o += `<circle cx="${cx}" cy="${cy}" r="${r}" stroke="${BLUE}" stroke-width="1.5"/>` + lbl("", cx, cy - 1, "M", BLUE) + lbl("", cx, cy + 13, "3~", BLUE);
+    o += lbl("dp", cx, cy + r + 16, ok ? `P ${si(state.P, "W")}` : "P", BLUE) + lbl("dpf", cx, cy + r + 30, ok ? `cos φ ${n3(state.pf)}` : "cos φ", BLUE);
+    // the taps: line i drops at xL[i] to y = 128, hopping over the lines below it
+    const yN = 128;
+    xL.forEach((x, i) => {
+      let d = `M${x} ${yL[i]}`;
+      for (let j = i + 1; j < 3; j++) d += ` V${yL[j] - 4} a4 4 0 0 1 0 8`;
+      o += `<path d="${d} V${yN}" stroke="${WIRE}" stroke-width="1.5"/><circle cx="${x}" cy="${yL[i]}" r="2.5" fill="${WIRE}"/>`;
+    });
+    // a capacitor: plates across a wire, horizontal (h) or vertical
+    const capH = (x, y) => `<path d="M${x - 3} ${y - 8} V${y + 8} M${x + 3} ${y - 8} V${y + 8}" stroke="${cc}" stroke-width="2.5"/>`;
+    const capV = (x, y) => `<path d="M${x - 8} ${y - 3} H${x + 8} M${x - 8} ${y + 3} H${x + 8}" stroke="${cc}" stroke-width="2.5"/>`;
+    if (!star) {
+      // delta: L1-L2 and L2-L3 side by side, L1-L3 along the bottom
+      const yb = 160, [a, b, c] = xL;
+      o += `<path d="M${a} ${yN} H${(a + b) / 2 - 3} M${(a + b) / 2 + 3} ${yN} H${b} H${(b + c) / 2 - 3} M${(b + c) / 2 + 3} ${yN} H${c} M${a} ${yN} V${yb} H${b - 3} M${b + 3} ${yb} H${c} V${yN}" stroke="${WIRE}" stroke-width="1.5"/>`;
+      o += capH((a + b) / 2, yN) + capH((b + c) / 2, yN) + capH(b, yb);
+      o += [a, b, c].map((x) => `<circle cx="${x}" cy="${yN}" r="2.5" fill="${WIRE}"/>`).join("");
+    } else {
+      // star: one capacitor down from each line, the three joined at the star point
+      const ys = 164;
+      o += xL.map((x) => `<path d="M${x} ${yN} V${yN + 9} M${x} ${yN + 15} V${ys}" stroke="${WIRE}" stroke-width="1.5"/>` + capV(x, yN + 12)).join("");
+      o += `<path d="M${xL[0]} ${ys} H${xL[2]}" stroke="${WIRE}" stroke-width="1.5"/><circle cx="${xL[1]}" cy="${ys}" r="2.5" fill="${WIRE}"/>` + lbl("", xL[1], ys + 15, "star point", GREY);
+    }
+    o += lbl("dc", 196, 140, k ? (k.need ? `C ${si(k.Cap, "F")}` : "C none") : "C", cc, "start");
+    if (k && k.need) o += lbl("dk", 196, 154, star ? "each, in star" : "each, in delta", GREEN, "start");
+    return `<svg width="320" height="186" viewBox="0 0 320 186" fill="none">${o}</svg>`;
+  }
   // One line: the supply on the left, the correction capacitor (green, the answer) and the load (R and L, blue) across it.
   function diagram() {
     const ok = !problem(), k = ok ? calc() : null, yT = 22, yB = 138, xs = 58, xc = 150, xl = 236;
+    if (three()) return diagram3(ok, k);
     let o = `<path d="M${xs} ${yT} H${xl} M${xs} ${yB} H${xl} M${xs} ${yT} V63 M${xs} 97 V${yB}" stroke="${WIRE}" stroke-width="1.5"/>`;
     o += `<circle cx="${xs}" cy="80" r="17" stroke="${BLUE}" stroke-width="1.5"/><path d="M${xs - 9} 80 q4.5 -9 9 0 t9 0" stroke="${BLUE}" stroke-width="1.5"/>`;
     o += lbl("dv", xs - 22, 76, ok ? `${n3(state.V)} V` : "V", BLUE, "end") + lbl("df", xs - 22, 90, ok ? `${n3(state.f)} Hz` : "f", BLUE, "end");
-    if (three()) o += lbl("", xs, 120, "3 phases", GREY);
     // the capacitor
     const cc = k && k.need ? GREEN : GREY;
     o += `<path d="M${xc} ${yT} V75 M${xc} 85 V${yB}" stroke="${WIRE}" stroke-width="1.5"/><path d="M${xc - 14} 75 H${xc + 14} M${xc - 14} 85 H${xc + 14}" stroke="${cc}" stroke-width="2.5"/>`;
     o += lbl("dc", xc + 20, 78, k ? (k.need ? `C ${si(k.Cap, "F")}` : "C none") : "C", cc, "start");
-    if (three() && k && k.need) o += lbl("dk", xc + 20, 92, state.conn === "delta" ? "× 3, in delta" : "× 3, in star", GREEN, "start");
     // the load: R over L
     const zz = Array.from({ length: 7 }, (_, i) => `L${xl + (i % 2 ? -6 : 6)} ${36 + i * 6}`).join(" ");
     o += `<path d="M${xl} ${yT} V33 ${zz} L${xl} 78 V84" stroke="${BLUE}" stroke-width="1.5" fill="none"/>`;
