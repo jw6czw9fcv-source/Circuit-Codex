@@ -130,6 +130,7 @@ will key on, since that is the id the app already holds for each tool.
 - Regulators → [DC/DC buck converter](#buck)
 - Regulators → [DC/DC boost converter](#boost)
 - Regulators → [SMPS flyback basics](#flyback)
+- Regulators → [Power factor](#power-factor)
 - Regulators → [Zener + transistor](#zener-transistor)
 - Regulators → [Constant current](#constant-current)
 - Regulators → [Inrush limiter (NTC)](#inrush-limiter)
@@ -142,9 +143,9 @@ will key on, since that is the id the app already holds for each tool.
 
 ### PCB & interconnect
 
-- Trace current & resistance → [Trace width](#trace-width)
-- Trace current & resistance → [Via current capacity](#via-current)
-- Trace current & resistance → [Trace inductance](#trace-inductance)
+- Trace current, resistance & inductance → [Trace width](#trace-width)
+- Trace current, resistance & inductance → [Via current capacity](#via-current)
+- Trace current, resistance & inductance → [Trace inductance](#trace-inductance)
 - Impedance → [Microstrip](#microstrip)
 - Impedance → [Embedded microstrip](#embedded-microstrip)
 - Impedance → [Edge-coupled microstrip](#diff-microstrip)
@@ -10901,7 +10902,7 @@ The review made these changes:
 <a id="trace-width"></a>
 ## Trace width
 
-`calc: trace-width` · PCB & interconnect › Trace current & resistance
+`calc: trace-width` · PCB & interconnect › Trace current, resistance & inductance
 (replaces PCB trace width / resistance, Trace current capacity (ampacity)
 and Trace current — IPC-2152 method)
 
@@ -11764,7 +11765,7 @@ by side share the heat, so N of them in parallel divide θ by N.
 <a id="via-current"></a>
 ## Via current capacity
 
-`calc: via-current` · PCB & interconnect › Trace current & resistance
+`calc: via-current` · PCB & interconnect › Trace current, resistance & inductance
 
 ### What it computes
 
@@ -11895,7 +11896,7 @@ that point; the nearest case is there to show how far.
 <a id="trace-inductance"></a>
 ## Trace inductance
 
-`calc: trace-inductance` · PCB & interconnect › Trace current & resistance
+`calc: trace-inductance` · PCB & interconnect › Trace current, resistance & inductance
 
 ### What it computes
 
@@ -17094,6 +17095,70 @@ input, so with 4 : 1 it shows 3.11 A of peak current where he gives
 - the proposed turns ratio follows the input (40 V: 3.2 : 1);
 - a typed inductance under the minimum is flagged;
 - a 100 % maximum duty is refused.
+
+[↑ Index](#index)
+
+---
+
+<a id="power-factor"></a>
+## Power factor
+
+`calc: power-factor` · Power electronics › Supply & regulation
+
+### What it computes
+
+A load's power factor and the capacitor that raises it to a target: single phase, or three phase with the capacitors in delta or in star. The drawing is the
+circuit on one line: the supply, the capacitor (green, the answer) and the load (R and L) across it.
+
+- **Pills:** **Single phase**, **Three phase** (the voltage then the line voltage U between phases; 230 V becomes 400 V and back, unless typed). In three phase the **Your
+  inputs** heading picks **Capacitors in delta** or **in star**.
+- **Inputs:** the voltage and frequency, the active power P (W or kW), cos φ now, the target cos φ, and the current's THDi in % (0 for a sine).
+- **Big result:** the capacitor, per phase in three phase, with the reactive power Qc it supplies; "none" when cos φ is already at or over the target.
+- **Cells:** Qc and the line current before and after. **Rows:** S and Q before and after, tan φ − tan φ′ (the var per W of the guide's table), the capacitor's current
+  (the bank's line current Q / (√3 U) in three phase), the true power factor λ before and after, and, with THDi, the most a capacitor can reach.
+- **Remembered:** the pill, the connection and the power unit.
+
+Examples: the guide's 100 kW motor (48.7 kvar), the guide's table from 0.7 to 0.95 (59.1 kvar), a 1 kW motor on 230 V (33.3 µF), a rectifier input with THDi 120 % (λ 0.63).
+
+### Terms
+
+- **Active power P (W):** the power that does work. **Reactive power Q (var):** the power that flows back and forth each cycle in an inductance or capacitance.
+  **Apparent power S (VA):** what the wiring carries, V I; with sine waves S = √(P² + Q²).
+- **cos φ (displacement power factor):** φ is the current's lag behind the voltage, for the fundamental; tan φ = Q / P.
+- **Power factor λ:** P / S, which counts the harmonics too; with a sine current it is cos φ.
+- **THDi:** the r.m.s. of the current's harmonics over its fundamental, in %.
+- **Delta, star:** a three-phase bank's three capacitors each across two lines (delta, the line voltage U), or each from a line to a common point (star, U / √3).
+
+### Sources
+
+- **Schneider Electric, "Electrical Installation Guide" (electrical-installation.org wiki, read in the browser pane; the site refuses automated fetches):** "Theoretical
+  principles to improve power factor" (chapter L), Qc = P (tan φ − tan φ′) and its example, 100 kW at 0.75 (tan φ 0.88) to 0.93 (0.4): 48 kvar; "How to determine the optimum
+  level of compensation", 0.691 × 85.4 = 59 kvar from 0.7 to 0.95 (seen in the search extract); "Implementation of capacitor banks", a three-phase bank's rated current
+  IN = Q / (√3 U), 50 kvar at 400 V: 72 A; "Harmonic distortion indicators – Power factor" (chapter M), λ = P / S, not to be mixed up with cos φ, and with a sinusoidal voltage
+  λ ≈ cos φ / √(1 + THDi²).
+
+### Why the formulas are these
+
+**The capacitor's reactive power** Qc = P (tan φ − tan φ′), from the guide: P stays, Q falls from P tan φ to P tan φ′. The tool gives 48.7 kvar for the guide's motor (48
+with the guide's rounded tangents), 0.692 var per W and 59.1 kvar for its table's case (0.691 and 59).
+
+**The capacitance** (derived): a capacitor C across a voltage V takes Q = 2π f C V². Single phase C = Qc / (2π f V²). Three phase, three capacitors share Qc: in delta each is
+across U, C = Qc / (3 · 2π f U²); in star each is across U / √3, C = Qc / (2π f U²), three times as much.
+
+**The currents** (derived): the line current is S / V (single phase) or S / (√3 U). The fundamental current is P / (V cos φ); the harmonic currents, I1 THDi, are left as they
+are by the capacitor, so the current after is √(I1′² + Ih²) and λ after is P over the new S. Corrected fully (cos φ′ = 1), λ reaches at most 1 / √(1 + (THDi / cos φ)²).
+
+### Assumptions and limits
+
+- **A lagging (inductive) load** and a sinusoidal voltage; a balanced three-phase load.
+- **Harmonics:** a capacitor corrects only the displacement; with harmonics it can also resonate with the supply (the guide warns of it), which the tool does not check.
+- **Display.** Three figures.
+
+### How it was checked
+
+35 cases, the expected values from a Python implementation that replays each case's taps and typing, itself checked against the guide's three examples. The cases: the
+opening screen and the picker; three phase in delta and star, the voltage carried over and kept when typed; targets, starting factors, frequencies, voltages, powers and
+THDi single phase and three phase; the target under cos φ now; W and kW; remembered choices; eight refusals; the four examples.
 
 [↑ Index](#index)
 

@@ -139,7 +139,7 @@ const DOMAINS = [
         tools: [
           { name: "Linear regulator", was: "Linear regulator (LDO)", calc: "linear-regulator" }, { name: "Zener regulation", calc: "zener-regulation", mergedNames: ["Zener voltage stabilization"] }, { name: "DC/DC buck converter", calc: "buck" }, { name: "DC/DC boost converter", calc: "boost" },
           { name: "Zener + transistor", was: "Zener + transistor stabilization", calc: "zener-transistor" }, { name: "Constant current", was: "Constant current source/driver", calc: "constant-current" }, { name: "Inrush limiter (NTC)", was: "Inrush current limiter (NTC)", calc: "inrush-limiter" }, { name: "SMPS flyback basics", calc: "flyback" },
-          { name: "Power factor" }, { name: "POE classes" },
+          { name: "Power factor", calc: "power-factor" }, { name: "POE classes" },
         ],
       },
       { title: "Battery", tools: [{ name: "Battery runtime", was: "Runtime / capacity estimation", calc: "battery-runtime" }, { name: "Battery C-rate", was: "C-rate", calc: "c-rate" }, { name: "Internal resistance", was: "Battery internal resistance", calc: "internal-resistance" }, { name: "Battery types & sizes", calc: "battery-sizes" }, { name: "Button cell sizes", was: "Button cells", calc: "button-cells" }, { name: "Accumulators" }] },
@@ -157,7 +157,7 @@ const DOMAINS = [
     icon: "pcb",
     sections: [
       {
-        title: "Trace current & resistance",
+        title: "Trace current, resistance & inductance",
         tools: [
           { name: "Trace width", was: "PCB trace width / resistance", calc: "trace-width", mergedNames: ["Trace current capacity (ampacity)", "Trace current — IPC-2152 method"] },
           { name: "Via current capacity", calc: "via-current" }, { name: "Trace inductance", calc: "trace-inductance" },
@@ -365,6 +365,7 @@ const TOOL_KEYWORDS = {
   "dual-stripline": "dual offset asymmetric off-centre off-center stripline transmission line impedance two signal layers between planes inner layer controlled impedance pcb trace ipc-2141a asymmetric stripline stripline asym asym offset stripline off-center stripline off-centre stripline dual stripline hogan robrish saturn polar wadell ohm ohms",
   "stripline": "stripline impedance characteristic z0 50 ohm controlled impedance inner layer pcb trace between planes transmission line dielectric constant er fr-4 propagation delay wheeler signal integrity symmetric stripline centred stripline centered stripline triplate sandwich line single ended cohn ipc-2141a saturn polar wadell ohms",
   "microstrip": "microstrip impedance characteristic z0 50 ohm controlled impedance pcb trace transmission line dielectric constant er fr-4 prepreg propagation delay signal integrity rf trace width an-905 surface microstrip outer layer exposed microstrip line single ended wadell ipc-2141a saturn polar ohms",
+  "power-factor": "power factor pf cos phi cosine phi power factor correction pfc capacitor bank kvar reactive power apparent power active power real power va var kva motor capacitor displacement power factor true power factor thd harmonic distortion three phase delta star wye single phase mains",
   "flyback": "flyback converter smps isolated transformer turns ratio primary inductance ccm continuous conduction reflected voltage drain voltage mosfet diode output capacitor offline power supply",
   "boost": "boost converter step up dc dc smps switching regulator switcher inductor ripple duty cycle schottky diode synchronous output capacitor esr feedback divider vfb battery li-ion tps61030 tps61023 slva372",
   "buck": "buck converter step down dc dc smps switching regulator switcher inductor ripple duty cycle schottky diode synchronous output capacitor esr feedback divider vfb tps54331 slva477",
@@ -493,6 +494,7 @@ const RELATED = {
   "dual-stripline": ["stripline", "microstrip", "embedded-microstrip"],
   "stripline": ["microstrip", "dual-stripline", "trace-width", "wavelength"],
   "microstrip": ["trace-width", "wavelength", "decoupling"],
+  "power-factor": ["rms-calculator", "transformer", "inrush-limiter", "flyback"],
   "flyback": ["buck", "boost", "heat-sink", "inrush-limiter"],
   "boost": ["buck", "battery-runtime", "decoupling", "pwm-duty"],
   "buck": ["linear-regulator", "decoupling", "heat-sink", "pwm-duty"],

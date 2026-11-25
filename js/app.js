@@ -704,6 +704,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "planar-inductor") return renderPlanarInductor(domain, tool, favId);
   if (calcId === "via-rlc") return renderViaRlc(domain, tool, favId);
   if (calcId === "trace-inductance") return renderTraceInductance(domain, tool, favId);
+  if (calcId === "power-factor") return renderPowerFactor(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -29974,6 +29975,172 @@ function renderTraceInductance(domain, tool, favId) {
   }
 
   paint(true);
+}
+
+// ---------- Power factor ----------
+// A load's power factor and the capacitor that corrects it, single phase or three phase. Sources, as read this session (Schneider Electric, "Electrical
+// Installation Guide", electrical-installation.org wiki, read in the browser pane): "Theoretical principles to improve power factor" (chapter L): Qc =
+// P (tan phi - tan phi'), its example 100 kW at 0.75 (tan phi 0.88) to 0.93 (0.4): 48 kvar; "How to determine the optimum level of compensation": 0.691 x
+// 85.4 kW = 59 kvar from 0.7 to 0.95; "Implementation of capacitor banks": a three-phase bank's rated current IN = Q / (sqrt(3) U), 50 kvar at 400 V: 72 A;
+// "Harmonic distortion indicators - Power factor" (chapter M): lambda = P / S, not to be mixed up with the displacement power factor cos phi, and with a
+// sinusoidal voltage lambda = cos phi / sqrt(1 + THDi^2). Derived here: a capacitor C across V takes Q = 2 pi f C V^2, so C = Qc / (2 pi f V^2) single
+// phase, Qc / (3 2 pi f U^2) per capacitor in delta (each across U), Qc / (2 pi f U^2) in star (each across U / sqrt(3)); the line current S / V or
+// S / (sqrt(3) U), the harmonic currents (I1 THDi) left unchanged by the capacitor.
+const PF_P_UNITS = { W: 1, kW: 1e3 };
+const PF_PHASES = { one: "Single phase", three: "Three phase" };
+const PF_CONN = { delta: "Capacitors in delta", star: "Capacitors in star" };
+const PF_NOTE = "Power factor is how much of what a load draws does work. P (W) is the power that does work; S = V I (VA) is what the wiring carries; their ratio λ = P / S is the power factor. With sine waves, λ is cos φ, φ the current's lag behind the voltage: a motor or transformer also draws a reactive power Q = P tan φ (var) that comes and goes each cycle. A capacitor supplies that reactive power on the spot, so the line carries less current. A distorted current (a rectifier, an SMPS without PFC) lowers λ further, as cos φ / √(1 + THDi²), and a capacitor does not fix that part.";
+
+function renderPowerFactor(domain, tool, favId) {
+  const C = "power-factor";
+  const state = {
+    phases: pref(C, "phases", "one", Object.keys(PF_PHASES)),
+    conn: pref(C, "conn", "delta", Object.keys(PF_CONN)),
+    uP: pref(C, "uP", "kW", Object.keys(PF_P_UNITS)),
+    V: 230, f: 50, P: 1e3, pf: 0.75, pt: 0.95, thd: 0,
+  };
+  const three = () => state.phases === "three";
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { V, f, P, pf, pt, thd } = state;
+    if (!(V > 0)) return three() ? "Enter the line voltage (between phases)." : "Enter the voltage.";
+    if (!(f > 0)) return "Enter the frequency.";
+    if (!(P > 0)) return "Enter the active power P.";
+    if (!(pf > 0 && pf <= 1)) return "cos φ now is between 0 and 1.";
+    if (!(pt > 0 && pt <= 1)) return "The target cos φ is between 0 and 1.";
+    if (!(thd >= 0)) return "Enter the current's THD in %, 0 for a sine.";
+    return "";
+  }
+  function calc() {
+    const { V, f, P, pf, thd } = state, h = thd / 100, w = 2 * Math.PI * f;
+    const pt = Math.max(state.pt, pf);                           // a target at or under cos φ now: nothing to correct
+    const tn = Math.tan(Math.acos(pf)), tt = Math.tan(Math.acos(pt));
+    const Qc = P * (tn - tt);
+    const k = three() ? Math.sqrt(3) * V : V;                    // the line current is S / V, or S / (√3 U)
+    // the fundamental current before and after, the harmonics (I1 THDi) unchanged
+    const I1 = P / (k * pf), Ih = I1 * h, I1b = P / (k * pt);
+    const I0 = Math.hypot(I1, Ih), Ib = Math.hypot(I1b, Ih);
+    const Cap = three() ? (state.conn === "delta" ? Qc / (3 * w * V * V) : Qc / (w * V * V)) : Qc / (w * V * V);
+    return { tn, tt, Qc, Cap, I0, Ib, S0: k * I0, Sb: k * Ib, Q0: P * tn, Qb: P * tt, l0: P / (k * I0), lb: P / (k * Ib), Ic: Qc / k, need: state.pt > pf };
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", GREEN = "#5DCAA5";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  // One line: the supply on the left, the correction capacitor (green, the answer) and the load (R and L, blue) across it.
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null, yT = 22, yB = 138, xs = 58, xc = 150, xl = 236;
+    let o = `<path d="M${xs} ${yT} H${xl} M${xs} ${yB} H${xl} M${xs} ${yT} V63 M${xs} 97 V${yB}" stroke="${WIRE}" stroke-width="1.5"/>`;
+    o += `<circle cx="${xs}" cy="80" r="17" stroke="${BLUE}" stroke-width="1.5"/><path d="M${xs - 9} 80 q4.5 -9 9 0 t9 0" stroke="${BLUE}" stroke-width="1.5"/>`;
+    o += lbl("dv", xs - 22, 76, ok ? `${n3(state.V)} V` : "V", BLUE, "end") + lbl("df", xs - 22, 90, ok ? `${n3(state.f)} Hz` : "f", BLUE, "end");
+    if (three()) o += lbl("", xs, 120, "3 phases", GREY);
+    // the capacitor
+    const cc = k && k.need ? GREEN : GREY;
+    o += `<path d="M${xc} ${yT} V75 M${xc} 85 V${yB}" stroke="${WIRE}" stroke-width="1.5"/><path d="M${xc - 14} 75 H${xc + 14} M${xc - 14} 85 H${xc + 14}" stroke="${cc}" stroke-width="2.5"/>`;
+    o += lbl("dc", xc + 20, 78, k ? (k.need ? `C ${si(k.Cap, "F")}` : "C none") : "C", cc, "start");
+    if (three() && k && k.need) o += lbl("dk", xc + 20, 92, state.conn === "delta" ? "× 3, in delta" : "× 3, in star", GREEN, "start");
+    // the load: R over L
+    const zz = Array.from({ length: 7 }, (_, i) => `L${xl + (i % 2 ? -6 : 6)} ${36 + i * 6}`).join(" ");
+    o += `<path d="M${xl} ${yT} V33 ${zz} L${xl} 78 V84" stroke="${BLUE}" stroke-width="1.5" fill="none"/>`;
+    o += `<path d="M${xl} 84 a6 6 0 0 1 0 11 a6 6 0 0 1 0 11 a6 6 0 0 1 0 11 a6 6 0 0 1 0 11" stroke="${BLUE}" stroke-width="1.5" fill="none"/><path d="M${xl} 128 V${yB}" stroke="${WIRE}" stroke-width="1.5"/>`;
+    o += lbl("dp", xl + 14, 58, ok ? `P ${si(state.P, "W")}` : "P", BLUE, "start") + lbl("dpf", xl + 14, 106, ok ? `cos φ ${n3(state.pf)}` : "cos φ", BLUE, "start");
+    return `<svg width="320" height="150" viewBox="0 0 320 150" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc();
+    const head = three() ? `Capacitor per phase, ${state.conn === "delta" ? "in delta" : "in star"}` : "Capacitor C";
+    const big = k.need ? si(k.Cap, "F") : "none";
+    const sub = k.need ? `${si(k.Qc, "var")} brings cos φ from ${n3(state.pf)} to ${n3(state.pt)}` : `cos φ is already ${n3(state.pf)}, at or over the target`;
+    let rows = row("Apparent power S, now → after", `${si(k.S0, "VA")} → ${si(k.Sb, "VA")}`, "s");
+    rows += row("Reactive power Q, now → after", `${si(k.Q0, "var")} → ${si(k.Qb, "var")}`, "q");
+    rows += row("var per W: tan φ − tan φ′", n3(k.tn - Math.tan(Math.acos(Math.max(state.pt, state.pf)))), "m");
+    rows += row(three() ? "The bank's line current Q / (√3 U)" : "The capacitor's current Q / V", si(k.Ic, "A"), "ic");
+    rows += row("True power factor λ, now → after", `${n3(k.l0)} → ${n3(k.lb)}`, "l");
+    // corrected fully (cos φ′ = 1) the fundamental falls to P / V while the harmonics stay: λ = 1 / √(1 + (THDi / cos φ)²)
+    if (state.thd > 0) rows += row("The most a capacitor can reach", `λ ${n3(1 / Math.sqrt(1 + (state.thd / 100 / state.pf) ** 2))}`, "lmax");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">${head}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${big}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Qc", si(k.Qc, "var"), "c1")}${cell("Current now", si(k.I0, "A"), "c2")}${cell("After", si(k.Ib, "A"), "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${PF_NOTE}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "The guide's 100 kW motor", note: "400 V three phase, cos φ 0.75 to 0.93: 48.7 kvar (the guide: 48, with rounded tangents).",
+      apply: example({ phases: "three", conn: "delta", V: 400, f: 50, P: 100e3, uP: "kW", pf: 0.75, pt: 0.93, thd: 0 }) },
+    { title: "0.7 to 0.95, the guide's table", note: "85.4 kW: 0.692 var per W and 59.1 kvar; the guide's table: 0.691 and 59 kvar.",
+      apply: example({ phases: "three", conn: "delta", V: 400, f: 50, P: 85.4e3, uP: "kW", pf: 0.7, pt: 0.95, thd: 0 }) },
+    { title: "A 1 kW motor on 230 V", note: "cos φ 0.75 to 0.95: a 33.3 µF capacitor, the line current 5.8 A down to 4.58 A.",
+      apply: example({ phases: "one", V: 230, f: 50, P: 1e3, uP: "kW", pf: 0.75, pt: 0.95, thd: 0 }) },
+    { title: "A rectifier input, THDi 120 %", note: "cos φ 0.98 but λ 0.63: the distortion, not the phase, wastes the line; a capacitor cannot help.",
+      apply: example({ phases: "one", V: 230, f: 50, P: 200, uP: "W", pf: 0.98, pt: 0.98, thd: 120 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(key === "P" ? state.P / PF_P_UNITS[state.uP] : state[key])}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The capacitor that corrects a load's power factor")}
+
+      ${pillRow(Object.entries(PF_PHASES), state.phases, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${three() ? sel('class="label-select" data-conn', Object.entries(PF_CONN), state.conn) : ""}</span>
+      </div>
+      ${pair(box(three() ? "Line voltage U" : "Voltage V", "V", fixed("V")), box("Frequency", "f", fixed("Hz")))}${pair(box("Active power P", "P", sel("data-up", Object.keys(PF_P_UNITS).map((x) => [x, x]), state.uP)), box("cos φ now", "pf", ""))}${pair(box("Target cos φ", "pt", ""), box("Current THDi", "thd", fixed("%")))}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Qc = P (tan φ − tan φ′)", "C = Qc / (2π f V²)   single phase", "C = Qc / (3 · 2π f U²)   delta", "C = Qc / (2π f U²)   star", "λ = P / S ≈ cos φ / √(1 + THDi²)"],
+        "A load that is partly inductive (a motor, a transformer, a fluorescent ballast) draws, besides its active power P, a reactive power Q = P tan φ that flows back and forth each cycle: the line carries the apparent power S = √(P² + Q²) = P / cos φ, so more current than the work needs. A capacitor across the load supplies reactive power of the other sign, Qc, close to the load: to bring cos φ up to cos φ′ it must supply Qc = P (tan φ − tan φ′) (Schneider Electric's Electrical Installation Guide). A capacitor C across a voltage V takes Q = 2π f C V², so single phase C = Qc / (2π f V²); three phase, the bank's three capacitors share Qc, each across the line voltage U in delta (C = Qc / (3 · 2π f U²)) or across U / √3 in star (three times the capacitance). Correcting fully, to 1, is rarely worth it; 0.93 to 0.95 is the usual target. A distorted current (a diode rectifier with a smoothing capacitor, as in an SMPS without power-factor correction) has harmonics that carry no power but load the line: then λ = P / S falls to cos φ / √(1 + THDi²), THDi the harmonics' r.m.s. over the fundamental. Only an active PFC stage or a filter fixes that part."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.phases = btn.dataset.pill; setPref(C, "phases", state.phases); if (three() && state.V === 230) state.V = 400; else if (!three() && state.V === 400) state.V = 230; paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value); state[key] = key === "P" ? v * PF_P_UNITS[state.uP] : v; show(); };
+    });
+    app.querySelector("select[data-up]").onchange = (e) => {
+      state.uP = e.target.value; setPref(C, "uP", state.uP);
+      const f = PF_P_UNITS[state.uP]; if (isFinite(state.P)) state.P = Number((state.P / f).toPrecision(3)) * f;
+      paint();
+    };
+    const conn = app.querySelector("select[data-conn]");
+    if (conn) conn.onchange = (e) => { state.conn = e.target.value; setPref(C, "conn", state.conn); paint(); };
+  }
+
+  paint();
 }
 
 // ---------- PWM (duty cycle) ----------

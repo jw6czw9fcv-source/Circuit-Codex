@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Power factor",
+    domain: "power",
+    formulas: ["Qc = P (tan φ − tan φ′)", "C = Qc / (2π f V²)   single phase", "C = Qc / (3 · 2π f U²)   delta", "C = Qc / (2π f U²)   star", "λ = P / S ≈ cos φ / √(1 + THDi²)"],
+    note: "A load's apparent and reactive power, the capacitor that raises its power factor to a target (single phase, or three phase in delta or star; Qc from Schneider Electric's Electrical Installation Guide), the line current before and after, and the true power factor with a distorted current.",
+  },
+  {
     tool: "Trace inductance",
     domain: "pcb",
     formulas: ["L = L′ l,  L′ = Z0(air) / c", "No plane: L = 0.002 l [ln(2l / (w + t))", "      + 0.50049 + (w + t) / 3l] µH", "X = 2π f L", "V = L di/dt"],
