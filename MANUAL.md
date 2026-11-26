@@ -143,6 +143,7 @@ will key on, since that is the id the app already holds for each tool.
 - Thermal management → [Heat sink sizing](#heat-sink)
 - Motors → [Torque & power conversion](#torque-power)
 - Motors → [RPM ↔ frequency conversion](#rpm-frequency)
+- Motors → [Back-EMF / Lenz's law](#back-emf)
 
 ### PCB & interconnect
 
@@ -11715,6 +11716,63 @@ one edge, so the speed is known to 60 / (PPR k T) rpm; the tool shows it for T =
 37 cases, the expected values from a Python implementation that replays each case's taps, typing and picks, itself checked against the source's 1500 and 1800 rpm. The
 cases: the opening screen and the pickers; 2 to 12 poles; 60 and 400 Hz, slip; the speed given; rad/s; the pulses with their own values, and back; 1 to 1024 pulses a turn,
 × 2 and × 4; the speed given; kHz; remembered choices; five refusals; the four examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="back-emf"></a>
+## Back-EMF / Lenz's law
+
+`calc: back-emf` · Power electronics › Motors
+
+### What it computes
+
+A brushed DC motor under a load, from its circuit: the supply, the winding's resistance and the back-EMF the turning rotor makes. The drawing is that circuit: the supply
+on the left, R on top, the back-EMF source E on the right, the current around the loop; what the tool finds is green.
+
+- **Inputs:** the supply voltage, the winding's resistance, the motor constant in the form the datasheet gives it (Kv in rpm/V, Ke in V/krpm, or Kt in N·m/A or mN·m/A;
+  changing the form keeps the motor, its constant shown in the new form to three figures) and the load torque (mN·m, N·m, oz·in, kgf·cm; 0 for none).
+- **Big result:** the speed under the load, with the back-EMF and the power at the shaft under it.
+- **Cells:** the current, the back-EMF, the efficiency. **Rows:** the no-load speed, the stall current and torque, the electrical input and the copper loss, the constant
+  as Kv, Ke and Kt together, the motor constant KM.
+- **Remembered:** the constant's form and the torque unit.
+
+Examples: Wikipedia's 5700 rpm/V motor on 11.1 V (63 270 rpm), its 3600 rpm/V motor at 2 A (5.31 mN·m, 7200 rpm, 4 W), a 12 V motor under 20 mN·m, a datasheet in V/krpm.
+
+### Terms
+
+- **Back-EMF E:** the voltage a turning motor generates against its supply, in proportion to its speed (Lenz's law: the induced voltage opposes the change that makes it).
+- **Kv:** the speed per volt of supply with no load, rpm/V. **Ke:** the back-EMF per speed, V·s/rad or V/krpm, the inverse of Kv. **Kt:** the torque per ampere, N·m/A;
+  in SI units Kt and Ke are the same number.
+- **Stall:** the rotor held still: no back-EMF, the current limited by R alone.
+- **KM:** the motor constant Kt / √R, the torque per square root of the copper loss; it depends on the motor's size, not its winding.
+
+### Sources
+
+- **Wikipedia, "Motor constants" (the article's wikitext, read as text):** Kv = ω_no-load / V; Ke = Kb = 1 / Kv; Kt = τ / Ia = 60 / (2π Kv(rpm)) = 1 / Kv(SI), the same unit as Ke;
+  "by Lenz's law, a running motor generates a back-EMF proportional to the speed", the limit speed being where it equals the supply; KM = Kt / √R; its examples, Kv 5700 rpm/V
+  on 11.1 V giving 63 270 rpm, Kv 3600 rpm/V giving 0.00265 N·m/A, and 2 A with 2 V of back-EMF giving 7200 rpm and 4 W.
+- **Not used:** Microchip AN905 "Brushed DC Motor Fundamentals" (read as text) describes back-EMF and the linear speed–torque line in words, without the constants.
+
+### Why the formulas are these
+
+**The circuit** (derived from the source's relations): in steady state the supply is shared between the winding's resistance and the back-EMF, V = I R + E; the load torque
+sets the current, I = τ / Kt, and the back-EMF the speed, ω = E / Ke = (V − I R) / Ke. Unloaded, ω = V / Ke (the source's Kv × V); stalled, I = V / R and τ = Kt V / R. The
+power at the shaft is τ ω, the electrical input V I, the copper loss I² R; the efficiency their ratio. The tool reproduces the source's three examples exactly.
+
+### Assumptions and limits
+
+- **No friction or iron loss:** a real motor draws a no-load current, so it runs a little slower and less efficiently than this; datasheets give it.
+- **Steady state and DC:** the winding's inductance matters only while the current changes (start-up, PWM); brushless motors follow the same constants per phase.
+- **The winding warms:** copper's resistance rises about 0.4 % per °C, which lowers the speed under load and the stall current.
+- **Display.** Three figures (63 270 rpm shows as 63 300 rpm).
+
+### How it was checked
+
+30 cases, the expected values from a Python implementation that replays each case's typing and picks, itself checked against the source's three examples. The cases: the
+opening screen and the pickers; loads, supplies, resistances and constants; the constant typed in each form and each form picked; loads in each torque unit, the unit linking;
+remembered choices; five refusals (the load past stall among them); the four examples.
 
 [↑ Index](#index)
 

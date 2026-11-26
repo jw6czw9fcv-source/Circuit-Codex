@@ -708,6 +708,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "poe-classes") return renderPoeClasses(domain, tool, favId);
   if (calcId === "torque-power") return renderTorquePower(domain, tool, favId);
   if (calcId === "rpm-frequency") return renderRpmFrequency(domain, tool, favId);
+  if (calcId === "back-emf") return renderBackEmf(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -30732,6 +30733,159 @@ function renderRpmFrequency(domain, tool, favId) {
         if (e.target.value === "f" && !byF()) { const f = RF_U.f[state.u.f]; state.f = Number((k.f / f).toPrecision(3)) * f; }
       }
       state.given = e.target.value; setPref(C, "given", state.given); paint();
+    };
+  }
+
+  paint();
+}
+
+// ---------- Back-EMF / Lenz's law ----------
+// A brushed DC motor as its circuit: the supply V across the winding's resistance R and the back-EMF E = Ke omega the turning rotor makes (Lenz's law),
+// the torque tau = Kt I. Source, as read this session: Wikipedia, "Motor constants" (wikitext read as text): Kv = omega_no-load / V; Ke = 1 / Kv; Kt =
+// tau / Ia = 60 / (2 pi Kv(rpm)) = 1 / Kv(SI), so Kt and Ke are one number in SI units; "by Lenz's law, a running motor generates a back-EMF proportional to
+// the speed", the limit speed being where it equals the supply; KM = Kt / sqrt(R); its examples, Kv 5700 rpm/V on 11.1 V 63 270 rpm, Kv 3600 rpm/V 0.00265
+// N m/A, and at 2 A with 2 V of back-EMF 7200 rpm and 4 W. Derived: the steady state V = I R + E, so I = tau / Kt and omega = (V - I R) / Ke; stall
+// I = V / R, tau = Kt V / R; the friction and iron losses (a no-load current) neglected.
+const BE_K = {
+  // the motor constant in any of its forms, to and from Ke in V s/rad (= Kt in N m/A)
+  "rpm/V": { to: (v) => 60 / (2 * Math.PI * v), from: (k) => 60 / (2 * Math.PI * k) },
+  "V/krpm": { to: (v) => (v * 60) / (2 * Math.PI * 1000), from: (k) => (k * 2 * Math.PI * 1000) / 60 },
+  "N·m/A": { to: (v) => v, from: (k) => k },
+  "mN·m/A": { to: (v) => v / 1000, from: (k) => k * 1000 },
+};
+const BE_TAU = { "mN·m": 1e-3, "N·m": 1, "oz·in": (4.4482216152605 / 16) * 0.0254, "kgf·cm": 9.80665 / 100 };
+const BE_NOTE = "A turning motor is also a generator: its winding cuts the magnet's field and makes a voltage against the supply, the back-EMF E (Lenz's law), in proportion to the speed. The current is what the difference between the supply and E drives through the winding's resistance, and the torque follows the current. So the motor speeds up until E nearly equals the supply (its no-load speed), and a load slows it just enough to let in the current its torque needs. Stalled, there is no back-EMF: the full supply across R.";
+
+function renderBackEmf(domain, tool, favId) {
+  const C = "back-emf";
+  const state = {
+    uk: pref(C, "uk", "rpm/V", Object.keys(BE_K)), ut: pref(C, "ut", "mN·m", Object.keys(BE_TAU)),
+    V: 12, R: 2, ke: BE_K["rpm/V"].to(500), tau: 0.02,
+  };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const rpm = (w) => `${n3((w * 60) / (2 * Math.PI))} rpm`;
+  const tq = (t, u = state.ut) => `${n3(t / BE_TAU[u])} ${u}`;
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { V, R, ke, tau } = state;
+    if (!(V > 0)) return "Enter the supply voltage.";
+    if (!(R > 0)) return "Enter the winding's resistance.";
+    if (!(ke > 0)) return "Enter the motor constant.";
+    if (!(tau >= 0)) return "Enter the load torque, 0 for none.";
+    const stall = (ke * V) / R;
+    if (tau >= stall) return `The load stalls the motor: ${tq(tau)} is over its stall torque, ${tq(stall)} (${si(V / R, "A")}).`;
+    return "";
+  }
+  function calc() {
+    const { V, R, ke, tau } = state;
+    const I = tau / ke, E = V - I * R, w = E / ke;
+    const Pout = tau * w, Pin = V * I;
+    return { I, E, w, Pout, Pin, eta: Pin > 0 ? Pout / Pin : NaN, cu: I * I * R, w0: V / ke, Is: V / R, ts: (ke * V) / R, km: ke / Math.sqrt(R) };
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREEN = "#5DCAA5";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  // The motor's circuit: the supply on the left, the winding's resistance on top, the back-EMF source on the right; the current around the loop.
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null;
+    let o = `<path d="M60 26 H128 M192 26 H250 V58 M250 98 V130 H60 V98 M60 62 V26" stroke="${WIRE}" stroke-width="1.5"/>`;
+    o += `<path d="M48 62 H72 M52 69 H68 M48 76 H72 M52 83 H68 M48 90 H72 M52 97 H68" stroke="${BLUE}" stroke-width="1.5"/>` + lbl("dv", 40, 84, ok ? `${n3(state.V)} V` : "V", BLUE, "end");
+    o += `<path d="M128 26 l4 -7 l8 14 l8 -14 l8 14 l8 -14 l8 14 l8 -14 l4 7" stroke="${BLUE}" stroke-width="1.5" fill="none"/>` + lbl("dr", 160, 50, ok ? `R ${si(state.R, "Ω")}` : "R", BLUE);
+    o += `<circle cx="250" cy="78" r="20" stroke="${GREEN}" stroke-width="1.5"/>` + lbl("", 250, 72, "+", GREEN) + lbl("", 250, 92, "−", GREEN);
+    o += lbl("de", 278, 82, k ? `E ${n3(k.E)} V` : "E", GREEN, "start");
+    o += `<path d="M98 130 m-6 -5 l8 5 l-8 5" stroke="${GREEN}" stroke-width="1.5" fill="none"/>` + lbl("di", 160, 146, k ? `I ${si(k.I, "A")}` : "I", GREEN);
+    return `<svg width="320" height="154" viewBox="0 0 320 154" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc();
+    const sub = `back-EMF ${n3(k.E)} V of the ${n3(state.V)} V; ${si(k.Pout, "W")} at the shaft`;
+    let rows = row("No-load speed V / Ke", rpm(k.w0), "nl");
+    rows += row("Stalled: V / R", `${si(k.Is, "A")}, ${tq(k.ts)}`, "st");
+    rows += row("In: electrical · copper loss", `${si(k.Pin, "W")} · ${si(k.cu, "W")}`, "pw");
+    rows += row("Kv · Ke · Kt", `${n3(BE_K["rpm/V"].from(state.ke))} rpm/V · ${n3(BE_K["V/krpm"].from(state.ke))} V/krpm · ${n3(state.ke * 1000)} mN·m/A`, "ks");
+    rows += row("Motor constant KM = Kt / √R", `${n3(k.km * 1000)} mN·m/√W`, "km");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Speed under the load</span></div>
+          <div class="result-value"><span class="num" data-res="big">${rpm(k.w)}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Current", si(k.I, "A"), "c1")}${cell("Back-EMF", `${n3(k.E)} V`, "c2")}${cell("Efficiency", isFinite(k.eta) ? `${n3(k.eta * 100)} %` : "—", "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${BE_NOTE}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "Wikipedia's 5700 rpm/V motor", note: "On 11.1 V with no load: 63300 rpm (Wikipedia: 63270 rpm, 5700 × 11.1).",
+      apply: example({ uk: "rpm/V", ke: BE_K["rpm/V"].to(5700), V: 11.1, R: 0.1, tau: 0, ut: "mN·m" }) },
+    { title: "Wikipedia's 3600 rpm/V motor", note: "2 A makes 5.31 mN·m; with 2 V of back-EMF it turns 7200 rpm: 4 W.",
+      apply: example({ uk: "rpm/V", ke: BE_K["rpm/V"].to(3600), V: 3, R: 0.5, tau: (60 / (2 * Math.PI * 3600)) * 2, ut: "mN·m" }) },
+    { title: "A 12 V motor, 2 Ω, 500 rpm/V", note: "20 mN·m slows it to 4950 rpm at 1.05 A; stalled it would take 6 A.",
+      apply: example({ uk: "rpm/V", ke: BE_K["rpm/V"].to(500), V: 12, R: 2, tau: 0.02, ut: "mN·m" }) },
+    { title: "A datasheet in V/krpm", note: "Ke 7.5 V/krpm, 24 V, 1.5 Ω, 0.3 N·m: 2360 rpm and 4.19 A.",
+      apply: example({ uk: "V/krpm", ke: BE_K["V/krpm"].to(7.5), V: 24, R: 1.5, tau: 0.3, ut: "N·m" }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, v, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A DC motor's speed and current from its back-EMF")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${pair(box("Supply V", "V", state.V, fixed("V")), box("Winding R", "R", state.R, fixed("Ω")))}${pair(box("Motor constant", "ke", BE_K[state.uk].from(state.ke), sel("data-uk", Object.keys(BE_K).map((x) => [x, x]), state.uk)), box("Load torque", "tau", state.tau / BE_TAU[state.ut], sel("data-ut", Object.keys(BE_TAU).map((x) => [x, x]), state.ut)))}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["V = I R + E,  E = Ke ω", "τ = Kt I,  Kt = Ke = 1 / Kv  (SI)", "ω = (V − I R) / Ke", "Stall: I = V / R"],
+        "A brushed DC motor is, for its electronics, a resistance in series with a voltage source: the winding's resistance R, and the back-EMF E that the turning rotor generates (Lenz's law), E = Ke ω. The supply V drives the current I = (V − E) / R, and the torque is τ = Kt I. Ke and Kt are the same number in SI units (V·s/rad and N·m/A); datasheets give it as Kv in rpm per volt (its inverse, 60 / (2π Kv)), as Ke in volts per thousand rpm, or as Kt (Wikipedia, Motor constants). Unloaded, the motor runs until E reaches V: the no-load speed V / Ke. A load torque needs a current τ / Kt, which drops I R across the winding, so E and the speed fall: ω = (V − I R) / Ke. Stalled, E is zero and the current is V / R, what a driver and a fuse must be sized for."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "ke") state.ke = v > 0 ? BE_K[state.uk].to(v) : NaN;
+        else if (key === "tau") state.tau = v * BE_TAU[state.ut];
+        else state[key] = v;
+        show();
+      };
+    });
+    // a new form of the constant: the same motor, its constant shown in the new form to three figures
+    app.querySelector("select[data-uk]").onchange = (e) => {
+      state.uk = e.target.value; setPref(C, "uk", state.uk);
+      if (isFinite(state.ke)) state.ke = BE_K[state.uk].to(Number(BE_K[state.uk].from(state.ke).toPrecision(3)));
+      paint();
+    };
+    app.querySelector("select[data-ut]").onchange = (e) => {
+      state.ut = e.target.value; setPref(C, "ut", state.ut);
+      const f = BE_TAU[state.ut]; if (isFinite(state.tau)) state.tau = Number((state.tau / f).toPrecision(3)) * f;
+      paint();
     };
   }
 

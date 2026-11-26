@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Back-EMF / Lenz's law",
+    domain: "power",
+    formulas: ["V = I R + E,  E = Ke ω", "τ = Kt I,  Kt = Ke = 1 / Kv  (SI)", "ω = (V − I R) / Ke", "Stall: I = V / R"],
+    note: "A brushed DC motor as its circuit, the winding's resistance and the back-EMF the turning rotor makes (Lenz's law): its speed, current, back-EMF and efficiency under a load, its no-load speed and stall current, and its constant as Kv, Ke and Kt (Wikipedia, Motor constants).",
+  },
+  {
     tool: "RPM ↔ frequency conversion",
     domain: "power",
     formulas: ["n_s = 120 f / p", "n = n_s (1 − s)", "f_pulse = n × PPR × k / 60", "Resolution = 60 / (PPR k T) rpm"],
