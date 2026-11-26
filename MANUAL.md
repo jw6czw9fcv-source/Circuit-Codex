@@ -144,6 +144,7 @@ will key on, since that is the id the app already holds for each tool.
 - Motors → [Torque & power conversion](#torque-power)
 - Motors → [RPM ↔ frequency conversion](#rpm-frequency)
 - Motors → [Back-EMF / Lenz's law](#back-emf)
+- Motors → [Stepper motor torque/step](#stepper-torque)
 
 ### PCB & interconnect
 
@@ -11773,6 +11774,63 @@ power at the shaft is τ ω, the electrical input V I, the copper loss I² R; th
 30 cases, the expected values from a Python implementation that replays each case's typing and picks, itself checked against the source's three examples. The cases: the
 opening screen and the pickers; loads, supplies, resistances and constants; the constant typed in each form and each form picked; loads in each torque unit, the unit linking;
 remembered choices; five refusals (the load past stall among them); the four examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="stepper-torque"></a>
+## Stepper motor torque/step
+
+`calc: stepper-torque` · Power electronics › Motors
+
+### What it computes
+
+A stepper's resolution and what its torque makes of it: the angle and the travel per microstep, the torque one microstep of error makes, how far a load holds the
+rotor behind its commanded position, and the step rate for a speed. The drawing is the torque pulling the rotor against how far it is behind (a sine, the holding torque
+a full step away), with the load's line across it and, in green, where they meet: the rotor's lag. The microsteps are marked along the angle up to 1/16.
+
+- **Inputs:** the holding torque and the load torque (one unit for both: mN·m, N·m, oz·in, kgf·cm; 0 for no load), the lead screw's lead (mm or in; 0 for none) and the speed
+  in rpm. The **Your inputs** heading picks the step angle (0.9°, 1.8°, 3.6°, 7.5°, 15°) and the microstepping (full steps to 1/256).
+- **Big result:** the angle per microstep, with the microsteps a turn (exact) under it, and a word past 1/32.
+- **Cells:** the torque one microstep of error makes, the lag, the step rate. **Rows:** the lag in degrees and microsteps, the travel per microstep, the step pulses at the speed,
+  the full step's angle and steps a turn.
+- **Remembered:** the step angle, the microstepping and the units.
+
+Examples: AN907's 7.5° motor at 1/32 (0.234°), a NEMA 17 on a T8 lead screw (2.5 µm a microstep, 0.29° of lag), 1/256 steps under a 5 % load, a printer axis at 600 rpm (32 kHz).
+
+### Terms
+
+- **Step angle S:** the rotor's turn per full step; **microstepping 1/m:** each step divided by m by sharing the current between the two windings in sine and cosine.
+- **Holding torque H:** the torque needed to turn the energized motor's shaft; the most it resists, reached a full step from its commanded position.
+- **Lag:** how far a load holds the rotor behind where the driver has put it; the position error the load causes.
+- **Lead:** how far a lead screw's nut moves per turn.
+
+### Sources
+
+- **Microchip AN907, "Stepping Motors Fundamentals" (DS00907A, 2004; PDF read as text):** one winding's torque against shaft angle, T1 = H sin(((π/2)/S) θ), H the holding torque
+  and S the step angle (equation 1), and the sine-cosine microstepping that keeps the two windings' sum constant; the step sizes, 7.5° and 3.6° for permanent-magnet motors (48 and
+  100 steps a turn), 3.6° to 0.9° for hybrids (100 to 400); "rarely worthwhile to subdivide each motor step into more than 32 microsteps", 0.23° from a 7.5° motor at 32; the
+  holding, pull-in, pull-out and detent torques; a lead screw turning steps into fine linear moves.
+
+### Why the formulas are these
+
+**Torque against angle** is AN907's equation 1. From it (derived): a rotor θ behind its commanded position is pulled forward by H sin(π θ / 2S); so one microstep of error,
+θ = S / m, pulls with H sin(π / 2m), 9.8 % of the holding torque at 1/16 and 0.6 % at 1/256; and a load torque T holds the rotor where the pull equals it, (2S / π) asin(T / H)
+behind. Microsteps finer than that lag make the motion smoother and quieter, but the load is not placed more finely. **Resolution and rate** (derived): (360 / S) m microsteps a
+turn, a travel of lead / ((360 / S) m) on a lead screw, n (360 / S) m / 60 step pulses a second at n rpm.
+
+### Assumptions and limits
+
+- **An ideal sine:** real motors depart from it (AN907), most at fine microsteps; friction adds a dead band the sine does not show.
+- **Holding torque at rest:** at speed the torque falls (the pull-out curve of the datasheet), so the lag at speed is larger; the tool uses the holding torque.
+- **Display.** Three figures; the step counts exact.
+
+### How it was checked
+
+34 cases, the expected values from a Python implementation that replays each case's typing and picks, itself checked against AN907's step counts and 0.23°. The cases: the
+opening screen and the pickers; every step angle; microstepping from full steps to 1/256; no load, a load near holding, a larger motor, lead screws and speeds; the torque units
+and their linking; a lead in inches; remembered choices; five refusals (a load over the holding torque among them); the four examples.
 
 [↑ Index](#index)
 

@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Stepper motor torque/step",
+    domain: "power",
+    formulas: ["Angle = S / m,  per turn = (360 / S) m", "T = H sin(π θ / 2S)", "One microstep: H sin(π / 2m)", "Lag = (2S / π) asin(T_load / H)", "f = n (360 / S) m / 60"],
+    note: "A stepper's angle and travel per microstep, the torque one microstep of error makes, how far a load holds the rotor behind its commanded position (from Microchip AN907's sine of torque against angle), and the step rate for a speed.",
+  },
+  {
     tool: "Back-EMF / Lenz's law",
     domain: "power",
     formulas: ["V = I R + E,  E = Ke ω", "τ = Kt I,  Kt = Ke = 1 / Kv  (SI)", "ω = (V − I R) / Ke", "Stall: I = V / R"],

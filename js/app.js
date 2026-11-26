@@ -709,6 +709,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "torque-power") return renderTorquePower(domain, tool, favId);
   if (calcId === "rpm-frequency") return renderRpmFrequency(domain, tool, favId);
   if (calcId === "back-emf") return renderBackEmf(domain, tool, favId);
+  if (calcId === "stepper-torque") return renderStepperTorque(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -30887,6 +30888,172 @@ function renderBackEmf(domain, tool, favId) {
       const f = BE_TAU[state.ut]; if (isFinite(state.tau)) state.tau = Number((state.tau / f).toPrecision(3)) * f;
       paint();
     };
+  }
+
+  paint();
+}
+
+// ---------- Stepper motor torque/step ----------
+// A stepper's resolution and what its torque makes of it: the angle and travel per (micro)step, the torque one microstep of error makes, how far a load
+// drags the rotor behind its commanded position, and the step rate for a speed. Source, as read this session: Microchip AN907 "Stepping Motors
+// Fundamentals" (DS00907A, 2004; PDF read as text): the torque of one winding against shaft angle, T1 = H sin(((pi/2)/S) theta), H the holding torque,
+// S the step angle (equation 1), the two windings' sum constant under sine-cosine microstepping; step sizes 7.5 and 3.6 degrees for PM motors (48 and
+// 100 steps a turn), 3.6 to 0.9 degrees for hybrids; "rarely worthwhile to subdivide each motor step into more than 32 microsteps", 7.5 degrees / 32 =
+// 0.23 degrees; a lead screw turns steps into fine linear moves. Derived from equation 1: a rotor theta behind its commanded position is pulled on by
+// H sin(pi theta / 2S), so one microstep (S / m) of error makes H sin(pi / 2m), and a load T holds it (2S / pi) asin(T / H) behind; f = n (360 / S) m / 60.
+const ST_ANGLES = [0.9, 1.8, 3.6, 7.5, 15];
+const ST_MICRO = [1, 2, 4, 8, 16, 32, 64, 128, 256];
+const ST_TAU = { "mN·m": 1e-3, "N·m": 1, "oz·in": (4.4482216152605 / 16) * 0.0254, "kgf·cm": 9.80665 / 100 };
+const ST_LEN = { mm: 1e-3, in: 0.0254 };
+const ST_NOTE = "A stepper turns by a fixed angle per full step (1.8° for most hybrids, 200 a turn); microstepping divides each step by sharing the current between its two windings. Its torque against the angle from where it is commanded is a sine, the holding torque at a full step away: so a microstep of error pulls back with only a small part of it, and a load drags the rotor behind until the sine matches it. Microsteps finer than that lag make the motion smoother, not more accurate.";
+
+function renderStepperTorque(domain, tool, favId) {
+  const C = "stepper-torque";
+  const state = {
+    ut: pref(C, "ut", "N·m", Object.keys(ST_TAU)), ul: pref(C, "ul", "mm", Object.keys(ST_LEN)),
+    S: pref(C, "S", 1.8, ST_ANGLES), m: pref(C, "m", 16, ST_MICRO),
+    H: 0.4, T: 0.1, lead: 8e-3, n: 300,
+  };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const tq = (t) => `${n3(t / ST_TAU[state.ut])} ${state.ut}`;
+  const deg = (d) => `${n3(d)}°`;
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { H, T, lead, n } = state;
+    if (!(H > 0)) return "Enter the holding torque.";
+    if (!(T >= 0)) return "Enter the load torque, 0 for none.";
+    if (T >= H) return `The load is not under the holding torque: at ${tq(T)} against ${tq(H)} the motor slips.`;
+    if (!(lead >= 0)) return "Enter the lead screw's lead, 0 for none.";
+    if (!(n > 0)) return "Enter the speed.";
+    return "";
+  }
+  function calc() {
+    const { S, m, H, T, lead, n } = state;
+    const steps = 360 / S, per = steps * m, ang = S / m;
+    const inc = H * Math.sin(Math.PI / (2 * m));                   // the pull of one microstep of error
+    const lag = ((2 * S) / Math.PI) * Math.asin(T / H);            // degrees behind
+    return { steps, per, ang, inc, lag, lagM: lag / ang, travel: lead / per, f: (n * per) / 60 };
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", GREEN = "#5DCAA5";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  // AN907's figure 10, one winding's half: the pull on the rotor against how far it is behind its commanded position, from 0 to two full steps; the
+  // load's line across it, and where they meet, the rotor's lag, in green; the microsteps marked along the angle when they are few enough to see.
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null, X0 = 40, X1 = 280, Y0 = 112, Hpx = 80, W = X1 - X0;
+    const x = (t) => X0 + (t / 2) * W, y = (v) => Y0 - v * Hpx;   // t in full steps (0 to 2), v as a fraction of H
+    let pts = "";
+    for (let i = 0; i <= 60; i++) { const t = (2 * i) / 60; pts += `${i ? "L" : "M"}${x(t).toFixed(1)} ${y(Math.sin((Math.PI / 2) * t)).toFixed(1)} `; }
+    let o = `<path d="M${X0} ${Y0} H${X1} M${X0} ${Y0} V${Y0 - Hpx - 10}" stroke="${WIRE}" stroke-width="1.5"/>`;
+    o += `<path d="${pts}" stroke="${BLUE}" stroke-width="1.5" fill="none"/>`;
+    o += lbl("", X0 - 4, y(1) + 4, "H", BLUE, "end") + lbl("", x(1), Y0 + 14, "1 step", GREY) + lbl("", x(2), Y0 + 14, "2", GREY);
+    if (ok && state.m <= 16) for (let i = 1; i < 2 * state.m; i++) { const xt = x(i / state.m); o += `<path d="M${xt.toFixed(1)} ${Y0} v4" stroke="${GREY}" stroke-width="1"/>`; }
+    if (k) {
+      const f = state.T / state.H, tl = k.lag / state.S;
+      // the load's label mid-curve, inside the arch (above its line while the arch leaves room, below it near the top); the lag under the axis
+      o += `<path d="M${X0} ${y(f).toFixed(1)} H${X1}" stroke="${GREY}" stroke-width="1" stroke-dasharray="4 3"/>` + lbl("", x(1), f < 0.7 ? y(f) - 5 : y(f) + 14, "load", GREY);
+      o += `<circle cx="${x(tl).toFixed(1)}" cy="${y(f).toFixed(1)}" r="3.5" fill="${GREEN}"/><path d="M${x(tl).toFixed(1)} ${y(f).toFixed(1)} V${Y0}" stroke="${GREEN}" stroke-width="1"/>`;
+      o += lbl("dl", tl < 0.55 ? x(tl) + 4 : x(tl) - 4, Y0 + 14, `lag ${deg(k.lag)}`, GREEN, tl < 0.55 ? "start" : "end");
+    }
+    o += lbl("", X0, 14, "torque pulling the rotor", GREY, "start");
+    return `<svg width="320" height="134" viewBox="0 0 320 134" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc();
+    // step counts are whole numbers (every listed step angle divides 360°): shown exactly, not to three figures
+    const sub = `${Math.round(k.per)} a turn: ${Math.round(k.steps)} steps × ${state.m}${state.m > 32 ? " (past AN907's 32)" : ""}`;
+    let rows = row("Under the load, the rotor lags", state.T > 0 ? `${deg(k.lag)}, ${n3(k.lagM)} microsteps` : "nothing: no load", "lag");
+    rows += row("Travel per microstep", state.lead > 0 ? si(k.travel, "m") : "no lead screw", "tr");
+    rows += row(`Step pulses at ${n3(state.n)} rpm`, si(k.f, "Hz"), "f");
+    rows += row("Full steps: angle · per turn", `${deg(state.S)} · ${Math.round(k.steps)}`, "fs");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Angle per microstep</span></div>
+          <div class="result-value"><span class="num" data-res="big">${deg(k.ang)}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Microstep torque", tq(k.inc), "c1")}${cell("Lag", state.T > 0 ? deg(k.lag) : "0°", "c2")}${cell("Step rate", si(k.f, "Hz"), "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${ST_NOTE}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "AN907's 7.5° motor at 1/32", note: "48 steps × 32: 0.234° a microstep (AN907: 0.23°), the finest it calls worthwhile.",
+      apply: example({ S: 7.5, m: 32, H: 0.05, T: 0, lead: 0, n: 60, ut: "N·m" }) },
+    { title: "A NEMA 17 on a T8 lead screw", note: "1.8°, 1/16, 0.4 N·m holding, 0.1 N·m load: 2.5 µm a microstep, but 0.29° of lag.",
+      apply: example({ S: 1.8, m: 16, H: 0.4, T: 0.1, lead: 8e-3, n: 300, ut: "N·m" }) },
+    { title: "1/256 steps: smooth, not finer", note: "Each microstep pulls with 0.6 % of the holding torque; a 5 % load spans 8 of them.",
+      apply: example({ S: 1.8, m: 256, H: 0.4, T: 0.02, lead: 0, n: 120, ut: "N·m" }) },
+    { title: "A 3D printer axis at 600 rpm", note: "200 × 16 = 3200 a turn: the driver needs 32 kHz of step pulses.",
+      apply: example({ S: 1.8, m: 16, H: 0.45, T: 0.05, lead: 2e-3, n: 600, ut: "N·m" }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, v, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${unit}</div></div>`;
+    const tsel = () => sel('data-u="tau"', Object.keys(ST_TAU).map((x) => [x, x]), state.ut);
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const heading = `${sel('class="label-select" data-s', ST_ANGLES.map((a) => [a, `${a}° step`]), state.S)} ${sel('class="label-select" data-m', ST_MICRO.map((m) => [m, m === 1 ? "full steps" : `1/${m} steps`]), state.m)}`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "Resolution, torque and lag per microstep")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${heading}</span>
+      </div>
+      ${pair(box("Holding torque", "H", state.H / ST_TAU[state.ut], tsel()), box("Load torque", "T", state.T / ST_TAU[state.ut], tsel()))}${pair(box("Lead screw lead", "lead", state.lead / ST_LEN[state.ul], sel("data-ul", Object.keys(ST_LEN).map((x) => [x, x]), state.ul)), box("Speed", "n", state.n, '<span class="unit-fixed">rpm</span>'))}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Angle = S / m,  per turn = (360 / S) m", "T = H sin(π θ / 2S)", "One microstep: H sin(π / 2m)", "Lag = (2S / π) asin(T_load / H)", "f = n (360 / S) m / 60"],
+        "A stepper moves S degrees a full step: 1.8° (200 a turn) for most hybrid motors, 0.9° to 3.6° for others, 7.5° and 3.6° for small permanent-magnet ones (Microchip AN907). Microstepping divides each step by m by sharing the current between the two windings in sine and cosine. The torque pulling the rotor towards where it is commanded is a sine of the angle behind it, T = H sin(π θ / 2S), H the holding torque, reached a full step away (AN907's equation 1). So one microstep of error pulls with only H sin(π / 2m), 9.8 % of H at 1/16, 0.6 % at 1/256, and a load T keeps the rotor (2S / π) asin(T / H) behind: microsteps finer than that lag make the motion smoother and quieter, but do not place the load more finely. AN907 finds more than 32 microsteps rarely worthwhile. On a lead screw each microstep moves the nut lead / ((360 / S) m); at n rpm the driver needs n (360 / S) m / 60 step pulses a second."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        state[key] = key === "H" || key === "T" ? v * ST_TAU[state.ut] : key === "lead" ? v * ST_LEN[state.ul] : v;
+        show();
+      };
+    });
+    // the two torque boxes share their unit: either picker changes both, to three figures
+    app.querySelectorAll('select[data-u="tau"]').forEach((el) => {
+      el.onchange = () => {
+        state.ut = el.value; setPref(C, "ut", state.ut); const f = ST_TAU[state.ut];
+        for (const key of ["H", "T"]) if (isFinite(state[key])) state[key] = Number((state[key] / f).toPrecision(3)) * f;
+        paint();
+      };
+    });
+    app.querySelector("select[data-ul]").onchange = (e) => {
+      state.ul = e.target.value; setPref(C, "ul", state.ul);
+      const f = ST_LEN[state.ul]; if (isFinite(state.lead)) state.lead = Number((state.lead / f).toPrecision(3)) * f;
+      paint();
+    };
+    app.querySelector("select[data-s]").onchange = (e) => { state.S = +e.target.value; setPref(C, "S", state.S); paint(); };
+    app.querySelector("select[data-m]").onchange = (e) => { state.m = +e.target.value; setPref(C, "m", state.m); paint(); };
   }
 
   paint();
