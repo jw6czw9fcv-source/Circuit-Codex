@@ -710,6 +710,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "rpm-frequency") return renderRpmFrequency(domain, tool, favId);
   if (calcId === "back-emf") return renderBackEmf(domain, tool, favId);
   if (calcId === "stepper-torque") return renderStepperTorque(domain, tool, favId);
+  if (calcId === "starting-current") return renderStartingCurrent(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -31054,6 +31055,165 @@ function renderStepperTorque(domain, tool, favId) {
     };
     app.querySelector("select[data-s]").onchange = (e) => { state.S = +e.target.value; setPref(C, "S", state.S); paint(); };
     app.querySelector("select[data-m]").onchange = (e) => { state.m = +e.target.value; setPref(C, "m", state.m); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- Starting current estimation ----------
+// An AC induction motor's starting (locked-rotor) current from its nameplate's NEMA code letter, and what a starting method makes of it. Sources, as read
+// this session: U.S. DOE Advanced Manufacturing Office, Motor Systems Tip Sheet #6 "Avoid Nuisance Tripping with Premium Efficiency Motors" (DOE/GO-
+// 102012-3731, November 2012; PDF read as text): the code letter is the locked-rotor kVA per hp at rated voltage and frequency (its table 1, from NEMA MG
+// 1-2011); LR current = hp x (kVA/hp / kV) / sqrt(3), its example Code C, 460 V, 100 hp: 502 A; peak inrush "as high as 2.8 times the RMS locked rotor
+// current" for under half a cycle; IEC motors carry no code letters. Its table prints a letter I and so shifts J to L by one; B. Spezia's lecture
+// "Lesson 14, ET332b" (Southern Illinois University, PDF read as text) lists the letters without I, O or Q, A 0-3.15 to U 20-22.4 and V over 22.4, and its
+// example 14-1, 150 hp, 460 V, code G, rated 163 A: 1054.3 to 1186.1 A; the letters here are the lecture's. Derived: single phase I = kVA / V; star-delta
+// a third of the direct-on-line line current (the winding sees V / sqrt(3), and the line carries one winding's current); an autotransformer at a tap k
+// gives the motor k V, its current k times, the line's k^2 times; the starting torque falls as the voltage squared, by the same factors.
+const SC_CODES = { A: [0, 3.15], B: [3.15, 3.55], C: [3.55, 4.0], D: [4.0, 4.5], E: [4.5, 5.0], F: [5.0, 5.6], G: [5.6, 6.3], H: [6.3, 7.1], J: [7.1, 8.0], K: [8.0, 9.0],
+  L: [9.0, 10.0], M: [10.0, 11.2], N: [11.2, 12.5], P: [12.5, 14.0], R: [14.0, 16.0], S: [16.0, 18.0], T: [18.0, 20.0], U: [20.0, 22.4], V: [22.4, Infinity] };
+const SC_METHODS = { dol: ["Direct on line", 1], sd: ["Star-delta", 1 / 3], at80: ["Autotransformer 80 %", 0.64], at65: ["Autotransformer 65 %", 0.4225], at50: ["Autotransformer 50 %", 0.25] };
+const SC_PHASES = { three: "Three phase", one: "Single phase" };
+const SC_P = { hp: 1, kW: 1000 / (550 * 4.4482216152605 * 12 * 0.0254) };       // kW to hp: 1 hp = 745.7 W
+const SC_NOTE = "A motor at rest has no back-EMF: switched on, it draws a current several times its rating, the locked-rotor current, until it nears its speed (seconds, for a large load). Its nameplate's code letter says how much, as kVA per horsepower; the current follows from the voltage. In the first half cycle the peak can reach 2.8 times that, which trips fast magnetic breakers. A star-delta or autotransformer starter lowers the voltage, and with it the current and the torque; a soft starter or a drive ramps it.";
+
+function renderStartingCurrent(domain, tool, favId) {
+  const C = "starting-current";
+  const state = {
+    phases: pref(C, "phases", "three", Object.keys(SC_PHASES)), code: pref(C, "code", "G", Object.keys(SC_CODES)),
+    method: pref(C, "method", "dol", Object.keys(SC_METHODS)), uP: pref(C, "uP", "hp", Object.keys(SC_P)),
+    P: 10, V: 460, Ir: NaN,
+  };
+  const one = () => state.phases === "one";
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  // a range of currents (or kVA): "up to" for code A (from 0), "over" for code V (no top)
+  // the unit written once when both ends share it ("446–502 A"), at each end when they do not ("950 A – 1.05 kA")
+  const span = ([lo, hi], u) => {
+    if (lo === 0) return `up to ${si(hi, u)}`;
+    if (!isFinite(hi)) return `over ${si(lo, u)}`;
+    const a = si(lo, u), b = si(hi, u), i = a.lastIndexOf(" "), j = b.lastIndexOf(" ");
+    return a.slice(i) === b.slice(j) ? `${a.slice(0, i)}–${b}` : `${a} – ${b}`;
+  };
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { P, V, Ir } = state;
+    if (!(P > 0)) return "Enter the motor's rated power.";
+    if (!(V > 0)) return one() ? "Enter the supply voltage." : "Enter the line voltage (between phases).";
+    if (!(isNaN(Ir) || Ir > 0)) return "The rated current is optional: leave it empty or enter it.";
+    return "";
+  }
+  function calc() {
+    const hp = state.P * SC_P[state.uP], [klo, khi] = SC_CODES[state.code], k = one() ? state.V : Math.sqrt(3) * state.V;
+    const kva = [klo * hp, khi * hp], dol = kva.map((x) => (x * 1000) / k), f = SC_METHODS[state.method][1];
+    return { hp, kva, dol, line: dol.map((x) => x * f), f };
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", GREEN = "#5DCAA5";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  // The supply, the starter (its method), the motor; the starting current on the line in green.
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null, n = one() ? 2 : 3, ys = one() ? [52, 72] : [46, 62, 78];
+    // each line ends on the motor's circle (centre 262, 62, radius 26)
+    let o = ys.map((y) => `<path d="M30 ${y} H104 M176 ${y} H${(262 - Math.sqrt(26 * 26 - (y - 62) ** 2)).toFixed(1)}" stroke="${WIRE}" stroke-width="1.5"/>`).join("");
+    o += lbl("dv", 30, 30, ok ? `${n3(state.V)} V${one() ? "" : ", 3 phases"}` : "V", BLUE, "start");
+    o += `<rect x="104" y="36" width="72" height="52" rx="6" stroke="${BLUE}" stroke-width="1.5"/>` + lbl("", 140, 58, "starter", BLUE) + lbl("dm", 140, 74, SC_METHODS[state.method][0].split(" ")[0], BLUE);
+    o += `<circle cx="262" cy="62" r="26" stroke="${BLUE}" stroke-width="1.5"/>` + lbl("", 262, 60, "M", BLUE) + lbl("", 262, 74, n === 3 ? "3~" : "1~", BLUE);
+    o += lbl("dp", 262, 104, ok ? `${n3(state.P)} ${state.uP}, code ${state.code}` : "P", BLUE);
+    if (k) o += `<path d="M44 88 l6 4 l-6 4" stroke="${GREEN}" stroke-width="1.5" fill="none"/>` + lbl("di", 30, 110, span(k.line, "A"), GREEN, "start");
+    return `<svg width="320" height="118" viewBox="0 0 320 118" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), dolM = state.method === "dol", hi = isFinite(k.line[1]) ? k.line[1] : k.line[0];
+    const head = dolM ? "Locked-rotor current" : `Starting current, ${SC_METHODS[state.method][0].toLowerCase()}`;
+    const sub = `RMS while it accelerates; the first half cycle up to ${si(2.8 * hi, "A")}`;
+    const times = isFinite(state.Ir) ? span(k.line.map((x) => x / state.Ir), "×") : "—";
+    const [clo, chi] = SC_CODES[state.code];
+    let rows = row(`Code ${state.code}: kVA per hp`, clo === 0 ? `up to ${n3(chi)}` : !isFinite(chi) ? `over ${n3(clo)}` : `${n3(clo)}–${n3(chi)}`, "kh");
+    rows += row(`Locked-rotor kVA, ${n3(k.hp)} hp`, span(k.kva.map((x) => x * 1000), "VA"), "kv");
+    if (!dolM) rows += row("Direct on line it would be", span(k.dol, "A"), "dol");
+    rows += row("Starting torque", dolM ? "the motor's locked-rotor torque" : `× ${n3(k.f)} of direct on line`, "tq");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">${head}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${span(k.line, "A")}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Times rated", times, "c1")}${cell("Peak, ½ cycle", si(2.8 * hi, "A"), "c2")}${cell("Line factor", `× ${n3(k.f)}`, "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${SC_NOTE}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "The DOE tip sheet's motor", note: "100 hp, 460 V, code C: up to 502 A (the tip sheet's 502 A), from 446 A.",
+      apply: example({ phases: "three", code: "C", method: "dol", uP: "hp", P: 100, V: 460, Ir: NaN }) },
+    { title: "The SIU lecture's 150 hp motor", note: "460 V, code G, rated 163 A: 1054 to 1186 A (the lecture's), 6.47 to 7.28 times rated.",
+      apply: example({ phases: "three", code: "G", method: "dol", uP: "hp", P: 150, V: 460, Ir: 163 }) },
+    { title: "The same 100 hp, star-delta", note: "Star-delta draws a third: 149 to 167 A, with a third of the starting torque.",
+      apply: example({ phases: "three", code: "C", method: "sd", uP: "hp", P: 100, V: 460, Ir: NaN }) },
+    { title: "A 1 hp single-phase motor", note: "230 V, code J: 7.1 to 8 kVA, so 30.9 to 34.8 A at switch-on.",
+      apply: example({ phases: "one", code: "J", method: "dol", uP: "hp", P: 1, V: 230, Ir: NaN }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, v, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const heading = `${sel('class="label-select" data-code', Object.keys(SC_CODES).map((c) => [c, `Code ${c}`]), state.code)} ${sel('class="label-select" data-method', Object.entries(SC_METHODS).map(([k, [t]]) => [k, t]), state.method)}`;
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "A motor's switch-on current from its code letter")}
+
+      ${pillRow(Object.entries(SC_PHASES), state.phases, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${heading}</span>
+      </div>
+      ${pair(box("Rated power", "P", state.P, sel("data-up", Object.keys(SC_P).map((x) => [x, x]), state.uP)), box(one() ? "Voltage" : "Line voltage", "V", state.V, fixed("V")))}${box("Rated current (optional)", "Ir", state.Ir, fixed("A"))}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["I = 1000 × kVA/hp × hp / (√3 V)", "Single phase: I = 1000 × kVA/hp × hp / V", "Star-delta: × 1/3", "Autotransformer at k: × k²", "Peak, ½ cycle: up to 2.8 × I"],
+        "An induction motor at rest has no back-EMF, so at switch-on it draws its locked-rotor current, typically six or seven times its rated current, until it nears its speed. The NEMA code letter on the nameplate gives it as kVA per horsepower at rated voltage (U.S. DOE motor tip sheet #6, from NEMA MG 1): the kVA is that times the horsepower, the current the kVA over √3 V (three phase) or over V (single phase). The letters skip I, O and Q; IEC motors carry none. In the first half cycle the peak can reach 2.8 times the RMS value, which trips magnetic-only breakers. A star-delta starter puts V / √3 on each winding and draws a third of the line current, with a third of the torque; an autotransformer at a tap k draws k² of it; a soft starter or a drive ramps the voltage or the frequency instead."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.phases = btn.dataset.pill; setPref(C, "phases", state.phases); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => { const v = parseFloat(el.value); state[key] = key === "Ir" && el.value.trim() === "" ? NaN : v; show(); };
+    });
+    app.querySelector("select[data-up]").onchange = (e) => {
+      // the same motor in the other unit, to three figures
+      const hp = state.P * SC_P[state.uP]; state.uP = e.target.value; setPref(C, "uP", state.uP);
+      if (isFinite(hp)) state.P = Number((hp / SC_P[state.uP]).toPrecision(3));
+      paint();
+    };
+    app.querySelector("select[data-code]").onchange = (e) => { state.code = e.target.value; setPref(C, "code", state.code); paint(); };
+    app.querySelector("select[data-method]").onchange = (e) => { state.method = e.target.value; setPref(C, "method", state.method); paint(); };
   }
 
   paint();

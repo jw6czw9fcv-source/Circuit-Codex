@@ -145,6 +145,7 @@ will key on, since that is the id the app already holds for each tool.
 - Motors → [RPM ↔ frequency conversion](#rpm-frequency)
 - Motors → [Back-EMF / Lenz's law](#back-emf)
 - Motors → [Stepper motor torque/step](#stepper-torque)
+- Motors → [Starting current estimation](#starting-current)
 
 ### PCB & interconnect
 
@@ -10651,6 +10652,10 @@ searchable by a tool's name, by a formula or a symbol in it (fc, Vout,
 - **Left out:** lookup tables, which have no formula to give: marking
   codes, packages, battery and button-cell sizes, cable colours, IP
   ratings, the Karnaugh map, constants and units.
+- **Order:** with a search typed, the cards whose tool name holds it come
+  first, then those with it in a formula, then those with it in the note,
+  alphabetical within each (a search for transformer leads with the
+  Transformer, not with a tool that mentions an autotransformer).
 
 ### Source
 
@@ -11831,6 +11836,70 @@ turn, a travel of lead / ((360 / S) m) on a lead screw, n (360 / S) m / 60 step 
 34 cases, the expected values from a Python implementation that replays each case's typing and picks, itself checked against AN907's step counts and 0.23°. The cases: the
 opening screen and the pickers; every step angle; microstepping from full steps to 1/256; no load, a load near holding, a larger motor, lead screws and speeds; the torque units
 and their linking; a lead in inches; remembered choices; five refusals (a load over the holding torque among them); the four examples.
+
+[↑ Index](#index)
+
+---
+
+<a id="starting-current"></a>
+## Starting current estimation
+
+`calc: starting-current` · Power electronics › Motors
+
+### What it computes
+
+An AC induction motor's starting (locked-rotor) current from the NEMA code letter on its nameplate, and what a starting method makes of it. The drawing shows the supply,
+the starter and the motor, the starting current on the line in green.
+
+- **Pills:** **Three phase** (the line voltage between phases) and **Single phase**.
+- **Inputs:** the rated power (hp or kW; switching keeps the motor, to three figures), the voltage, and the rated current if known (for the ratio). The **Your inputs** heading
+  picks the code letter (A to V, without I, O, Q) and the starting method: direct on line, star-delta, or an autotransformer at 80, 65 or 50 %.
+- **Big result:** the starting current's range (the code letter is a range of kVA per hp), with the peak of the first half cycle under it.
+- **Cells:** the range as times the rated current, the peak, the line factor of the method. **Rows:** the code's kVA per hp, the locked-rotor kVA, the direct-on-line current
+  when a starter is chosen, the starting torque's factor.
+- **Remembered:** the pill, the code letter, the method and the power unit.
+
+Examples: the DOE tip sheet's 100 hp code C motor (up to 502 A), the SIU lecture's 150 hp code G motor (1054 to 1186 A), the same 100 hp on star-delta (149 to 167 A), a 1 hp
+single-phase motor (30.9 to 34.8 A).
+
+### Terms
+
+- **Locked-rotor current:** the RMS current of a motor held at rest at rated voltage; at switch-on the current stays near it while the motor accelerates.
+- **Code letter:** the nameplate's NEMA locked-rotor code, the locked-rotor kVA per horsepower; not the design letter (A, B, C, D) next to it.
+- **Peak inrush:** the transient of the first half cycle, above the locked-rotor value, which can trip a magnetic-only breaker.
+- **Star-delta, autotransformer:** starters that start the motor at a reduced voltage, switching to full voltage once it runs.
+
+### Sources
+
+- **U.S. Department of Energy, Advanced Manufacturing Office, Motor Systems Tip Sheet #6 "Avoid Nuisance Tripping with Premium Efficiency Motors" (DOE/GO-102012-3731,
+  November 2012; PDF read as text):** the code letter is the locked-rotor kVA/hp (its table 1, from NEMA MG 1-2011, A 0–3.15 to H 6.3–7.1 as here); LR current = hp × (kVA/hp / kV) / √3,
+  its example Code C, 460 V, 100 hp: 502 A; the peak inrush "as high as 2.8 times the RMS locked rotor current", within half a cycle; IEC motors carry no code letters. Its table
+  prints a letter I (7.1–8.0) and so shifts J, K and L by one, against the next source.
+- **B. Spezia, "Lesson 14, ET332b" (Southern Illinois University lecture, PDF read as text):** the code-letter table without I, O or Q, A 0–3.15 through U 20–22.4 and V over
+  22.4, the letters used here; its example 14-1, 150 hp, 460 V, code G, rated 163 A: 1054.3 to 1186.1 A.
+- **Wikipedia, "Induction motor" (wikitext read as text):** locked-rotor current typically 6 to 7 times rated for NEMA Design B; the starting methods (direct on line,
+  autotransformer, star-delta, soft starters, drives).
+- **Not read:** NEMA MG 1 and the NEC table 430.7(B) themselves.
+
+### Why the formulas are these
+
+**The current** is the tip sheet's: the code's kVA per hp times the horsepower, over √3 V in three phase; in single phase over V (derived). Both sources' examples come out
+exactly (502 A; 1054.3 and 1186.1 A). **Starters** (derived): star-delta puts V / √3 on each winding, so each winding's current falls by √3 and the line, which now carries one
+winding's current instead of √3 of them, a third; an autotransformer at a tap k gives the motor k V, its current k times and the line's k² times; in both the starting torque
+falls as the voltage squared, by the same factor.
+
+### Assumptions and limits
+
+- **NEMA motors:** IEC motors carry no code letter; for one, the letter must be assumed or the maker's starting-current ratio used instead.
+- **The supply's own drop:** the current is at rated voltage at the terminals; a weak supply lowers it (and the torque).
+- **Soft starters and drives** set their own current limit; they are not modelled.
+- **Display.** Three figures.
+
+### How it was checked
+
+35 cases, the expected values from a Python implementation that replays each case's taps, typing and picks, itself checked against both sources' examples. The cases: the
+opening screen and the pickers; code letters across the table (A's "up to", V's "over"); each starting method; powers, voltages and a rated current; single phase; kW; a cleared
+rated current; remembered choices; four refusals; the four examples.
 
 [↑ Index](#index)
 

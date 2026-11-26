@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Starting current estimation",
+    domain: "power",
+    formulas: ["I = 1000 × kVA/hp × hp / (√3 V)", "Single phase: I = 1000 × kVA/hp × hp / V", "Star-delta: × 1/3", "Autotransformer at k: × k²", "Peak, ½ cycle: up to 2.8 × I"],
+    note: "An induction motor's locked-rotor (starting) current from its nameplate's NEMA code letter (kVA per hp; U.S. DOE motor tip sheet #6 and an SIU lecture table), three or single phase, with the peak inrush and the current a star-delta or autotransformer starter draws.",
+  },
+  {
     tool: "Stepper motor torque/step",
     domain: "power",
     formulas: ["Angle = S / m,  per turn = (360 / S) m", "T = H sin(π θ / 2S)", "One microstep: H sin(π / 2m)", "Lag = (2S / π) asin(T_load / H)", "f = n (360 / S) m / 60"],
@@ -859,9 +865,8 @@ function searchFormulas(query) {
   const q = searchFold(query.trim());
   if (!q) return [];
   const text = (s) => searchFold(s.replace(/<[^>]+>/g, ""));
-  return FORMULAS.filter(f =>
-    text(f.tool).includes(q) ||
-    f.formulas.some(x => text(x).includes(q)) ||
-    text(f.note).includes(q)
-  );
+  // Where the query is found ranks the card: in the tool's name first, then in a formula, then in the note, each tier in the list's order (a
+  // search for "transformer" leads with Transformer, not with a tool that mentions an autotransformer).
+  const tier = (f) => (text(f.tool).includes(q) ? 0 : f.formulas.some(x => text(x).includes(q)) ? 1 : text(f.note).includes(q) ? 2 : 3);
+  return FORMULAS.map((f, i) => [tier(f), i, f]).filter(([t]) => t < 3).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , f]) => f);
 }
