@@ -174,6 +174,7 @@ will key on, since that is the id the app already holds for each tool.
 - Vias & layout → [Decoupling capacitor](#decoupling)
 - Cabling → [Wire sizing](#wire-gauge)
 - Cabling → [Wire & cable colors](#cable-colors)
+- Electrical safety → [Resettable fuse (PTC) sizing](#ptc-sizing)
 - Electrical safety → [IP ratings](#ip-ratings)
 
 ### Tools
@@ -9591,6 +9592,68 @@ The review made these changes:
 - DIN 47100's cores 45 to 60 are labelled a makers' extension.
 - A DC filter chip (DC rows had no filter), the remembered filter, a new
   subtitle, the first cases and this section.
+
+[↑ Index](#index)
+
+---
+
+<a id="ptc-sizing"></a>
+## Resettable fuse (PTC) sizing
+
+`calc: ptc-sizing` · PCB & interconnect › Electrical safety
+
+### What it computes
+
+The polymer PTC resettable fuse for a load: the smallest of Bourns' MF-R series that holds the load's current at the hottest ambient, with its order code, and the
+checks a designer makes: that a fault trips it even at the coldest ambient, that the supply is within its voltage and the fault within its interrupt current. The drawing
+is the circuit: the supply, the PTC in series (green, the answer, the US thermistor symbol), the load.
+
+- **Inputs:** the load's normal current and the fault current (optional), one unit for both (mA or A); the supply voltage; the hottest and coldest ambient (−40 to +85 °C,
+  the series' range). The **Your inputs** heading picks the packaging, which ends the order code: bulk (-0), tape and reel (-2), Ammo-Pak (-AP).
+- **Big result:** the order code, with its hold current at 23 °C and at the hottest ambient under it.
+- **Cells:** the hold current at the hottest ambient, the trip current at the coldest, the maximum voltage and interrupt current. **Rows:** the resistance new and an hour after a
+  trip, the drop and loss at the load current, the maximum time to trip, what the fault does, the power it dissipates tripped.
+- **Remembered:** the packaging and the current unit.
+
+Examples: a 0.5 A load at up to 50 °C (MF-R075-0), 1 A in a 70 °C box (MF-R185-0), a 48 V rail at 300 mA (MF-R040-0), a weak fault at −20 °C that may not trip MF-R025.
+
+### Terms
+
+- **Hold current Ihold:** the most the PTC carries without tripping (tested 30 minutes); **trip current Itrip:** the least that always trips it, about twice the hold. Between
+  the two it may do either.
+- **Tripped:** the polymer, heated by the current, has expanded and its resistance has risen a thousandfold; a small current keeps it hot and tripped until the power is removed.
+- **Vmax, Imax:** the most voltage it may face tripped, and the most fault current it may interrupt.
+- **R1max:** its highest resistance an hour after a trip, when it has cooled; it settles back over time.
+
+### Sources
+
+- **Bourns, "MF-R Series – PTC Resettable Fuses" data sheet (bourns.com/docs/Product-Datasheets/mfr.pdf; PDF read as text in layout mode):** the electrical characteristics of
+  MF-R005 to MF-R1100 (Vmax, Imax, Ihold and Itrip at 23 °C, Rmin, Rmax, R1max, the maximum time to trip at a current, the tripped power dissipation); the thermal derating table,
+  Ihold / Itrip at −40, −20, 0, 23, 40, 50, 60, 70 and 85 °C; the operating range −40 °C to +85 °C; the test conditions (hold: 30 min at Ihold without a trip; time to trip at 23 °C
+  in still air); How to Order (MF-R, the hold code, then -0 bulk with part number, -2 tape and reel, -AP Ammo-Pak).
+- **As printed:** two cells break their rows' pattern of trip = 2 × hold, MF-R700 at 70 °C (4.27 / 9.44 A) and MF-R900 at 50 °C (6.93 / 12.7 A); they are used as printed. The
+  variants MF-R090-0-9 (30 V, lower resistance) and MF-R250-0-10 are left out of the choice (the same hold currents as MF-R090 and MF-R250).
+
+### Why the formulas are these
+
+**The choice** (the data sheet's rule of use): the hold current falls as the ambient warms, so the part must hold the load at the hottest ambient; the trip current rises as it
+cools, so a fault must exceed the trip current at the coldest; and the supply and fault must stay within Vmax and Imax. The tool takes the smallest MF-R that holds the load
+and stands the supply, between the table's temperatures linearly (derived). **The drop and loss** (derived): the load current through the PTC's highest resistance new, I Rmax
+and I² Rmax.
+
+### Assumptions and limits
+
+- **Still air:** the data sheet's currents are for still air; a draught cools the PTC (it holds more and trips later), a hot neighbour does the opposite.
+- **One series:** the choice is within Bourns MF-R (radial leaded); other series and makers have their own tables.
+- **Time to trip** is given at one current and 23 °C; it is longer for a smaller fault and in the cold.
+- **Display.** Three figures; the order code as Bourns writes it.
+
+### How it was checked
+
+45 cases, the expected values from a Python implementation whose MF-R data is parsed from the data sheet's own text and checked against the app's table, number by number
+(all 24 models). The cases: the opening screen and the pickers; ten load currents across the series; ambients from −40 to +85 °C and between columns; voltages to 60 V and past it;
+loads no part holds; faults that trip, that may not, past Imax, and exactly at the trip; the packagings; mA and the linking; a cleared fault; remembered choices; seven refusals;
+the four examples.
 
 [↑ Index](#index)
 

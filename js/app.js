@@ -712,6 +712,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "stepper-torque") return renderStepperTorque(domain, tool, favId);
   if (calcId === "starting-current") return renderStartingCurrent(domain, tool, favId);
   if (calcId === "power-derating") return renderPowerDerating(domain, tool, favId);
+  if (calcId === "ptc-sizing") return renderPtcSizing(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -31400,6 +31401,201 @@ function renderPowerDerating(domain, tool, favId) {
         paint();
       };
     });
+  }
+
+  paint();
+}
+
+// ---------- Resettable fuse (PTC) sizing ----------
+// A polymer PTC resettable fuse for a load: the smallest of Bourns' MF-R series that holds the load current at the hottest ambient, with the checks a
+// designer makes: the fault trips it at the coldest ambient, the supply is within its voltage, the fault within its interrupt current. Source, as read
+// this session: Bourns, "MF-R Series – PTC Resettable Fuses" data sheet (bourns.com/docs/Product-Datasheets/mfr.pdf; PDF read as text in layout mode):
+// the electrical characteristics (Vmax, Imax, Ihold and Itrip at 23 °C, Rmin, Rmax, R1max one hour after a trip, the maximum time to trip at a
+// current, the tripped power dissipation), the thermal derating table (Ihold / Itrip at -40, -20, 0, 23, 40, 50, 60, 70, 85 °C), the operating range -40 °C
+// to +85 °C, the test conditions (hold: 30 min at Ihold, no trip; time to trip at 23 °C, still air), and How to Order (MF-R + hold code + -0 bulk with part
+// number, -2 tape and reel, -AP Ammo-Pak). Two cells break their rows' pattern (trip twice the hold): MF-R700 at 70 °C 9.44 A, MF-R900 at 50 °C 12.7 A,
+// used as printed. Derived: linear interpolation between the table's temperatures; the drop I R and the loss I² R at the load current.
+const PTC_T = [-40, -20, 0, 23, 40, 50, 60, 70, 85];
+// model: [Vmax, Imax, Rmin, Rmax, R1max, time-to-trip current, its seconds, tripped Pd, then Ihold and Itrip at each PTC_T]
+const PTC_MFR = {
+  "MF-R005": [60, 40, 7.3, 11.1, 22.0, 0.5, 5.0, 0.22, [0.08, 0.07, 0.06, 0.05, 0.04, 0.04, 0.03, 0.03, 0.02], [0.16, 0.14, 0.12, 0.10, 0.08, 0.08, 0.07, 0.07, 0.05]],
+  "MF-R010": [60, 40, 2.50, 4.50, 7.50, 0.5, 4.0, 0.38, [0.16, 0.14, 0.12, 0.10, 0.08, 0.07, 0.06, 0.05, 0.04], [0.32, 0.28, 0.24, 0.20, 0.16, 0.14, 0.12, 0.10, 0.08]],
+  "MF-R017": [60, 40, 2.00, 3.20, 8.00, 0.85, 3.0, 0.48, [0.26, 0.23, 0.20, 0.17, 0.14, 0.12, 0.11, 0.09, 0.07], [0.52, 0.46, 0.40, 0.34, 0.28, 0.24, 0.22, 0.18, 0.14]],
+  "MF-R020": [60, 40, 1.50, 2.84, 4.40, 1.0, 2.2, 0.40, [0.31, 0.27, 0.24, 0.20, 0.16, 0.14, 0.13, 0.11, 0.08], [0.62, 0.54, 0.48, 0.40, 0.32, 0.28, 0.26, 0.22, 0.16]],
+  "MF-R025": [60, 40, 1.00, 1.95, 3.00, 1.25, 2.5, 0.45, [0.39, 0.34, 0.30, 0.25, 0.20, 0.18, 0.16, 0.14, 0.10], [0.78, 0.68, 0.60, 0.50, 0.40, 0.36, 0.32, 0.28, 0.20]],
+  "MF-R030": [60, 40, 0.76, 1.36, 2.10, 1.5, 3.0, 0.50, [0.47, 0.41, 0.36, 0.30, 0.24, 0.22, 0.19, 0.16, 0.12], [0.94, 0.82, 0.72, 0.60, 0.48, 0.44, 0.38, 0.32, 0.24]],
+  "MF-R040": [60, 40, 0.52, 0.86, 1.29, 2.0, 3.8, 0.55, [0.62, 0.54, 0.48, 0.40, 0.32, 0.29, 0.25, 0.22, 0.16], [1.24, 1.08, 0.96, 0.80, 0.64, 0.58, 0.50, 0.44, 0.32]],
+  "MF-R050": [60, 40, 0.41, 0.77, 1.17, 2.5, 4.0, 0.75, [0.78, 0.68, 0.60, 0.50, 0.41, 0.36, 0.32, 0.27, 0.20], [1.56, 1.36, 1.20, 1.00, 0.82, 0.72, 0.64, 0.54, 0.40]],
+  "MF-R065": [60, 40, 0.27, 0.48, 0.72, 3.25, 5.3, 0.90, [1.01, 0.88, 0.77, 0.65, 0.53, 0.47, 0.41, 0.35, 0.26], [2.02, 1.76, 1.54, 1.30, 1.06, 0.94, 0.82, 0.70, 0.52]],
+  "MF-R075": [60, 40, 0.18, 0.40, 0.60, 3.75, 6.3, 0.90, [1.16, 1.02, 0.89, 0.75, 0.61, 0.54, 0.47, 0.41, 0.30], [2.32, 2.04, 1.78, 1.50, 1.22, 1.08, 0.94, 0.82, 0.60]],
+  "MF-R090": [60, 40, 0.14, 0.31, 0.47, 4.5, 7.2, 1.00, [1.40, 1.22, 1.07, 0.90, 0.73, 0.65, 0.57, 0.49, 0.36], [2.80, 2.44, 2.14, 1.80, 1.46, 1.30, 1.14, 0.98, 0.72]],
+  "MF-R110": [30, 40, 0.10, 0.18, 0.27, 5.5, 6.6, 0.70, [1.60, 1.43, 1.27, 1.10, 0.91, 0.85, 0.75, 0.67, 0.57], [3.20, 2.86, 2.54, 2.20, 1.82, 1.70, 1.50, 1.34, 1.14]],
+  "MF-R135": [30, 40, 0.065, 0.115, 0.17, 6.75, 7.3, 0.80, [1.96, 1.76, 1.55, 1.35, 1.12, 1.04, 0.92, 0.82, 0.70], [3.92, 3.52, 3.10, 2.70, 2.24, 2.08, 1.84, 1.64, 1.40]],
+  "MF-R160": [30, 40, 0.055, 0.105, 0.15, 8.0, 8.0, 0.90, [2.32, 2.08, 1.84, 1.60, 1.33, 1.23, 1.09, 0.98, 0.83], [4.64, 4.16, 3.68, 3.20, 2.66, 2.46, 2.18, 1.96, 1.66]],
+  "MF-R185": [30, 40, 0.040, 0.07, 0.11, 9.25, 8.7, 1.00, [2.68, 2.41, 2.13, 1.85, 1.54, 1.42, 1.26, 1.13, 0.96], [5.36, 4.82, 4.26, 3.70, 3.08, 2.84, 2.52, 2.26, 1.92]],
+  "MF-R250": [30, 40, 0.025, 0.048, 0.07, 12.5, 10.3, 1.20, [3.63, 3.25, 2.88, 2.50, 2.08, 1.93, 1.70, 1.53, 1.30], [7.26, 6.50, 5.76, 5.00, 4.16, 3.86, 3.40, 3.06, 2.60]],
+  "MF-R300": [30, 40, 0.020, 0.05, 0.08, 15.0, 10.8, 2.00, [4.35, 3.90, 3.45, 3.00, 2.49, 2.31, 2.04, 1.83, 1.56], [8.70, 7.80, 6.90, 6.00, 4.98, 4.62, 4.08, 3.66, 3.12]],
+  "MF-R400": [30, 40, 0.010, 0.03, 0.05, 20.0, 12.7, 2.50, [5.80, 5.20, 4.60, 4.00, 3.32, 3.08, 2.72, 2.44, 2.08], [11.6, 10.4, 9.20, 8.00, 6.64, 6.16, 5.44, 4.88, 4.16]],
+  "MF-R500": [30, 40, 0.010, 0.03, 0.05, 25.0, 14.5, 3.00, [7.25, 6.50, 5.75, 5.00, 4.15, 3.85, 3.40, 3.05, 2.60], [14.5, 13.0, 11.5, 10.0, 8.30, 7.70, 6.80, 6.10, 5.20]],
+  "MF-R600": [30, 40, 0.005, 0.02, 0.04, 30.0, 16.0, 3.50, [8.70, 7.80, 6.90, 6.00, 4.98, 4.62, 4.08, 3.66, 3.12], [17.4, 15.6, 13.8, 12.0, 9.96, 9.24, 8.16, 7.32, 6.24]],
+  "MF-R700": [30, 40, 0.005, 0.02, 0.03, 35.0, 17.5, 3.80, [10.1, 9.10, 8.05, 7.00, 5.81, 5.39, 4.76, 4.27, 3.64], [20.3, 18.2, 16.1, 14.0, 11.6, 10.7, 9.52, 9.44, 7.28]],
+  "MF-R800": [30, 40, 0.005, 0.02, 0.03, 40.0, 18.8, 4.00, [11.6, 10.4, 9.20, 8.00, 6.64, 6.16, 5.44, 4.88, 4.16], [23.2, 20.8, 18.4, 16.0, 13.2, 12.3, 10.8, 9.76, 8.32]],
+  "MF-R900": [30, 40, 0.005, 0.01, 0.02, 40.0, 20.0, 4.20, [13.0, 11.7, 10.3, 9.00, 7.47, 6.93, 6.12, 5.49, 4.68], [26.1, 23.4, 20.7, 18.0, 14.9, 12.7, 12.2, 10.9, 9.36]],
+  "MF-R1100": [16, 100, 0.003, 0.01, 0.014, 40.0, 20.0, 4.50, [16.1, 14.6, 13.1, 11.0, 9.40, 8.80, 7.80, 6.90, 5.20], [32.0, 29.2, 26.2, 22.1, 18.4, 17.6, 15.6, 13.8, 10.4]],
+};
+const PTC_PACK = { "-0": "Bulk (-0)", "-2": "Tape and reel (-2)", "-AP": "Ammo-Pak (-AP)" };
+const PTC_I = { mA: 1e-3, A: 1 };
+const PTC_NOTE = "A polymer PTC is a resettable fuse: at its normal current it is a small resistance, but a fault heats it until its polymer expands and its resistance jumps a thousandfold, cutting the current to a trickle; when the fault and the power go, it cools and resets. Heat is also what trips it, so its currents fall as the air around it warms: choose it to hold your current at the hottest ambient, and check that a fault still trips it at the coldest.";
+
+function renderPtcSizing(domain, tool, favId) {
+  const C = "ptc-sizing";
+  const state = { uI: pref(C, "uI", "A", Object.keys(PTC_I)), pack: pref(C, "pack", "-0", Object.keys(PTC_PACK)), I: 0.5, Th: 50, Tc: 0, V: 12, If: NaN };
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const degC = (t) => `${n3(t)} °C`;
+  // the table's value at an ambient, linear between its temperatures
+  // (a table temperature gives its printed value exactly, so 0.20 A is not lost to rounding as 0.19999…)
+  const at = (row, T) => {
+    const j = PTC_T.indexOf(T); if (j >= 0) return row[j];
+    let i = 0; while (i < PTC_T.length - 2 && T > PTC_T[i + 1]) i++; const t0 = PTC_T[i], t1 = PTC_T[i + 1]; return row[i] + ((row[i + 1] - row[i]) * (T - t0)) / (t1 - t0);
+  };
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { I, Th, Tc, V, If } = state;
+    if (!(I > 0)) return "Enter the load's normal current.";
+    if (!isFinite(Th) || !isFinite(Tc)) return "Enter the hottest and coldest ambient.";
+    if (Th < -40 || Th > 85 || Tc < -40 || Tc > 85) return "The MF-R series works from −40 °C to +85 °C.";
+    if (Tc > Th) return "The coldest ambient cannot be above the hottest.";
+    if (!(V > 0)) return "Enter the supply voltage.";
+    if (!(isNaN(If) || If > 0)) return "The fault current is optional: leave it empty or enter it.";
+    return "";
+  }
+  // the smallest model that holds the load at the hottest ambient and stands the supply's voltage
+  function pick() {
+    for (const [m, d] of Object.entries(PTC_MFR)) if (at(d[8], state.Th) >= state.I * (1 - 1e-9) && d[0] >= state.V) return m;
+    return null;
+  }
+  function calc() {
+    const m = pick();
+    if (!m) return null;
+    const d = PTC_MFR[m];
+    return { m, d, hold: at(d[8], state.Th), trip: at(d[9], state.Tc), hold23: d[8][3], drop: state.I * d[3], loss: state.I * state.I * d[3] };
+  }
+  function none() {
+    const { I, V } = state;
+    if (V > 60) return `No MF-R stands ${n3(V)} V: the series goes to 60 V (MF-R005 to MF-R090).`;
+    const best = Object.entries(PTC_MFR).filter(([, d]) => d[0] >= V).pop();
+    return `No MF-R holds ${si(I, "A")} at ${degC(state.Th)}${V > 30 ? " at " + n3(V) + " V (above 30 V the series stops at MF-R090)" : ""}: the largest, ${best[0]}, holds ${si(at(best[1][8], state.Th), "A")} there.`;
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREEN = "#5DCAA5";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}">${t}</text>`;
+  // The supply, the PTC in series (the answer, green: a zigzag with the thermistor's bent diagonal), the load.
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null, c = k ? GREEN : WIRE;
+    let o = `<path d="M60 30 H124 M196 30 H262 V58 M262 98 V130 H60 V98 M60 62 V30" stroke="${WIRE}" stroke-width="1.5"/>`;
+    o += `<path d="M48 62 H72 M52 69 H68 M48 76 H72 M52 83 H68 M48 90 H72 M52 97 H68" stroke="${BLUE}" stroke-width="1.5"/>` + lbl("dv", 40, 84, ok ? `${n3(state.V)} V` : "V", BLUE, "end");
+    o += `<path d="M124 30 l4 -7 l8 14 l8 -14 l8 14 l8 -14 l8 14 l8 -14 l8 14 l4 -7" stroke="${c}" stroke-width="1.5" fill="none"/><path d="M132 46 L186 14 H196" stroke="${c}" stroke-width="1.5" fill="none"/>`;
+    o += lbl("dm", 160, 58, k ? k.m + state.pack : "PTC", c);
+    o += `<rect x="250" y="58" width="24" height="40" rx="3" stroke="${BLUE}" stroke-width="1.5"/>` + lbl("", 282, 82, "load", BLUE, "start");
+    o += lbl("di", 160, 148, ok ? `${si(state.I, "A")} at up to ${degC(state.Th)}` : "I", BLUE);
+    return `<svg width="320" height="156" viewBox="0 0 320 156" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc();
+    if (!k) return `<div class="error-text" data-res="err">${none()}</div>`;
+    const { d } = k, If = state.If, haveF = isFinite(If);
+    const sub = `holds ${si(k.hold23, "A")} at 23 °C, ${si(k.hold, "A")} at ${degC(state.Th)}; your load ${si(state.I, "A")}`;
+    // a range with its unit once when both ends share it ("180–400 mΩ")
+    const rng = (lo, hi, u) => { const a = si(lo, u), b = si(hi, u), i = a.lastIndexOf(" "), j = b.lastIndexOf(" "); return a.slice(i) === b.slice(j) ? `${a.slice(0, i)}–${b}` : `${a} – ${b}`; };
+    let rows = row("R new · after a trip", `${rng(d[2], d[3], "Ω")} · ${si(d[4], "Ω")}`, "r");
+    rows += row(`Drop and loss at ${si(state.I, "A")} (R max)`, `${si(k.drop, "V")} · ${si(k.loss, "W")}`, "dl");
+    rows += row("Trips within", `${n3(d[6])} s at ${si(d[5], "A")} (23 °C)`, "tt");
+    rows += row(haveF ? `Your ${si(If, "A")} fault` : "Fault current", !haveF ? "enter it to check" : If > d[1] ? `over its ${si(d[1], "A")} Imax` : If >= k.trip * (1 - 1e-9) ? `trips it, even at ${degC(state.Tc)}` : `may not trip: < ${si(k.trip, "A")} at ${degC(state.Tc)}`, "ft");
+    rows += row("Tripped, it dissipates", `${si(d[7], "W")} (typical)`, "pd");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Bourns MF-R to use</span></div>
+          <div class="result-value"><span class="num" data-res="big">${k.m}${state.pack}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell(`Hold, ${degC(state.Th)}`, si(k.hold, "A"), "c1")}${cell(`Trip, ${degC(state.Tc)}`, si(k.trip, "A"), "c2")}${cell("Max V · I", `${d[0]} V · ${d[1]} A`, "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${PTC_NOTE}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "A 0.5 A load at up to 50 °C", note: "MF-R065 holds only 0.47 A at 50 °C; MF-R075 holds 0.54 A: the one to use.",
+      apply: example({ uI: "A", I: 0.5, Th: 50, Tc: 0, V: 12, If: NaN }) },
+    { title: "1 A in a 70 °C box", note: "Heat takes 40 % of the hold: MF-R185 (1.85 A at 23 °C) still holds 1.13 A at 70 °C.",
+      apply: example({ uI: "A", I: 1, Th: 70, Tc: 0, V: 12, If: NaN }) },
+    { title: "A 48 V rail, 300 mA", note: "Above 30 V only MF-R005 to MF-R090 (60 V): MF-R040 holds 0.32 A at 40 °C.",
+      apply: example({ uI: "mA", I: 0.3, Th: 40, Tc: -20, V: 48, If: NaN }) },
+    { title: "A weak fault at −20 °C", note: "0.2 A load, 0.5 A short: MF-R025's trip rises to 0.68 A in the cold; it may not trip.",
+      apply: example({ uI: "A", I: 0.2, Th: 40, Tc: -20, V: 12, If: 0.5 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, v, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const isel = () => sel('data-u="i"', Object.keys(PTC_I).map((x) => [x, x]), state.uI);
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const f = PTC_I[state.uI];
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The resettable fuse that holds your load")}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label split" style="color:#8FC1F5;grid-template-columns:auto 1fr auto">
+        <span>Your inputs</span><span></span><span>${sel('class="label-select" data-pack', Object.entries(PTC_PACK), state.pack)}</span>
+      </div>
+      ${pair(box("Load current", "I", state.I / f, isel()), box("Supply voltage", "V", state.V, fixed("V")))}${pair(box("Hottest ambient", "Th", state.Th, fixed("°C")), box("Coldest ambient", "Tc", state.Tc, fixed("°C")))}${box("Fault current (optional)", "If", isFinite(state.If) ? state.If / f : NaN, isel())}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Hold at T_hot ≥ load current", "Fault ≥ trip at T_cold", "V ≤ Vmax,  fault ≤ Imax", "Drop = I R,  loss = I² R"],
+        "A polymer PTC (positive temperature coefficient) fuse is conductive polymer that, heated past a point by too much current, expands and becomes a high resistance, limiting the current until the fault and the supply are removed; then it cools and conducts again. It holds (never trips) at its hold current and always trips at its trip current, about twice the hold; between the two it may do either. Both are given at 23 °C and fall as the ambient warms, so the part must hold the load at the hottest ambient and trip on a fault at the coldest (Bourns MF-R thermal derating table). It must also stand the supply's voltage and the fault's current when tripped. The tool picks the smallest MF-R that holds the load, and checks the rest; its resistance drops a little voltage and warms the part even when it is not tripped."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "If") state.If = el.value.trim() === "" ? NaN : v * PTC_I[state.uI];
+        else state[key] = key === "I" ? v * PTC_I[state.uI] : v;
+        show();
+      };
+    });
+    // the two currents share their unit: either picker changes both, to three figures
+    app.querySelectorAll('select[data-u="i"]').forEach((el) => {
+      el.onchange = () => {
+        state.uI = el.value; setPref(C, "uI", state.uI); const f2 = PTC_I[state.uI];
+        for (const key of ["I", "If"]) if (isFinite(state[key])) state[key] = Number((state[key] / f2).toPrecision(3)) * f2;
+        paint();
+      };
+    });
+    app.querySelector("select[data-pack]").onchange = (e) => { state.pack = e.target.value; setPref(C, "pack", state.pack); paint(); };
   }
 
   paint();

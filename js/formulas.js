@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Resettable fuse (PTC) sizing",
+    domain: "pcb",
+    formulas: ["Hold at T_hot ≥ load current", "Fault ≥ trip at T_cold", "V ≤ Vmax,  fault ≤ Imax", "Drop = I R,  loss = I² R"],
+    note: "The smallest Bourns MF-R polymer PTC that holds a load at the hottest ambient (the data sheet's thermal derating table), with its order code, and the checks: a fault trips it at the coldest ambient, the supply is within its voltage, the fault within its interrupt current.",
+  },
+  {
     tool: "Power derating",
     domain: "power",
     formulas: ["Knee: P = P_r (T_m − T) / (T_m − T_k)", "Per °C: P = P25 − k (T − 25)", "θJA = 1 / k,  TJmax = 25 + P25 / k"],
