@@ -711,6 +711,7 @@ function renderTool(rawKey, calcId) {
   if (calcId === "back-emf") return renderBackEmf(domain, tool, favId);
   if (calcId === "stepper-torque") return renderStepperTorque(domain, tool, favId);
   if (calcId === "starting-current") return renderStartingCurrent(domain, tool, favId);
+  if (calcId === "power-derating") return renderPowerDerating(domain, tool, favId);
   if (calcId === "pwm-duty") return renderPwmDutyCycle(domain, tool, favId);
   if (calcId === "debounce-rc") return renderDebounceRc(domain, tool, favId);
   if (calcId === "wavelength") return renderWavelength(domain, tool, favId);
@@ -31214,6 +31215,191 @@ function renderStartingCurrent(domain, tool, favId) {
     };
     app.querySelector("select[data-code]").onchange = (e) => { state.code = e.target.value; setPref(C, "code", state.code); paint(); };
     app.querySelector("select[data-method]").onchange = (e) => { state.method = e.target.value; setPref(C, "method", state.method); paint(); };
+  }
+
+  paint();
+}
+
+// ---------- Power derating ----------
+// How much power a part may dissipate at a given ambient temperature, from its datasheet's derating: a knee curve (full power up to a knee temperature,
+// falling linearly to none at the maximum: resistors and many passives) or a factor per degree above 25 °C (semiconductors). Sources, as read this
+// session: Vishay, "D/CRCW e3 Standard Thick Film Chip Resistors" (document 20035, revision 14-Apr-2026; PDF read as text, its page 6 derating chart
+// rendered with pdf.js): rated dissipation P70, 0.10 W (0402) to 1.0 W (2512), 0.25 W for 1206; permissible film temperature 155 °C; the chart flat to
+// 70 °C and falling to zero at 155 °C. onsemi, "2N3903, 2N3904 General Purpose Transistors" (2n3903-d; PDF read as text, layout mode): total device
+// dissipation 625 mW at TA = 25 °C, derate above 25 °C 5.0 mW/°C; 1.5 W at TC = 25 °C, 12 mW/°C; TJ to +150 °C; R_thetaJA 200 °C/W, R_thetaJC 83.3 °C/W
+// (consistent: (150 - 25) / 0.625 W = 200 °C/W = 1 / 5 mW/°C). Derived: P(T) = P_rated (T_max - T) / (T_max - T_knee) above the knee; P(T) = P25 - k (T - 25)
+// = (TJmax - T) / theta, TJmax = 25 + P25 / k, theta = 1 / k; the hottest ambient for a dissipation P: T_max - (T_max - T_knee) P / P_rated, or TJmax - P theta.
+const PDR_MODES = { knee: "Knee curve", factor: "Per °C" };
+const PDR_P = { mW: 1e-3, W: 1 };
+const PDR_NOTE = {
+  knee: "A part's rating holds only while it stays cool enough: a resistor's film may reach, say, 155 °C, so at a high ambient there is less room for its own heating. Datasheets draw it as a derating curve: the rated power up to a knee temperature (70 °C for most chip resistors), then a straight line to nothing at the maximum. Read your ambient on the curve, the air around the part, which on a board is often well above the room's.",
+  factor: "A semiconductor's power rating is for 25 °C; above that its datasheet takes away so many milliwatts per degree. That factor is 1 / θJA, the junction-to-ambient thermal resistance, and the line reaches zero at the maximum junction temperature: P = (TJmax − T) / θJA. The rating at 25 °C ambient assumes the datasheet's mounting; a larger copper area lowers θJA and raises the whole line.",
+};
+
+function renderPowerDerating(domain, tool, favId) {
+  const C = "power-derating";
+  const state = {
+    mode: pref(C, "mode", "knee", Object.keys(PDR_MODES)), uP: pref(C, "uP", "W", Object.keys(PDR_P)),
+    Pr: 0.25, Tk: 70, Tm: 155, P25: 0.625, k: 5, T: 85, Pa: NaN,
+  };
+  const knee = () => state.mode === "knee";
+  const n3 = (v) => {
+    let s = String(Number(v.toPrecision(3)));
+    if (s.includes("e-")) s = Number(s).toFixed(20).replace(/0+$/, "");
+    return s.replace("-", "−");
+  };
+  const fmt = (v) => (isFinite(v) ? String(+v.toPrecision(10)) : "");
+  const si = (v, u) => siFormat(Number(v.toPrecision(3)), u, 3);
+  const degC = (t) => `${n3(t)} °C`;
+
+  // ---------------- the numbers ----------------
+  function problem() {
+    const { Pr, Tk, Tm, P25, k, T, Pa } = state;
+    if (knee()) {
+      if (!(Pr > 0)) return "Enter the rated power.";
+      if (!isFinite(Tk)) return "Enter the knee temperature (where the derating starts).";
+      if (!(Tm > Tk)) return "The maximum temperature must be above the knee.";
+    } else {
+      if (!(P25 > 0)) return "Enter the power rating at 25 °C.";
+      if (!(k > 0)) return "Enter the derating factor, in mW per °C.";
+    }
+    if (!isFinite(T)) return "Enter the ambient temperature.";
+    if (!(isNaN(Pa) || Pa >= 0)) return "Your dissipation is optional: leave it empty or enter it.";
+    return "";
+  }
+  function calc() {
+    const { T, Pa } = state;
+    if (knee()) {
+      const { Pr, Tk, Tm } = state;
+      const P = T <= Tk ? Pr : T >= Tm ? 0 : (Pr * (Tm - T)) / (Tm - Tk);
+      const Tok = isNaN(Pa) ? NaN : Pa > Pr ? -Infinity : Tm - ((Tm - Tk) * Pa) / Pr;
+      return { P, rated: Pr, frac: P / Pr, Tok, top: Tm, kneeT: Tk };
+    }
+    const { P25 } = state, kW = state.k / 1000, Tj = 25 + P25 / kW, th = 1 / kW;
+    const P = T <= 25 ? P25 : T >= Tj ? 0 : P25 - kW * (T - 25);
+    const Tok = isNaN(Pa) ? NaN : Pa > P25 ? -Infinity : Tj - Pa * th;
+    return { P, rated: P25, frac: P / P25, Tok, top: Tj, kneeT: 25, th, Tjp: isNaN(Pa) ? NaN : T + Pa * th };
+  }
+
+  // ---------------- the drawing ----------------
+  const BLUE = "#8FC1F5", WIRE = "#5A6169", GREY = "#8A9099", GREEN = "#5DCAA5", RED = "#E24B4A";
+  const lbl = (id, x, y, t, c, a = "middle") => `<text${id ? ` data-res="${id}"` : ""} x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="600" text-anchor="${a}" style="paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round">${t}</text>`;
+  // The derating curve: power against ambient, flat to the knee and straight down to the maximum; the ambient's point green, your dissipation dashed.
+  function diagram() {
+    const ok = !problem(), k = ok ? calc() : null, X0 = 44, X1 = 290, Y0 = 108, H = 78;
+    const lo = -25, hi = k ? Math.max(k.top, state.T) + 10 : 165;
+    const x = (t) => X0 + ((t - lo) / (hi - lo)) * (X1 - X0), y = (f) => Y0 - f * H;
+    let o = `<path d="M${X0} ${Y0} H${X1} M${X0} ${Y0} V${Y0 - H - 12}" stroke="${WIRE}" stroke-width="1.5"/>` + lbl("", X0 - 4, y(1) + 4, "100 %", GREY, "end");
+    if (k) {
+      o += `<path d="M${X0} ${y(1)} H${x(k.kneeT).toFixed(1)} L${x(k.top).toFixed(1)} ${Y0}" stroke="${BLUE}" stroke-width="2" fill="none"/>`;
+      o += lbl("", x(k.kneeT), Y0 + 14, degC(k.kneeT), GREY) + lbl("", x(k.top), Y0 + 14, degC(k.top), GREY);
+      if (isFinite(state.Pa) && state.Pa <= k.rated) {
+        const f = state.Pa / k.rated;
+        o += `<path d="M${X0} ${y(f).toFixed(1)} H${X1}" stroke="${GREY}" stroke-width="1" stroke-dasharray="4 3"/>` + lbl("", X1, y(f) - 4, "yours", GREY, "end");
+      }
+      const fits = isNaN(state.Pa) || state.Pa <= k.P;
+      o += `<path d="M${x(state.T).toFixed(1)} ${Y0} V${y(k.frac).toFixed(1)}" stroke="${fits ? GREEN : RED}" stroke-width="1"/><circle cx="${x(state.T).toFixed(1)}" cy="${y(k.frac).toFixed(1)}" r="3.5" fill="${fits ? GREEN : RED}"/>`;
+      // above the point, or below it when your dissipation's line runs just above (or the point is at the top)
+      const fa = isFinite(state.Pa) ? state.Pa / k.rated : -1, below = (fa > k.frac && fa - k.frac < 0.2) || k.frac > 0.7;
+      // below, it sits to the left of the point (under the flat part, clear of the falling line), or to its right near the axis
+      const xp = x(state.T), left = xp > X0 + 100, txt = `${n3(k.frac * 100)} % at ${degC(state.T)}`;
+      o += below ? lbl("da", left ? xp - 6 : xp + 6, y(k.frac) + 16, txt, fits ? GREEN : RED, left ? "end" : "start")
+        : lbl("da", Math.min(Math.max(xp, X0 + 50), X1 - 50), y(k.frac) - 8, txt, fits ? GREEN : RED);
+    }
+    o += lbl("", X0, 12, "power allowed, against ambient", GREY, "start");
+    return `<svg width="320" height="130" viewBox="0 0 320 130" fill="none">${o}</svg>`;
+  }
+
+  // ---------------- the answers ----------------
+  const row = (label, value, key) => `<div class="notation-row"><span>${label}</span><span data-res="${key}">${value}</span></div>`;
+  const cell = (label, value, key) => `<div class="eseries-cell"><div style="font-weight:600;color:${domain.color};">${label}</div><div data-res="${key}">${value}</div></div>`;
+  function resultHTML() {
+    const err = problem();
+    if (err) return `<div class="error-text" data-res="err">${err}</div>`;
+    const k = calc(), have = isFinite(state.Pa);
+    const fits = !have || state.Pa <= k.P;
+    const sub = !have ? `${n3(k.frac * 100)} % of the rated ${si(k.rated, "W")} at ${degC(state.T)}`
+      : fits ? `your ${si(state.Pa, "W")} fits: up to ${degC(k.Tok)} ambient` : k.Tok === -Infinity ? `your ${si(state.Pa, "W")} is over the rating at any temperature`
+      : `your ${si(state.Pa, "W")} is too much here: only up to ${degC(k.Tok)} ambient`;
+    let rows = knee() ? row("Full power up to · none at", `${degC(state.Tk)} · ${degC(state.Tm)}`, "kt")
+      : row("θJA = 1 / factor · TJmax", `${n3(k.th)} °C/W · ${degC(k.top)}`, "th");
+    rows += row(knee() ? "Slope above the knee" : "Lost per °C above 25 °C", knee() ? `${si(state.Pr / (state.Tm - state.Tk), "W")}/°C` : `${si(state.k / 1000, "W")}/°C`, "sl");
+    if (!knee() && have) rows += row(`Junction at ${si(state.Pa, "W")}`, degC(k.Tjp), "tj");
+    return `<div class="result-field">
+          <div class="result-head"><span class="label">Power allowed at ${degC(state.T)}</span></div>
+          <div class="result-value"><span class="num" data-res="big">${si(k.P, "W")}</span></div>
+          <div class="result-sub" data-res="sub">${sub}</div>
+        </div>
+        <div class="eseries-grid eseries-grid--tight" style="grid-template-columns:repeat(3,1fr);">${cell("Of rated", `${n3(k.frac * 100)} %`, "c1")}${cell("Hottest for yours", have ? (k.Tok === -Infinity ? "none" : degC(k.Tok)) : "—", "c2")}${cell("Margin", have ? (fits ? si(k.P - state.Pa, "W") : `− ${si(state.Pa - k.P, "W")}`) : "—", "c3")}</div>
+        <div class="field notation-box">${rows}<div class="cx-note" data-res="note">${PDR_NOTE[state.mode]}</div></div>`;
+  }
+  function show() {
+    app.querySelector(".diagram-box").innerHTML = diagram();
+    app.querySelector('[data-res="result"]').innerHTML = resultHTML();
+  }
+
+  const example = (st) => () => { Object.assign(state, st); paint(); };
+  useExamples([
+    { title: "A Vishay CRCW1206 at 100 °C", note: "Rated 0.25 W to 70 °C, none at 155 °C: 162 mW left at 100 °C.",
+      apply: example({ mode: "knee", uP: "W", Pr: 0.25, Tk: 70, Tm: 155, T: 100, Pa: NaN }) },
+    { title: "Will 0.2 W survive in it?", note: "The same 1206 dissipating 0.2 W: fine up to 87 °C ambient, not at 100 °C.",
+      apply: example({ mode: "knee", uP: "W", Pr: 0.25, Tk: 70, Tm: 155, T: 100, Pa: 0.2 }) },
+    { title: "A 2N3904 at 85 °C", note: "625 mW at 25 °C, 5 mW/°C less above: 325 mW at 85 °C (200 °C/W, TJ 150 °C).",
+      apply: example({ mode: "factor", uP: "mW", P25: 0.625, k: 5, T: 85, Pa: NaN }) },
+    { title: "The 2N3904 dissipating 400 mW", note: "Its junction reaches 150 °C at 70 °C ambient: keep the air under that.",
+      apply: example({ mode: "factor", uP: "mW", P25: 0.625, k: 5, T: 50, Pa: 0.4 }) },
+  ]);
+
+  function paint() {
+    const sel = (attr, opts, cur) => `<select ${attr}>${opts.map(([k, t]) => `<option value="${k}" ${String(k) === String(cur) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const box = (name, key, v, unit) => `<div class="field"><label><span class="field-name">${name}</span></label><div class="field-row"><input type="number" inputmode="decimal" step="any" data-key="${key}" value="${fmt(v)}" />${unit}</div></div>`;
+    const fixed = (u) => `<span class="unit-fixed">${u}</span>`;
+    const psel = () => sel('data-u="p"', Object.keys(PDR_P).map((x) => [x, x]), state.uP);
+    const pair = (a, b) => `<div class="field-pair">${a}${b}</div>`;
+    const f = PDR_P[state.uP];
+    const inputs = knee()
+      ? pair(box("Rated power", "Pr", state.Pr / f, psel()), box("Knee temperature", "Tk", state.Tk, fixed("°C"))) + pair(box("Maximum temperature", "Tm", state.Tm, fixed("°C")), box("Ambient", "T", state.T, fixed("°C")))
+      : pair(box("Rating at 25 °C", "P25", state.P25 / f, psel()), box("Derating factor", "k", state.k, fixed("mW/°C"))) + box("Ambient", "T", state.T, fixed("°C"));
+    app.innerHTML = `
+      ${calcHeader(tool, favId, "The power a part may dissipate when it runs hot")}
+
+      ${pillRow(Object.entries(PDR_MODES), state.mode, domain.bg)}
+
+      <div class="diagram-box">${diagram()}</div>
+
+      <div class="section-label" style="color:#8FC1F5">Your inputs</div>
+      ${inputs}${box("Your dissipation (optional)", "Pa", isFinite(state.Pa) ? state.Pa / f : NaN, psel())}
+
+      <div class="section-label" style="color:#5DCAA5">Output</div>
+      <div data-res="result">${resultHTML()}</div>
+
+      ${formulaSection(
+        ["Knee: P = P_r (T_m − T) / (T_m − T_k)", "Per °C: P = P25 − k (T − 25)", "θJA = 1 / k,  TJmax = 25 + P25 / k", "Hottest: T_m − (T_m − T_k) P / P_r"],
+        "A part may dissipate its rated power only while it stays within its temperature limit, and the hotter the air around it, the less of its own heating that leaves room for. Datasheets give the allowance two ways. A knee curve, usual for resistors and passives: the rated power up to a knee temperature, then a straight line to zero at the maximum (Vishay's CRCW chip resistors: full power to 70 °C, none at 155 °C). A derating factor, usual for semiconductors: the power at 25 °C less so many mW per °C above it (onsemi's 2N3904: 625 mW, less 5 mW/°C); the factor is 1 / θJA, and the line reaches zero at the maximum junction temperature, so P = (TJmax − T) / θJA. The other way round, a part dissipating P may sit in air up to T_max − (T_max − T_knee) P / P_rated, or TJmax − P θJA."
+      )}
+      ${calcFooter("")}
+    `;
+    wireCalc(favId, () => paint());
+    app.querySelectorAll(".pill").forEach((btn) => {
+      btn.onclick = () => { state.mode = btn.dataset.pill; setPref(C, "mode", state.mode); paint(); };
+    });
+    app.querySelectorAll("input[data-key]").forEach((el) => {
+      const key = el.dataset.key;
+      el.oninput = () => {
+        const v = parseFloat(el.value);
+        if (key === "Pa") state.Pa = el.value.trim() === "" ? NaN : v * PDR_P[state.uP];
+        else state[key] = key === "Pr" || key === "P25" ? v * PDR_P[state.uP] : v;
+        show();
+      };
+    });
+    // the power boxes share their unit: either picker changes both, to three figures
+    app.querySelectorAll('select[data-u="p"]').forEach((el) => {
+      el.onchange = () => {
+        state.uP = el.value; setPref(C, "uP", state.uP); const f2 = PDR_P[state.uP];
+        for (const key of ["Pr", "P25", "Pa"]) if (isFinite(state[key])) state[key] = Number((state[key] / f2).toPrecision(3)) * f2;
+        paint();
+      };
+    });
   }
 
   paint();

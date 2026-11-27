@@ -716,6 +716,12 @@ const FORMULAS = [
     note: "The inductance of a flat spiral on a PCB or a chip, square, hexagonal, octagonal or circular, from its turns, outer size, trace width and spacing, or the turns for an inductance: Mohan et al.'s current-sheet expression (IEEE JSSC 1999), with their modified Wheeler and monomial expressions and a segment sum after Grover as checks; the inner diameter, fill ratio, trace length and DC resistance.",
   },
   {
+    tool: "Power derating",
+    domain: "power",
+    formulas: ["Knee: P = P_r (T_m − T) / (T_m − T_k)", "Per °C: P = P25 − k (T − 25)", "θJA = 1 / k,  TJmax = 25 + P25 / k"],
+    note: "The power a part may dissipate at an ambient temperature, from its datasheet's knee curve (resistors: Vishay CRCW, full power to 70 °C, none at 155 °C) or its derating factor (semiconductors: onsemi 2N3904, 5 mW/°C above 25 °C), and the hottest ambient a dissipation allows.",
+  },
+  {
     tool: "Starting current estimation",
     domain: "power",
     formulas: ["I = 1000 × kVA/hp × hp / (√3 V)", "Single phase: I = 1000 × kVA/hp × hp / V", "Star-delta: × 1/3", "Autotransformer at k: × k²", "Peak, ½ cycle: up to 2.8 × I"],

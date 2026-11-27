@@ -141,6 +141,7 @@ will key on, since that is the id the app already holds for each tool.
 - Battery → [Battery types & sizes](#battery-types--sizes)
 - Battery → [Button cell sizes](#button-cell-sizes)
 - Thermal management → [Heat sink sizing](#heat-sink)
+- Thermal management → [Power derating](#power-derating)
 - Motors → [Torque & power conversion](#torque-power)
 - Motors → [RPM ↔ frequency conversion](#rpm-frequency)
 - Motors → [Back-EMF / Lenz's law](#back-emf)
@@ -11609,6 +11610,66 @@ bigger heatsink.
 - a unit change keeps the power (3.6 W reads 3600 mW);
 - a junction limit under the ambient is refused;
 - the remembered pill.
+
+[↑ Index](#index)
+
+---
+
+<a id="power-derating"></a>
+## Power derating
+
+`calc: power-derating` · Power electronics › Thermal management
+
+### What it computes
+
+How much power a part may dissipate at a given ambient temperature, from the derating its datasheet gives, and the hottest ambient that allows your dissipation. The
+drawing is the derating curve (power allowed against ambient), the ambient's point on it in green (red when your dissipation does not fit), your dissipation dashed.
+
+- **Pills:** **Knee curve** (resistors and many passives: the rated power up to a knee temperature, falling linearly to zero at a maximum) and **Per °C** (semiconductors:
+  the power at 25 °C less a factor per degree above).
+- **Inputs:** knee curve, the rated power, the knee and maximum temperatures; per °C, the rating at 25 °C and the derating factor in mW/°C; both, the ambient and, optionally,
+  your dissipation. The power boxes share one unit, mW or W.
+- **Big result:** the power allowed at the ambient, with what is left of the rating, or whether your dissipation fits and up to what ambient.
+- **Cells:** the share of the rating, the hottest ambient for your dissipation, the margin. **Rows:** the knee and maximum (or θJA and TJmax), the slope, and per °C the
+  junction temperature at your dissipation.
+- **Remembered:** the pill and the power unit.
+
+Examples: a Vishay CRCW1206 at 100 °C (162 mW), the same 1206 dissipating 0.2 W (fine to 87 °C), a 2N3904 at 85 °C (325 mW), the 2N3904 dissipating 400 mW (to 70 °C).
+
+### Terms
+
+- **Derating:** taking power away from a part's rating as its surroundings get hotter, so that it stays within its temperature limit.
+- **Knee temperature:** the ambient up to which the full rating holds (70 °C for most chip resistors). **Maximum temperature:** where nothing is left (the film's 155 °C).
+- **Derating factor:** the power lost per degree above 25 °C, in mW/°C; it is 1 / θJA, the junction-to-ambient thermal resistance.
+- **Ambient:** the air around the part, which on a board or in a box is often well above the room's.
+
+### Sources
+
+- **Vishay, "D/CRCW e3 Standard Thick Film Chip Resistors" (document 20035, revision 14 April 2026; PDF read as text, its page 6 derating chart rendered with pdf.js and
+  looked at):** rated dissipation P70 from 0.10 W (0402) to 1.0 W (2512), 0.25 W for 1206; the permissible film temperature 155 °C; the derating chart, every size flat to 70 °C
+  and falling to zero at 155 °C.
+- **onsemi, "2N3903, 2N3904 General Purpose Transistors" (data sheet 2n3903-d; PDF read as text in layout mode):** total device dissipation 625 mW at TA = 25 °C, derate above
+  25 °C 5.0 mW/°C; 1.5 W at TC = 25 °C, 12 mW/°C; TJ to +150 °C; RθJA 200 °C/W, RθJC 83.3 °C/W.
+
+### Why the formulas are these
+
+**Knee curve** (the chart's straight lines): P = P_rated up to T_knee, then P_rated (T_max − T) / (T_max − T_knee), zero from T_max. **Per °C:** P = P25 − k (T − 25); the line
+reaches zero where the junction reaches its maximum, so TJmax = 25 + P25 / k and θJA = 1 / k (derived; the 2N3904's figures agree: 125 °C / 0.625 W = 200 °C/W = 1 / 5 mW/°C,
+and 125 °C / 1.5 W = 83.3 °C/W). **The other way round** (derived): the hottest ambient for a dissipation P is T_max − (T_max − T_knee) P / P_rated, or TJmax − P θJA; the
+junction then runs at T + P θJA.
+
+### Assumptions and limits
+
+- **The datasheet's mounting:** a derating curve or factor holds for the board and copper its maker tested on; more copper lowers θJA and lifts the line.
+- **Straight lines:** some datasheets draw a curve with more than one slope; enter the segment that applies.
+- **Ambient, not case:** for a case rating (the 2N3904's 1.5 W at TC = 25 °C), the temperature to enter is the case's, kept there by a heat sink.
+- **Display.** Three figures.
+
+### How it was checked
+
+38 cases, the expected values from a Python implementation that replays each case's taps and typing, itself checked against the two datasheets' consistency. The cases: the
+opening screen and the picker; ambients under, at and past the knee and the maximum; another knee; dissipations that fit, that do not, over the rating and none; per °C at 25 °C,
+under it, at and past TJmax, the case rating, dissipations; mW and its linking; a cleared dissipation; remembered choices; seven refusals; the four examples.
 
 [↑ Index](#index)
 
